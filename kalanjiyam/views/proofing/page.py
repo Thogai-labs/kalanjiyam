@@ -132,14 +132,14 @@ def edit(project_slug, page_slug):
     if has_edits:
         latest_revision = cur.revisions[-1]
         form.content.data = latest_revision.content
-        
+
         # Get all available translations for the latest revision
         session = q.get_session()
         translations = session.query(db.Translation).filter_by(
             page_id=cur.id,
             revision_id=latest_revision.id
         ).all()
-        
+
         available_translations = [
             {
                 'id': t.id,
@@ -151,7 +151,7 @@ def edit(project_slug, page_slug):
             }
             for t in translations
         ]
-        
+
         # Use the first translation as default (if any exist)
         if available_translations:
             first_translation = available_translations[0]
@@ -234,7 +234,7 @@ def edit_post(project_slug, page_slug):
             page_id=cur.id,
             revision_id=latest_revision.id
         ).all()
-        
+
         available_translations = [
             {
                 'id': t.id,
@@ -246,7 +246,7 @@ def edit_post(project_slug, page_slug):
             }
             for t in translations
         ]
-        
+
         # Use the first translation as default (if any exist)
         if available_translations:
             first_translation = available_translations[0]
@@ -348,29 +348,32 @@ def ocr(project_slug, page_slug):
     # Get OCR parameters from query parameters
     engine = request.args.get('engine', 'google')
     language = request.args.get('language', 'sa')
-    
+
     # Decode numeric engine values to actual engine names
     engine_map = {
         '1': 'google',
         '2': 'tesseract',
-        '3': 'surya'
+        '3': 'surya',
+        '4': 'docling'
     }
     if engine in engine_map:
         engine = engine_map[engine]
-    
+
     # Validate engine
     from kalanjiyam.utils.ocr_engine import OcrEngineFactory
     if engine not in OcrEngineFactory.get_supported_engines():
         abort(400, description=f"Unsupported OCR engine: {engine}")
 
     image_path = get_page_image_filepath(project_slug, page_slug)
-    
+
     try:
         from kalanjiyam.utils.ocr_engine import run_ocr
-        ocr_response = run_ocr(image_path, engine_name=engine, language=language)
+        ocr_response = run_ocr(
+            image_path, engine_name=engine, language=language)
         return ocr_response.text_content
     except Exception as e:
-        logging.error(f"OCR failed for {project_slug}/{page_slug} with engine {engine} and language {language}: {e}")
+        logging.error(
+            f"OCR failed for {project_slug}/{page_slug} with engine {engine} and language {language}: {e}")
         abort(500, description=f"OCR failed: {str(e)}")
 
 
@@ -391,7 +394,7 @@ def translate(project_slug, page_slug):
     target_lang = request.args.get('target_lang', 'en')
     engine = request.args.get('engine', 'google')
     revision_id = request.args.get('revision_id', type=int)
-    
+
     # Validate engine
     from kalanjiyam.utils.translation_engine import TranslationEngineFactory
     if engine not in TranslationEngineFactory.get_supported_engines():
@@ -406,8 +409,9 @@ def translate(project_slug, page_slug):
     else:
         revision = q.get_session().query(db.Revision).filter_by(id=revision_id).first()
         if not revision or revision.page_id != page_.id:
-            abort(400, description=f"Revision {revision_id} not found for this page")
-    
+            abort(
+                400, description=f"Revision {revision_id} not found for this page")
+
     try:
         # Check if translation already exists
         session = q.get_session()
@@ -426,9 +430,9 @@ def translate(project_slug, page_slug):
         # Perform translation
         from kalanjiyam.utils.translation_engine import translate_text
         translation_response = translate_text(
-            revision.content, 
-            source_lang, 
-            target_lang, 
+            revision.content,
+            source_lang,
+            target_lang,
             engine
         )
 
@@ -448,11 +452,12 @@ def translate(project_slug, page_slug):
             translation_engine=engine,
             status='completed'
         )
-        
+
         session.add(new_translation)
         session.commit()
 
         return translation_response.translated_text
     except Exception as e:
-        logging.error(f"Translation failed for {project_slug}/{page_slug} with engine {engine}: {e}")
+        logging.error(
+            f"Translation failed for {project_slug}/{page_slug} with engine {engine}: {e}")
         abort(500, description=f"Translation failed: {str(e)}")
