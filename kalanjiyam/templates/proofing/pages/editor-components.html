@@ -1,438 +1,438 @@
-        {#
-      <button
-          type="button"
-          class="btn bg-sky-700 text-white m-2 hover:bg-sky-900"
-          @click="runOCR"
-          :disabled="isRunningOCR"
-          x-text="isRunningOCR ? '{{ _("Running OCR ...") }}' : '{{ _("Run OCR") }}'">
-        {{ _("Run OCR") }}
-      </button>
-      #}
+{#
+<button type="button" class="btn bg-sky-700 text-white m-2 hover:bg-sky-900" @click="runOCR" :disabled="isRunningOCR"
+  x-text="isRunningOCR ? '{{ _(" Running OCR ...") }}' : '{{ _("Run OCR") }}'">
+        {{ _(" Run OCR") }} </button>
+  #}
 
-{# Components of the page editor.
+  {# Components of the page editor.
 
-We use these macros both to keep `pages/edit` readable and so that we can embed
-these components in our help text and documentation.
-#}
+  We use these macros both to keep `pages/edit` readable and so that we can embed
+  these components in our help text and documentation.
+  #}
 
-{% import "macros/proofing.html" as m %}
+  {% import "macros/proofing.html" as m %}
 
 
-{# Button for specific OpenSeadragon (OSD) functions. #}
-{# FIXME: migrate all of these buttons to `alpine_button`. #}
-{% macro osd_button(id, text) %}
-<button type="button" id="{{ id }}" class="p-2 hover:bg-peacock-light rounded transition-colors">{{ text|safe }}</button>
-{% endmacro %}
+  {# Button for specific OpenSeadragon (OSD) functions. #}
+  {# FIXME: migrate all of these buttons to `alpine_button`. #}
+  {% macro osd_button(id, text) %}
+  <button type="button" id="{{ id }}" class="p-2 hover:bg-peacock-light rounded transition-colors">{{ text|safe
+    }}</button>
+  {% endmacro %}
 
 
-{# A generic application button. #}
-{% macro alpine_button(text, click) %}
-<button type="button" class="p-2 hover:bg-peacock-light rounded transition-colors" @click="{{ click }}">
-  {{ text|safe }}
-</button>
-{% endmacro %}
-
-
-{# A small status badge we display in the page header. #}
-{% macro status_badge(status) %}
-{% if status == 'reviewed-0' %}
-<span class="px-3 py-1 rounded-full text-xs bg-red-100 text-red-800 border border-red-200">{{ _('Needs more work') }}</span>
-{% elif status == 'reviewed-1' %}
-<span class="px-3 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800 border border-yellow-200">{{ _('Proofed once') }}</span>
-{% elif status == 'reviewed-2' %}
-<span class="px-3 py-1 rounded-full text-xs bg-emerald-100 text-emerald-800 border border-emerald-200">{{ _('Proofed twice') }}</span>
-{% elif status == 'skip' %}
-<span class="px-3 py-1 rounded-full text-xs bg-slate-100 text-slate-800 border border-slate-200">{{ _('Not relevant') }}</span>
-{% endif %}
-{% endmacro %}
-
-
-{# Page information and navigation options. #}
-{% macro navigation_bar(ctx, page_number, image_number, num_images) %}
-{% set project = ctx.project %}
-<header class="bg-white border-b border-teal-200 p-4 mb-4 rounded-lg peacock-shadow">
-  <div class="flex justify-between items-center">
-
-  <div class="flex items-center gap-4">
-    <a class="text-peacock-primary font-bold text-xl hover:text-peacock-secondary transition-colors"
-        href="{{ url_for("proofing.project.summary", slug=project.slug) }}">
-      {{ project.display_title }}
-    </a>
-    <div class="w-px h-6 bg-teal-200"></div>
-    <div>
-      <span class="text-lg font-semibold text-peacock-primary">{{ image_number }}</span>
-      <div class="text-sm text-peacock-secondary">
-        Image {{ image_number }} of {{ num_images }}
-        {% if image_title != page_number %}
-          (Page {{ page_number }})
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
-  <div class="flex items-center gap-4">
-    <div class="flex items-center gap-2">
-      {% set history_url = url_for("proofing.page.history", project_slug=project.slug, page_slug=ctx.cur.slug) %}
-      <a class="p-2 hover:bg-peacock-light rounded transition-colors" href="{{ history_url }}" title="{{ _('History') }}">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-        </svg>
-      </a>
-      {% set prev_url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=ctx.prev.slug) %}
-      {% set next_url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=ctx.next.slug) %}
-      <a class="p-2 hover:bg-peacock-light rounded transition-colors" href="{{ prev_url }}" title="{{ _('Previous') }}">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-        </svg>
-      </a>
-      <a class="p-2 hover:bg-peacock-light rounded transition-colors" href="{{ next_url }}" title="{{ _('Next') }}">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-        </svg>
-      </a>
-    </div>
-    {{ status_badge(ctx.cur.status.name) }}
-  </div>
-  </div>
-</header>
-{% endmacro %}
-
-
-{# Defines an item in a dropdown menu. #}
-{% macro _dropdown_item(fn, text, icon=None) %}
-<li>
-  <button type="button" class="dropdown-item flex items-center gap-2 w-full text-left" @click.prevent="{{ fn }}">
-    {% if icon %}
-    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      {{ icon|safe }}
-    </svg>
-    {% endif %}
-    <span class="truncate">{{ text|safe }}</span>
+  {# A generic application button. #}
+  {% macro alpine_button(text, click) %}
+  <button type="button" class="p-2 hover:bg-peacock-light rounded transition-colors" @click="{{ click }}">
+    {{ text|safe }}
   </button>
-</li>
-{% endmacro %}
+  {% endmacro %}
 
 
-{#
-Print a row of Latin characters.
-Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
-{% macro _latin_char_row(chars, class) %}
-<div class="grid {{ class }}">
-{% for char in chars.split() %}
-  <button type="button" class="hover:bg-peacock-light rounded p-1 transition-colors">{{ char.upper()|safe }}</button>
-  <button type="button" class="hover:bg-peacock-light rounded p-1 transition-colors">{{ char|safe }}</button>
-{% endfor %}
-</div>
-{% endmacro %}
+  {# A small status badge we display in the page header. #}
+  {% macro status_badge(status) %}
+  {% if status == 'reviewed-0' %}
+  <span class="px-3 py-1 rounded-full text-xs bg-red-100 text-red-800 border border-red-200">{{ _('Needs more work')
+    }}</span>
+  {% elif status == 'reviewed-1' %}
+  <span class="px-3 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800 border border-yellow-200">{{ _('Proofed
+    once') }}</span>
+  {% elif status == 'reviewed-2' %}
+  <span class="px-3 py-1 rounded-full text-xs bg-emerald-100 text-emerald-800 border border-emerald-200">{{ _('Proofed
+    twice') }}</span>
+  {% elif status == 'skip' %}
+  <span class="px-3 py-1 rounded-full text-xs bg-slate-100 text-slate-800 border border-slate-200">{{ _('Not relevant')
+    }}</span>
+  {% endif %}
+  {% endmacro %}
 
 
-{#
-Print a row of Devanagari characters.
-Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
-{% macro _devanagari_char_row(chars, class) %}
-<div class="text-xl grid {{ class }}">
-{% for char in chars.split() %}
-  <button type="button" class="hover:bg-peacock-light rounded p-1 transition-colors">{{ char|safe }}</button>
-{% endfor %}
-</div>
-{% endmacro %}
+  {# Page information and navigation options. #}
+  {% macro navigation_bar(ctx, page_number, image_number, num_images) %}
+  {% set project = ctx.project %}
+  <header class="bg-white border-b border-teal-200 p-4 mb-4 rounded-lg peacock-shadow">
+    <div class="flex justify-between items-center">
+
+      <div class="flex items-center gap-4">
+        <a class="text-peacock-primary font-bold text-xl hover:text-peacock-secondary transition-colors"
+          href='{{ url_for("proofing.project.summary", slug=project.slug) }}'>
+          {{ project.display_title }}
+        </a>
+        <div class="w-px h-6 bg-teal-200"></div>
+        <div>
+          <span class="text-lg font-semibold text-peacock-primary">{{ image_number }}</span>
+          <div class="text-sm text-peacock-secondary">
+            Image {{ image_number }} of {{ num_images }}
+            {% if image_title != page_number %}
+            (Page {{ page_number }})
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2">
+          {% set history_url = url_for("proofing.page.history", project_slug=project.slug, page_slug=ctx.cur.slug) %}
+          <a class="p-2 hover:bg-peacock-light rounded transition-colors" href="{{ history_url }}"
+            title="{{ _(' History') }}">
+            <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </a>
+          {% set prev_url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=ctx.prev.slug) %}
+          {% set next_url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=ctx.next.slug) %}
+          <a class="p-2 hover:bg-peacock-light rounded transition-colors" href="{{ prev_url }}"
+            title="{{ _('Previous') }}">
+            <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+          </a>
+          <a class="p-2 hover:bg-peacock-light rounded transition-colors" href="{{ next_url }}" title="{{ _('Next') }}">
+            <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+          </a>
+        </div>
+        {{ status_badge(ctx.cur.status.name) }}
+      </div>
+    </div>
+  </header>
+  {% endmacro %}
 
 
-{# Toolbar with various options and dropdowns. #}
-{% macro menu_bar() %}
-{% set button_css = "flex items-center gap-2 p-3 hover:bg-peacock-light rounded transition-colors" %}
-<nav class="bg-white border border-teal-200 rounded-lg mb-4 peacock-shadow">
-  <div class="flex items-center p-2 gap-1">
-    
-    <!-- OCR Dropdown -->
-    <div x-data="{open: false, selectedEngine: '1', selectedLanguage: 'sa', showEngineInfo: false}" class="relative">
-      <button class="{{ button_css }}"
-         @click.prevent="open=!open"
-         @click.outside="open=false">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-        </svg>
-        {{ _('OCR') }}
-      </button>
-      <div x-show="open" x-cloak class="dropdown-pane w-80">
-        <ul class="text-sm" @click.prevent="open=false">
-          
-          <!-- OCR Section Header -->
-          <li class="border-b border-teal-100 pb-2 mb-2">
-            <div class="dropdown-item">
-              <div class="flex items-center gap-2 mb-2">
-                <svg class="w-4 h-4 text-peacock-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <span class="font-semibold text-peacock-primary">{{ _('OCR Engine') }}</span>
-                <button @click.prevent.stop="showEngineInfo = !showEngineInfo" 
-                        class="ml-auto p-1 hover:bg-peacock-light rounded transition-colors"
-                        title="{{ _('Engine Information') }}">
-                  <svg class="w-4 h-4 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+  {# Defines an item in a dropdown menu. #}
+  {% macro _dropdown_item(fn, text, icon=None) %}
+  <li>
+    <button type="button" class="dropdown-item flex items-center gap-2 w-full text-left" @click.prevent="{{ fn }}">
+      {% if icon %}
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {{ icon|safe }}
+      </svg>
+      {% endif %}
+      <span class="truncate">{{ text|safe }}</span>
+    </button>
+  </li>
+  {% endmacro %}
+
+
+  {#
+  Print a row of Latin characters.
+  Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
+  {% macro _latin_char_row(chars, class) %}
+  <div class="grid {{ class }}">
+    {% for char in chars.split() %}
+    <button type="button" class="hover:bg-peacock-light rounded p-1 transition-colors">{{ char.upper()|safe }}</button>
+    <button type="button" class="hover:bg-peacock-light rounded p-1 transition-colors">{{ char|safe }}</button>
+    {% endfor %}
+  </div>
+  {% endmacro %}
+
+
+  {#
+  Print a row of Devanagari characters.
+  Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
+  {% macro _devanagari_char_row(chars, class) %}
+  <div class="text-xl grid {{ class }}">
+    {% for char in chars.split() %}
+    <button type="button" class="hover:bg-peacock-light rounded p-1 transition-colors">{{ char|safe }}</button>
+    {% endfor %}
+  </div>
+  {% endmacro %}
+
+
+  {# Toolbar with various options and dropdowns. #}
+  {% macro menu_bar() %}
+  {% set button_css = "flex items-center gap-2 p-3 hover:bg-peacock-light rounded transition-colors" %}
+  <nav class="bg-white border border-teal-200 rounded-lg mb-4 peacock-shadow">
+    <div class="flex items-center p-2 gap-1">
+
+      <!-- OCR Dropdown -->
+      <div x-data="{open: false, selectedEngine: '1', selectedLanguage: 'sa', showEngineInfo: false}" class="relative">
+        <button class="{{ button_css }}" @click.prevent="open=!open" @click.outside="open=false">
+          <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
+            </path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z">
+            </path>
+          </svg>
+          {{ _('OCR') }}
+        </button>
+        <div x-show="open" x-cloak class="dropdown-pane w-80">
+          <ul class="text-sm" @click.prevent="open=false">
+
+            <!-- OCR Section Header -->
+            <li class="border-b border-teal-100 pb-2 mb-2">
+              <div class="dropdown-item">
+                <div class="flex items-center gap-2 mb-2">
+                  <svg class="w-4 h-4 text-peacock-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                   </svg>
-                </button>
-              </div>
-              
-              <!-- Engine Information Panel -->
-              <div x-show="showEngineInfo" x-transition class="engine-info-panel mb-3">
-                <div class="space-y-2">
-                  <div class="engine-item">
-                    <span class="engine-name">OCR 1:</span>
-                    <span class="engine-desc">{{ _('Cloud-based, high accuracy, requires internet') }}</span>
-                  </div>
-                  <div class="engine-item">
-                    <span class="engine-name">OCR 2:</span>
-                    <span class="engine-desc">{{ _('Local processing, fast, good for Latin scripts') }}</span>
-                  </div>
-                  <div class="engine-item">
-                    <span class="engine-name">OCR 3:</span>
-                    <span class="engine-desc">{{ _('AI-powered, multilingual, best for Indic scripts') }}</span>
+                  <span class="font-semibold text-peacock-primary">{{ _('OCR Engine') }}</span>
+                  <button @click.prevent.stop="showEngineInfo = !showEngineInfo"
+                    class="ml-auto p-1 hover:bg-peacock-light rounded transition-colors"
+                    title="{{ _('Engine Information') }}">
+                    <svg class="w-4 h-4 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                  </button>
+                </div>
+
+                <!-- Engine Information Panel -->
+                <div x-show="showEngineInfo" x-transition class="engine-info-panel mb-3">
+                  <div class="space-y-2">
+                    <div class="engine-item">
+                      <span class="engine-name">OCR 1:</span>
+                      <span class="engine-desc">{{ _('Cloud-based, high accuracy, requires internet') }}</span>
+                    </div>
+                    <div class="engine-item">
+                      <span class="engine-name">OCR 2:</span>
+                      <span class="engine-desc">{{ _('Local processing, fast, good for Latin scripts') }}</span>
+                    </div>
+                    <div class="engine-item">
+                      <span class="engine-name">OCR 3:</span>
+                      <span class="engine-desc">{{ _('AI-powered, multilingual, best for Indic scripts') }}</span>
+                    </div>
+                    <div class="engine-item">
+                      <span class="engine-name">OCR 4:</span>
+                      <span class="engine-desc">{{ _('Docling: multi‑format parsing with OCR, strong for scanned PDFs')
+                        }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </li>
-          
-          <!-- Engine Selection -->
-          <li class="mb-3">
-            <div class="dropdown-item-no-hover">
-              <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Select Engine:') }}</label>
-              <div class="grid grid-cols-3 gap-2">
-                <button @click.prevent.stop="selectedEngine = '1'; updateLanguageOptions()" 
-                        class="ocr-engine-btn"
-                        :class="selectedEngine === '1' ? 'active' : ''">
-                  OCR 1
-                </button>
-                <button @click.prevent.stop="selectedEngine = '2'; updateLanguageOptions()" 
-                        class="ocr-engine-btn"
-                        :class="selectedEngine === '2' ? 'active' : ''">
-                  OCR 2
-                </button>
-                <button @click.prevent.stop="selectedEngine = '3'; updateLanguageOptions()" 
-                        class="ocr-engine-btn"
-                        :class="selectedEngine === '3' ? 'active' : ''">
-                  OCR 3
-                </button>
+            </li>
+
+            <!-- Engine Selection -->
+            <li class="mb-3">
+              <div class="dropdown-item-no-hover">
+                <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Select Engine:') }}</label>
+                <div class="grid grid-cols-4 gap-2">
+                  <button @click.prevent.stop="selectedEngine = '1'; updateLanguageOptions()" class="ocr-engine-btn"
+                    :class="selectedEngine === '1' ? 'active' : ''">OCR 1</button>
+                  <button @click.prevent.stop="selectedEngine = '2'; updateLanguageOptions()" class="ocr-engine-btn"
+                    :class="selectedEngine === '2' ? 'active' : ''">OCR 2</button>
+                  <button @click.prevent.stop="selectedEngine = '3'; updateLanguageOptions()" class="ocr-engine-btn"
+                    :class="selectedEngine === '3' ? 'active' : ''">OCR 3</button>
+                  <button @click.prevent.stop="selectedEngine = '4'; updateLanguageOptions()" class="ocr-engine-btn"
+                    :class="selectedEngine === '4' ? 'active' : ''">Docling</button>
+                </div>
               </div>
-            </div>
-          </li>
-          
-          <!-- Language Selection -->
-          <li class="mb-3">
-            <div class="dropdown-item-no-hover">
-              <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Primary Language:') }}</label>
-              <select class="form-select-enhanced" 
-                      x-model="selectedLanguage" 
-                      id="language-select"
-                      @click.stop>
-                <!-- Options will be populated by JavaScript -->
-              </select>
-            </div>
-          </li>
-          
-          <!-- Additional Language for Bilingual Support -->
-          <li class="mb-3" x-show="selectedEngine === '2' || selectedEngine === '3'">
-            <div class="dropdown-item-no-hover">
-              <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Additional Language (Optional):') }}</label>
-              <select class="form-select-enhanced" 
-                      id="additional-language-select"
-                      @click.stop>
-                <option value="">{{ _('None') }}</option>
-                <!-- Options will be populated by JavaScript -->
-              </select>
-              <p class="text-xs text-peacock-secondary mt-1">
-                <span x-show="selectedEngine === '2'">{{ _('For bilingual documents (e.g., Sanskrit + English)') }}</span>
-                <span x-show="selectedEngine === '3'">{{ _('Engine auto-detects languages, but you can specify additional ones') }}</span>
-              </p>
-            </div>
-          </li>
-          
-          <!-- Run OCR Button -->
-          <li class="border-t border-teal-100 pt-2">
-            <button type="button" 
-                    class="dropdown-item flex items-center gap-2 w-full justify-center bg-peacock-primary text-white rounded-lg py-2 hover:bg-peacock-secondary transition-colors"
-                    @click.prevent.stop="runOCR(selectedEngine, selectedLanguage)"
-                    :disabled="isRunningOCR"
-                    x-text="isRunningOCR ? '{{ _("Running OCR ...") }}' : '{{ _("Run OCR") }}'">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-            </button>
-          </li>
-          
+            </li>
 
-        </ul>
-      </div>
-    </div>
+            <!-- Language Selection -->
+            <li class="mb-3">
+              <div class="dropdown-item-no-hover">
+                <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Primary Language:')
+                  }}</label>
+                <select class="form-select-enhanced" x-model="selectedLanguage" id="language-select" @click.stop>
+                  <!-- Options will be populated by JavaScript -->
+                </select>
+              </div>
+            </li>
 
-    <!-- Translation Dropdown -->
-    <div x-data="{open: false, selectedTranslationEngine: 'google', sourceLanguage: 'sa', targetLanguage: 'en', showTranslationInfo: false}" class="relative">
-      <button class="{{ button_css }}"
-         @click.prevent="open=!open"
-         @click.outside="open=false">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
-        </svg>
-        {{ _('Translation') }}
-      </button>
-      <div x-show="open" x-cloak class="dropdown-pane w-80">
-        <ul class="text-sm" @click.prevent="open=false">
-          
-          <!-- Translation Section Header -->
-          <li class="border-b border-teal-100 pb-2 mb-2">
-            <div class="dropdown-item">
-              <div class="flex items-center gap-2 mb-2">
-                <svg class="w-4 h-4 text-peacock-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
+            <!-- Additional Language for Bilingual Support -->
+            <li class="mb-3" x-show="selectedEngine === '2' || selectedEngine === '3'">
+              <div class="dropdown-item-no-hover">
+                <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Additional Language
+                  (Optional):') }}</label>
+                <select class="form-select-enhanced" id="additional-language-select" @click.stop>
+                  <option value="">{{ _('None') }}</option>
+                  <!-- Options will be populated by JavaScript -->
+                </select>
+                <p class="text-xs text-peacock-secondary mt-1">
+                  <span x-show="selectedEngine === '2'">{{ _('For bilingual documents (e.g., Sanskrit + English)')
+                    }}</span>
+                  <span x-show="selectedEngine === '3'">{{ _('Engine auto-detects languages, but you can specify
+                    additional ones') }}</span>
+                </p>
+              </div>
+            </li>
+
+            <!-- Run OCR Button -->
+            <li class="border-t border-teal-100 pt-2">
+              <button type="button"
+                class="dropdown-item flex items-center gap-2 w-full justify-center bg-peacock-primary text-white rounded-lg py-2 hover:bg-peacock-secondary transition-colors"
+                @click.prevent.stop="runOCR(selectedEngine, selectedLanguage)" :disabled="isRunningOCR"
+                x-text="isRunningOCR ? '{{ _(" Running OCR ...") }}' : '{{ _("Run OCR") }}'">
+              <svg class=" w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
-                <span class="font-semibold text-peacock-primary">{{ _('Translation Engine') }}</span>
-                <button @click.prevent.stop="showTranslationInfo = !showTranslationInfo" 
-                        class="ml-auto p-1 hover:bg-peacock-light rounded transition-colors"
-                        title="{{ _('Engine Information') }}">
-                  <svg class="w-4 h-4 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </button>
+            </li>
+
+
+          </ul>
+        </div>
+      </div>
+
+      <!-- Translation Dropdown -->
+      <div
+        x-data="{open: false, selectedTranslationEngine: 'google', sourceLanguage: 'sa', targetLanguage: 'en', showTranslationInfo: false}"
+        class="relative">
+        <button class="{{ button_css }}" @click.prevent="open=!open" @click.outside="open=false">
+          <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129">
+            </path>
+          </svg>
+          {{ _('Translation') }}
+        </button>
+        <div x-show="open" x-cloak class="dropdown-pane w-80">
+          <ul class="text-sm" @click.prevent="open=false">
+
+            <!-- Translation Section Header -->
+            <li class="border-b border-teal-100 pb-2 mb-2">
+              <div class="dropdown-item">
+                <div class="flex items-center gap-2 mb-2">
+                  <svg class="w-4 h-4 text-peacock-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129">
+                    </path>
                   </svg>
-                </button>
-              </div>
-              
-              <!-- Translation Engine Information Panel -->
-              <div x-show="showTranslationInfo" x-transition class="engine-info-panel mb-3">
-                <div class="space-y-2">
-                  <div class="engine-item">
-                    <span class="engine-name">Google:</span>
-                    <span class="engine-desc">{{ _('Free, reliable, supports many languages') }}</span>
-                  </div>
-                  <div class="engine-item">
-                    <span class="engine-name">OpenAI:</span>
-                    <span class="engine-desc">{{ _('High quality, requires API key, better context understanding') }}</span>
+                  <span class="font-semibold text-peacock-primary">{{ _('Translation Engine') }}</span>
+                  <button @click.prevent.stop="showTranslationInfo = !showTranslationInfo"
+                    class="ml-auto p-1 hover:bg-peacock-light rounded transition-colors"
+                    title="{{ _('Engine Information') }}">
+                    <svg class="w-4 h-4 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                  </button>
+                </div>
+
+                <!-- Translation Engine Information Panel -->
+                <div x-show="showTranslationInfo" x-transition class="engine-info-panel mb-3">
+                  <div class="space-y-2">
+                    <div class="engine-item">
+                      <span class="engine-name">Google:</span>
+                      <span class="engine-desc">{{ _('Free, reliable, supports many languages') }}</span>
+                    </div>
+                    <div class="engine-item">
+                      <span class="engine-name">OpenAI:</span>
+                      <span class="engine-desc">{{ _('High quality, requires API key, better context understanding')
+                        }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </li>
-          
-          <!-- Translation Engine Selection -->
-          <li class="mb-3">
-            <div class="dropdown-item-no-hover">
-              <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Select Engine:') }}</label>
-              <div class="grid grid-cols-2 gap-2">
-                <button @click.prevent.stop="selectedTranslationEngine = 'google'" 
-                        class="ocr-engine-btn"
-                        :class="selectedTranslationEngine === 'google' ? 'active' : ''">
-                  Google
-                </button>
-                <button @click.prevent.stop="selectedTranslationEngine = 'openai'" 
-                        class="ocr-engine-btn"
-                        :class="selectedTranslationEngine === 'openai' ? 'active' : ''">
-                  OpenAI
-                </button>
+            </li>
+
+            <!-- Translation Engine Selection -->
+            <li class="mb-3">
+              <div class="dropdown-item-no-hover">
+                <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Select Engine:') }}</label>
+                <div class="grid grid-cols-2 gap-2">
+                  <button @click.prevent.stop="selectedTranslationEngine = 'google'" class="ocr-engine-btn"
+                    :class="selectedTranslationEngine === 'google' ? 'active' : ''">
+                    Google
+                  </button>
+                  <button @click.prevent.stop="selectedTranslationEngine = 'openai'" class="ocr-engine-btn"
+                    :class="selectedTranslationEngine === 'openai' ? 'active' : ''">
+                    OpenAI
+                  </button>
+                </div>
               </div>
-            </div>
-          </li>
-          
-          <!-- Source Language Selection -->
-          <li class="mb-3">
-            <div class="dropdown-item-no-hover">
-              <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Source Language:') }}</label>
-              <select class="form-select-enhanced" 
-                      x-model="sourceLanguage" 
-                      id="source-language-select"
-                      @click.stop>
-                <option value="hi">Hindi (hi)</option>
-                <option value="te">Telugu (te)</option>
-                <option value="mr">Marathi (mr)</option>
-                <option value="bn">Bengali (bn)</option>
-                <option value="gu">Gujarati (gu)</option>
-                <option value="kn">Kannada (kn)</option>
-                <option value="ml">Malayalam (ml)</option>
-                <option value="ta">Tamil (ta)</option>
-                <option value="pa">Punjabi (pa)</option>
-                <option value="or">Odia (or)</option>
-                <option value="ur">Urdu (ur)</option>
-                <option value="en">English (en)</option>
-              </select>
-            </div>
-          </li>
-          
-          <!-- Target Language Selection -->
-          <li class="mb-3">
-            <div class="dropdown-item-no-hover">
-              <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Target Language:') }}</label>
-              <select class="form-select-enhanced" 
-                      x-model="targetLanguage" 
-                      id="target-language-select"
-                      @click.stop>
-                <option value="en">English (en)</option>
-                <option value="sa">Sanskrit (sa)</option>
-                <option value="hi">Hindi (hi)</option>
-                <option value="te">Telugu (te)</option>
-                <option value="mr">Marathi (mr)</option>
-                <option value="bn">Bengali (bn)</option>
-                <option value="gu">Gujarati (gu)</option>
-                <option value="kn">Kannada (kn)</option>
-                <option value="ml">Malayalam (ml)</option>
-                <option value="ta">Tamil (ta)</option>
-                <option value="pa">Punjabi (pa)</option>
-                <option value="or">Odia (or)</option>
-                <option value="ur">Urdu (ur)</option>
-                <option value="fr">French (fr)</option>
-                <option value="de">German (de)</option>
-                <option value="es">Spanish (es)</option>
-                <option value="ja">Japanese (ja)</option>
-                <option value="ko">Korean (ko)</option>
-                <option value="zh">Chinese (zh)</option>
-              </select>
-            </div>
-          </li>
-          
-          <!-- Run Translation Button -->
-          <li class="border-t border-teal-100 pt-2">
-            <button type="button" 
-                    class="dropdown-item flex items-center gap-2 w-full justify-center bg-peacock-primary text-white rounded-lg py-2 hover:bg-peacock-secondary transition-colors"
-                    @click.prevent.stop="runTranslation(selectedTranslationEngine, sourceLanguage, targetLanguage)"
-                    :disabled="isRunningTranslation"
-                    x-text="isRunningTranslation ? '{{ _("Translating...") }}' : '{{ _("Translate Page") }}'">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
-              </svg>
-            </button>
-          </li>
-        </ul>
+            </li>
+
+            <!-- Source Language Selection -->
+            <li class="mb-3">
+              <div class="dropdown-item-no-hover">
+                <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Source Language:') }}</label>
+                <select class="form-select-enhanced" x-model="sourceLanguage" id="source-language-select" @click.stop>
+                  <option value="hi">Hindi (hi)</option>
+                  <option value="te">Telugu (te)</option>
+                  <option value="mr">Marathi (mr)</option>
+                  <option value="bn">Bengali (bn)</option>
+                  <option value="gu">Gujarati (gu)</option>
+                  <option value="kn">Kannada (kn)</option>
+                  <option value="ml">Malayalam (ml)</option>
+                  <option value="ta">Tamil (ta)</option>
+                  <option value="pa">Punjabi (pa)</option>
+                  <option value="or">Odia (or)</option>
+                  <option value="ur">Urdu (ur)</option>
+                  <option value="en">English (en)</option>
+                </select>
+              </div>
+            </li>
+
+            <!-- Target Language Selection -->
+            <li class="mb-3">
+              <div class="dropdown-item-no-hover">
+                <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Target Language:') }}</label>
+                <select class="form-select-enhanced" x-model="targetLanguage" id="target-language-select" @click.stop>
+                  <option value="en">English (en)</option>
+                  <option value="sa">Sanskrit (sa)</option>
+                  <option value="hi">Hindi (hi)</option>
+                  <option value="te">Telugu (te)</option>
+                  <option value="mr">Marathi (mr)</option>
+                  <option value="bn">Bengali (bn)</option>
+                  <option value="gu">Gujarati (gu)</option>
+                  <option value="kn">Kannada (kn)</option>
+                  <option value="ml">Malayalam (ml)</option>
+                  <option value="ta">Tamil (ta)</option>
+                  <option value="pa">Punjabi (pa)</option>
+                  <option value="or">Odia (or)</option>
+                  <option value="ur">Urdu (ur)</option>
+                  <option value="fr">French (fr)</option>
+                  <option value="de">German (de)</option>
+                  <option value="es">Spanish (es)</option>
+                  <option value="ja">Japanese (ja)</option>
+                  <option value="ko">Korean (ko)</option>
+                  <option value="zh">Chinese (zh)</option>
+                </select>
+              </div>
+            </li>
+
+            <!-- Run Translation Button -->
+            <li class="border-t border-teal-100 pt-2">
+              <button type="button"
+                class="dropdown-item flex items-center gap-2 w-full justify-center bg-peacock-primary text-white rounded-lg py-2 hover:bg-peacock-secondary transition-colors"
+                @click.prevent.stop="runTranslation(selectedTranslationEngine, sourceLanguage, targetLanguage)"
+                :disabled="isRunningTranslation" x-text="isRunningTranslation ? '{{ _(" Translating...") }}'
+                : '{{ _("Translate Page") }}'">
+              <svg class=" w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129">
+                </path>
+                </svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </nav>
+  {% endmacro %}
+
+
+  {# Text editing area. #}
+  {% macro text_box(content) %}
+  <div class="bg-white border border-teal-200 rounded-lg p-4 peacock-shadow">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold text-peacock-primary">{{ _('Text Editor') }}</h3>
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-peacock-secondary" x-show="hasUnsavedChanges">
+          {{ _('Unsaved changes') }}
+        </span>
       </div>
     </div>
-
-  </div>
-</nav>
-{% endmacro %}
-
-
-{# Text editing area. #}
-{% macro text_box(content) %}
-<div class="bg-white border border-teal-200 rounded-lg p-4 peacock-shadow">
-  <div class="flex items-center justify-between mb-4">
-    <h3 class="text-lg font-semibold text-peacock-primary">{{ _('Text Editor') }}</h3>
-    <div class="flex items-center gap-2">
-      <span class="text-sm text-peacock-secondary" x-show="hasUnsavedChanges">
-        {{ _('Unsaved changes') }}
-      </span>
-    </div>
-  </div>
-  <textarea
-      id="content"
-      name="content"
+    <textarea id="content" name="content"
       class="w-full h-[500px] p-4 border-0 resize-none focus:outline-none focus:ring-0 text-lg leading-relaxed bg-peacock-subtle rounded-lg"
-      x-model="content"
-      @input="hasUnsavedChanges = true"
+      x-model="content" @input="hasUnsavedChanges = true"
       placeholder="{{ _('Enter or edit text here...') }}">{{ content }}</textarea>
-</div>
-{% endmacro %}
+  </div>
+  {% endmacro %}
 
 
-{# Image viewing area with toggle for translation. #}
-{% macro image_box(translation_content=None, translation_metadata=None, available_translations=None) %}
-<div class="bg-white border border-teal-200 rounded-lg p-4 peacock-shadow" x-data="{ 
+  {# Image viewing area with toggle for translation. #}
+  {% macro image_box(translation_content=None, translation_metadata=None, available_translations=None) %}
+  <div class="bg-white border border-teal-200 rounded-lg p-4 peacock-shadow" x-data="{ 
   showTranslation: false, 
   dynamicTranslation: null, 
   translation_content: {{ 'true' if translation_content else 'false' }},
@@ -453,117 +453,138 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
     this.dynamicTranslation = translationData;
   }
 }">
-  <div class="flex items-center justify-between mb-4">
-    <h3 class="text-lg font-semibold text-peacock-primary" x-text="showTranslation ? '{{ _('Translation') }}' : '{{ _('Original Image') }}'"></h3>
-    <div class="flex items-center gap-2">
-      <!-- Translation Language Selector -->
-      {% if available_translations and available_translations|length > 1 %}
-      <div class="flex items-center gap-2 mr-4">
-        <label class="text-sm font-medium text-peacock-secondary">Language:</label>
-        <select id="translation-language-select" 
-                class="text-sm border border-teal-200 rounded px-2 py-1 bg-white text-peacock-secondary" 
-                x-show="showTranslation"
-                @change="switchTranslation($event)">
-          {% for translation in available_translations %}
-            <option value="{{ translation.id }}" 
-                    data-content="{{ translation.content|e }}"
-                    data-source-lang="{{ translation.source_language }}"
-                    data-target-lang="{{ translation.target_language }}"
-                    data-engine="{{ translation.engine }}">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold text-peacock-primary"
+        x-text="showTranslation ? '{{ _('Translation') }}' : '{{ _('Original Image') }}'"></h3>
+      <div class="flex items-center gap-2">
+        <!-- Translation Language Selector -->
+        {% if available_translations and available_translations|length > 1 %}
+        <div class="flex items-center gap-2 mr-4">
+          <label class="text-sm font-medium text-peacock-secondary">Language:</label>
+          <select id="translation-language-select"
+            class="text-sm border border-teal-200 rounded px-2 py-1 bg-white text-peacock-secondary"
+            x-show="showTranslation" @change="switchTranslation($event)">
+            {% for translation in available_translations %}
+            <option value="{{ translation.id }}" data-content="{{ translation.content|e }}"
+              data-source-lang="{{ translation.source_language }}" data-target-lang="{{ translation.target_language }}"
+              data-engine="{{ translation.engine }}">
               {{ translation.target_language.upper() }} ({{ translation.engine }})
             </option>
-          {% endfor %}
-        </select>
-      </div>
-      {% else %}
-      <!-- Debug: No translations available -->
-      <div class="text-xs text-gray-500" x-show="showTranslation">
-        Available translations: {{ available_translations|length if available_translations else 0 }}
-      </div>
-      {% endif %}
-      <button type="button" 
-              @click="showTranslation = !showTranslation"
-              class="flex items-center gap-2 p-2 hover:bg-peacock-light rounded transition-colors"
-              :class="showTranslation ? 'bg-peacock-light' : ''"
-              title="{{ _('Toggle between image and translation') }}">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-show="!showTranslation">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z"></path>
-        </svg>
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-show="showTranslation">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-        </svg>
-        <span x-text="showTranslation ? '{{ _('Show Image') }}' : '{{ _('Show Translation') }}'" class="text-sm"></span>
-      </button>
-      <button type="button" id="osd-zoom-in" class="p-2 hover:bg-peacock-light rounded transition-colors" title="{{ _('Zoom in') }}" x-show="!showTranslation">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-        </svg>
-      </button>
-      <button type="button" id="osd-zoom-out" class="p-2 hover:bg-peacock-light rounded transition-colors" title="{{ _('Zoom out') }}" x-show="!showTranslation">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-        </svg>
-      </button>
-      <button type="button" id="osd-home" class="p-2 hover:bg-peacock-light rounded transition-colors" title="{{ _('Reset view') }}" x-show="!showTranslation">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
-        </svg>
-      </button>
-      <button type="button" id="osd-rotate-left" class="p-2 hover:bg-peacock-light rounded transition-colors" title="{{ _('Rotate left') }}" x-show="!showTranslation">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-        </svg>
-      </button>
-      <button type="button" id="osd-rotate-right" class="p-2 hover:bg-peacock-light rounded transition-colors" title="{{ _('Rotate right') }}" x-show="!showTranslation">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
-        </svg>
-      </button>
-    </div>
-  </div>
-  
-  <!-- Image content -->
-  <div x-show="!showTranslation" class="w-full h-[500px] bg-peacock-subtle rounded-lg border border-teal-100">
-    <div id="osd-image" class="w-full h-full"></div>
-  </div>
-  
-  <!-- Translation content -->
-  <div x-show="showTranslation" class="w-full h-[500px] bg-peacock-subtle rounded-lg border border-teal-100 p-4 overflow-y-auto">
-    <!-- Dynamic translation content (set via JavaScript) -->
-    <div x-show="dynamicTranslation && dynamicTranslation.sourceLang && dynamicTranslation.targetLang && dynamicTranslation.engine && dynamicTranslation.content" class="prose max-w-none">
-      <h4 class="text-lg font-semibold text-peacock-primary mb-3">
-        Translation (<span x-text="getTranslationSourceLang()"></span> → <span x-text="getTranslationTargetLang()"></span>)
-        <span class="text-sm font-normal text-peacock-secondary">via <span x-text="getTranslationEngine()"></span></span>
-      </h4>
-      <div class="text-sm leading-relaxed whitespace-pre-wrap" x-text="getTranslationContent()"></div>
-    </div>
-    
-    <!-- Server-side translation content -->
-    <div x-show="!dynamicTranslation && translation_content" class="prose max-w-none">
-      <h4 class="text-lg font-semibold text-peacock-primary mb-3">
-        {% if translation_metadata %}
-          {{ _('Translation') }} ({{ translation_metadata.source_language.upper() }} → {{ translation_metadata.target_language.upper() }})
-          <span class="text-sm font-normal text-peacock-secondary">via {{ translation_metadata.engine }}</span>
+            {% endfor %}
+          </select>
+        </div>
         {% else %}
-          {{ _('Translation') }}
+        <!-- Debug: No translations available -->
+        <div class="text-xs text-gray-500" x-show="showTranslation">
+          Available translations: {{ available_translations|length if available_translations else 0 }}
+        </div>
         {% endif %}
-      </h4>
-      <div class="text-sm leading-relaxed whitespace-pre-wrap">{{ translation_content }}</div>
+        <button type="button" @click="showTranslation = !showTranslation"
+          class="flex items-center gap-2 p-2 hover:bg-peacock-light rounded transition-colors"
+          :class="showTranslation ? 'bg-peacock-light' : ''" title="{{ _('Toggle between image and translation') }}">
+          <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            x-show="!showTranslation">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z"></path>
+          </svg>
+          <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            x-show="showTranslation">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+          <span x-text="showTranslation ? '{{ _('Show Image') }}' : '{{ _('Show Translation') }}'"
+            class="text-sm"></span>
+        </button>
+        <button type="button" id="osd-zoom-in" class="p-2 hover:bg-peacock-light rounded transition-colors"
+          title="{{ _('Zoom in') }}" x-show="!showTranslation">
+          <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+        </button>
+        <button type="button" id="osd-zoom-out" class="p-2 hover:bg-peacock-light rounded transition-colors"
+          title="{{ _('Zoom out') }}" x-show="!showTranslation">
+          <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+        </button>
+        <button type="button" id="osd-home" class="p-2 hover:bg-peacock-light rounded transition-colors"
+          title="{{ _('Reset view') }}" x-show="!showTranslation">
+          <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6">
+            </path>
+          </svg>
+        </button>
+        <button type="button" id="osd-rotate-left" class="p-2 hover:bg-peacock-light rounded transition-colors"
+          title="{{ _('Rotate left') }}" x-show="!showTranslation">
+          <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18">
+            </path>
+          </svg>
+        </button>
+        <button type="button" id="osd-rotate-right" class="p-2 hover:bg-peacock-light rounded transition-colors"
+          title="{{ _('Rotate right') }}" x-show="!showTranslation">
+          <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+          </svg>
+        </button>
+      </div>
     </div>
-    
-    <!-- No translation available -->
-    <div x-show="!dynamicTranslation && !translation_content" class="flex items-center justify-center h-full">
-      <div class="text-center">
-        <svg class="w-16 h-16 text-peacock-secondary mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
-        </svg>
-        <h4 class="text-lg font-semibold text-peacock-primary mb-2">{{ _('No Translation Available') }}</h4>
-        <p class="text-peacock-secondary">{{ _('Translation has not been generated for this page yet.') }}</p>
-        <p class="text-sm text-peacock-secondary mt-2">{{ _('Use the batch translation feature to generate translations for this project.') }}</p>
+
+    <!-- Image content -->
+    <div x-show="!showTranslation" class="w-full h-[500px] bg-peacock-subtle rounded-lg border border-teal-100">
+      <div id="osd-image" class="w-full h-full"></div>
+    </div>
+
+    <!-- Translation content -->
+    <div x-show="showTranslation"
+      class="w-full h-[500px] bg-peacock-subtle rounded-lg border border-teal-100 p-4 overflow-y-auto">
+      <!-- Dynamic translation content (set via JavaScript) -->
+      <div
+        x-show="dynamicTranslation && dynamicTranslation.sourceLang && dynamicTranslation.targetLang && dynamicTranslation.engine && dynamicTranslation.content"
+        class="prose max-w-none">
+        <h4 class="text-lg font-semibold text-peacock-primary mb-3">
+          Translation (<span x-text="getTranslationSourceLang()"></span> → <span
+            x-text="getTranslationTargetLang()"></span>)
+          <span class="text-sm font-normal text-peacock-secondary">via <span
+              x-text="getTranslationEngine()"></span></span>
+        </h4>
+        <div class="text-sm leading-relaxed whitespace-pre-wrap" x-text="getTranslationContent()"></div>
+      </div>
+
+      <!-- Server-side translation content -->
+      <div x-show="!dynamicTranslation && translation_content" class="prose max-w-none">
+        <h4 class="text-lg font-semibold text-peacock-primary mb-3">
+          {% if translation_metadata %}
+          {{ _('Translation') }} ({{ translation_metadata.source_language.upper() }} → {{
+          translation_metadata.target_language.upper() }})
+          <span class="text-sm font-normal text-peacock-secondary">via {{ translation_metadata.engine }}</span>
+          {% else %}
+          {{ _('Translation') }}
+          {% endif %}
+        </h4>
+        <div class="text-sm leading-relaxed whitespace-pre-wrap">{{ translation_content }}</div>
+      </div>
+
+      <!-- No translation available -->
+      <div x-show="!dynamicTranslation && !translation_content" class="flex items-center justify-center h-full">
+        <div class="text-center">
+          <svg class="w-16 h-16 text-peacock-secondary mx-auto mb-4" fill="none" stroke="currentColor"
+            viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129">
+            </path>
+          </svg>
+          <h4 class="text-lg font-semibold text-peacock-primary mb-2">{{ _('No Translation Available') }}</h4>
+          <p class="text-peacock-secondary">{{ _('Translation has not been generated for this page yet.') }}</p>
+          <p class="text-sm text-peacock-secondary mt-2">{{ _('Use the batch translation feature to generate
+            translations for this project.') }}</p>
+        </div>
       </div>
     </div>
   </div>
-</div>
-{% endmacro %}
-
+  {% endmacro %}
