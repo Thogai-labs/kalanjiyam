@@ -151,6 +151,44 @@ export default () => ({
       supportsBilingual: true,
       bilingualSeparator: ',',
       autoDetect: true
+    },
+    '4': {
+      name: 'Docling OCR',
+      languages: [
+        { value: 'sa', text: 'Sanskrit (sa)' },
+        { value: 'hi', text: 'Hindi (hi)' },
+        { value: 'te', text: 'Telugu (te)' },
+        { value: 'mr', text: 'Marathi (mr)' },
+        { value: 'bn', text: 'Bengali (bn)' },
+        { value: 'gu', text: 'Gujarati (gu)' },
+        { value: 'kn', text: 'Kannada (kn)' },
+        { value: 'ml', text: 'Malayalam (ml)' },
+        { value: 'ta', text: 'Tamil (ta)' },
+        { value: 'pa', text: 'Punjabi (pa)' },
+        { value: 'or', text: 'Odia (or)' },
+        { value: 'ur', text: 'Urdu (ur)' },
+        { value: 'en', text: 'English (en)' },
+        { value: 'ar', text: 'Arabic (ar)' },
+        { value: 'fa', text: 'Persian (fa)' },
+        { value: 'th', text: 'Thai (th)' },
+        { value: 'ko', text: 'Korean (ko)' },
+        { value: 'ja', text: 'Japanese (ja)' },
+        { value: 'zh', text: 'Chinese (zh)' },
+        { value: 'ru', text: 'Russian (ru)' },
+        { value: 'es', text: 'Spanish (es)' },
+        { value: 'fr', text: 'French (fr)' },
+        { value: 'de', text: 'German (de)' },
+        { value: 'it', text: 'Italian (it)' },
+        { value: 'pt', text: 'Portuguese (pt)' },
+        { value: 'nl', text: 'Dutch (nl)' },
+        { value: 'pl', text: 'Polish (pl)' },
+        { value: 'tr', text: 'Turkish (tr)' },
+        { value: 'vi', text: 'Vietnamese (vi)' },
+        { value: 'id', text: 'Indonesian (id)' },
+        { value: 'ms', text: 'Malay (ms)' }
+      ],
+      supportsBilingual: false,
+      autoDetect: true
     }
   },
 
@@ -316,7 +354,8 @@ export default () => ({
     const engineMap = {
       '1': 'google',
       '2': 'tesseract', 
-      '3': 'surya'
+      '3': 'surya',
+      '4': 'docling'
     };
     return engineMap[engineValue] || 'google';
   },
