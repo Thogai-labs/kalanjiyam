@@ -29,7 +29,8 @@ def _run_ocr_for_page_inner(
     engine_map = {
         '1': 'google',
         '2': 'tesseract',
-        '3': 'surya'
+        '3': 'surya',
+        '4': 'docling'
     }
     if engine in engine_map:
         engine = engine_map[engine]
@@ -43,25 +44,27 @@ def _run_ocr_for_page_inner(
 
         # The actual API call.
         image_path = get_page_image_filepath(project_slug, page_slug)
-        
+
         from kalanjiyam.utils.ocr_engine import run_ocr
-        
+
         # Get GPU configuration for Surya OCR
         gpu_config = None
         if engine == 'surya':
             from kalanjiyam.utils.surya_gpu_config import get_gpu_config_from_env
             gpu_config = get_gpu_config_from_env()
-        
-        ocr_response = run_ocr(image_path, engine_name=engine, language=language, gpu_config=gpu_config)
+
+        ocr_response = run_ocr(
+            image_path, engine_name=engine, language=language, gpu_config=gpu_config)
 
         session = q.get_session()
         project = q.project(project_slug)
         if project is None:
             raise ValueError(f'Project "{project_slug}" not found.')
-        
+
         page = q.page(project.id, page_slug)
         if page is None:
-            raise ValueError(f'Page "{page_slug}" not found in project "{project_slug}".')
+            raise ValueError(
+                f'Page "{page_slug}" not found in project "{project_slug}".')
 
         # Use the appropriate serialize function based on engine
         if engine == 'google':
@@ -73,12 +76,17 @@ def _run_ocr_for_page_inner(
             page.ocr_bounding_boxes = serialize_bounding_boxes(
                 ocr_response.bounding_boxes
             )
+        elif engine == 'docling':   # Add this new condition
+            from kalanjiyam.utils.docling_ocr import serialize_bounding_boxes
+            page.ocr_bounding_boxes = serialize_bounding_boxes(
+                ocr_response.bounding_boxes
+            )
         else:
             from kalanjiyam.utils.tesseract_ocr import serialize_bounding_boxes
             page.ocr_bounding_boxes = serialize_bounding_boxes(
                 ocr_response.bounding_boxes
             )
-        
+
         session.add(page)
         session.commit()
 
@@ -115,9 +123,6 @@ def run_ocr_for_page(
         engine,
         language,
     )
-
-
-
 
 
 def run_ocr_for_project(

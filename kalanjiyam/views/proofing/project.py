@@ -49,7 +49,8 @@ bp = Blueprint("project", __name__)
 LOG = logging.getLogger(__name__)
 
 # Initialize Redis client
-redis_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+redis_client = redis.Redis.from_url(
+    os.getenv("REDIS_URL", "redis://localhost:6379/0"))
 
 
 def _is_valid_page_number_spec(_, field):
@@ -408,13 +409,15 @@ def _replace_text(project_, replace_form: ReplaceForm, query: str, replace: str)
             if query_pattern.search(line):
                 try:
                     marked_query = query_pattern.sub(
-                        lambda m: Markup(f"<mark>{escape(m.group(0))}</mark>"), line
+                        lambda m: Markup(
+                            f"<mark>{escape(m.group(0))}</mark>"), line
                     )
                     marked_replace = query_pattern.sub(
                         Markup(f"<mark>{escape(replace)}</mark>"), line
                     )
                     LOG.debug(f"Search/Replace > marked query: {marked_query}")
-                    LOG.debug(f"Search/Replace > marked replace: {marked_replace}")
+                    LOG.debug(
+                        f"Search/Replace > marked replace: {marked_replace}")
                     matches.append(
                         {
                             "query": marked_query,
@@ -454,7 +457,8 @@ def replace(slug):
     form = ReplaceForm(request.form)
     if not form.validate():
         invalid_keys = list(form.errors.keys())
-        LOG.debug(f"Invalid form - {request.method}, invalid keys: {invalid_keys}")
+        LOG.debug(
+            f"Invalid form - {request.method}, invalid keys: {invalid_keys}")
         return render_template(
             "proofing/projects/replace.html", project=project_, form=ReplaceForm()
         )
@@ -462,7 +466,8 @@ def replace(slug):
     # search for "query" string and replace with "update" string
     query = form.query.data
     replace = form.replace.data
-    results = _replace_text(project_, replace_form=form, query=query, replace=replace)
+    results = _replace_text(project_, replace_form=form,
+                            query=query, replace=replace)
     num_matches = sum(len(r["matches"]) for r in results)
 
     return render_template(
@@ -498,7 +503,8 @@ def _select_changes(project_, selected_keys, query: str, replace: str):
             replace_form_key = f"match{page_.slug}-{line_num}-replace"
 
             if selected_keys.get(form_key) == "selected":
-                LOG.debug(f"{__name__}: {form_key}: {selected_keys.get(form_key)}")
+                LOG.debug(
+                    f"{__name__}: {form_key}: {selected_keys.get(form_key)}")
                 LOG.debug(
                     f"{__name__}: {replace_form_key}: {request.form.get(replace_form_key)}"
                 )
@@ -515,7 +521,8 @@ def _select_changes(project_, selected_keys, query: str, replace: str):
         results.append({"page": page_, "matches": matches})
         LOG.debug(f"{__name__}: Total matches appended: {len(matches)}")
 
-    selected_count = sum(value == "selected" for value in selected_keys.values())
+    selected_count = sum(
+        value == "selected" for value in selected_keys.values())
     LOG.debug(f"{__name__} > Number of selected changes = {selected_count}")
 
     return render_template(
@@ -566,7 +573,8 @@ def submit_changes(slug):
         for key, value in request.form.items()
         if key.startswith("match") and not key.endswith("replace")
     }
-    render = _select_changes(project_, selected_keys, query=query, replace=replace)
+    render = _select_changes(project_, selected_keys,
+                             query=query, replace=replace)
 
     return render
 
@@ -612,7 +620,8 @@ def confirm_changes(slug):
 
         for page_slug, changed_lines in pages.items():
             # Get the corresponding `Page` object
-            LOG.debug(f"{__name__}: Project - {project_.slug}, Page : {page_slug}")
+            LOG.debug(
+                f"{__name__}: Project - {project_.slug}, Page : {page_slug}")
 
             # Page query needs id for project and slug for page
             page = q.page(project_.id, page_slug)
@@ -652,7 +661,8 @@ def confirm_changes(slug):
                     version=page.version,
                     author_id=current_user.id,
                 )
-                LOG.debug(f"{__name__}: New reviion > {page_slug}: {new_revision}")
+                LOG.debug(
+                    f"{__name__}: New reviion > {page_slug}: {new_revision}")
 
         flash("Changes applied.", "success")
         return redirect(url_for("proofing.project.activity", slug=slug))
@@ -673,12 +683,12 @@ def batch_ocr(slug):
     # Check if there's an ongoing OCR task using Redis
     task_key = f"ocr_task:{slug}"
     task_info = redis_client.get(task_key)
-    
+
     if task_info:
         try:
             task_data = json.loads(task_info)
             task_id = task_data.get('task_id')
-            
+
             # Try to restore the task to check if it's still active
             r = GroupResult.restore(task_id, app=celery_app)
             if r and r.results:
@@ -687,12 +697,15 @@ def batch_ocr(slug):
                 # Check if task is still in progress (not all tasks completed)
                 if current < total:
                     percent = current / total if total > 0 else 0
-                    
+
                     # Calculate task status variables
-                    active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
-                    pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
-                    failed_tasks = sum(1 for result in r.results if result.failed())
-                    
+                    active_tasks = sum(
+                        1 for result in r.results if result.state == 'STARTED')
+                    pending_tasks = sum(
+                        1 for result in r.results if result.state == 'PENDING')
+                    failed_tasks = sum(
+                        1 for result in r.results if result.failed())
+
                     return render_template(
                         "proofing/projects/batch-ocr-post.html",
                         project=project_,
@@ -720,16 +733,17 @@ def batch_ocr(slug):
         # Get OCR parameters from form
         engine = request.form.get('engine', 'google')
         language = request.form.get('language', 'sa')
-        
+
         # Decode numeric engine values to actual engine names
         engine_map = {
             '1': 'google',
             '2': 'tesseract',
-            '3': 'surya'
+            '3': 'surya',
+            '4': 'docling'
         }
         if engine in engine_map:
             engine = engine_map[engine]
-        
+
         # Validate engine
         from kalanjiyam.utils.ocr_engine import OcrEngineFactory
         if engine not in OcrEngineFactory.get_supported_engines():
@@ -738,7 +752,7 @@ def batch_ocr(slug):
                 "proofing/projects/batch-ocr.html",
                 project=project_,
             )
-        
+
         task = ocr_tasks.run_ocr_for_project(
             app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
             project=project_,
@@ -755,7 +769,7 @@ def batch_ocr(slug):
                 'project_slug': slug
             }
             redis_client.setex(task_key, 86400, json.dumps(task_info))
-            
+
             return render_template(
                 "proofing/projects/batch-ocr-post.html",
                 project=project_,
@@ -789,7 +803,8 @@ def _clear_ocr_task_from_redis(task_id):
                 task_data = json.loads(task_info)
                 if task_data.get('task_id') == task_id:
                     redis_client.delete(key)
-                    LOG.debug(f"Cleared OCR task {task_id} from Redis key {key}")
+                    LOG.debug(
+                        f"Cleared OCR task {task_id} from Redis key {key}")
                     break
     except Exception as e:
         LOG.warning(f"Error clearing OCR task from Redis: {e}")
@@ -821,8 +836,10 @@ def batch_ocr_status(task_id):
         percent = current / total if total > 0 else 0
 
         # Check if any tasks are actively being processed
-        active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
-        pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
+        active_tasks = sum(
+            1 for result in r.results if result.state == 'STARTED')
+        pending_tasks = sum(
+            1 for result in r.results if result.state == 'PENDING')
         failed_tasks = sum(1 for result in r.results if result.failed())
 
         status = None
@@ -878,12 +895,12 @@ def batch_translate(slug):
     # Check if there's an ongoing translation task using Redis
     task_key = f"translation_task:{slug}"
     task_info = redis_client.get(task_key)
-    
+
     if task_info:
         try:
             task_data = json.loads(task_info)
             task_id = task_data.get('task_id')
-            
+
             # Try to restore the task to check if it's still active
             r = GroupResult.restore(task_id, app=celery_app)
             if r and r.results:
@@ -892,12 +909,15 @@ def batch_translate(slug):
                 # Check if task is still in progress (not all tasks completed)
                 if current < total:
                     percent = current / total if total > 0 else 0
-                    
+
                     # Calculate task status variables
-                    active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
-                    pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
-                    failed_tasks = sum(1 for result in r.results if result.failed())
-                    
+                    active_tasks = sum(
+                        1 for result in r.results if result.state == 'STARTED')
+                    pending_tasks = sum(
+                        1 for result in r.results if result.state == 'PENDING')
+                    failed_tasks = sum(
+                        1 for result in r.results if result.failed())
+
                     return render_template(
                         "proofing/projects/batch-translate.html",
                         project=project_,
@@ -926,7 +946,7 @@ def batch_translate(slug):
         source_lang = request.form.get('source_lang', 'sa')
         target_lang = request.form.get('target_lang', 'en')
         engine = request.form.get('engine', 'google')
-        
+
         # Validate engine
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
         if engine not in TranslationEngineFactory.get_supported_engines():
@@ -935,7 +955,7 @@ def batch_translate(slug):
                 "proofing/projects/batch-translate.html",
                 project=project_,
             )
-        
+
         task = translation_tasks.run_translation_for_project(
             app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
             project=project_,
@@ -954,7 +974,7 @@ def batch_translate(slug):
                 'project_slug': slug
             }
             redis_client.setex(task_key, 86400, json.dumps(task_info))
-            
+
             return render_template(
                 "proofing/projects/batch-translate.html",
                 project=project_,
@@ -987,8 +1007,10 @@ def batch_translate_status(task_id):
         percent = current / total if total > 0 else 0
 
         # Check if any tasks are actively being processed
-        active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
-        pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
+        active_tasks = sum(
+            1 for result in r.results if result.state == 'STARTED')
+        pending_tasks = sum(
+            1 for result in r.results if result.state == 'PENDING')
         failed_tasks = sum(1 for result in r.results if result.failed())
 
         status = None
