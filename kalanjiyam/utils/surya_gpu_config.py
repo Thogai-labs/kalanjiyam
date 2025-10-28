@@ -50,6 +50,7 @@ def get_gpu_config_from_env() -> Dict[str, Any]:
             config['device'] = f'cuda:{device}'
         else:
             config['device'] = device
+        logging.info(f"GPU device set from environment: {config['device']}")
     
     if os.environ.get('SURYA_GPU_MEMORY_FRACTION'):
         try:
@@ -65,6 +66,23 @@ def get_gpu_config_from_env() -> Dict[str, Any]:
     
     if os.environ.get('SURYA_GPU_ALLOW_GROWTH'):
         config['allow_growth'] = os.environ['SURYA_GPU_ALLOW_GROWTH'].lower() == 'true'
+    
+    # Auto-detect GPU if device is 'auto'
+    if config['device'] == 'auto':
+        if os.environ.get('CUDA_VISIBLE_DEVICES'):
+            # Use the first available GPU
+            gpu_id = os.environ.get('CUDA_VISIBLE_DEVICES').split(',')[0]
+            config['device'] = f'cuda:{gpu_id}'
+        else:
+            # Check if CUDA is available
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    config['device'] = 'cuda:0'
+                else:
+                    config['device'] = 'cpu'
+            except ImportError:
+                config['device'] = 'cpu'
     
     return config
 
@@ -159,11 +177,17 @@ def setup_gpu_environment(config: Dict[str, Any]) -> None:
     Args:
         config: GPU configuration dictionary
     """
+    # Normalize device name
+    device = config['device']
+    if device.isdigit():
+        device = f'cuda:{device}'
+        config['device'] = device
+    
     # Set device
-    if config['device'].startswith('cuda'):
+    if device.startswith('cuda'):
         # Extract GPU ID and set CUDA_VISIBLE_DEVICES
-        if ':' in config['device']:
-            gpu_id = config['device'].split(':')[1]
+        if ':' in device:
+            gpu_id = device.split(':')[1]
             os.environ['CUDA_VISIBLE_DEVICES'] = gpu_id
             # When CUDA_VISIBLE_DEVICES is set, the GPU becomes cuda:0 in PyTorch
             os.environ['TORCH_DEVICE'] = 'cuda:0'
@@ -181,7 +205,7 @@ def setup_gpu_environment(config: Dict[str, Any]) -> None:
         if config['memory_fraction'] < 1.0:
             os.environ['TF_GPU_MEMORY_FRACTION'] = str(config['memory_fraction'])
         
-        logging.info(f"GPU configured: {config['device']}, memory fraction: {config['memory_fraction']}")
+        logging.info(f"GPU configured: {device}, memory fraction: {config['memory_fraction']}")
     else:
         os.environ['TORCH_DEVICE'] = 'cpu'
         logging.info("Using CPU for Surya OCR")

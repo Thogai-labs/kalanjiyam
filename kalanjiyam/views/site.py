@@ -1,6 +1,6 @@
 """Views for basic site pages."""
 
-from flask import Blueprint, current_app, redirect, render_template, send_file, session, url_for
+from flask import Blueprint, abort, current_app, redirect, render_template, send_file, session, url_for
 
 from kalanjiyam import queries as q
 from kalanjiyam.consts import LOCALES
@@ -48,12 +48,17 @@ def sentry_500():
 
 @bp.route("/static/uploads/<project_slug>/pages/<page_slug>.jpg")
 def page_image(project_slug, page_slug):
-    """(Debug only) Serve an image from the filesystem.
-
-    In production, we serve images directly from nginx.
+    """Serve an image from the filesystem.
+    
+    In production, this is typically handled by nginx, but we allow
+    Flask to serve it if the file exists.
     """
-    assert current_app.debug
     image_path = get_page_image_filepath(project_slug, page_slug)
+    
+    # Check if the image file exists
+    if not image_path.exists():
+        abort(404)
+    
     return send_file(image_path)
 
 

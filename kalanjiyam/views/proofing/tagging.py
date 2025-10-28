@@ -7,7 +7,7 @@ from wtforms.widgets import TextArea
 
 import kalanjiyam.queries as q
 from kalanjiyam import database as db
-from kalanjiyam.utils import word_parses, xml
+from kalanjiyam.utils import word_parses, xml_utils
 
 bp = Blueprint("tagging", __name__)
 

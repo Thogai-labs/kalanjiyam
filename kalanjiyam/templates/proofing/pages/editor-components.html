@@ -179,17 +179,33 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
               <div x-show="showEngineInfo" x-transition class="engine-info-panel mb-3">
                 <div class="space-y-2">
                   <div class="engine-item">
-                    <span class="engine-name">OCR 1:</span>
+                    <span class="engine-name">Google:</span>
                     <span class="engine-desc">{{ _('Cloud-based, high accuracy, requires internet') }}</span>
                   </div>
                   <div class="engine-item">
-                    <span class="engine-name">OCR 2:</span>
+                    <span class="engine-name">Tesseract:</span>
                     <span class="engine-desc">{{ _('Local processing, fast, good for Latin scripts') }}</span>
                   </div>
                   <div class="engine-item">
-                    <span class="engine-name">OCR 3:</span>
+                    <span class="engine-name">Surya:</span>
                     <span class="engine-desc">{{ _('AI-powered, multilingual, best for Indic scripts') }}</span>
                   </div>
+                  <div class="engine-item">
+                    <span class="engine-name">Nanonets:</span>
+                    <span class="engine-desc">{{ _('Advanced AI model, HTML output, layout-aware, handles tables/charts') }}</span>
+                  </div>
+                  <div class="engine-item">
+                    <span class="engine-name">DeepSeek:</span>
+                    <span class="engine-desc">{{ _('Advanced AI model, markdown output, grounding support') }}</span>
+                  </div>
+           <div class="engine-item">
+             <span class="engine-name">Chandra:</span>
+             <span class="engine-desc">{{ _('Layout-preserving OCR, HTML/Markdown output, handles tables/forms') }}</span>
+           </div>
+           <div class="engine-item">
+             <span class="engine-name">Qwen 2VL:</span>
+             <span class="engine-desc">{{ _('Advanced multimodal model, supports 100+ languages, vision-language understanding') }}</span>
+           </div>
                 </div>
               </div>
             </div>
@@ -199,22 +215,42 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
           <li class="mb-3">
             <div class="dropdown-item-no-hover">
               <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Select Engine:') }}</label>
-              <div class="grid grid-cols-3 gap-2">
+              <div class="grid grid-cols-2 gap-2">
                 <button @click.prevent.stop="selectedEngine = '1'; updateLanguageOptions()" 
                         class="ocr-engine-btn"
                         :class="selectedEngine === '1' ? 'active' : ''">
-                  OCR 1
+                  Google
                 </button>
                 <button @click.prevent.stop="selectedEngine = '2'; updateLanguageOptions()" 
                         class="ocr-engine-btn"
                         :class="selectedEngine === '2' ? 'active' : ''">
-                  OCR 2
+                  Tesseract
                 </button>
                 <button @click.prevent.stop="selectedEngine = '3'; updateLanguageOptions()" 
                         class="ocr-engine-btn"
                         :class="selectedEngine === '3' ? 'active' : ''">
-                  OCR 3
+                  Surya
                 </button>
+         <button @click.prevent.stop="selectedEngine = '4'; updateLanguageOptions()"
+                 class="ocr-engine-btn"
+                 :class="selectedEngine === '4' ? 'active' : ''">
+           Nanonets
+         </button>
+         <button @click.prevent.stop="selectedEngine = '5'; updateLanguageOptions()"
+                 class="ocr-engine-btn"
+                 :class="selectedEngine === '5' ? 'active' : ''">
+           DeepSeek
+         </button>
+         <button @click.prevent.stop="selectedEngine = '6'; updateLanguageOptions()"
+                 class="ocr-engine-btn"
+                 :class="selectedEngine === '6' ? 'active' : ''">
+           Chandra
+         </button>
+         <button @click.prevent.stop="selectedEngine = '7'; updateLanguageOptions()"
+                 class="ocr-engine-btn"
+                 :class="selectedEngine === '7' ? 'active' : ''">
+           Qwen 2VL
+         </button>
               </div>
             </div>
           </li>

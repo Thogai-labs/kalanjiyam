@@ -13,7 +13,7 @@ from indic_transliteration import sanscript
 
 from kalanjiyam.seed.utils.sandhi_utils import AC
 from kalanjiyam.utils.word_parses import Token
-from kalanjiyam.utils.xml import tei_xml, transform
+from kalanjiyam.utils.xml_utils import tei_xml, transform
 
 
 @dataclass

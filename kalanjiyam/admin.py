@@ -693,8 +693,6 @@ def create_admin_manager(app):
         app,
         name="Kalanjiyam",
         index_view=KalanjiyamIndexView(),
-        base_template="admin/master.html",
-        template_mode="bootstrap4",
     )
 
     admin.add_view(DictionaryView(db.Dictionary, session))

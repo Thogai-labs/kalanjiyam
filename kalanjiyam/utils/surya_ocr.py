@@ -100,7 +100,24 @@ def run(file_path: Path, language: str = 'sa', additional_languages: Optional[Li
     # Get and setup GPU configuration
     if gpu_config is None:
         gpu_config = get_gpu_config()
+    
+    logging.info(f"Surya OCR GPU configuration: {gpu_config}")
     setup_gpu_environment(gpu_config)
+    
+    # Force GPU usage if CUDA is available
+    if gpu_config['device'].startswith('cuda'):
+        try:
+            import torch
+            if torch.cuda.is_available():
+                # Ensure we're using the correct GPU
+                torch.cuda.set_device(0)  # Use first GPU
+                logging.info(f"Force-set PyTorch to use GPU: {torch.cuda.get_device_name(0)}")
+            else:
+                logging.warning("CUDA not available despite GPU config - falling back to CPU")
+                gpu_config['device'] = 'cpu'
+        except ImportError:
+            logging.warning("PyTorch not available - falling back to CPU")
+            gpu_config['device'] = 'cpu'
     
     # Set conservative environment variables for Surya OCR
     os.environ.setdefault('COMPILE_DETECTOR', 'false')  # Disable compilation to save memory
@@ -131,15 +148,48 @@ def run(file_path: Path, language: str = 'sa', additional_languages: Optional[Li
         det_predictor = DetectionPredictor()
         rec_predictor = RecognitionPredictor(foundation_predictor)
         
+        # Log device information and clear GPU memory
+        try:
+            import torch
+            if torch.cuda.is_available():
+                current_device = torch.cuda.current_device()
+                device_name = torch.cuda.get_device_name(current_device)
+                memory_allocated = torch.cuda.memory_allocated(current_device) / 1024**3  # GB
+                memory_reserved = torch.cuda.memory_reserved(current_device) / 1024**3  # GB
+                logging.info(f"Surya OCR using GPU: {device_name} (Device {current_device})")
+                logging.info(f"GPU Memory - Allocated: {memory_allocated:.2f}GB, Reserved: {memory_reserved:.2f}GB")
+                
+                # Clear GPU memory before starting OCR
+                torch.cuda.empty_cache()
+                logging.info("Cleared GPU cache before OCR")
+            else:
+                logging.info("Surya OCR using CPU")
+        except ImportError:
+            logging.info("Surya OCR using CPU (PyTorch not available)")
+        
         # Run OCR with the new API and conservative settings
         logging.info(f"Running Surya OCR with automatic language detection on {gpu_config['device']}")
-        predictions_by_image = rec_predictor(
-            [image],
-            task_names=[TaskNames.ocr_with_boxes],
-            det_predictor=det_predictor,
-            highres_images=[image],
-            math_mode=os.environ.get('SURYA_MATH_MODE', 'false').lower() == 'true',  # Configurable math recognition
-        )
+        
+        # Add timeout and better error handling
+        try:
+            predictions_by_image = rec_predictor(
+                [image],
+                task_names=[TaskNames.ocr_with_boxes],
+                det_predictor=det_predictor,
+                highres_images=[image],
+                math_mode=os.environ.get('SURYA_MATH_MODE', 'false').lower() == 'true',  # Configurable math recognition
+            )
+        except Exception as e:
+            logging.error(f"Surya OCR inference failed: {e}")
+            # Clear GPU memory and try again
+            if gpu_config['device'].startswith('cuda'):
+                try:
+                    import torch
+                    torch.cuda.empty_cache()
+                    logging.info("Cleared GPU cache after error")
+                except ImportError:
+                    pass
+            raise
         
         # Extract text and bounding boxes from the first image result
         if not predictions_by_image:

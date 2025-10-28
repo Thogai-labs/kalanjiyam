@@ -8,7 +8,7 @@ from indic_transliteration import sanscript
 import kalanjiyam.database as db
 import kalanjiyam.queries as q
 from kalanjiyam.consts import TEXT_CATEGORIES
-from kalanjiyam.utils import xml
+from kalanjiyam.utils import xml_utils
 from kalanjiyam.utils.json_serde import KalanjiyamJSONEncoder
 from kalanjiyam.views.api import bp as api
 from kalanjiyam.views.reader.schema import Block, Section

@@ -353,10 +353,18 @@ def ocr(project_slug, page_slug):
     engine_map = {
         '1': 'google',
         '2': 'tesseract',
-        '3': 'surya'
+        '3': 'surya',
+        '4': 'nanonets',
+        '5': 'deepseek',
+        '6': 'chandra',
+        '7': 'qwen3'
     }
+    original_engine = engine
     if engine in engine_map:
         engine = engine_map[engine]
+    
+    # Debug logging
+    logging.info(f"OCR API called with engine='{original_engine}' -> mapped to '{engine}', language='{language}'")
     
     # Validate engine
     from kalanjiyam.utils.ocr_engine import OcrEngineFactory
@@ -365,9 +373,27 @@ def ocr(project_slug, page_slug):
 
     image_path = get_page_image_filepath(project_slug, page_slug)
     
+    # Get GPU configuration for engines that need it
+    gpu_config = None
+    if engine == 'surya':
+        from kalanjiyam.utils.surya_gpu_config import get_gpu_config_from_env
+        gpu_config = get_gpu_config_from_env()
+    elif engine == 'nanonets':
+        # Nanonets OCR GPU configuration
+        gpu_config = {'device': 'auto'}  # Will use GPU-first, CPU fallback
+    elif engine == 'deepseek':
+        # DeepSeek OCR GPU configuration
+        gpu_config = {'device': 'auto'}  # Will use GPU-first, CPU fallback
+    elif engine == 'chandra':
+        # Chandra OCR GPU configuration
+        gpu_config = {'device': 'auto'}  # Will use GPU-first, CPU fallback
+    elif engine == 'qwen3':
+        # Qwen 3 OCR GPU configuration
+        gpu_config = {'device': 'auto'}  # Will use GPU-first, CPU fallback
+    
     try:
         from kalanjiyam.utils.ocr_engine import run_ocr
-        ocr_response = run_ocr(image_path, engine_name=engine, language=language)
+        ocr_response = run_ocr(image_path, engine_name=engine, language=language, gpu_config=gpu_config)
         return ocr_response.text_content
     except Exception as e:
         logging.error(f"OCR failed for {project_slug}/{page_slug} with engine {engine} and language {language}: {e}")
