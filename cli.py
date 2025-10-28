@@ -77,6 +77,37 @@ def add_role(username, role):
 
 
 @cli.command()
+@click.option("--username", help="the user whose password to change")
+def change_password(username):
+    """Change a user's password.
+    
+    This command prompts for a new password and confirmation.
+    """
+    if not username:
+        username = input("Username: ")
+    
+    new_password = getpass.getpass("New password: ")
+    confirm_password = getpass.getpass("Confirm password: ")
+    
+    if new_password != confirm_password:
+        raise click.ClickException("Passwords don't match.")
+    
+    if not new_password.strip():
+        raise click.ClickException("Password cannot be empty.")
+    
+    with Session(engine) as session:
+        u = session.query(db.User).where(db.User.username == username).first()
+        if u is None:
+            raise click.ClickException(f'User "{username}" does not exist.')
+        
+        u.set_password(new_password)
+        session.add(u)
+        session.commit()
+    
+    print(f'Changed password for user "{username}".')
+
+
+@cli.command()
 @click.option("--title", help="title of the new project")
 @click.option("--pdf-path", help="path to the source PDF")
 def create_project(title, pdf_path):
