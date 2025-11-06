@@ -40,6 +40,12 @@
   .bg-peacock-emerald { background-color: #059669; } /* Emerald-600 */
   .bg-peacock-gold { background-color: #fbbf24; } /* Amber-400 */
   
+  .border-peacock-primary { border-color: #0f766e; } /* Teal-800 */
+  .border-peacock-secondary { border-color: #0891b2; } /* Cyan-600 */
+  .border-peacock-accent { border-color: #7c3aed; } /* Violet-600 */
+  .border-peacock-emerald { border-color: #059669; } /* Emerald-600 */
+  .border-peacock-gold { border-color: #fbbf24; } /* Amber-400 */
+  
   .bg-peacock-gradient { 
     background: linear-gradient(135deg, #0f766e 0%, #0891b2 50%, #7c3aed 100%); 
   }
