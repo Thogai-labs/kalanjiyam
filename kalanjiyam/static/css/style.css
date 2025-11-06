@@ -261,5 +261,102 @@
     background-clip: text;
   }
 
+  /* TipTap Rich Text Editor Styles */
+  #rich-editor .ProseMirror {
+    outline: none;
+    min-height: 500px;
+    padding: 1rem;
+  }
+  
+  #rich-editor .ProseMirror p {
+    margin: 0.75rem 0;
+  }
+  
+  #rich-editor .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    color: #64748b;
+    pointer-events: none;
+    height: 0;
+  }
+  
+  #rich-editor .ProseMirror img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    margin: 0.5rem 0;
+  }
+  
+  #rich-editor .ProseMirror table {
+    border-collapse: collapse;
+    margin: 0.75rem 0;
+    table-layout: fixed;
+    width: 100%;
+  }
+  
+  #rich-editor .ProseMirror table td,
+  #rich-editor .ProseMirror table th {
+    min-width: 1em;
+    border: 1px solid #5eead4;
+    padding: 0.5rem;
+    vertical-align: top;
+    box-sizing: border-box;
+    position: relative;
+  }
+  
+  #rich-editor .ProseMirror table th {
+    font-weight: 600;
+    background-color: #ccfbf1;
+  }
+  
+  #rich-editor .ProseMirror table .selectedCell:after {
+    z-index: 2;
+    position: absolute;
+    content: "";
+    left: 0; right: 0; top: 0; bottom: 0;
+    background: rgba(200, 200, 255, 0.4);
+    pointer-events: none;
+  }
+  
+  #rich-editor .ProseMirror table .column-resize-handle {
+    position: absolute;
+    right: -2px;
+    top: 0;
+    bottom: -2px;
+    width: 4px;
+    background-color: #0891b2;
+    pointer-events: none;
+  }
+
+  /* TipTap Simple UI Toolbar Styles - Matching TipTap's official design */
+  #rich-editor-toolbar {
+    @apply bg-white border-b border-gray-200;
+  }
+
+  .toolbar-btn {
+    @apply flex items-center justify-center w-9 h-9 rounded transition-all duration-150;
+    @apply text-gray-700 hover:bg-gray-100 hover:text-gray-900;
+    @apply disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent;
+    @apply focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-1;
+  }
+
+  .toolbar-btn.active {
+    @apply bg-gray-100 text-gray-900;
+  }
+
+  .toolbar-btn svg {
+    @apply flex-shrink-0 w-5 h-5;
+  }
+
+  .toolbar-separator {
+    @apply w-px h-6 bg-gray-300 mx-1;
+  }
+
+  .toolbar-group {
+    @apply flex items-center gap-0;
+  }
+
 }
+
+
 

@@ -439,29 +439,276 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
       </div>
     </div>
 
+    <!-- Image Upload Button -->
+    <div class="relative">
+      <input type="file" 
+             id="image-upload-input" 
+             accept="image/*" 
+             class="hidden" 
+             @change="handleImageUpload($event)"
+             multiple>
+      <button type="button" 
+              class="{{ button_css }}"
+              @click.prevent="document.getElementById('image-upload-input').click()"
+              title="{{ _('Upload Image') }}">
+        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+        </svg>
+        {{ _('Image') }}
+      </button>
+    </div>
+
   </div>
 </nav>
 {% endmacro %}
 
 
-{# Text editing area. #}
+{# Text editing area with rich text editor. #}
 {% macro text_box(content) %}
-<div class="bg-white border border-teal-200 rounded-lg p-4 peacock-shadow">
+<div class="bg-white border border-teal-200 rounded-lg p-4 peacock-shadow"
+     @dragover.prevent="handleDragOver"
+     @dragleave="handleDragLeave"
+     @drop.prevent="handleDrop"
+     :class="isDragging ? 'ring-2 ring-peacock-primary border-peacock-primary' : ''">
   <div class="flex items-center justify-between mb-4">
     <h3 class="text-lg font-semibold text-peacock-primary">{{ _('Text Editor') }}</h3>
     <div class="flex items-center gap-2">
       <span class="text-sm text-peacock-secondary" x-show="hasUnsavedChanges">
         {{ _('Unsaved changes') }}
       </span>
+      <span x-show="isDragging" class="text-sm text-peacock-primary font-medium">
+        {{ _('Drop image here') }}
+      </span>
     </div>
   </div>
+  
+  {# TipTap Simple UI Toolbar - Matching TipTap's official design #}
+  <div id="rich-editor-toolbar" class="px-2 py-1.5" x-show="richEditor">
+    <div class="flex items-center gap-0 flex-wrap">
+      {# Undo/Redo #}
+      <div class="toolbar-group">
+        <button type="button"
+                class="toolbar-btn"
+                data-tiptap-command="undo"
+                title="{{ _('Undo') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+          </svg>
+        </button>
+        <button type="button"
+                class="toolbar-btn"
+                data-tiptap-command="redo"
+                title="{{ _('Redo') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="toolbar-separator"></div>
+
+      {# Text Formatting #}
+      <div class="toolbar-group">
+        <button type="button"
+                class="toolbar-btn"
+                data-tiptap-command="toggleBold"
+                title="{{ _('Bold') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 4h8a4 4 0 014 4v8a4 4 0 01-4 4H6a4 4 0 01-4-4V8a4 4 0 014-4z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6"></path>
+          </svg>
+        </button>
+        <button type="button"
+                class="toolbar-btn"
+                data-tiptap-command="toggleItalic"
+                title="{{ _('Italic') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+          </svg>
+        </button>
+        <button type="button"
+                class="toolbar-btn"
+                data-tiptap-command="toggleUnderline"
+                title="{{ _('Underline') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16a2 2 0 01-2 2H7a2 2 0 01-2-2V5z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="toolbar-separator"></div>
+
+      {# Headings Dropdown #}
+      <div class="toolbar-group relative" x-data="{ open: false }">
+        <button type="button"
+                class="toolbar-btn"
+                @click.prevent="open = !open"
+                @click.outside="open = false"
+                title="{{ _('Heading') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+          <svg class="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div x-show="open" x-cloak class="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50" style="min-width: 150px;">
+          <ul class="py-1">
+            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 hover:bg-gray-100" data-tiptap-command="setParagraph" @click="open = false">{{ _('Paragraph') }}</button></li>
+            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 hover:bg-gray-100" data-tiptap-command="toggleHeading" data-level="1" @click="open = false">{{ _('Heading 1') }}</button></li>
+            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 hover:bg-gray-100" data-tiptap-command="toggleHeading" data-level="2" @click="open = false">{{ _('Heading 2') }}</button></li>
+            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 hover:bg-gray-100" data-tiptap-command="toggleHeading" data-level="3" @click="open = false">{{ _('Heading 3') }}</button></li>
+          </ul>
+        </div>
+      </div>
+      <div class="toolbar-separator"></div>
+
+      {# Lists #}
+      <div class="toolbar-group">
+        <button type="button"
+                class="toolbar-btn"
+                data-tiptap-command="toggleBulletList"
+                title="{{ _('Bullet List') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6h13M8 12h13m-13 6h13M3 6h.01M3 12h.01M3 18h.01"></path>
+          </svg>
+        </button>
+        <button type="button"
+                class="toolbar-btn"
+                data-tiptap-command="toggleOrderedList"
+                title="{{ _('Numbered List') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="toolbar-separator"></div>
+
+      {# Text Alignment #}
+      <div class="toolbar-group">
+        <button type="button"
+                class="toolbar-btn"
+                data-tiptap-command="setTextAlign"
+                data-align="left"
+                title="{{ _('Align Left') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18M3 6h18"></path>
+          </svg>
+        </button>
+        <button type="button"
+                class="toolbar-btn"
+                data-tiptap-command="setTextAlign"
+                data-align="center"
+                title="{{ _('Align Center') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M6 14h12M9 6h6"></path>
+          </svg>
+        </button>
+        <button type="button"
+                class="toolbar-btn"
+                data-tiptap-command="setTextAlign"
+                data-align="right"
+                title="{{ _('Align Right') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M9 14h12M3 6h18"></path>
+          </svg>
+        </button>
+        <button type="button"
+                class="toolbar-btn"
+                data-tiptap-command="setTextAlign"
+                data-align="justify"
+                title="{{ _('Justify') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18M3 6h18M3 18h18"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="toolbar-separator"></div>
+
+      {# Link #}
+      <div class="toolbar-group relative" x-data="{ open: false, url: '' }">
+        <button type="button"
+                class="toolbar-btn"
+                data-tiptap-command="setLink"
+                @click.prevent="open = !open"
+                @click.outside="open = false"
+                title="{{ _('Link') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+          </svg>
+        </button>
+        <div x-show="open" x-cloak class="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 p-3" style="min-width: 250px;">
+          <input type="text"
+                 x-model="url"
+                 placeholder="{{ _('Enter URL') }}"
+                 class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                 @keyup.enter="if(window.richEditorInstance && url) { window.richEditorInstance.chain().focus().setLink({ href: url }).run(); open = false; url = ''; }">
+          <div class="flex gap-2">
+            <button type="button"
+                    class="px-3 py-1.5 text-sm bg-gray-900 text-white rounded hover:bg-gray-800 flex-1"
+                    @click.prevent="if(window.richEditorInstance && url) { window.richEditorInstance.chain().focus().setLink({ href: url }).run(); open = false; url = ''; }">
+              {{ _('Set Link') }}
+            </button>
+            <button type="button"
+                    class="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 flex-1"
+                    @click.prevent="if(window.richEditorInstance) { window.richEditorInstance.chain().focus().unsetLink().run(); open = false; url = ''; }">
+              {{ _('Remove') }}
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="toolbar-separator"></div>
+
+      {# Image Upload #}
+      <div class="toolbar-group">
+        <input type="file"
+               id="toolbar-image-upload"
+               accept="image/*"
+               class="hidden"
+               @change="handleImageUpload($event)"
+               multiple>
+        <button type="button"
+                class="toolbar-btn"
+                @click.prevent="document.getElementById('toolbar-image-upload').click()"
+                title="{{ _('Insert Image') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="toolbar-separator"></div>
+
+      {# Table #}
+      <div class="toolbar-group relative" x-data="{ open: false }">
+        <button type="button"
+                class="toolbar-btn"
+                @click.prevent="open = !open"
+                @click.outside="open = false"
+                title="{{ _('Insert Table') }}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+          </svg>
+          <svg class="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div x-show="open" x-cloak class="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50" style="min-width: 200px;">
+          <ul class="py-1">
+            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 hover:bg-gray-100" @click.prevent="toolbarCommand('insertTable', { rows: 2, cols: 2, withHeaderRow: true }); open = false">2x2 {{ _('Table') }}</button></li>
+            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 hover:bg-gray-100" @click.prevent="toolbarCommand('insertTable', { rows: 3, cols: 3, withHeaderRow: true }); open = false">3x3 {{ _('Table') }}</button></li>
+            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 hover:bg-gray-100" @click.prevent="toolbarCommand('insertTable', { rows: 4, cols: 4, withHeaderRow: true }); open = false">4x4 {{ _('Table') }}</button></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Hidden textarea for form submission - keeps content in sync #}
   <textarea
       id="content"
       name="content"
-      class="w-full h-[500px] p-4 border-0 resize-none focus:outline-none focus:ring-0 text-lg leading-relaxed bg-peacock-subtle rounded-lg"
-      x-model="content"
-      @input="hasUnsavedChanges = true"
-      placeholder="{{ _('Enter or edit text here...') }}">{{ content }}</textarea>
+      class="hidden">{{ content }}</textarea>
+  {# Rich text editor container - TipTap Simple UI style #}
+  <div id="rich-editor" class="w-full min-h-[500px] bg-white border-t border-gray-200 focus-within:outline-none prose prose-lg max-w-none"></div>
 </div>
 {% endmacro %}
 

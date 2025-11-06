@@ -5,15 +5,18 @@ The main route here is `edit`, which defines the page editor and the edit flow.
 
 from dataclasses import dataclass
 
-from flask import Blueprint, current_app, flash, render_template, send_file, request
+from flask import Blueprint, current_app, flash, render_template, send_file, request, jsonify, url_for
 from flask_babel import lazy_gettext as _l
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from werkzeug.exceptions import abort
+from werkzeug.utils import secure_filename
 from wtforms import HiddenField, RadioField, StringField
 from wtforms.validators import DataRequired
 from wtforms.widgets import TextArea
 import logging
+import uuid
+from pathlib import Path
 
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
@@ -482,3 +485,71 @@ def translate(project_slug, page_slug):
     except Exception as e:
         logging.error(f"Translation failed for {project_slug}/{page_slug} with engine {engine}: {e}")
         abort(500, description=f"Translation failed: {str(e)}")
+
+
+@api.route("/upload-image/<project_slug>/<page_slug>/", methods=["POST"])
+@login_required
+def upload_image(project_slug, page_slug):
+    """Upload an image for the rich text editor."""
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+
+    page_ = q.page(project_.id, page_slug)
+    if not page_:
+        abort(404)
+
+    # Check if file was uploaded
+    if 'image' not in request.files:
+        abort(400, description="No image file provided")
+    
+    file = request.files['image']
+    if file.filename == '':
+        abort(400, description="No image file selected")
+    
+    # Validate file type
+    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
+    filename = secure_filename(file.filename)
+    if '.' not in filename:
+        abort(400, description="File must have an extension")
+    
+    file_ext = filename.rsplit('.', 1)[1].lower()
+    if file_ext not in allowed_extensions:
+        abort(400, description=f"File type '{file_ext}' not allowed. Allowed types: {', '.join(allowed_extensions)}")
+    
+    # Validate file size (max 10MB)
+    file.seek(0, 2)  # Seek to end
+    file_size = file.tell()
+    file.seek(0)  # Reset to beginning
+    max_size = 10 * 1024 * 1024  # 10MB
+    if file_size > max_size:
+        abort(400, description=f"File size ({file_size / 1024 / 1024:.2f}MB) exceeds maximum allowed size (10MB)")
+    
+    try:
+        # Create images directory for this project
+        upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
+        images_dir = upload_folder / "projects" / project_slug / "images"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename to avoid conflicts
+        unique_id = uuid.uuid4().hex[:8]
+        safe_filename = secure_filename(filename)
+        name_without_ext = safe_filename.rsplit('.', 1)[0] if '.' in safe_filename else safe_filename
+        unique_filename = f"{name_without_ext}_{unique_id}.{file_ext}"
+        file_path = images_dir / unique_filename
+        
+        # Save file
+        file.save(str(file_path))
+        
+        # Generate URL for the image
+        # Use the site blueprint to serve images
+        image_url = url_for("site.editor_image", project_slug=project_slug, filename=unique_filename)
+        
+        return jsonify({
+            'success': True,
+            'url': image_url,
+            'filename': unique_filename
+        })
+    except Exception as e:
+        logging.error(f"Image upload failed for {project_slug}/{page_slug}: {e}")
+        abort(500, description=f"Image upload failed: {str(e)}")

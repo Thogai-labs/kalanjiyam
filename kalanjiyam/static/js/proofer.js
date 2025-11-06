@@ -2,6 +2,15 @@
 /* Transcription and proofreading interface. */
 
 import { $ } from './core.ts';
+import {
+  createRichEditor,
+  getEditorContent,
+  setEditorContent,
+  setEditorText,
+  destroyEditor,
+  insertImage,
+  initializeToolbar,
+} from './rich-editor.js';
 
 const CONFIG_KEY = 'proofing-editor';
 
@@ -71,6 +80,10 @@ export default () => ({
   isRunningTranslation: false,
   hasUnsavedChanges: false,
   imageViewer: null,
+  richEditor: null,
+  isDragging: false,
+  toolbarUpdateTrigger: 0, // Used to trigger Alpine reactivity for toolbar updates
+  _commandInProgress: false, // Flag to prevent callback interference during commands
 
   // OCR Engine configurations
   ocrEngines: {
@@ -402,6 +415,213 @@ export default () => ({
     
     // Initialize translation selector
     this.initTranslationSelector();
+    
+    // Initialize rich text editor
+    this.initRichEditor();
+  },
+  
+  // Initialize TipTap rich text editor
+  initRichEditor() {
+    // Wait for DOM to be ready using setTimeout
+    setTimeout(() => {
+      const editorElement = document.getElementById('rich-editor');
+      // Check window.richEditorInstance instead of this.richEditor to avoid Alpine Proxy
+      if (editorElement && !window.richEditorInstance) {
+        // Get initial content from textarea if it exists, or from Alpine.js content
+        const textarea = document.getElementById('content');
+        const initialContent = textarea ? textarea.value : this.content;
+        
+        // Store editor instance on window to avoid Alpine.js Proxy wrapping
+        // This is CRITICAL - Alpine's Proxy causes transaction state conflicts
+        const editor = createRichEditor('rich-editor', {
+          content: initialContent || '',
+          onUpdate: (html) => {
+            // Simple: just sync the content
+            this.content = html;
+            const contentTextarea = document.getElementById('content');
+            if (contentTextarea) {
+              contentTextarea.value = html;
+            }
+            this.hasUnsavedChanges = true;
+          },
+          onSelectionUpdate: () => {
+            // No-op - toolbar handles its own state now
+          },
+        });
+        
+        // Store globally to avoid Alpine Proxy
+        window.richEditorInstance = editor;
+        
+        // Also store as non-reactive property (Alpine ignores properties starting with _)
+        // This allows Alpine methods to access it if needed
+        this._richEditor = editor;
+        
+        // Set simple boolean flag for Alpine (for showing/hiding toolbar)
+        this.richEditor = true;
+        
+        // Initialize toolbar with vanilla JS (NO Alpine.js)
+        if (editor) {
+          initializeToolbar(editor);
+          console.log('Editor and toolbar initialized with vanilla JS (stored outside Alpine)');
+        }
+        
+        // Store reference for manual sync
+        this.syncEditorFromTextarea = () => {
+          const textarea = document.getElementById('content');
+          if (textarea && window.richEditorInstance) {
+            const content = textarea.value;
+            if (content) {
+              try {
+                window.richEditorInstance.commands.setContent(content);
+              } catch (e) {
+                console.error('Manual sync failed:', e);
+              }
+            }
+          }
+        };
+        
+        // Make uploadImageFiles available globally for drag-and-drop
+        window.uploadImageFiles = this.uploadImageFiles.bind(this);
+      }
+    }, 100);
+  },
+
+  // Drag and drop handlers for image upload
+  handleDragOver(e) {
+    e.preventDefault();
+    this.isDragging = true;
+  },
+  
+  handleDragLeave() {
+    this.isDragging = false;
+  },
+  
+  handleDrop(e) {
+    e.preventDefault();
+    this.isDragging = false;
+    const files = e.dataTransfer.files;
+    if (files.length > 0 && files[0].type.startsWith('image/')) {
+      this.uploadImageFiles(Array.from(files));
+    }
+  },
+
+  
+  // Upload image files
+  async uploadImageFiles(files) {
+    if (!files || files.length === 0) return;
+    
+    // Get project and page slugs from URL
+    const pathMatch = window.location.pathname.match(/\/proofing\/([^\/]+)\/([^\/]+)/);
+    if (!pathMatch) {
+      this.showNotification('Could not determine project/page from URL', 'error');
+      return;
+    }
+    
+    const [, projectSlug, pageSlug] = pathMatch;
+    
+    // Upload each file
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) {
+        this.showNotification(`File ${file.name} is not an image`, 'error');
+        continue;
+      }
+      
+      try {
+        await this.uploadImage(file, projectSlug, pageSlug);
+      } catch (error) {
+        console.error('Image upload error:', error);
+        this.showNotification(`Failed to upload ${file.name}: ${error.message}`, 'error');
+      }
+    }
+  },
+  
+  // Handle image upload from file input
+  handleImageUpload(event) {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      this.uploadImageFiles(Array.from(files));
+    }
+    // Reset input so same file can be selected again
+    event.target.value = '';
+  },
+  
+  // Upload a single image
+  async uploadImage(file, projectSlug, pageSlug) {
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    // Construct URL correctly - use the same pattern as OCR route
+    const { pathname } = window.location;
+    const url = pathname.replace('/proofing/', '/api/upload-image/');
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Upload failed with status ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.url) {
+        // Insert image into editor
+        const editor = window.richEditorInstance;
+        if (editor && editor.isEditable) {
+          // Use setTimeout with a small delay to ensure editor is stable
+          // This gives any pending updates time to complete
+          setTimeout(() => {
+            try {
+              // Ensure editor is still ready
+              if (!editor || !editor.isEditable) {
+                this.showNotification('Editor became unavailable', 'error');
+                return;
+              }
+              
+              console.log('Editor state before insertion:', {
+                isEditable: editor.isEditable,
+                docSize: editor.state.doc.content.size,
+                selection: editor.state.selection,
+                hasImageNode: !!editor.state.schema.nodes.image
+              });
+              
+              // Insert image - function will use current state at insertion time
+              // insertImage might return a Promise now
+              const insertResult = insertImage(editor, result.url);
+              
+              if (insertResult instanceof Promise) {
+                insertResult.then((success) => {
+                  if (success) {
+                    this.showNotification(`Image ${result.filename} uploaded successfully`, 'success');
+                  } else {
+                    console.error('Image insertion failed');
+                    this.showNotification(`Image uploaded but failed to insert. Check browser console.`, 'error');
+                  }
+                });
+              } else if (insertResult === true) {
+                this.showNotification(`Image ${result.filename} uploaded successfully`, 'success');
+              } else {
+                console.error('Image insertion failed');
+                this.showNotification(`Image uploaded but failed to insert. Check browser console.`, 'error');
+              }
+            } catch (error) {
+              console.error('Error in image insertion callback:', error);
+              this.showNotification(`Error inserting image: ${error.message}`, 'error');
+            }
+          }, 100); // Small delay to ensure editor is stable
+        } else {
+          this.showNotification('Editor not initialized or not editable', 'error');
+        }
+      } else {
+        throw new Error('Upload response missing URL');
+      }
+    } catch (error) {
+      console.error('Image upload error:', error);
+      throw error;
+    }
   },
 
   // Settings IO
@@ -570,13 +790,20 @@ export default () => ({
       if (response.ok) {
         const content = await response.text();
         
-        // Update the Alpine.js data property directly
-        this.content = content;
-        
-        // Also update the DOM element for compatibility
-        const textarea = document.getElementById('content');
-        if (textarea) {
-          textarea.value = content;
+        // Update the rich editor if available
+        const editor = window.richEditorInstance;
+        if (editor) {
+          // OCR returns plain text, so use setEditorText
+          setEditorText(editor, content);
+          // Get HTML content from editor
+          this.content = getEditorContent(editor);
+        } else {
+          // Fallback to textarea if editor not initialized
+          this.content = content;
+          const textarea = document.getElementById('content');
+          if (textarea) {
+            textarea.value = content;
+          }
         }
         
         // Show success feedback
@@ -597,8 +824,16 @@ export default () => ({
   async runTranslation(engine = 'google', sourceLang = 'sa', targetLang = 'en') {
     console.log('=== TRANSLATION DEBUG START ===');
     
+    // Get content from rich editor if available, otherwise use content property
+    let contentToTranslate = this.content;
+    const editor = window.richEditorInstance;
+    if (editor) {
+      // Get plain text from editor for translation
+      contentToTranslate = editor.getText();
+    }
+    
     // Check if there's content to translate
-    if (!this.content || this.content.trim() === '') {
+    if (!contentToTranslate || contentToTranslate.trim() === '') {
       console.log('No content to translate');
       this.showNotification('No content to translate. Please add some text to the editor first.', 'error');
       return;
@@ -607,10 +842,11 @@ export default () => ({
     this.isRunningTranslation = true;
 
     console.log('Starting translation:', { engine, sourceLang, targetLang });
-    console.log('Content to translate:', this.content);
+    console.log('Content to translate:', contentToTranslate);
     console.log('Current pathname:', window.location.pathname);
 
     const { pathname } = window.location;
+    // Send content as POST body for translation
     const url = pathname.replace('/proofing/', '/api/translate/') + `?engine=${engine}&source_lang=${sourceLang}&target_lang=${targetLang}`;
     
     console.log('Translation URL:', url);
@@ -942,5 +1178,30 @@ export default () => ({
   copyCharacter(e) {
     const character = e.target.textContent;
     navigator.clipboard.writeText(character);
+  },
+  
+  // Sync editor content to textarea before form submission
+  syncContentBeforeSubmit() {
+    // Ensure textarea has the latest content from editor
+    const editor = window.richEditorInstance;
+    if (editor) {
+      const htmlContent = editor.getHTML();
+      
+      // Update Alpine.js content first (this drives the textarea via x-model)
+      this.content = htmlContent;
+      
+      // Also update textarea directly as backup
+      const textarea = document.getElementById('content');
+      if (textarea) {
+        textarea.value = htmlContent;
+        // Trigger events to ensure form recognizes the change
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        textarea.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      
+      console.log('Synced editor content before submit. Length:', htmlContent.length);
+      console.log('Content preview:', htmlContent.substring(0, 200));
+    }
+    this.hasUnsavedChanges = false;
   },
 });

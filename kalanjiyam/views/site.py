@@ -1,6 +1,7 @@
 """Views for basic site pages."""
 
 from flask import Blueprint, abort, current_app, redirect, render_template, send_file, session, url_for
+from pathlib import Path
 
 from kalanjiyam import queries as q
 from kalanjiyam.consts import LOCALES
@@ -54,6 +55,23 @@ def page_image(project_slug, page_slug):
     Flask to serve it if the file exists.
     """
     image_path = get_page_image_filepath(project_slug, page_slug)
+    
+    # Check if the image file exists
+    if not image_path.exists():
+        abort(404)
+    
+    return send_file(image_path)
+
+
+@bp.route("/static/uploads/<project_slug>/images/<filename>")
+def editor_image(project_slug, filename):
+    """Serve an image uploaded to the rich text editor.
+    
+    In production, this is typically handled by nginx, but we allow
+    Flask to serve it if the file exists.
+    """
+    upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
+    image_path = upload_folder / "projects" / project_slug / "images" / filename
     
     # Check if the image file exists
     if not image_path.exists():

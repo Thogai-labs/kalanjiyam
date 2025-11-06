@@ -93,7 +93,7 @@
       <div class="flex items-center gap-4">
         <button class="btn btn-submit flex items-center gap-2"
                 type="submit"
-                @click="hasUnsavedChanges = false">
+                @click.prevent="syncContentBeforeSubmit(); $el.closest('form').submit();">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
           </svg>
