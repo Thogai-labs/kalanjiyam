@@ -7,7 +7,6 @@ import threading
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
-import torch
 from PIL import Image
 
 @dataclass
@@ -65,6 +64,7 @@ class ChandraOcrEngine:
     def _load_model(self):
         """Load the Chandra OCR model with GPU-first, CPU fallback."""
         try:
+            import torch
             from chandra.model import InferenceManager
             
             logging.info("Loading Chandra OCR model")

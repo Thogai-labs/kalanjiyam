@@ -7,13 +7,10 @@ import threading
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
-import torch
 from PIL import Image
 import re
 from bs4 import BeautifulSoup
 
-# Import Qwen 2VL specific modules (Qwen3VL not available yet)
-from transformers import Qwen2VLForConditionalGeneration, Qwen2VLProcessor
 
 @dataclass
 class OcrResponse:
@@ -72,6 +69,9 @@ class Qwen3OcrEngine:
     def _load_model(self):
         """Load the Qwen 3 OCR model and processor with GPU-first, CPU fallback."""
         try:
+            import torch
+            from transformers import Qwen2VLForConditionalGeneration, Qwen2VLProcessor
+            
             logging.info(f"Loading Qwen 3 OCR model: {self.model_name}")
             
             # Determine device with GPU-first approach
@@ -144,6 +144,8 @@ class Qwen3OcrEngine:
             self._load_model()  # Ensure model is loaded
 
         try:
+            import torch
+            
             # Load image
             image = Image.open(file_path).convert("RGB")
             
