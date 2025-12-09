@@ -368,6 +368,7 @@ def ocr(project_slug, page_slug):
     
     # Debug logging
     logging.info(f"OCR API called with engine='{original_engine}' -> mapped to '{engine}', language='{language}'")
+    logging.info(f"OCR request for project={project_slug}, page={page_slug}")
     
     # Validate engine
     from kalanjiyam.utils.ocr_engine import OcrEngineFactory
@@ -375,6 +376,7 @@ def ocr(project_slug, page_slug):
         abort(400, description=f"Unsupported OCR engine: {engine}")
 
     image_path = get_page_image_filepath(project_slug, page_slug)
+    logging.info(f"Image path: {image_path}")
     
     # Get GPU configuration for engines that need it
     gpu_config = None
@@ -390,16 +392,19 @@ def ocr(project_slug, page_slug):
     elif engine == 'chandra':
         # Chandra OCR GPU configuration
         gpu_config = {'device': 'auto'}  # Will use GPU-first, CPU fallback
+        logging.info(f"Using Chandra OCR with GPU config: {gpu_config}")
     elif engine == 'qwen3':
         # Qwen 3 OCR GPU configuration
         gpu_config = {'device': 'auto'}  # Will use GPU-first, CPU fallback
     
     try:
         from kalanjiyam.utils.ocr_engine import run_ocr
+        logging.info(f"Starting OCR with engine={engine}, language={language}")
         ocr_response = run_ocr(image_path, engine_name=engine, language=language, gpu_config=gpu_config)
+        logging.info(f"OCR completed successfully, returning {len(ocr_response.text_content)} characters")
         return ocr_response.text_content
     except Exception as e:
-        logging.error(f"OCR failed for {project_slug}/{page_slug} with engine {engine} and language {language}: {e}")
+        logging.error(f"OCR failed for {project_slug}/{page_slug} with engine {engine} and language {language}: {e}", exc_info=True)
         abort(500, description=f"OCR failed: {str(e)}")
 
 

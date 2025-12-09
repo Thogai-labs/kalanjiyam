@@ -121,8 +121,11 @@ class ChandraOcrEngine:
         try:
             from chandra.model.schema import BatchInputItem
             
+            logging.info(f"Starting Chandra OCR for file: {file_path}")
+            
             # Load image
             image = Image.open(file_path).convert("RGB")
+            logging.info(f"Image loaded: size={image.size}, mode={image.mode}")
             
             # Use default prompt if none provided
             if prompt is None:
@@ -130,9 +133,11 @@ class ChandraOcrEngine:
             
             # Create batch input item
             batch_item = BatchInputItem(image=image, prompt=prompt)
+            logging.info(f"Running Chandra OCR inference with prompt='{prompt}'...")
             
             # Run inference
             results = self.inference_manager.generate([batch_item])
+            logging.info(f"Chandra OCR inference completed, processing results...")
             
             if not results or len(results) == 0:
                 raise RuntimeError("Chandra OCR returned no results")
@@ -141,9 +146,11 @@ class ChandraOcrEngine:
             
             # Extract text content (prefer markdown output)
             text_content = result.markdown if result.markdown else result.raw
+            logging.info(f"Extracted text content: {len(text_content)} characters")
             
             # Generate bounding boxes from chunks
             bounding_boxes = self._generate_bounding_boxes_from_chunks(result.chunks, image.size)
+            logging.info(f"Generated {len(bounding_boxes)} bounding boxes")
             
             return OcrResponse(
                 text_content=text_content,
