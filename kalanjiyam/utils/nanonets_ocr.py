@@ -127,7 +127,13 @@ class NanonetsOcrEngine:
 
             # Default prompt for Nanonets OCR
             if prompt is None:
-                prompt = """Extract the text from the above document as if you were reading it naturally. Return the tables in html format. Return the equations in LaTeX representation. If there is an image in the document and image caption is not present, add a small description of the image inside the <img></img> tag; otherwise, add the image caption inside <img></img>. Watermarks should be wrapped in brackets. Ex: <watermark>OFFICIAL COPY</watermark>. Page numbers should be wrapped in brackets. Ex: <page_number>14</page_number> or <page_number>9/22</page_number>. Prefer using ☐ and ☑ for check boxes."""
+                prompt = """Extract all text from the document, preserving the original layout and formatting as much as possible.
+1. Formatting: Return the output in HTML format. Use <b> or <strong> for bold text, <i> or <em> for italics, and correct heading tags (<h1>, <h2>, etc.) for titles.
+2. Tables: Return tables in standard HTML format (<table>, <tr>, <td>).
+3. Equations: Return equations in LaTeX format.
+4. Images: For images, provide a description in an <img alt="description" /> tag.
+5. Metadata: Wrap page numbers in <page_number>...</page_number> and watermarks in <watermark>...</watermark>.
+6. Checkboxes: Use ☐ and ☑."""
 
             messages = [
                 {"role": "system", "content": "You are a helpful assistant."},

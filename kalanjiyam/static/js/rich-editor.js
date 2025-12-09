@@ -11,6 +11,9 @@ import TableHeader from '@tiptap/extension-table-header';
 import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import Link from '@tiptap/extension-link';
+import Mathematics from '@tiptap/extension-mathematics';
+import 'katex/dist/katex.min.css';
+
 
 /**
  * Initialize TipTap editor instance
@@ -76,6 +79,11 @@ export function createRichEditor(elementId, options = {}) {
         openOnClick: false,
         HTMLAttributes: {
           class: 'text-peacock-primary underline hover:text-peacock-secondary',
+        },
+      }),
+      Mathematics.configure({
+        katexOptions: {
+          throwOnError: false, // Don't throw errors for invalid LaTeX
         },
       }),
     ],
