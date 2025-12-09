@@ -52,7 +52,7 @@
 
     {{ editor.menu_bar() }}
     
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 min-h-[600px]">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[600px]">
       {{ editor.text_box(form.content.data or "") }}
       {{ editor.image_box(translation_content, translation_metadata, available_translations) }}
     </div>

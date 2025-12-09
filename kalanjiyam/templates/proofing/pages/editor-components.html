@@ -708,7 +708,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
       name="content"
       class="hidden">{{ content }}</textarea>
   {# Rich text editor container - TipTap Simple UI style #}
-  <div id="rich-editor" class="w-full min-h-[500px] bg-white border-t border-gray-200 focus-within:outline-none prose prose-lg max-w-none"></div>
+  <div id="rich-editor" class="w-full h-[600px] overflow-y-auto bg-white border-t border-gray-200 focus-within:outline-none prose prose-lg max-w-none"></div>
 </div>
 {% endmacro %}
 
@@ -807,12 +807,12 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
   </div>
   
   <!-- Image content -->
-  <div x-show="!showTranslation" class="w-full h-[500px] bg-peacock-subtle rounded-lg border border-teal-100">
+  <div x-show="!showTranslation" class="w-full h-[600px] bg-peacock-subtle rounded-lg border border-teal-100">
     <div id="osd-image" class="w-full h-full"></div>
   </div>
   
   <!-- Translation content -->
-  <div x-show="showTranslation" class="w-full h-[500px] bg-peacock-subtle rounded-lg border border-teal-100 p-4 overflow-y-auto">
+  <div x-show="showTranslation" class="w-full h-[600px] bg-peacock-subtle rounded-lg border border-teal-100 p-4 overflow-y-auto">
     <!-- Dynamic translation content (set via JavaScript) -->
     <div x-show="dynamicTranslation && dynamicTranslation.sourceLang && dynamicTranslation.targetLang && dynamicTranslation.engine && dynamicTranslation.content" class="prose max-w-none">
       <h4 class="text-lg font-semibold text-peacock-primary mb-3">
