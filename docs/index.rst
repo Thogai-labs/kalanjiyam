@@ -18,6 +18,7 @@ Kalanjiyam locally or contribute to Kalanjiyam's technical work.
    creating-data-from-the-command-line
    background-tasks-with-celery
    batch-ocr-task-tracking
+   ocr-comparison
    running-in-production
    i18n-and-l10n
    tei-xml

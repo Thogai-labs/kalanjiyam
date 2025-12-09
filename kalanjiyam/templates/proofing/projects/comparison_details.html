@@ -1,0 +1,80 @@
+{% extends 'proofing/base-sidebar.html' %}
+{% import "macros/proofing.html" as m %}
+
+{% block title %}Comparison Details: {{ project.display_title }} | Ambuda{% endblock %}
+
+{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
+
+{% block content %}
+{{ m.project_header_nested('Stats', project) }}
+{{ m.project_tabs(project=project, active='stats', is_mod=current_user.is_moderator) }}
+
+<div class="prose">
+  <h2>Comparison Details</h2>
+  <div class="mb-4">
+      <p><strong>Engine:</strong> {{ comparison.engine }}</p>
+      <p><strong>Status:</strong> {{ comparison.status }}</p>
+      <p><strong>Date:</strong> {{ comparison.created_at }}</p>
+  </div>
+
+  {% if comparison.error_message %}
+  <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+    <strong class="font-bold">Error:</strong>
+    <span class="block sm:inline">{{ comparison.error_message }}</span>
+  </div>
+  {% endif %}
+
+  {% if comparison.summary_metrics %}
+  <h3>Summary Metrics</h3>
+  <table>
+    <tr><th>Metric</th><th>Value</th></tr>
+    <tr><td>Average WER</td><td>{{ "%.2f"|format(comparison.summary_metrics.avg_wer * 100) }}%</td></tr>
+    <tr><td>Average CER</td><td>{{ "%.2f"|format(comparison.summary_metrics.avg_cer * 100) }}%</td></tr>
+    <tr><td>Average Levenshtein Distance</td><td>{{ "%.2f"|format(comparison.summary_metrics.avg_lev) }}</td></tr>
+    <tr><td>Total Pages</td><td>{{ comparison.summary_metrics.total_pages }}</td></tr>
+    <tr><td>Processed Pages</td><td>{{ comparison.summary_metrics.processed_pages }}</td></tr>
+  </table>
+  {% endif %}
+
+  {% if comparison.page_results %}
+  <h3>Page Results</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Page</th>
+        <th>WER</th>
+        <th>CER</th>
+        <th>Diff</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for page in comparison.page_results %}
+      <tr>
+        <td>{{ page.page_slug }}</td>
+        <td>{{ "%.2f"|format(page.wer * 100) }}%</td>
+        <td>{{ "%.2f"|format(page.cer * 100) }}%</td>
+        <td>
+           <details>
+             <summary class="cursor-pointer text-blue-600">View Comparison</summary>
+             <div class="grid grid-cols-2 gap-4 mt-2">
+               <div>
+                 <strong>Ground Truth:</strong>
+                 <pre class="whitespace-pre-wrap text-xs bg-gray-100 p-2 border rounded">{{ page.ground_truth }}</pre>
+               </div>
+               <div>
+                 <strong>OCR Output:</strong>
+                 <pre class="whitespace-pre-wrap text-xs bg-gray-100 p-2 border rounded">{{ page.ocr_text }}</pre>
+               </div>
+             </div>
+           </details>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  
+  <p class="mt-4"><a href="{{ url_for('proofing.project.stats', slug=project.slug) }}" class="text-blue-600 hover:underline">&larr; Back to Stats</a></p>
+</div>
+{% endblock %}
+

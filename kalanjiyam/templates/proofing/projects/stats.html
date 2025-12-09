@@ -37,4 +37,52 @@
     </tr>
   </table>
 </div>
+
+<div class="prose mt-8">
+  <h3>OCR Comparisons</h3>
+  
+  <form action="{{ url_for('proofing.project.run_comparison', slug=project.slug) }}" method="POST" class="mb-4">
+    <div class="flex gap-2 items-center">
+      <select name="engine" class="form-select border rounded px-2 py-1">
+        <option value="google">Google</option>
+        <option value="tesseract">Tesseract</option>
+        <option value="surya">Surya</option>
+        <option value="nanonets">Nanonets</option>
+        <option value="deepseek">DeepSeek</option>
+        <option value="chandra">Chandra</option>
+        <option value="qwen3">Qwen3</option>
+      </select>
+      <button type="submit" class="btn btn-primary px-3 py-1 bg-blue-600 text-white rounded">Run Comparison</button>
+    </div>
+  </form>
+  
+  {% if comparisons %}
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Engine</th>
+        <th>Status</th>
+        <th>WER</th>
+        <th>CER</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for comp in comparisons %}
+      <tr>
+        <td>{{ comp.created_at | time_ago }}</td>
+        <td>{{ comp.engine }}</td>
+        <td>{{ comp.status }}</td>
+        <td>{% if comp.summary_metrics and comp.summary_metrics.avg_wer is defined %}{{ "%.2f"|format(comp.summary_metrics.avg_wer * 100) }}%{% else %}-{% endif %}</td>
+        <td>{% if comp.summary_metrics and comp.summary_metrics.avg_cer is defined %}{{ "%.2f"|format(comp.summary_metrics.avg_cer * 100) }}%{% else %}-{% endif %}</td>
+        <td><a href="{{ url_for('proofing.project.comparison_details', slug=project.slug, comparison_id=comp.id) }}">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No comparisons run yet.</p>
+  {% endif %}
+</div>
 {% endblock %}

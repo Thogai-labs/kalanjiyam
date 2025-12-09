@@ -35,8 +35,9 @@ app = Celery(
     broker=redis_url,
     include=[
             "kalanjiyam.tasks.projects",
-    "kalanjiyam.tasks.ocr",
-    "kalanjiyam.tasks.translation",
+            "kalanjiyam.tasks.ocr",
+            "kalanjiyam.tasks.translation",
+            "kalanjiyam.tasks.comparison",
     ],
 )
 app.conf.update(
