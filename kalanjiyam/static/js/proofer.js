@@ -9,6 +9,7 @@ import {
   setEditorText,
   destroyEditor,
   insertImage,
+  insertTable,
   initializeToolbar,
 } from './rich-editor.js';
 
@@ -385,6 +386,17 @@ export default () => ({
   },
 
 
+
+  toolbarCommand(command, options) {
+    const editor = window.richEditorInstance;
+    if (!editor) return;
+
+    if (command === 'insertTable') {
+      if (options && options.rows && options.cols) {
+        insertTable(editor, options.rows, options.cols);
+      }
+    }
+  },
 
   init() {
     this.loadSettings();

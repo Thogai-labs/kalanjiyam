@@ -154,137 +154,24 @@ export function insertImage(editor, imageUrl) {
     absoluteUrl = '/' + imageUrl;
   }
   
-  console.log('Attempting to insert image:', absoluteUrl);
+  console.log('Attempting to insert image at cursor:', absoluteUrl);
   
   try {
+    // Insert image at current selection
+    // Using setImage command from TipTap Image extension
+    editor.chain().focus().setImage({ src: absoluteUrl }).run();
+    
+    // Manual sync to textarea to ensure Alpine/form picks it up
     const textarea = document.getElementById('content');
-    if (!textarea) {
-      console.error('Content textarea not found');
-      return false;
+    if (textarea) {
+      textarea.value = editor.getHTML();
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      textarea.dispatchEvent(new Event('change', { bubbles: true }));
     }
     
-    // Get current HTML content from editor
-    const currentContent = editor.getHTML();
-    const imageHtml = `<img src="${absoluteUrl}" alt="" class="max-w-full h-auto rounded-lg" />`;
-    
-    // Append image to content
-    let newContent;
-    if (!currentContent || currentContent.trim() === '' || currentContent.trim() === '<p></p>') {
-      newContent = `<p>${imageHtml}</p>`;
-    } else {
-      newContent = currentContent + `\n<p>${imageHtml}</p>`;
-    }
-    
-    // CRITICAL: Update Alpine.js content first (textarea uses x-model="content")
-    // Find the Alpine.js component that owns this textarea
-    let alpineData = null;
-    const formElement = textarea.closest('[x-data]');
-    if (formElement && window.Alpine) {
-      try {
-        alpineData = window.Alpine.$data(formElement);
-        if (alpineData && typeof alpineData.content !== 'undefined') {
-          alpineData.content = newContent;
-          console.log('Alpine.js content updated directly');
-        }
-      } catch (e) {
-        console.warn('Could not access Alpine.js data:', e);
-      }
-    }
-    
-    // Also update textarea value directly (backup)
-    textarea.value = newContent;
-    
-    // Verify textarea was updated
-    console.log('Textarea updated. Value length:', textarea.value.length);
-    console.log('Textarea contains image URL:', textarea.value.includes(absoluteUrl));
-    console.log('Alpine content length:', alpineData?.content?.length || 0);
-    
-    // Trigger input event to ensure form recognizes the change
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-    textarea.dispatchEvent(new Event('change', { bubbles: true }));
-    
-    // Temporarily disable onUpdate to prevent interference
-    const originalOnUpdate = editor.options.onUpdate;
-    let updateDisabled = false;
-    
-    editor.options.onUpdate = () => {
-      if (!updateDisabled) {
-        originalOnUpdate?.apply(editor, arguments);
-      }
-    };
-    
-    // Now update editor with disabled callbacks
-    return new Promise((resolve) => {
-      updateDisabled = true;
-      
-      // Use a longer delay to ensure editor is completely idle
-      setTimeout(() => {
-        try {
-          if (!editor || !editor.isEditable) {
-            editor.options.onUpdate = originalOnUpdate;
-            resolve(false);
-            return;
-          }
-          
-          // Try to set content
-          try {
-            // Method: Use editor's setOptions to update content
-            // This is a more reliable way that bypasses some transaction issues
-            editor.setOptions({ content: newContent });
-            
-            // Verify it worked
-            setTimeout(() => {
-              const actualContent = editor.getHTML();
-              if (actualContent.includes(absoluteUrl) || actualContent.length >= newContent.length - 10) {
-                console.log('Image inserted successfully via setOptions');
-                editor.commands.focus();
-                // Restore onUpdate
-                editor.options.onUpdate = originalOnUpdate;
-                // Trigger one update to sync
-                originalOnUpdate?.({ editor });
-                resolve(true);
-              } else {
-                // Fallback to setContent
-                console.warn('setOptions might not have worked, trying setContent');
-                try {
-                  editor.commands.setContent(newContent);
-                  setTimeout(() => {
-                    editor.options.onUpdate = originalOnUpdate;
-                    originalOnUpdate?.({ editor });
-                    resolve(true);
-                  }, 100);
-                } catch (e) {
-                  editor.options.onUpdate = originalOnUpdate;
-                  console.warn('setContent also failed, but textarea is updated');
-                  resolve(true); // Still success since textarea is updated
-                }
-              }
-            }, 200);
-          } catch (setOptionsError) {
-            console.error('setOptions failed:', setOptionsError);
-            // Try setContent as fallback
-            try {
-              editor.commands.setContent(newContent);
-              setTimeout(() => {
-                editor.options.onUpdate = originalOnUpdate;
-                originalOnUpdate?.({ editor });
-                resolve(true);
-              }, 100);
-            } catch (setContentError) {
-              editor.options.onUpdate = originalOnUpdate;
-              console.warn('Both methods failed, but textarea is updated');
-              resolve(true); // Still success since textarea is updated
-            }
-          }
-        } catch (error) {
-          editor.options.onUpdate = originalOnUpdate;
-          console.error('Error in image insertion:', error);
-          resolve(true); // Still success since textarea is updated
-        }
-      }, 200); // Longer delay to ensure editor is idle
-    });
+    return true;
   } catch (error) {
-    console.error('Unexpected error in insertImage:', error);
+    console.error('Error inserting image:', error);
     return false;
   }
 }
