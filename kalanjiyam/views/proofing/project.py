@@ -720,6 +720,11 @@ def batch_ocr(slug):
     if project_ is None:
         abort(404)
 
+    # Initialize engine variable
+    engine = None
+    # Ensure engine is initialized
+
+
     # Check if there's an ongoing OCR task using Redis
     task_key = f"ocr_task:{slug}"
     task_info = redis_client.get(task_key)
@@ -771,19 +776,19 @@ def batch_ocr(slug):
         engine = request.form.get('engine', 'google')
         language = request.form.get('language', 'sa')
         
-    # Decode numeric engine values to actual engine names
-    engine_map = {
-        '1': 'google',
-        '2': 'tesseract',
-        '3': 'surya',
-        '4': 'nanonets',
-        '5': 'deepseek',
-        '6': 'chandra',
-        '7': 'qwen3'
-    }
-    if engine in engine_map:
-        engine = engine_map[engine]
-        
+        # Decode numeric engine values to actual engine names
+        engine_map = {
+            '1': 'google',
+            '2': 'tesseract',
+            '3': 'surya',
+            '4': 'nanonets',
+            '5': 'deepseek',
+            '6': 'chandra',
+            '7': 'qwen3'
+        }
+        if engine in engine_map:
+            engine = engine_map[engine]
+            
         # Validate engine
         from kalanjiyam.utils.ocr_engine import OcrEngineFactory
         if engine not in OcrEngineFactory.get_supported_engines():

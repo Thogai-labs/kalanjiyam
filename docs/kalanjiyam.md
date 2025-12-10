@@ -20,6 +20,15 @@ Kalanjiyam integrates multiple Optical Character Recognition (OCR) engines to ha
 *   **Tesseract**: Open-source standard for offline OCR.
 *   **Specialized Models**: Includes support for **Nanonets**, **Chandra**, and **Qwen3** for specific use cases.
 
+### GPU Scalability & Resource Management
+Kalanjiyam is designed to perform at scale, leveraging GPU acceleration for modern AI-based OCR engines (Surya, DeepSeek, Chandra, Qwen3).
+*   **Auto-Device Detection**: The system intelligently detects available hardware. It defaults to GPU (`cuda`) if available for maximum speed, gracefully falling back to CPU (`cpu`) if not, ensuring continuity of service across different deployment environments.
+*   **Granular Resource Control**: Administrators can fine-tune GPU usage via environment variables to prevent resource exhaustion in shared environments:
+    *   `SURYA_GPU_DEVICE`: Pin specific GPU devices (e.g., `cuda:0`) or use `auto`.
+    *   `SURYA_GPU_MEMORY_FRACTION`: Limit the percentage of VRAM allocated (e.g., `0.8` for 80%).
+    *   `SURYA_GPU_ALLOW_GROWTH`: Toggle dynamic memory allocation to share resources efficiently with other processes.
+*   **Horizontal Scalability**: The architecture decouples OCR processing (Celery workers) from the web server. This allows for horizontal scaling—you can add more worker nodes with GPUs to handle increased load without affecting the responsiveness of the main application.
+
 ### Batch Processing & Infrastructure
 *   **Background Processing**: Utilizes **Celery** workers to handle long-running OCR tasks without blocking the user interface.
 *   **Task Tracking**: Custom **Redis**-based system for tracking batch OCR operations across thousands of pages, allowing users to navigate away and resume monitoring later.
