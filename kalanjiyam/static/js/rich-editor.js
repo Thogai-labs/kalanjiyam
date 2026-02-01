@@ -12,6 +12,7 @@ import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import Link from '@tiptap/extension-link';
 import Mathematics from '@tiptap/extension-mathematics';
+import { marked } from 'marked';
 import 'katex/dist/katex.min.css';
 
 
@@ -142,7 +143,53 @@ export function getEditorText(editor) {
  */
 export function setEditorText(editor, text) {
   if (!editor) return;
-  editor.commands.setContent(text || '');
+
+  if (!text) {
+    editor.commands.setContent('');
+    return;
+  }
+
+  try {
+    // Configure marked to use breaks for newlines
+    marked.use({
+      breaks: true,
+      gfm: true,
+    });
+    
+    // Preprocess text to ensure headers are on their own lines
+    // Chandra OCR might return flat text where headers are just embedded with #
+    // We look for patterns like " # " or " ## " and insert newlines before them
+    let processedText = text;
+    if (processedText) {
+      // Regex to find headers that are not at the start of the string or line
+      // Matches a space followed by 1-6 hashes followed by a space
+      processedText = processedText.replace(/([^\n])\s+(#{1,6}\s)/g, '$1\n\n$2');
+    }
+
+    // console.log('Processed text:', processedText);
+    
+    // Parse Markdown to HTML
+    const htmlContent = marked.parse(processedText);
+    editor.commands.setContent(htmlContent);
+  } catch (error) {
+    console.error('Error parsing Markdown content:', error);
+    console.error('Marked library status:', !!marked);
+    
+    // Fallback to simple newline conversion if marked fails
+    const escapedText = text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+    const fallbackContent = escapedText
+      .split('\n')
+      .map(line => `<p>${line || '<br>'}</p>`)
+      .join('');
+      
+    editor.commands.setContent(fallbackContent);
+  }
 }
 
 /**

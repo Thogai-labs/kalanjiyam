@@ -33,11 +33,32 @@ class ChandraOcrEngine:
     def __init__(self, device: str = 'auto'):
         """Initialize Chandra OCR engine.
         
-        :param device: Device preference ('auto', 'cuda', 'cpu')
+        :param device: Device preference ('auto', 'cuda', 'cpu', 'cuda:0', etc.)
         """
         if not hasattr(self, '_initialized'):
-            self.device = device
-            self.device_preference = device
+            # Import GPU config helpers
+            from .surya_gpu_config import get_gpu_config_from_env, setup_gpu_environment
+
+            # If a specific device is requested, set it in environment so config loader picks it up
+            # This avoids auto-detection which might initialize CUDA prematurely
+            if device != 'auto':
+                os.environ['SURYA_GPU_DEVICE'] = device
+            
+            # Load and apply GPU configuration
+            self.gpu_config = get_gpu_config_from_env()
+            setup_gpu_environment(self.gpu_config)
+            
+            # Update device preference to match configured device
+            # If we resolved to a specific cuda device, we use 'cuda' for internal logic
+            # as CUDA_VISIBLE_DEVICES handles the isolation
+            if self.gpu_config['device'].startswith('cuda'):
+                self.device_preference = 'cuda'
+            elif self.gpu_config['device'] == 'cpu':
+                self.device_preference = 'cpu'
+            else:
+                self.device_preference = device
+                
+            self.device = self.gpu_config['device']
             self.inference_manager = None
             self.actual_device = None
             self._check_availability()

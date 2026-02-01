@@ -204,6 +204,19 @@ def setup_gpu_environment(config: Dict[str, Any]) -> None:
         # Set memory fraction if specified
         if config['memory_fraction'] < 1.0:
             os.environ['TF_GPU_MEMORY_FRACTION'] = str(config['memory_fraction'])
+            
+            # Apply PyTorch memory fraction limit
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    # Check if CUDA_VISIBLE_DEVICES is set (it should be)
+                    # When visible devices are restricted, the visible devices are indexed from 0
+                    device_idx = 0
+                    fraction = config['memory_fraction']
+                    torch.cuda.set_per_process_memory_fraction(fraction, device_idx)
+                    logging.info(f"PyTorch GPU memory fraction set to {fraction} for device {device_idx}")
+            except (ImportError, RuntimeError) as e:
+                logging.warning(f"Could not set PyTorch memory fraction: {e}")
         
         logging.info(f"GPU configured: {device}, memory fraction: {config['memory_fraction']}")
     else:
