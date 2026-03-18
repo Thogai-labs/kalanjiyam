@@ -14,14 +14,6 @@ export default {
 
   parseData: (textSlug, blockSlug) => `/api/parses/${textSlug}/${blockSlug}`,
 
-  // TODO: where to put this?
-  getTextSlug: () => {
-    const { pathname } = window.location;
-    const suffix = pathname.replace('/texts/', '');
-    const slug = suffix.split('/')[0];
-    return slug;
-  },
-
   /**
    * Parse a dictionary URL for its source and query. We use this data to
    * initialize our form fields from the URL state.

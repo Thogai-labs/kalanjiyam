@@ -1,6 +1,7 @@
-"""Public views for viewing books."""
+"""Public views for viewing books (project-based)."""
 
-from flask import Blueprint, abort, render_template, request
+from flask import Blueprint, abort, current_app, render_template, request
+from flask_login import current_user
 from sqlalchemy import and_, or_
 
 import kalanjiyam.database as db
@@ -22,7 +23,10 @@ def get_public_projects():
         .distinct()
         .all()
     )
-    
+    if current_app.config.get("ENFORCE_GROUP_ACCESS_FOR_PROJECTS"):
+        projects_with_content = [
+            p for p in projects_with_content if q.user_can_view_project(current_user, p)
+        ]
     return projects_with_content
 
 
@@ -88,6 +92,10 @@ def book(project_slug):
     project = q.project(project_slug)
     if project is None:
         abort(404)
+    if current_app.config.get("ENFORCE_GROUP_ACCESS_FOR_PROJECTS") and not q.user_can_view_project(
+        current_user, project
+    ):
+        abort(403)
     
     # Check if project has any OCR'd content
     session = q.get_session()
@@ -135,6 +143,10 @@ def page(project_slug, page_slug):
     project = q.project(project_slug)
     if project is None:
         abort(404)
+    if current_app.config.get("ENFORCE_GROUP_ACCESS_FOR_PROJECTS") and not q.user_can_view_project(
+        current_user, project
+    ):
+        abort(403)
     
     page_obj = q.page(project.id, page_slug)
     if page_obj is None:

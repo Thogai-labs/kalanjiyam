@@ -106,8 +106,9 @@
               {% set has_revision = page_info.latest_revision is not none %}
               {% set has_translation = page_info.has_translation %}
               
+              {% if has_revision %}
               <a href="{{ url_for('public.books.page', project_slug=project.slug, page_slug=page.slug) }}" 
-                 class="block p-3 border rounded-lg hover:bg-gray-50 transition-colors {% if has_revision %}border-blue-200{% else %}border-gray-200{% endif %}">
+                 class="block p-3 border rounded-lg hover:bg-gray-50 transition-colors border-blue-200">
                 
                 <div class="text-center">
                   <div class="text-lg font-medium text-gray-900 mb-1">{{ page.slug }}</div>
@@ -127,6 +128,14 @@
                   </div>
                 </div>
               </a>
+              {% else %}
+              <div class="block p-3 border rounded-lg border-gray-200 opacity-60 cursor-not-allowed" title="OCR text not available for this page yet">
+                <div class="text-center">
+                  <div class="text-lg font-medium text-gray-900 mb-1">{{ page.slug }}</div>
+                  <div class="text-xs text-gray-600">No OCR yet</div>
+                </div>
+              </div>
+              {% endif %}
             {% endfor %}
           </div>
         {% else %}

@@ -212,8 +212,8 @@ export default () => ({
   },
 
   async fetchBlockParse(blockSlug) {
-    const textSlug = Routes.getTextSlug();
-    const url = Routes.parseData(textSlug, blockSlug);
+    // /texts has been removed; parse viewer is no longer supported here.
+    return [null, false];
 
     // Fetch parsed data.
     let resp;
