@@ -2,6 +2,7 @@
 
 from flask import abort, render_template, request, flash, redirect, url_for, send_file, current_app
 from flask_admin import Admin, AdminIndexView, expose, BaseView as AdminBaseView
+from flask_wtf.csrf import generate_csrf
 from flask_admin.contrib import sqla
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
@@ -616,6 +617,148 @@ class KalanjiyamIndexView(AdminIndexView):
             }
 
 
+class GroupsView(AdminBaseView):
+    """Super-admin group management: list/create/edit/delete groups, manage users and books."""
+
+    def is_accessible(self):
+        return current_user.is_authenticated and current_user.is_admin
+
+    def inaccessible_callback(self, name, **kwargs):
+        abort(404)
+
+    @expose("/")
+    def index(self):
+        page = request.args.get("page", 1, type=int)
+        if page < 1:
+            page = 1
+        per_page = 20
+        groups_list, total = q.groups_paginated(page=page, per_page=per_page)
+        num_pages = (total + per_page - 1) // per_page if total else 1
+        return render_template(
+            "admin/groups_list.html",
+            groups=groups_list,
+            page=page,
+            per_page=per_page,
+            total=total,
+            num_pages=num_pages,
+            csrf_token=generate_csrf(),
+        )
+
+    @expose("/create", methods=["GET", "POST"])
+    def create(self):
+        if request.method == "POST":
+            name = (request.form.get("name") or "").strip()
+            description = (request.form.get("description") or "").strip()
+            if not name:
+                flash("Name is required.", "error")
+                return render_template("admin/group_form.html", group=None, csrf_token=generate_csrf())
+            session = q.get_session()
+            group = db.Group(name=name, description=description)
+            session.add(group)
+            session.commit()
+            flash("Group created.")
+            return redirect(url_for("groups_view.manage", id=group.id))
+        return render_template("admin/group_form.html", group=None, csrf_token=generate_csrf())
+
+    @expose("/edit/<int:id>", methods=["GET", "POST"])
+    def edit(self, id):
+        group = q.group(id)
+        if not group:
+            abort(404)
+        if request.method == "POST":
+            name = (request.form.get("name") or "").strip()
+            description = (request.form.get("description") or "").strip()
+            if not name:
+                flash("Name is required.", "error")
+                return render_template("admin/group_form.html", group=group, csrf_token=generate_csrf())
+            group.name = name
+            group.description = description
+            session = q.get_session()
+            session.add(group)
+            session.commit()
+            flash("Group updated.")
+            return redirect(url_for("groups_view.index"))
+        return render_template("admin/group_form.html", group=group, csrf_token=generate_csrf())
+
+    @expose("/delete/<int:id>", methods=["POST"])
+    def delete(self, id):
+        group = q.group(id)
+        if not group:
+            abort(404)
+        session = q.get_session()
+        session.delete(group)
+        session.commit()
+        flash("Group deleted.")
+        return redirect(url_for("groups_view.index"))
+
+    @expose("/manage/<int:id>", methods=["GET", "POST"])
+    def manage(self, id):
+        group = q.group(id)
+        if not group:
+            abort(404)
+        projects_page = request.args.get("projects_page", 1, type=int)
+        if projects_page < 1:
+            projects_page = 1
+        projects_per_page = 20
+        if request.method == "POST":
+            action = request.form.get("action")
+            if action == "add_user":
+                user_id = request.form.get("user_id", type=int)
+                if user_id:
+                    q.add_user_to_group(user_id=user_id, group_id=id)
+                    flash("User added to group.")
+            elif action == "remove_user":
+                user_id = request.form.get("user_id", type=int)
+                if user_id:
+                    q.remove_user_from_group(user_id=user_id, group_id=id)
+                    flash("User removed from group.")
+            elif action == "add_project":
+                project_id = request.form.get("project_id", type=int)
+                if project_id:
+                    q.add_project_to_group(project_id=project_id, group_id=id)
+                    flash("Project added to group.")
+            elif action == "remove_project":
+                project_id = request.form.get("project_id", type=int)
+                if project_id:
+                    q.remove_project_from_group(project_id=project_id, group_id=id)
+                    flash("Project removed from group.")
+            return redirect(
+                url_for(
+                    "groups_view.manage",
+                    id=id,
+                    projects_page=request.form.get("projects_page") or projects_page,
+                )
+            )
+        users = q.users_in_group(id)
+        projects_list, projects_total = q.projects_in_group(
+            id, page=projects_page, per_page=projects_per_page
+        )
+        projects_num_pages = (
+            (projects_total + projects_per_page - 1) // projects_per_page
+            if projects_total
+            else 1
+        )
+        all_projects = q.all_projects_for_group_select()
+        all_users = q.all_users_for_group_select()
+        projects_in_group_ids = {p.id for p in group.projects}
+        users_in_group_ids = {u.id for u in users}
+        return render_template(
+            "admin/group_manage.html",
+            group=group,
+            users=users,
+            projects=projects_list,
+            projects_total=projects_total,
+            projects_page=projects_page,
+            projects_per_page=projects_per_page,
+            projects_num_pages=projects_num_pages,
+            all_projects=all_projects,
+            all_users=all_users,
+            projects_in_group_ids=projects_in_group_ids,
+            users_in_group_ids=users_in_group_ids,
+            csrf_token=generate_csrf(),
+        )
+
+
 class BaseView(sqla.ModelView):
     """Base view for models.
 
@@ -642,16 +785,6 @@ class ModeratorBaseView(sqla.ModelView):
 class UserView(BaseView):
     column_list = form_columns = ["username", "email"]
     can_delete = False
-
-
-class TextBlockView(BaseView):
-    column_list = form_columns = ["text", "slug", "xml"]
-
-
-class TextView(BaseView):
-    column_list = form_columns = ["slug", "title"]
-
-    form_widget_args = {"header": {"readonly": True}}
 
 
 class ProjectView(BaseView):
@@ -695,15 +828,19 @@ def create_admin_manager(app):
         index_view=KalanjiyamIndexView(),
     )
 
+    admin.add_view(
+        GroupsView(name="Groups", category="Access", url="groups", endpoint="groups_view")
+    )
+    # Redirect /admin/groups -> /admin/groups/ (Flask-Admin registers with trailing slash)
+    @app.route("/admin/groups")
+    def _redirect_groups_trailing_slash():
+        return redirect(url_for("groups_view.index"))
+
     admin.add_view(DictionaryView(db.Dictionary, session))
     admin.add_view(ProjectView(db.Project, session))
-    admin.add_view(TextBlockView(db.TextBlock, session))
-    admin.add_view(TextView(db.Text, session))
     admin.add_view(UserView(db.User, session))
     admin.add_view(GenreView(db.Genre, session))
     admin.add_view(SponsorshipView(db.ProjectSponsorship, session))
     admin.add_view(ContributorInfoView(db.ContributorInfo, session))
-    
-    # Export/Import functionality is now integrated into the main admin index view
 
     return admin

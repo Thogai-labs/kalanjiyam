@@ -17,10 +17,10 @@
   </div>
   <ul id="navbar" class="hidden md:flex">
     <li><a class="block p-4 py-2" href="{{ url_for('public.books.index') }}">{{ _('Books') }}</a></li>
-    {% if current_user.is_admin %}
+    {% if current_user is defined and current_user.is_admin %}
     <li><a class="block p-4 py-2" href="{{ url_for('proofing.index') }}">{{ _('Proofing') }}</a></li>
     {% endif %}
-    {% if current_user.is_authenticated %}
+    {% if current_user is defined and current_user.is_authenticated %}
     {% set name = current_user.username %}
     <li class="p-4 py-2">
       <a href="{{ url_for("proofing.user.summary", username=name) }}">{{ name }}</a> |

@@ -83,6 +83,22 @@ class BaseConfig:
     #: Where to store user uploads (PDFs, images, etc.).
     UPLOAD_FOLDER = _env("FLASK_UPLOAD_FOLDER")
 
+    #: If True, library texts (books) are restricted by group: only users in a
+    #: group that contains the text (or admins) can view it. Texts not in any
+    #: group remain visible to everyone. Set ENFORCE_GROUP_ACCESS_FOR_TEXTS=true
+    #: in .env to enable.
+    ENFORCE_GROUP_ACCESS_FOR_TEXTS = (
+        _env("ENFORCE_GROUP_ACCESS_FOR_TEXTS", "false").lower() in ("true", "1", "yes")
+    )
+
+    #: If True, proofing projects (public books under /books/...) are restricted
+    #: by group: only users in a group that contains the project (or admins) can
+    #: view it. Projects not in any group remain visible to everyone.
+    ENFORCE_GROUP_ACCESS_FOR_PROJECTS = (
+        _env("ENFORCE_GROUP_ACCESS_FOR_PROJECTS", "false").lower()
+        in ("true", "1", "yes")
+    )
+
     #: Logger setup
     LOG_LEVEL = logging.ERROR
 

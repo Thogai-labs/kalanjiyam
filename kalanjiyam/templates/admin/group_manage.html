@@ -1,0 +1,111 @@
+{% extends 'admin/master.html' %}
+
+{% block title %}Manage {{ group.name }} | Kalanjiyam Admin{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="mb-6 flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold">{{ group.name }}</h1>
+            {% if group.description %}
+            <p class="text-gray-600 mt-1">{{ group.description }}</p>
+            {% endif %}
+        </div>
+        <div class="flex gap-2">
+            <a href="{{ url_for('groups_view.edit', id=group.id) }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded">Edit group</a>
+            <a href="{{ url_for('groups_view.index') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded">Back to list</a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Users -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Users in this group</h2>
+            <form method="post" action="{{ url_for('groups_view.manage', id=group.id) }}" class="mb-4 flex gap-2">
+                {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+                <input type="hidden" name="action" value="add_user">
+                <select name="user_id" class="flex-1 border border-gray-300 rounded px-3 py-2" required>
+                    <option value="">Select a user…</option>
+                    {% for u in all_users %}
+                    {% if u.id not in users_in_group_ids %}
+                    <option value="{{ u.id }}">{{ u.username }} ({{ u.email }})</option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+                <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Add user</button>
+            </form>
+            {% if users %}
+            <ul class="divide-y divide-gray-200">
+                {% for u in users %}
+                <li class="py-2 flex justify-between items-center">
+                    <span>{{ u.username }} <span class="text-gray-500 text-sm">({{ u.email }})</span></span>
+                    <form method="post" action="{{ url_for('groups_view.manage', id=group.id) }}" class="inline">
+                        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+                        <input type="hidden" name="action" value="remove_user">
+                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                        <button type="submit" class="text-red-600 hover:text-red-800 text-sm">Remove</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-gray-500">No users in this group.</p>
+            {% endif %}
+        </div>
+
+        <!-- Projects (public books) -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Books (projects) in this group</h2>
+            <p class="text-gray-600 mb-3">These are the proofing projects that power the public book reader under <span class="font-mono text-sm">/books/</span>.</p>
+            <form method="post" action="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page, texts_page=texts_page) }}" class="mb-4 flex gap-2">
+                {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+                <input type="hidden" name="action" value="add_project">
+                <input type="hidden" name="projects_page" value="{{ projects_page }}">
+                <input type="hidden" name="texts_page" value="{{ texts_page }}">
+                <select name="project_id" class="flex-1 border border-gray-300 rounded px-3 py-2" required>
+                    <option value="">Select a project…</option>
+                    {% for p in all_projects %}
+                    {% if p.id not in projects_in_group_ids %}
+                    <option value="{{ p.id }}">{{ p.slug }} — {{ p.display_title[:60] }}{% if p.display_title|length > 60 %}…{% endif %}</option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+                <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Add project</button>
+            </form>
+
+            {% if projects %}
+            <ul class="divide-y divide-gray-200">
+                {% for p in projects %}
+                <li class="py-2 flex justify-between items-center">
+                    <span><span class="font-mono text-sm">{{ p.slug }}</span> — {{ p.display_title[:70] }}{% if p.display_title|length > 70 %}…{% endif %}</span>
+                    <form method="post" action="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page, texts_page=texts_page) }}" class="inline">
+                        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+                        <input type="hidden" name="action" value="remove_project">
+                        <input type="hidden" name="project_id" value="{{ p.id }}">
+                        <input type="hidden" name="projects_page" value="{{ projects_page }}">
+                        <input type="hidden" name="texts_page" value="{{ texts_page }}">
+                        <button type="submit" class="text-red-600 hover:text-red-800 text-sm">Remove</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+            {% if projects_num_pages > 1 %}
+            <div class="mt-4 flex items-center gap-2">
+                {% if projects_page > 1 %}
+                <a href="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page - 1, texts_page=texts_page) }}" class="text-blue-600 hover:text-blue-800">Previous</a>
+                {% endif %}
+                <span class="text-gray-600">Page {{ projects_page }} of {{ projects_num_pages }} ({{ projects_total }} projects)</span>
+                {% if projects_page < projects_num_pages %}
+                <a href="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page + 1, texts_page=texts_page) }}" class="text-blue-600 hover:text-blue-800">Next</a>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% else %}
+            <p class="text-gray-500">No projects in this group.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# /texts removed: no library texts section #}
+</div>
+{% endblock %}
