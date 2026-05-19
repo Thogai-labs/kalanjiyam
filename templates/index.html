@@ -1,0 +1,157 @@
+{% extends 'header-main-footer.html' %}
+
+{% set mailing_url = 'https://groups.google.com/g/siddhasagaram-announce' %}
+{% set code_url = 'https://github.com/siddhasagaram/kalanjiyam' %}
+{% set contact_url = url_for('about.contact') %}
+{% set group = "https://groups.google.com/u/2/g/siddhasagaram-announce" %}
+
+
+{% set links = [
+  ('proofing.index', 'Proofing'),
+  ('site.support', 'Support'),
+  ('about.index', 'About'),
+] %}
+
+{% set mobile_only = ["proofing.index", "site.support"] %}
+
+
+{% block title %}{{ _('Kalanjiyam - Indian Knowledge Digital Repo') }}{% endblock %}
+
+
+{% block header %}
+<header class="bg-peacock-gradient text-white shrink-0 pb-16">
+  <div class="mb-4 fill-white">
+    {% include("include/header.html") %}
+  </div>
+
+  <div class="text-center">
+
+  <div class="max-w-4xl mx-auto mt-28 mb-4 p-4">
+    <div class="flex justify-center mb-6">
+      <img src="{{ url_for('static', filename='images/siddha-logo.svg') }}" alt="Siddha Logo" class="w-24 h-24">
+    </div>
+    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold">{{ _('Digital Library') }}</h1>
+    <p class="mx-auto text-lg mt-4 mb-4 max-w-2xl text-teal-100">{% trans %}
+    All free online library 
+    dedicated to preserving and sharing  wisdom.
+    {% endtrans %}</p>
+  </div>
+
+  <div class="flex flex-col sm:flex-row gap-4 justify-center">
+    <a class="p-4 transition rounded btn bg-white text-peacock-primary hover:bg-peacock-light hover:text-peacock-primary peacock-shadow" href="{{ url_for("public.books.index") }}">
+        {{ _('Browse Books') }}
+    </a>
+    {% if current_user.is_admin %}
+    <a class="p-4 transition rounded btn bg-white text-peacock-primary hover:bg-peacock-light hover:text-peacock-primary peacock-shadow" href="{{ url_for("proofing.index") }}">
+        {{ _('Start Proofing') }}
+    </a>
+    {% else %}
+    <a class="p-4 transition rounded btn bg-white text-peacock-primary hover:bg-peacock-light hover:text-peacock-primary peacock-shadow" href="{{ url_for("auth.sign_in") }}">
+        {{ _('Sign In') }}
+    </a>
+    {% endif %}
+  </div>
+
+  </div>
+</header>
+{% endblock %}
+
+{% macro section(classes = '') %}
+<section class="p-8 md:py-14 lg:py-20 {{ classes }}">
+<div class="prose max-w-2xl mx-auto">
+{{ caller() }}
+</div>
+</section>
+{% endmacro %}
+
+{% block main %}
+<article>
+
+  {#
+{% call section("text-peacock-primary") %}
+<h2 class="!mt-0">{{ _("Preserving Ancient Siddha Knowledge") }}</h2>
+
+<p>{% trans %}
+Siddha texts, containing the wisdom of ancient sages and alchemists, are scattered 
+across manuscripts, palm leaves, and traditional repositories. Their knowledge of 
+medicine, alchemy, yoga, and spiritual practices has been preserved through generations.
+{% endtrans %}</p>
+
+<p>{% trans %}
+That's why Kalanjiyam is dedicated to building a comprehensive digital library of 
+Siddha literature. Our platform focuses on proofing and preserving these precious 
+texts, making them accessible to researchers, practitioners, and seekers of wisdom.
+{% endtrans %}</p>
+{% endcall %}
+
+
+{% call section("bg-peacock-subtle text-peacock-primary") %}
+<h2 class="!mt-0">{{ _('Murugan\'s Blessing - Knowledge for All') }}</h2>
+
+<p>{% trans %}
+What if you could access centuries-old Siddha wisdom anywhere for free? What if 
+reading and studying Siddha texts online were as beautiful as the peacock's dance? 
+What if you could contribute to preserving this ancient knowledge?
+{% endtrans %}</p>
+
+<p>{% trans %}
+We believe that Siddha knowledge should be freely accessible to all who seek it. 
+Our proofing platform allows volunteers to help digitize and preserve these texts, 
+ensuring that the wisdom of the Siddhas continues to enlighten future generations.
+{% endtrans %}</p>
+{% endcall %}
+
+
+{% call section("bg-peacock-light text-peacock-primary") %}
+<h2 class="!mt-0">{{ _('Digital Preservation with Traditional Wisdom') }}</h2>
+
+<p>{% trans %}
+Advanced proofing tools. Collaborative editing. Digital preservation. And so much more. 
+Our platform combines modern technology with respect for traditional knowledge, making 
+Siddha texts more accessible while maintaining their authenticity.
+{% endtrans %}</p>
+
+<p>{% trans %}
+Our work is guided by the spirit of the Siddhas - combining practical knowledge 
+with spiritual insight. We're building tools for text analysis, translation support, 
+and community collaboration to honor this ancient tradition.
+{% endtrans %}</p>
+{% endcall %}
+
+
+{% call section("bg-peacock-medium text-peacock-primary") %}
+<h2 class="!mt-0">{{ _('Community-Driven Preservation') }}</h2>
+{% set support_url = url_for('site.support') %}
+
+<p>{% trans %}
+Kalanjiyam is powered by volunteers who are passionate about preserving Siddha wisdom. 
+We welcome your support in whatever form you can provide - from proofing texts to 
+contributing knowledge. Learn more about how you can <a href="{{ support_url }}">help 
+preserve Siddha knowledge</a>.
+{% endtrans %}</p>
+
+<p>{% trans %}
+Join our community of Siddha enthusiasts. <a href="{{ mailing_url }}">Sign up for our 
+mailing list</a> to receive updates on new texts, features, and opportunities to 
+contribute to this sacred work.
+{% endtrans %}</p>
+{% endcall %}
+
+ <section class="text-center text-peacock-primary shrink-0 pt-4 pb-32">
+  <div class="max-w-4xl mx-auto mt-28 mb-4 p-4">
+    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold peacock-text-gradient">
+      {{ _('Siddha Wisdom at Your Fingertips') }}
+    </h1>
+    <p class="mx-auto text-lg mt-4 mb-4 max-w-2xl">
+      {{ _('Join us in preserving and sharing the ancient wisdom of the Siddhas.') }}
+    </p>
+  </div>
+  <div>
+    <a class="p-4 btn btn-submit" href="{{ url_for("proofing.index") }}">
+      {{ _('Start Proofing') }}
+    </a>
+  </div>
+</section> #}
+
+</article>
+{% endblock %}

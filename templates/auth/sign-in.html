@@ -1,0 +1,36 @@
+{% extends 'base-auth-form.html' %}
+{% import "macros/components.html" as components %}
+{% import "macros/forms.html" as mf %}
+
+
+{% block title %}{{ components.title(_('Sign in')) }}{% endblock %}
+
+
+{% set forgot = url_for('auth.get_reset_password_token') %}
+{% block body %}
+<div class="max-w-md mx-auto mt-32 p-4">
+{{ mf.show_errors_if_any(form.errors) }}
+{{ components.flash_messages() }}
+
+<form method="POST" class="bg-white rounded p-8 peacock-shadow peacock-border">
+  <h1 class="text-2xl font-bold text-center mb-8 text-peacock-primary">{{ _('Sign in to Kalanjiyam') }}</h1>
+
+  {{ form.csrf_token }}
+  {{ mf.auth_field(form.username) }}
+
+  <div class="mb-4">
+  <div class="flex justify-between items-center">
+  {{ mf.auth_label(form.password) }}
+  <a class="hover:underline font-bold text-sm text-peacock-secondary" href="{{ forgot }}">{{ _('Forgot password?') }}</a>
+  </div>
+  {{ mf.auth_input(form.password) }}
+  </div>
+
+  {{ mf.auth_submit(_("Sign in")) }}
+</form>
+
+<p class="text-center text-md mt-4 text-peacock-secondary">
+  {{ _("Contact the site administrator to create an account.") }}
+</p>
+</div>
+{% endblock %}

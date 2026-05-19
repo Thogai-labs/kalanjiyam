@@ -1,0 +1,64 @@
+{% extends 'admin/master.html' %}
+
+{% block title %}Groups | Kalanjiyam Admin{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-8">Groups</h1>
+    <p class="text-gray-600 mb-6">Manage access groups: add or edit groups, then assign users and books (library texts) to each group.</p>
+
+    <div class="mb-4">
+        <a href="{{ url_for('groups_view.create') }}" class="inline-block bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+            Create group
+        </a>
+    </div>
+
+    {% if groups %}
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <table class="min-w-full table-auto">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-2 text-left">Name</th>
+                    <th class="px-4 py-2 text-left">Description</th>
+                    <th class="px-4 py-2 text-left"># Users</th>
+                    <th class="px-4 py-2 text-left"># Books</th>
+                    <th class="px-4 py-2 text-left">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {% for g in groups %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-2 font-medium">{{ g.name }}</td>
+                    <td class="px-4 py-2 text-gray-600">{{ g.description[:80] }}{% if g.description|length > 80 %}…{% endif %}</td>
+                    <td class="px-4 py-2">{{ g.users|length }}</td>
+                    <td class="px-4 py-2">{{ g.texts|length }}</td>
+                    <td class="px-4 py-2">
+                        <a href="{{ url_for('groups_view.manage', id=g.id) }}" class="text-blue-600 hover:text-blue-800 mr-3">Manage</a>
+                        <a href="{{ url_for('groups_view.edit', id=g.id) }}" class="text-blue-600 hover:text-blue-800 mr-3">Edit</a>
+                        <form method="post" action="{{ url_for('groups_view.delete', id=g.id) }}" class="inline" onsubmit="return confirm('Delete this group?');">
+                            {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+                            <button type="submit" class="text-red-600 hover:text-red-800">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if num_pages > 1 %}
+    <div class="mt-4 flex items-center gap-2">
+        {% if page > 1 %}
+        <a href="{{ url_for('groups_view.index', page=page - 1) }}" class="text-blue-600 hover:text-blue-800">Previous</a>
+        {% endif %}
+        <span class="text-gray-600">Page {{ page }} of {{ num_pages }} ({{ total }} groups)</span>
+        {% if page < num_pages %}
+        <a href="{{ url_for('groups_view.index', page=page + 1) }}" class="text-blue-600 hover:text-blue-800">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% else %}
+    <p class="text-gray-500 py-8">No groups yet. <a href="{{ url_for('groups_view.create') }}" class="text-blue-600 hover:text-blue-800">Create one</a>.</p>
+    {% endif %}
+</div>
+{% endblock %}

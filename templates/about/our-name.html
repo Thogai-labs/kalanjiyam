@@ -1,0 +1,46 @@
+{% extends 'base-text.html' %}
+{% import "macros/components.html" as m %}
+
+{% block title %}{{ m.title(_('Why "Kalanjiyam"?')) }}{% endblock %}
+
+{% block meta_description -%}
+Learn about the meaning behind the name "Kalanjiyam" and its connection to Siddha Knowledge Systems.
+{%- endblock %}
+
+{% block content %}
+<div class="prose">
+<h1>{{ _('Why "Kalanjiyam"?') }}</h1>
+
+<p>{% trans %}
+When we first started planning this project, we knew we wanted to build a platform to
+transcribe and preserve Siddha texts. Since the platform would store texts in a digital
+format and make them accessible to everyone, we wanted a name that reflected this
+purpose.
+{% endtrans %}</p>
+
+<p>{% trans %}
+After much consideration, we chose to name
+the project "Kalanjiyam," which means "treasure of knowledge" or "repository of wisdom"
+in Tamil. This name perfectly captures our mission to preserve and share the vast
+knowledge contained in Siddha texts.
+{% endtrans %}</p>
+
+<p>{% trans %}
+As a Tamil word, it is simple and meaningful to the ear. It represents the ancient
+wisdom and knowledge systems that we are working to preserve and make accessible.
+The word "Kalanjiyam" itself embodies the concept of a comprehensive collection
+of knowledge, which is exactly what we aim to create.
+{% endtrans %}</p>
+
+<p>{% trans %}
+The name also reflects our commitment to preserving the cultural and linguistic
+heritage of the Siddha tradition, which has its roots in Tamil Nadu and has
+contributed significantly to the fields of medicine, alchemy, and spiritual knowledge.
+{% endtrans %}</p>
+
+<p>{% trans %}
+We believe that this name honors the tradition we serve while also being
+accessible and memorable to our global community of users and contributors.
+{% endtrans %}</p>
+</div>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends 'proofing/base.html' %}
+{% import "macros/proofing.html" as m %}
+
+{% block title %}History: {{ project.display_title }}/{{ cur.slug }} | Ambuda{% endblock %}
+
+{% block content %}
+{{ m.page_header(project, cur=cur, prev=prev, next=next) }}
+
+{% if cur.revisions %}
+{{ m.page_revision_list(cur.revisions|reverse) }}
+{% else %}
+<p>There are no revisions for this page.</p>
+{% endif %}
+
+</div>
+{% endblock %}

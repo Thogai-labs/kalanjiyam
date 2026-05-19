@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ project.display_title }} | Kalanjiyam{% endblock %}
+
+{% block meta_description %}{{ project.display_title }} - Browse pages and read OCR'd content with translations.{% endblock %}
+
+{% block main_class %}p-4 md:p-0 max-w-6xl mx-auto my-8{% endblock %}
+
+{% block main %}
+<article>
+  <header class="mb-8">
+    <nav class="mb-4">
+      <a href="{{ url_for('public.books.index') }}" class="text-blue-600 hover:text-blue-800 transition-colors">
+        ← Back to Books
+      </a>
+    </nav>
+    
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">{{ project.display_title }}</h1>
+    
+    {% if project.author %}
+      <p class="text-xl text-gray-600 mb-4">by {{ project.author }}</p>
+    {% endif %}
+    
+    {% if project.description %}
+      <div class="prose max-w-none mb-6">
+        {{ project.description|markdown|safe }}
+      </div>
+    {% endif %}
+  </header>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- Book Information -->
+    <div class="lg:col-span-1">
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Book Information</h2>
+        
+        <div class="space-y-3">
+          {% if project.print_title %}
+            <div>
+              <span class="text-sm font-medium text-gray-600">Full Title:</span>
+              <p class="text-gray-900">{{ project.print_title }}</p>
+            </div>
+          {% endif %}
+          
+          {% if project.editor %}
+            <div>
+              <span class="text-sm font-medium text-gray-600">Editor:</span>
+              <p class="text-gray-900">{{ project.editor }}</p>
+            </div>
+          {% endif %}
+          
+          {% if project.publisher %}
+            <div>
+              <span class="text-sm font-medium text-gray-600">Publisher:</span>
+              <p class="text-gray-900">{{ project.publisher }}</p>
+            </div>
+          {% endif %}
+          
+          {% if project.publication_year %}
+            <div>
+              <span class="text-sm font-medium text-gray-600">Year:</span>
+              <p class="text-gray-900">{{ project.publication_year }}</p>
+            </div>
+          {% endif %}
+        </div>
+        
+        <div class="mt-6 pt-6 border-t border-gray-200">
+          <h3 class="text-sm font-medium text-gray-600 mb-3">Progress</h3>
+          
+          <div class="space-y-3">
+            <div>
+              <div class="flex justify-between text-sm mb-1">
+                <span>OCR Progress</span>
+                <span>{{ stats.ocr_pages }}/{{ stats.total_pages }}</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-blue-600 h-2 rounded-full" style="width: {{ stats.ocr_percentage }}%"></div>
+              </div>
+            </div>
+            
+            {% if stats.translated_pages > 0 %}
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span>Translation Progress</span>
+                  <span>{{ stats.translated_pages }}/{{ stats.total_pages }}</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                  <div class="bg-green-600 h-2 rounded-full" style="width: {{ stats.translation_percentage }}%"></div>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pages List -->
+    <div class="lg:col-span-2">
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Pages</h2>
+        
+        {% if pages %}
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {% for page_info in pages %}
+              {% set page = page_info.page %}
+              {% set has_revision = page_info.latest_revision is not none %}
+              {% set has_translation = page_info.has_translation %}
+              
+              {% if has_revision %}
+              <a href="{{ url_for('public.books.page', project_slug=project.slug, page_slug=page.slug) }}" 
+                 class="block p-3 border rounded-lg hover:bg-gray-50 transition-colors border-blue-200">
+                
+                <div class="text-center">
+                  <div class="text-lg font-medium text-gray-900 mb-1">{{ page.slug }}</div>
+                  
+                  <div class="flex justify-center space-x-1">
+                    {% if has_revision %}
+                      <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        OCR
+                      </span>
+                    {% endif %}
+                    
+                    {% if has_translation %}
+                      <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        Trans
+                      </span>
+                    {% endif %}
+                  </div>
+                </div>
+              </a>
+              {% else %}
+              <div class="block p-3 border rounded-lg border-gray-200 opacity-60 cursor-not-allowed" title="OCR text not available for this page yet">
+                <div class="text-center">
+                  <div class="text-lg font-medium text-gray-900 mb-1">{{ page.slug }}</div>
+                  <div class="text-xs text-gray-600">No OCR yet</div>
+                </div>
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-gray-600 text-center py-8">No pages available.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</article>
+{% endblock %}

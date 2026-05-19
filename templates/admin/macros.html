@@ -1,0 +1,46 @@
+{% import "macros/forms.html" as mf %}
+
+
+{# Show models in the menu bar. #}
+{% macro nav_menu(admin_view) %}
+  <ul class="flex items-center a-hover-underline">
+  {% for item in admin_view.admin.menu() %}
+    {% if item.is_accessible() and item.is_visible() %}
+      {% set url = item.get_url() %}
+      {% set active = item.is_active(admin_view) %}
+      <li>
+        <a class="block p-2" href="{{ url }}">{{ item.name }}</a>
+      </li>
+    {% endif %}
+  {% endfor %}
+  </ul>
+{% endmacro %}
+
+
+{# Show flashed messages #}
+{% macro messages() %}
+  {% with messages = get_flashed_messages(with_categories=True) %}
+    {% if messages %}
+      {% for category, m in messages %}
+        {% set mapping = {
+            'error': 'bg-red-200 text-red-800',
+            'message': 'bg-yellow-200 text-yellow-800',
+            'success': 'bg-green-200 text-green-800',
+        } %}
+        <div class="p-2 {{ mapping.get(category, "") }} my-4 alert-dismissable">
+          {{ m }}
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+{% endmacro %}
+
+
+{% macro create_buttons() %}
+<div class="mt-4">
+  {{ mf.submit("Save") }}
+  <input name="_add_another" type="submit"
+      class="btn border border-black transition hover:bg-slate-300"
+      value="Save and add another" />
+</div>
+{% endmacro %}

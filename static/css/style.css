@@ -1,0 +1,362 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+@layer components {
+  ::selection {
+    @apply text-white bg-emerald-400;
+  }
+  body, html {
+    /* For sticky footers. */
+    @apply h-full;
+  }
+  mark {
+    @apply bg-emerald-200 p-1;
+  }
+  ins {
+    @apply bg-teal-200 text-teal-700 no-underline;
+  }
+  del {
+    @apply bg-rose-200 text-rose-700;
+  }
+
+  /* Needed to support the Alpine `x-cloak` attribute. */
+  [x-cloak] { display: none !important; }
+
+  /* Siddha Peacock theme colors - inspired by Murugan's mayil */
+  .text-brand { color: #0f766e; } /* Teal-800 */
+  .bg-brand { background: linear-gradient(135deg, #0f766e 0%, #0891b2 50%, #7c3aed 100%); }
+  
+  /* Peacock accent colors */
+  .text-peacock-primary { color: #0f766e; } /* Teal-800 */
+  .text-peacock-secondary { color: #0891b2; } /* Cyan-600 */
+  .text-peacock-accent { color: #7c3aed; } /* Violet-600 - Murugan's color */
+  .text-peacock-emerald { color: #059669; } /* Emerald-600 */
+  .text-peacock-gold { color: #fbbf24; } /* Amber-400 - Peacock feather */
+  
+  .bg-peacock-primary { background-color: #0f766e; } /* Teal-800 */
+  .bg-peacock-secondary { background-color: #0891b2; } /* Cyan-600 */
+  .bg-peacock-accent { background-color: #7c3aed; } /* Violet-600 */
+  .bg-peacock-emerald { background-color: #059669; } /* Emerald-600 */
+  .bg-peacock-gold { background-color: #fbbf24; } /* Amber-400 */
+  
+  .border-peacock-primary { border-color: #0f766e; } /* Teal-800 */
+  .border-peacock-secondary { border-color: #0891b2; } /* Cyan-600 */
+  .border-peacock-accent { border-color: #7c3aed; } /* Violet-600 */
+  .border-peacock-emerald { border-color: #059669; } /* Emerald-600 */
+  .border-peacock-gold { border-color: #fbbf24; } /* Amber-400 */
+  
+  .bg-peacock-gradient { 
+    background: linear-gradient(135deg, #0f766e 0%, #0891b2 50%, #7c3aed 100%); 
+  }
+  
+  .bg-peacock-subtle { background-color: #f0fdfa; } /* Teal-50 */
+  .bg-peacock-light { background-color: #ccfbf1; } /* Teal-100 */
+  .bg-peacock-medium { background-color: #99f6e4; } /* Teal-200 */
+  
+  /* Siddha-specific colors */
+  .bg-siddha-warm { background-color: #fef3c7; } /* Amber-50 */
+  .text-siddha-warm { color: #92400e; } /* Amber-800 */
+
+  /* Form controls */
+  .btn {
+    @apply rounded p-2 cursor-pointer select-none;
+  }
+  .btn-basic {
+    @apply bg-white hover:bg-peacock-light border border-teal-200;
+  }
+  .btn-submit {
+    @apply bg-peacock-primary text-white hover:bg-peacock-secondary transition;
+    @apply active:translate-y-0.5;
+  }
+  ::file-selector-button {
+    @apply border-0 p-2 rounded bg-peacock-primary text-white cursor-pointer mr-4 hover:bg-peacock-secondary;
+  }
+  .f-select {
+    @apply rounded text-sm bg-white text-slate-500 hover:text-peacock-primary p-1 border border-teal-200
+  }
+
+  /* Dropdowns (e.g. in proofing editor) */
+  .dropdown-pane {
+    @apply z-50 bg-white border border-teal-200 absolute a-hover-underline rounded-lg;
+    box-shadow: 0 4px 12px rgba(15, 118, 110, 0.15);
+    min-width: 200px;
+  }
+  .dropdown-item {
+    @apply block w-full text-left p-3 hover:bg-peacock-subtle transition-colors rounded;
+  }
+  .dropdown-item-no-hover {
+    @apply block w-full text-left p-3 transition-colors rounded;
+  }
+
+  /* OCR Engine Selection Buttons */
+  .ocr-engine-btn {
+    @apply p-2 text-xs border rounded transition-all duration-200 font-medium;
+    @apply border-teal-200 bg-white text-peacock-secondary;
+  }
+  .ocr-engine-btn:hover:not(.active) {
+    @apply border-peacock-primary bg-peacock-subtle;
+  }
+  .ocr-engine-btn.active {
+    @apply border-peacock-primary bg-peacock-primary text-white shadow-sm;
+  }
+  .ocr-engine-btn.active:hover {
+    @apply border-peacock-secondary bg-peacock-secondary;
+  }
+
+  /* Notification System */
+  .notification {
+    @apply fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 transition-all duration-300;
+    animation: slideInRight 0.3s ease-out;
+  }
+  .notification.success {
+    @apply bg-green-100 border border-green-300 text-green-800;
+  }
+  .notification.error {
+    @apply bg-red-100 border border-red-300 text-red-800;
+  }
+  .notification.info {
+    @apply bg-blue-100 border border-blue-300 text-blue-800;
+  }
+  @keyframes slideInRight {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  @keyframes slideOutRight {
+    from {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+  }
+
+  /* Enhanced Form Controls */
+  .form-select-enhanced {
+    @apply w-full p-2 text-sm border border-teal-200 rounded transition-colors;
+    @apply focus:border-peacock-primary focus:ring-1 focus:ring-peacock-primary focus:outline-none;
+  }
+  .form-select-enhanced:hover {
+    @apply border-peacock-secondary;
+  }
+
+  /* Engine Info Panel */
+  .engine-info-panel {
+    @apply bg-peacock-subtle rounded p-3 text-xs border border-teal-100;
+  }
+  .engine-info-panel .engine-item {
+    @apply flex items-start gap-2 mb-2 last:mb-0;
+  }
+  .engine-info-panel .engine-name {
+    @apply font-medium text-peacock-primary min-w-0 flex-shrink-0;
+  }
+  .engine-info-panel .engine-desc {
+    @apply text-peacock-secondary leading-relaxed;
+  }
+
+  /* Sidebar */
+  .h-full-minus-nav {
+    /* 4rm is based on the header height+margin in include/header.html. */
+    /* 3rm is based on the footer height in text-section.html. */
+    height: calc(100vh - 3rem - 5rem);
+  }
+
+  .x-deva {
+    /* TODO: choose a nice typeface. */
+  }
+
+  /* Custom elements. */
+
+  s-block {
+    @apply block mb-4;
+  }
+  /* TEI <lg>, i.e. a Sanskrit verse. */
+  s-lg {
+    @apply block x-deva leading-normal;
+  }
+  /* TEI <l>, i.e. a line of Sanskrit verse. */
+  s-l {
+    @apply block;
+  }
+  /* Represents a parsed word. */
+  s-w {
+    @apply text-peacock-emerald;
+    @apply cursor-pointer;
+  }
+  s-w:hover {
+    @apply underline;
+  }
+
+  .prose {
+    @apply tw-prose tw-prose-slate;
+  }
+  .prose dt {
+    @apply uppercase text-xs font-bold text-peacock-secondary mb-1;
+  }
+  .prose dd {
+    @apply mb-4;
+  }
+
+  /* Custom */
+  .a-underline a {
+      @apply underline;
+  }
+  .a-hover-underline a {
+      @apply hover:underline;
+  }
+
+  /* MW dictionary */
+  .dict-entry {max-width: 700px; margin: 0.5em 0;}
+  .dict-entry .lex {font-weight: bold; }
+  .dict-entry cite {
+    @apply text-sm text-peacock-secondary;
+  }
+
+  /* Vacaspatyam */
+  .dict-entry q {
+    @apply text-peacock-secondary;
+  }
+  .mw-entry [lang=sa] {
+    @apply text-peacock-emerald;
+  }
+
+  /* Classes created by Flask-admin */
+  .pagination {
+    @apply border border-teal-200 rounded my-4;
+  }
+  .pagination ul { @apply flex; }
+  .pagination li.active { @apply font-bold text-white bg-peacock-gradient; }
+  .pagination a { @apply py-2 px-4 block hover:bg-peacock-subtle; }
+
+  /* heatmap */
+  .heatmap text { @apply text-xs; }
+  .heatmap rect.l1 { fill: #f0fdfa; }
+  .heatmap rect.l2 { fill: #ccfbf1; }
+  .heatmap rect.l3 { fill: #99f6e4; }
+  .heatmap rect.l4 { fill: #5eead4; }
+
+  /* Peacock feather decorative elements */
+  .peacock-border {
+    border: 2px solid transparent;
+    background: linear-gradient(white, white) padding-box,
+                linear-gradient(135deg, #0f766e, #0891b2, #7c3aed, #059669) border-box;
+  }
+  
+  .peacock-shadow {
+    box-shadow: 0 4px 12px rgba(15, 118, 110, 0.15);
+  }
+  
+  .peacock-text-gradient {
+    background: linear-gradient(135deg, #0f766e, #0891b2, #7c3aed);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* TipTap Rich Text Editor Styles */
+  #rich-editor .ProseMirror {
+    outline: none;
+    min-height: 500px;
+    padding: 1rem;
+  }
+  
+  #rich-editor .ProseMirror p {
+    margin: 0.75rem 0;
+  }
+  
+  #rich-editor .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    color: #64748b;
+    pointer-events: none;
+    height: 0;
+  }
+  
+  #rich-editor .ProseMirror img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    margin: 0.5rem 0;
+  }
+  
+  #rich-editor .ProseMirror table {
+    border-collapse: collapse;
+    margin: 0.75rem 0;
+    table-layout: fixed;
+    width: 100%;
+  }
+  
+  #rich-editor .ProseMirror table td,
+  #rich-editor .ProseMirror table th {
+    min-width: 1em;
+    border: 1px solid #5eead4;
+    padding: 0.5rem;
+    vertical-align: top;
+    box-sizing: border-box;
+    position: relative;
+  }
+  
+  #rich-editor .ProseMirror table th {
+    font-weight: 600;
+    background-color: #ccfbf1;
+  }
+  
+  #rich-editor .ProseMirror table .selectedCell:after {
+    z-index: 2;
+    position: absolute;
+    content: "";
+    left: 0; right: 0; top: 0; bottom: 0;
+    background: rgba(200, 200, 255, 0.4);
+    pointer-events: none;
+  }
+  
+  #rich-editor .ProseMirror table .column-resize-handle {
+    position: absolute;
+    right: -2px;
+    top: 0;
+    bottom: -2px;
+    width: 4px;
+    background-color: #0891b2;
+    pointer-events: none;
+  }
+
+  /* TipTap Simple UI Toolbar Styles - Matching TipTap's official design */
+  #rich-editor-toolbar {
+    @apply bg-white border-b border-gray-200;
+  }
+
+  .toolbar-btn {
+    @apply flex items-center justify-center w-9 h-9 rounded transition-all duration-150;
+    @apply text-gray-700 hover:bg-gray-100 hover:text-gray-900;
+    @apply disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent;
+    @apply focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-1;
+  }
+
+  .toolbar-btn.active {
+    @apply bg-gray-100 text-gray-900;
+  }
+
+  .toolbar-btn svg {
+    @apply flex-shrink-0 w-5 h-5;
+  }
+
+  .toolbar-separator {
+    @apply w-px h-6 bg-gray-300 mx-1;
+  }
+
+  .toolbar-group {
+    @apply flex items-center gap-0;
+  }
+
+}
+
+
+

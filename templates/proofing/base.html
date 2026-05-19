@@ -1,0 +1,20 @@
+{% extends 'header-main-footer.html' %}
+
+
+{% block meta_description -%}
+A state-of-the-art Sanskrit proofreading platform with best-in-class OCR. Join today!
+{%- endblock %}
+
+
+{% block header %}
+<div class="text-peacock-primary bg-white border-b border-teal-200 mb-4 peacock-shadow">
+  {% include "include/header-login.html" %}
+</div>
+{% endblock %}
+
+
+{% block main %}
+<article class="p-4 xl:p-0 max-w-6xl mx-auto mb-24">
+{% block content %}{% endblock %}
+</article>
+{% endblock %}

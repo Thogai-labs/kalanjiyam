@@ -1,0 +1,36 @@
+{% extends 'admin/master.html' %}
+{% import "admin/macros.html" as m_admin %}
+{% import 'admin/lib.html' as lib with context %}
+{% import "macros/forms.html" as mf %}
+
+
+{% block body %}
+  {% block navlinks %}
+  <nav class="rounded border my-4 a-hover-underline">
+    <ul class="flex items-center">
+      <li>
+          <a class="block p-2" href="{{ return_url }}">{{ _gettext('List') }}</a>
+      </li>
+      <li class="active">
+          <a class="block p-2" href="javascript:void(0)">{{ _gettext('Create') }}</a>
+      </li>
+    </ul>
+  </nav>
+  {% endblock %}
+
+  {% block create_form %}
+  <form method="POST" action="" class="bg-slate-100 rounded p-4">
+    {% for field in form %}
+      {{ mf.field(field) }}
+    {% endfor %}
+
+    {{ m_admin.create_buttons() }}
+  </form>
+  {% endblock %}
+{% endblock %}
+
+
+{% block tail %}
+  {{ super() }}
+  {{ lib.form_js() }}
+{% endblock %}

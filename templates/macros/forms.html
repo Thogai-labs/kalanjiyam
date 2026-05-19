@@ -1,0 +1,75 @@
+{# Show form errors, if any exist. #}
+{% macro show_errors_if_any(errors) %}
+{% if errors %}
+<div class="prose p-2 bg-red-100 text-red-900 rounded my-4">
+  <ul>
+  {% for k, v in errors.items() %}
+    <li>{{ v[0] }}</li>
+  {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% endmacro %}
+
+
+{% macro label(L) %}
+{{ L(class_="block text-peacock-secondary my-2") }}
+{% endmacro %}
+
+
+{# Render a form field. #}
+{% macro field(f) %}
+<div class="my-2">
+  {{ label(f.label) }}
+  {{ f(class_="p-2 block w-full my-2") }}
+</div>
+{% endmacro %}
+
+
+{# Render a markdown text box. #}
+{% macro markdown_field(field) %}
+<div>
+  {{ label(field.label) }}
+  {{ field(class_="border border-teal-200 block p-2 w-full min-h-[200px] rounded") }}
+  {% set help_url = "https://commonmark.org/help/" %}
+  <p class="text-sm text-peacock-secondary mt-2 mb-4 a-underline">{% trans %}
+    You can format this text with Markdown.
+    <a href="{{ help_url }}">Click here to learn more.</a>
+  {% endtrans %}</p>
+</div>
+{% endmacro %}
+
+
+{# Submit button for general forms. #}
+{% macro submit(text) %}
+<input type="submit" class="btn btn-submit" value="{{ text }}" />
+{% endmacro %}
+
+
+{# Label for an auth field. #}
+{% macro auth_label(field) %}
+{{ field.label(class_="block text-peacock-secondary") }}
+{% endmacro %}
+
+
+{# Main input for an auth field. #}
+{% macro auth_input(field) %}
+{{ field(class_="w-full p-2 mt-2 border border-teal-200 rounded") }}
+{% endmacro %}
+
+
+{# Submit button for the authentication flow. #}
+{% macro auth_submit(text) %}
+<input type="submit" class="btn btn-submit w-full" value="{{ text }}" />
+{% endmacro %}
+
+
+{# Render an authenticated_related form field. #}
+{% macro auth_field(field) %}
+<div class="mb-4">
+  {{ auth_label(field) }}
+  {{ auth_input(field) }}
+</div>
+{% endmacro %}
+
+

@@ -1,0 +1,91 @@
+{% extends 'base-text.html' %}
+{% import "macros/components.html" as m %}
+
+{% block title %}{{ m.title(_('Values')) }}{% endblock %}
+
+{% block meta_description -%}
+Learn about the values that guide Kalanjiyam's work in preserving and sharing Siddha Knowledge Systems.
+{%- endblock %}
+
+{% block content %}
+<div class="prose">
+<h1>{{ _('Values') }}</h1>
+
+<p>{% trans %}
+Kalanjiyam's mission is to make the Siddha Knowledge Systems tradition radically accessible. This
+mission is guided by several core values that shape everything we do.
+{% endtrans %}</p>
+
+<h2>{{ _('Siddha Knowledge as human heritage') }}</h2>
+
+<p>{% trans %}
+Siddha Knowledge Systems literature is part of our collective human heritage, and we want to
+preserve and share this knowledge for future generations. The Siddha tradition encompasses
+not just medicine and alchemy, but also philosophy, spirituality, and practical wisdom
+that has been passed down through centuries.
+{% endtrans %}</p>
+
+<p>{% trans %}
+We believe that this knowledge belongs to all of humanity and should be freely accessible
+to anyone who wishes to learn from it, regardless of their background, location, or
+economic status.
+{% endtrans %}</p>
+
+<h2>{{ _('Radical accessibility') }}</h2>
+
+<p>{% trans %}
+We believe that knowledge should be accessible to everyone. This means not just making
+texts available online, but also providing tools and resources that make the content
+understandable and useful to people at all levels of expertise.
+{% endtrans %}</p>
+
+<p>{% trans %}
+Our platform includes features like word-by-word analysis, integrated dictionaries,
+and contextual explanations to help readers understand complex Siddha texts. We also
+provide translations and commentaries to make the content accessible to non-Tamil speakers.
+{% endtrans %}</p>
+
+<h2>{{ _('Open collaboration') }}</h2>
+
+<p>{% trans %}
+We believe that the best way to preserve and improve our knowledge base is through
+open collaboration. Our platform allows users to contribute corrections, translations,
+and additional content, creating a community-driven resource that grows and improves
+over time.
+{% endtrans %}</p>
+
+<p>{% trans %}
+We welcome contributions from scholars, students, and enthusiasts from around the world,
+recognizing that diverse perspectives and expertise enrich our understanding of the
+Siddha tradition.
+{% endtrans %}</p>
+
+<h2>{{ _('Cultural respect') }}</h2>
+
+<p>{% trans %}
+We approach the Siddha tradition with deep respect for its cultural and historical
+significance. We work closely with scholars and practitioners to ensure that our
+representations are accurate and respectful of the tradition's integrity.
+{% endtrans %}</p>
+
+<p>{% trans %}
+We also recognize that the Siddha tradition is a living tradition that continues to
+evolve and adapt. Our goal is to preserve the historical texts while also supporting
+contemporary practice and scholarship.
+{% endtrans %}</p>
+
+<h2>{{ _('Technical excellence') }}</h2>
+
+<p>{% trans %}
+We believe that the best way to serve our mission is through technical excellence.
+Our platform is built with modern web technologies that provide a fast, reliable,
+and user-friendly experience.
+{% endtrans %}</p>
+
+<p>{% trans %}
+We continuously improve our tools and infrastructure to better serve our users and
+preserve the texts in our care. We also make our code open source so that others
+can learn from and build upon our work.
+{% endtrans %}</p>
+</div>
+{% endblock %}

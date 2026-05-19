@@ -1,0 +1,68 @@
+{% extends 'base-text.html' %}
+{% import "macros/components.html" as m %}
+
+{% block title %}{{ m.title(_('Support the future of Siddha Knowledge Systems')) }}{% endblock %}
+
+{% block meta_description -%}
+Support Kalanjiyam's mission to preserve and share Siddha Knowledge Systems with the world.
+{%- endblock %}
+
+{% block content %}
+<div class="prose">
+<h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold">{{ _('Support the future of Siddha Knowledge Systems') }}</h1>
+
+<p class="my-4">{{ _('Kalanjiyam is a breakthrough digital library of Siddha Knowledge Systems literature.') }}</p>
+<p class="my-4">{{ _('Donate today and help us make Siddha Knowledge Systems accessible to all.') }}</p>
+
+<div class="text-center my-8">
+  <a href="#" class="btn bg-blue-600 text-white px-8 py-4 text-lg font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+    {{ _('Donate Now') }}
+  </a>
+</div>
+
+<h2>{{ _('Why donate to Kalanjiyam?') }}</h2>
+
+<p>{% trans %}
+Your donation helps us preserve and share the vast knowledge contained in Siddha texts.
+Every contribution, no matter the size, makes a difference in our mission to make
+Siddha Knowledge Systems accessible to everyone.
+{% endtrans %}</p>
+
+<h3>{{ _('What your donation supports:') }}</h3>
+
+<ul>
+<li>{{ _("Digitization of rare Siddha manuscripts and texts") }}</li>
+<li>{{ _("Development of tools for text analysis and translation") }}</li>
+<li>{{ _("Scholarship and research in Siddha Knowledge Systems") }}</li>
+<li>{{ _("Educational resources and training programs") }}</li>
+<li>{{ _("Technical infrastructure and platform development") }}</li>
+<li>{{ _("Community outreach and awareness programs") }}</li>
+</ul>
+
+<h2>{{ _('Other ways to support') }}</h2>
+
+<p>{% trans %}
+In addition to financial contributions, there are many other ways you can support
+our mission:
+{% endtrans %}</p>
+
+<ul>
+<li><a href="{{ url_for('about.contact') }}">{{ _('Volunteer your time and expertise') }}</a></li>
+<li><a href="https://github.com/kalanjiyam-org/kalanjiyam">{{ _('Contribute to our codebase') }}</a></li>
+<li>{{ _('Share our resources with your network') }}</li>
+<li>{{ _('Provide feedback and suggestions for improvement') }}</li>
+</ul>
+
+<h2>{{ _('Contact us') }}</h2>
+
+<p>{% trans %}
+If you have questions about donating or would like to discuss other ways to support
+our work, please <a href="{{ url_for('about.contact') }}">contact us</a>.
+{% endtrans %}</p>
+
+<p>{% trans %}
+Thank you for your support in preserving and sharing Siddha Knowledge Systems
+with the world.
+{% endtrans %}</p>
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{# like include/header.html, but with auth options #}
+{# https://css-tricks.com/snippets/svg/svg-hamburger-menu/ #}
+{% macro hamburger() %}
+<svg viewBox="0 0 100 80" width="20" height="20">
+  <rect width="100" height="10"></rect>
+  <rect y="30" width="100" height="10"></rect>
+  <rect y="60" width="100" height="10"></rect>
+</svg>
+{% endmacro %}
+
+<nav class="md:flex justify-between items-center a-hover-underline">
+  <div class="flex justify-between items-center">
+    <a class="p-4 font-bold text-lg" href="{{ url_for('site.index') }}">{{ _('Kalanjiyam') }}</a>
+    <div class="block p-4 md:hidden">
+      <button id="hamburger" type="button">{{ hamburger() }}</button>
+    </div>
+  </div>
+  <ul id="navbar" class="hidden md:flex">
+    {% if current_user.is_authenticated %}
+    {% set name = current_user.username %}
+    <li class="p-4 py-2">
+      <a href="{{ url_for("proofing.user.summary", username=name) }}">{{ name }}</a> |
+      <a href="{{ url_for("auth.sign_out") }}">{{ _('Sign out') }}</a>
+    </li>
+    {% else %}
+    <li class="p-4 py-2">
+      <a href="{{ url_for("auth.sign_in") }}">{{ _('Sign in') }}</a>
+    </li>
+    {% endif %}
+  </ul>
+</nav>

@@ -1,0 +1,407 @@
+{% extends 'base.html' %}
+
+{% block title %}Page {{ page.slug }} - {{ project.display_title }} | Kalanjiyam{% endblock %}
+
+{% block meta_description %}View page {{ page.slug }} of {{ project.display_title }} with OCR text and translations.{% endblock %}
+
+{% block extra_head %}
+<style>
+  .page-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+  }
+  
+  .text-content {
+    font-family: 'Noto Sans Devanagari', 'Arial', sans-serif;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-height: 100%;
+    overflow-y: auto;
+  }
+  
+  .content-container {
+    height: 700px;
+    display: flex;
+    flex-direction: column;
+  }
+  
+
+  
+  .content-header {
+    flex-shrink: 0;
+    margin-bottom: 1rem;
+  }
+  
+  .content-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .scrollable-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    background: white;
+  }
+  
+  .content-container.no-translation .scrollable-content {
+    overflow-y: visible;
+  }
+  
+  .image-controls {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 10;
+    display: flex;
+    gap: 0.25rem;
+  }
+  
+  .image-controls button {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #e5e7eb;
+    border-radius: 0.25rem;
+    padding: 0.25rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .image-controls button:hover {
+    background: rgba(255, 255, 255, 1);
+    border-color: #d1d5db;
+  }
+  
+  .image-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  
+  .translation-toggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+  
+  .navigation-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    border-top: 1px solid #e5e7eb;
+    padding: 1rem;
+    z-index: 1000;
+  }
+  
+  @media (max-width: 768px) {
+    .translation-toggle {
+      top: 10px;
+      right: 10px;
+    }
+    
+    .navigation-bar {
+      padding: 0.75rem;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block body_class %}bg-gray-50{% endblock %}
+
+{% block main %}
+<!-- Translation Toggle -->
+{% if translations %}
+<div class="translation-toggle">
+  <div class="flex items-center space-x-2">
+    <label class="text-sm font-medium text-gray-700">Translation:</label>
+    <select id="translation-select" class="text-sm border border-gray-300 rounded px-2 py-1">
+      <option value="none">Original</option>
+      {% for translation in translations %}
+        <option value="{{ translation.target_language }}" 
+                {% if selected_translation and selected_translation.id == translation.id %}selected{% endif %}>
+          {{ translation.target_language.upper() }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+{% endif %}
+
+<div class="max-w-7xl mx-auto p-2">
+  <!-- Header -->
+  <header class="mb-6">
+    <nav class="mb-4">
+      <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" 
+         class="text-blue-600 hover:text-blue-800 transition-colors">
+        ← Back to {{ project.display_title }}
+      </a>
+    </nav>
+    
+    <div class="flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ project.display_title }}</h1>
+        <p class="text-gray-600">Page {{ page.slug }}</p>
+      </div>
+      
+      <div class="text-right">
+        <p class="text-sm text-gray-500">{{ current_index + 1 }} of {{ total_pages }}</p>
+        <p class="text-sm text-gray-500">{{ "%.1f"|format((current_index + 1) / total_pages * 100) }}% complete</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- Page Content -->
+  <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-20">
+    <!-- Page Image -->
+    <div class="lg:col-span-2">
+      <div class="content-container">
+        <div class="content-header">
+          <h2 class="text-lg font-semibold text-gray-900">Original Page</h2>
+        </div>
+        <div class="content-body">
+          <div class="scrollable-content">
+            <div class="image-container">
+              <div id="osd-image" class="w-full h-full"></div>
+              <div class="image-controls">
+                <button type="button" id="osd-zoom-in" title="Zoom in">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                  </svg>
+                </button>
+                <button type="button" id="osd-zoom-out" title="Zoom out">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 12H6"></path>
+                  </svg>
+                </button>
+                <button type="button" id="osd-home" title="Reset view">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="hidden text-center py-8 text-gray-500" id="image-error">
+              <svg class="mx-auto h-12 w-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+              </svg>
+              <p>Page image not available</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OCR Text -->
+    <div class="lg:col-span-3">
+      <div class="content-container">
+        <div class="content-header">
+          <h2 class="text-lg font-semibold text-gray-900">Text Content</h2>
+        </div>
+        <div class="content-body">
+          <div class="scrollable-content">
+            <!-- Original Text -->
+            <div id="original-text" class="text-content">
+              {{ revision.content }}
+            </div>
+            
+            <!-- Translation Text (hidden by default) -->
+            {% if selected_translation %}
+              <div id="translation-text" class="text-content hidden">
+                {{ selected_translation.content }}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- No translation available message - displayed outside the grid -->
+  {% if not translations %}
+    <div class="max-w-7xl mx-auto mt-4 mb-20">
+      <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div class="flex items-center">
+          <svg class="w-5 h-5 text-yellow-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+          </svg>
+          <div>
+            <h3 class="text-sm font-medium text-yellow-800">No Translation Available</h3>
+            <p class="text-sm text-yellow-700 mt-1">Translation has not been generated for this page yet.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+  </div>
+</div>
+
+<!-- Navigation Bar -->
+<div class="navigation-bar">
+  <div class="max-w-7xl mx-auto flex justify-between items-center">
+    <div class="flex items-center space-x-4">
+      {% if prev_page %}
+        <a href="{{ url_for('public.books.page', project_slug=project.slug, page_slug=prev_page.slug) }}" 
+           class="inline-flex items-center px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 transition-colors">
+          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+          </svg>
+          Previous
+        </a>
+      {% endif %}
+      
+      <span class="text-sm text-gray-600">
+        Page {{ current_index + 1 }} of {{ total_pages }}
+      </span>
+    </div>
+    
+    <div class="flex items-center space-x-4">
+      <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" 
+         class="text-sm text-gray-600 hover:text-gray-800 transition-colors">
+        Book Overview
+      </a>
+      
+      {% if next_page %}
+        <a href="{{ url_for('public.books.page', project_slug=project.slug, page_slug=next_page.slug) }}" 
+           class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors">
+          Next
+          <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+          </svg>
+        </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const translationSelect = document.getElementById('translation-select');
+  const originalText = document.getElementById('original-text');
+  const translationText = document.getElementById('translation-text');
+  
+  if (translationSelect) {
+    translationSelect.addEventListener('change', function() {
+      const selectedValue = this.value;
+      
+      if (selectedValue === 'none') {
+        // Show original text
+        originalText.classList.remove('hidden');
+        if (translationText) {
+          translationText.classList.add('hidden');
+        }
+      } else {
+        // Show translation
+        originalText.classList.add('hidden');
+        if (translationText) {
+          translationText.classList.remove('hidden');
+        }
+        
+        // Update URL with translation parameter
+        const url = new URL(window.location);
+        url.searchParams.set('translation', selectedValue);
+        window.history.replaceState({}, '', url);
+      }
+    });
+  }
+  
+  // Handle keyboard navigation
+  document.addEventListener('keydown', function(e) {
+    {% if prev_page %}
+      if (e.key === 'ArrowLeft' || e.key === 'a') {
+        window.location.href = "{{ url_for('public.books.page', project_slug=project.slug, page_slug=prev_page.slug) }}";
+      }
+    {% endif %}
+    
+    {% if next_page %}
+      if (e.key === 'ArrowRight' || e.key === 'd') {
+        window.location.href = "{{ url_for('public.books.page', project_slug=project.slug, page_slug=next_page.slug) }}";
+      }
+    {% endif %}
+    
+    // Toggle translation with 't' key
+    if (e.key === 't' && translationSelect) {
+      const currentValue = translationSelect.value;
+      const options = Array.from(translationSelect.options);
+      const currentIndex = options.findIndex(option => option.value === currentValue);
+      const nextIndex = (currentIndex + 1) % options.length;
+      translationSelect.value = options[nextIndex].value;
+      translationSelect.dispatchEvent(new Event('change'));
+    }
+  });
+});
+</script>
+
+<!-- OpenSeadragon Image Viewer -->
+<script src="https://cdn.jsdelivr.net/npm/openseadragon@3.1/build/openseadragon/openseadragon.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Initialize OpenSeadragon image viewer
+  const imageURL = "{{ url_for('site.page_image', project_slug=project.slug, page_slug=page.slug) }}";
+  
+  try {
+    const viewer = OpenSeadragon({
+      id: 'osd-image',
+      tileSources: {
+        type: 'image',
+        url: imageURL,
+        buildPyramid: false,
+      },
+      
+      // Buttons
+      showZoomControl: false,
+      showHomeControl: false,
+      showRotationControl: false,
+      showFullPageControl: false,
+      
+      // Animations
+      gestureSettingsMouse: {
+        flickEnabled: true,
+      },
+      animationTime: 0.5,
+      
+      // Zoom settings
+      zoomPerClick: 1.1,
+      maxZoomPixelRatio: 2.5,
+      
+      // Error handling
+      errorHandler: function(event) {
+        console.error('OpenSeadragon error:', event);
+        document.getElementById('osd-image').style.display = 'none';
+        document.getElementById('image-error').style.display = 'block';
+      }
+    });
+    
+    // Connect zoom buttons
+    document.getElementById('osd-zoom-in').addEventListener('click', function() {
+      viewer.viewport.zoomBy(1.1);
+    });
+    
+    document.getElementById('osd-zoom-out').addEventListener('click', function() {
+      viewer.viewport.zoomBy(0.9);
+    });
+    
+    document.getElementById('osd-home').addEventListener('click', function() {
+      viewer.viewport.goHome();
+    });
+    
+  } catch (error) {
+    console.error('Failed to initialize OpenSeadragon:', error);
+    document.getElementById('osd-image').style.display = 'none';
+    document.getElementById('image-error').style.display = 'block';
+  }
+});
+</script>
+{% endblock %}

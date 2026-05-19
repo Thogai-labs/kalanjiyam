@@ -1,0 +1,162 @@
+{% extends 'admin/master.html' %}
+
+{% block title %}Export/Import Books | Kalanjiyam Admin{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-8">Book Export/Import Management</h1>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Export Section -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-2xl font-semibold mb-4 text-blue-600">Export Books</h2>
+            
+            <div class="space-y-4">
+                <div class="border-l-4 border-blue-500 pl-4">
+                    <h3 class="text-lg font-medium mb-2">Export Single Project</h3>
+                    <p class="text-gray-600 mb-4">Export a specific book with all its data, revisions, translations, and files.</p>
+                    
+                    <div class="flex gap-2">
+                        <select id="project-select" class="flex-1 border border-gray-300 rounded px-3 py-2" required>
+                            <option value="">Select a project...</option>
+                            {% for project in projects %}
+                            <option value="{{ project.slug }}">{{ project.display_title }}</option>
+                            {% endfor %}
+                        </select>
+                        <button onclick="exportProject()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                            Export
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="border-l-4 border-green-500 pl-4">
+                    <h3 class="text-lg font-medium mb-2">Export All Projects</h3>
+                    <p class="text-gray-600 mb-4">Export all books in a single ZIP file. This may take a while for large datasets.</p>
+                    
+                    <a href="{{ url_for('admin.export_all_projects') }}" 
+                       class="inline-block bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
+                        Export All Projects
+                    </a>
+                </div>
+            </div>
+            
+            <div class="mt-6 p-4 bg-blue-50 rounded">
+                <h4 class="font-medium text-blue-800 mb-2">Export Includes:</h4>
+                <ul class="text-sm text-blue-700 space-y-1">
+                    <li>• Project metadata (title, author, description, etc.)</li>
+                    <li>• All pages with their order and status</li>
+                    <li>• Complete revision history for each page</li>
+                    <li>• Translations (if any exist)</li>
+                    <li>• Discussion boards, threads, and posts</li>
+                    <li>• Original PDF files</li>
+                    <li>• Page images (JPG files)</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Import Section -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-2xl font-semibold mb-4 text-green-600">Import Books</h2>
+            
+            <div class="space-y-4">
+                <div class="border-l-4 border-green-500 pl-4">
+                    <h3 class="text-lg font-medium mb-2">Import Single Project</h3>
+                    <p class="text-gray-600 mb-4">Import a book from an exported ZIP file.</p>
+                    
+                    <form method="POST" action="{{ url_for('admin.import_project') }}" enctype="multipart/form-data" class="space-y-3">
+                        <div>
+                            <input type="file" name="project_file" accept=".zip" 
+                                   class="w-full border border-gray-300 rounded px-3 py-2" required>
+                        </div>
+                        <button type="submit" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
+                            Import Project
+                        </button>
+                    </form>
+                </div>
+                
+                <div class="border-l-4 border-purple-500 pl-4">
+                    <h3 class="text-lg font-medium mb-2">Import All Projects</h3>
+                    <p class="text-gray-600 mb-4">Import multiple books from an exported ZIP file.</p>
+                    
+                    <form method="POST" action="{{ url_for('admin.import_all_projects') }}" enctype="multipart/form-data" class="space-y-3">
+                        <div>
+                            <input type="file" name="projects_file" accept=".zip" 
+                                   class="w-full border border-gray-300 rounded px-3 py-2" required>
+                        </div>
+                        <button type="submit" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded">
+                            Import All Projects
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="mt-6 p-4 bg-yellow-50 rounded">
+                <h4 class="font-medium text-yellow-800 mb-2">⚠️ Important Notes:</h4>
+                <ul class="text-sm text-yellow-700 space-y-1">
+                    <li>• Importing will create new users for any authors that don't exist</li>
+                    <li>• Users will have placeholder passwords that should be changed</li>
+                    <li>• Projects with duplicate slugs will be rejected</li>
+                    <li>• Import process is irreversible - backup your database first</li>
+                    <li>• Large imports may take several minutes</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Current Projects List -->
+    <div class="mt-8 bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-2xl font-semibold mb-4">Current Projects</h2>
+        
+        {% if projects %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full table-auto">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left">Title</th>
+                        <th class="px-4 py-2 text-left">Slug</th>
+                        <th class="px-4 py-2 text-left">Author</th>
+                        <th class="px-4 py-2 text-left">Pages</th>
+                        <th class="px-4 py-2 text-left">Created</th>
+                        <th class="px-4 py-2 text-left">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for project in projects %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-2">{{ project.display_title }}</td>
+                        <td class="px-4 py-2 font-mono text-sm">{{ project.slug }}</td>
+                        <td class="px-4 py-2">{{ project.author or 'N/A' }}</td>
+                        <td class="px-4 py-2">{{ project.pages|length }}</td>
+                        <td class="px-4 py-2">{{ project.created_at.strftime('%Y-%m-%d') }}</td>
+                        <td class="px-4 py-2">
+                                                    <a href="{{ url_for('admin.export_project', project_slug=project.slug) }}" 
+                           class="text-blue-600 hover:text-blue-800 text-sm">
+                            Export
+                        </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-gray-500 text-center py-8">No projects found.</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function exportProject() {
+    const select = document.getElementById('project-select');
+    const projectSlug = select.value;
+    
+    if (!projectSlug) {
+        alert('Please select a project to export.');
+        return;
+    }
+    
+    // Redirect to the export URL
+    window.location.href = "{{ url_for('admin.export_project', project_slug='') }}" + projectSlug;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends 'proofing/base-sidebar.html' %}
+{% import "macros/components.html" as components %}
+{% import "macros/forms.html" as mf %}
+{% import "macros/proofing.html" as m %}
+
+
+{% block title %}Edit: {{ project.display_title }} | Ambuda{% endblock %}
+
+
+{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
+
+
+{% block content %}
+{{ m.project_header_nested('Edit', project) }}
+{{ m.project_tabs(project=project, active='edit', is_mod=current_user.is_moderator) }}
+
+{% set search_url = url_for("proofing.project.search", slug=project.slug)  %}
+{% set replace_url = url_for("proofing.project.replace", slug=project.slug)  %}
+{% set ocr_url = url_for("proofing.project.batch_ocr", slug=project.slug)  %}
+{% set translate_url = url_for("proofing.project.batch_translate", slug=project.slug)  %}
+
+<div class="prose">
+
+<ul>
+  <li><a href="{{ search_url }}">{{ _('Search the project') }}</a></li>
+  <li><a href="{{ replace_url }}">{{ _('Search & replace in the project') }}</a></li>
+  <li><a href="{{ ocr_url }}">{{ _('Run batch OCR') }}</a></li>
+  <li><a href="{{ translate_url }}">{{ _('Run batch translation') }}</a></li>
+</ul>
+
+{{ components.flash_messages() }}
+{{ mf.show_errors_if_any(form.errors) }}
+
+<form method="POST">
+  {{ form.csrf_token }}
+
+  <fieldset>
+    <legend class="text-lg font-bold mt-8 mb-4">Basic information</legend>
+    <div class="bg-slate-100 p-4">
+      {{ mf.field(form.display_title) }}
+      {{ mf.field(form.genre) }}
+      {{ mf.markdown_field(form.description) }}
+      {{ mf.field(form.page_numbers) }}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend class="text-lg font-bold mt-8 mb-4">Book metadata</legend>
+    <div class="bg-slate-100 p-4">
+      {{ mf.field(form.print_title) }}
+      {{ mf.field(form.author) }}
+      {{ mf.field(form.editor) }}
+      {{ mf.field(form.publisher) }}
+      {{ mf.field(form.publication_year) }}
+      {{ mf.field(form.worldcat_link) }}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend class="text-lg font-bold mt-8 mb-4">Internal notes</legend>
+    <div class="bg-slate-100 p-4">
+      {{ mf.field(form.notes) }}
+    </div>
+  </fieldset>
+
+  <input class="btn btn-submit mt-4" type="submit" value="{{ _('Save changes') }}">
+</form>
+
+{% endblock %}

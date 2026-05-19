@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block title %}Books | Kalanjiyam{% endblock %}
+
+{% block meta_description %}Browse our collection of OCR'd and translated books. Access traditional texts with modern digital tools.{% endblock %}
+
+{% block main_class %}p-4 md:p-0 max-w-6xl mx-auto my-8{% endblock %}
+
+{% block main %}
+<article>
+  <header class="text-center mb-12">
+    <h1 class="text-4xl font-bold text-gray-900 mb-4">Digital Books</h1>
+    <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+      Browse our collection of OCR'd and translated traditional texts. 
+      Each book has been digitized and made searchable for easy access and study.
+    </p>
+  </header>
+
+  {% if projects %}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {% for project_data in projects %}
+        {% set project = project_data.project %}
+        {% set stats = project_data.stats %}
+        
+        <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200">
+          <div class="p-6">
+            <h2 class="text-xl font-semibold text-gray-900 mb-2">
+              <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" 
+                 class="hover:text-blue-600 transition-colors">
+                {{ project.display_title }}
+              </a>
+            </h2>
+            
+            {% if project.author %}
+              <p class="text-gray-600 mb-3">by {{ project.author }}</p>
+            {% endif %}
+            
+            {% if project.description %}
+              <p class="text-gray-700 text-sm mb-4 line-clamp-3">
+                {{ project.description[:200] }}{% if project.description|length > 200 %}...{% endif %}
+              </p>
+            {% endif %}
+            
+            <div class="space-y-2">
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-600">Pages:</span>
+                <span class="font-medium">{{ stats.total_pages }}</span>
+              </div>
+              
+              <div class="flex justify-between text-sm">
+                <span class="text-gray-600">OCR'd:</span>
+                <span class="font-medium">{{ stats.ocr_pages }} ({{ "%.1f"|format(stats.ocr_percentage) }}%)</span>
+              </div>
+              
+              {% if stats.translated_pages > 0 %}
+                <div class="flex justify-between text-sm">
+                  <span class="text-gray-600">Translated:</span>
+                  <span class="font-medium">{{ stats.translated_pages }} ({{ "%.1f"|format(stats.translation_percentage) }}%)</span>
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="mt-4 pt-4 border-t border-gray-200">
+              <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" 
+                 class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors">
+                View Book
+                <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+              </a>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="text-center py-12">
+      <div class="text-gray-400 mb-4">
+        <svg class="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+      </div>
+      <h3 class="text-lg font-medium text-gray-900 mb-2">No books available</h3>
+      <p class="text-gray-600">No books with OCR'd content are currently available for public viewing.</p>
+    </div>
+  {% endif %}
+</article>
+{% endblock %}

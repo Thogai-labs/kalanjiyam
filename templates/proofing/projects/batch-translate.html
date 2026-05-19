@@ -1,0 +1,195 @@
+{% extends 'proofing/base-sidebar.html' %}
+{% import "macros/components.html" as components %}
+{% import "macros/proofing.html" as m %}
+
+{% block title %}Batch Translate: {{ project.display_title }} | Kalanjiyam{% endblock %}
+
+{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
+
+{% block content %}
+{{ components.flash_messages() }}
+
+{{ m.project_header_nested('Batch Translate', project) }}
+{{ m.project_tabs(project=project, active='edit') }}
+
+{% if status %}
+  {# Show progress when task is running #}
+  <div class="bg-white shadow rounded-lg p-6">
+    <div class="flex items-center mb-4">
+      <div class="flex-shrink-0">
+        <svg class="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
+        </svg>
+      </div>
+      <div class="ml-3">
+        <h3 class="text-lg font-medium text-gray-900">Batch Translation Progress</h3>
+        <p class="text-sm text-gray-500">Translating project pages...</p>
+      </div>
+    </div>
+
+    <div id="translation-progress" class="mb-6">
+      {% include 'include/translation-progress.html' %}
+    </div>
+
+    <div class="border-t pt-4">
+      <div class="flex justify-between items-center">
+        <div class="text-sm text-gray-600">
+          <span id="status-text">
+            {% if status == "PENDING" %}
+              Preparing translation tasks...
+            {% elif status == "PROGRESS" %}
+              Translation in progress...
+            {% elif status == "SUCCESS" %}
+              Translation completed successfully!
+            {% elif status == "FAILURE" %}
+              Translation failed. Please try again.
+            {% endif %}
+          </span>
+        </div>
+        <div class="space-x-2">
+          <a href="{{ url_for('proofing.project.edit', slug=project.slug) }}" 
+             class="bg-gray-300 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-400 transition-colors">
+            Back to Project
+          </a>
+          {% if status == "SUCCESS" %}
+            <a href="{{ url_for('proofing.project.activity', slug=project.slug) }}" 
+               class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors">
+              View Results
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // Auto-refresh progress every 2 seconds
+  function updateProgress() {
+    fetch('{{ url_for("proofing.project.batch_translate_status", task_id=task_id) }}')
+      .then(response => response.text())
+      .then(html => {
+        document.getElementById('translation-progress').innerHTML = html;
+        
+        // Check if we need to stop refreshing
+        const statusElement = document.querySelector('[data-status]');
+        if (statusElement) {
+          const status = statusElement.getAttribute('data-status');
+          if (status === 'SUCCESS' || status === 'FAILURE') {
+            // Update status text
+            const statusText = document.getElementById('status-text');
+            if (status === 'SUCCESS') {
+              statusText.textContent = 'Translation completed successfully!';
+            } else if (status === 'FAILURE') {
+              statusText.textContent = 'Translation failed. Please try again.';
+            }
+            return; // Stop refreshing
+          }
+        }
+        
+        // Continue refreshing
+        setTimeout(updateProgress, 2000);
+      })
+      .catch(error => {
+        console.error('Error updating progress:', error);
+        setTimeout(updateProgress, 5000); // Retry after 5 seconds
+      });
+  }
+
+  // Start progress updates
+  setTimeout(updateProgress, 2000);
+  </script>
+
+{% else %}
+  {# Show form when no task is running #}
+  <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+    <div class="flex">
+      <div class="flex-shrink-0">
+        <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+        </svg>
+      </div>
+      <div class="ml-3">
+        <p class="text-sm text-yellow-700">
+          <strong>Note:</strong> This will translate all pages in the project that have revisions. 
+          The translation will be based on the latest revision of each page.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <form method="POST">
+    <div class="bg-white shadow rounded-lg p-6">
+      <h3 class="text-lg font-medium text-gray-900 mb-4">Translation Settings</h3>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label for="source_lang" class="block text-sm font-medium text-gray-700 mb-2">
+            Source Language
+          </label>
+          <select id="source_lang" name="source_lang" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="sa" selected>Sanskrit (sa)</option>
+            <option value="hi">Hindi (hi)</option>
+            <option value="te">Telugu (te)</option>
+            <option value="mr">Marathi (mr)</option>
+            <option value="en">English (en)</option>
+            <option value="fr">French (fr)</option>
+            <option value="de">German (de)</option>
+            <option value="es">Spanish (es)</option>
+          </select>
+        </div>
+        
+        <div>
+          <label for="target_lang" class="block text-sm font-medium text-gray-700 mb-2">
+            Target Language
+          </label>
+          <select id="target_lang" name="target_lang" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="en" selected>English (en)</option>
+            <option value="sa">Sanskrit (sa)</option>
+            <option value="hi">Hindi (hi)</option>
+            <option value="te">Telugu (te)</option>
+            <option value="mr">Marathi (mr)</option>
+            <option value="fr">French (fr)</option>
+            <option value="de">German (de)</option>
+            <option value="es">Spanish (es)</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="mt-6">
+        <label for="engine" class="block text-sm font-medium text-gray-700 mb-2">
+          Translation Engine
+        </label>
+        <select id="engine" name="engine" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="google" selected>Google Translate</option>
+          <option value="openai">OpenAI GPT</option>
+        </select>
+        <p class="mt-1 text-sm text-gray-500">
+          Google Translate is free but may have lower quality. OpenAI GPT provides better quality but requires an API key.
+        </p>
+      </div>
+      
+      <div class="mt-6 flex justify-end space-x-3">
+        <a href="{{ url_for('proofing.project.edit', slug=project.slug) }}" 
+           class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors">
+          Cancel
+        </a>
+        <button type="submit" 
+                class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+          Start Translation
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <div class="mt-6 bg-gray-50 rounded-lg p-4">
+    <h4 class="text-sm font-medium text-gray-900 mb-2">What happens next?</h4>
+    <ul class="text-sm text-gray-600 space-y-1">
+      <li>• The system will process each page that has revisions</li>
+      <li>• Text will be segmented into manageable chunks for translation</li>
+      <li>• Each chunk will be translated using the selected engine</li>
+      <li>• Translations will be stored and can be viewed/edited later</li>
+      <li>• You can monitor progress and navigate away from this page</li>
+    </ul>
+  </div>
+{% endif %}
+{% endblock %} 

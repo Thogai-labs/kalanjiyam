@@ -1,0 +1,26 @@
+{% extends 'admin/master.html' %}
+
+{% block title %}{% if group %}Edit group{% else %}Create group{% endif %} | Kalanjiyam Admin{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-8">{% if group %}Edit group{% else %}Create group{% endif %}</h1>
+
+    <form method="post" action="{% if group %}{{ url_for('groups_view.edit', id=group.id) }}{% else %}{{ url_for('groups_view.create') }}{% endif %}" class="max-w-xl space-y-4">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+        <div>
+            <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <input type="text" id="name" name="name" value="{{ group.name if group else '' }}" required
+                   class="w-full border border-gray-300 rounded px-3 py-2">
+        </div>
+        <div>
+            <label for="description" class="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+            <textarea id="description" name="description" rows="3" class="w-full border border-gray-300 rounded px-3 py-2">{{ group.description if group else '' }}</textarea>
+        </div>
+        <div class="flex gap-2">
+            <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">{% if group %}Save{% else %}Create{% endif %}</button>
+            <a href="{% if group %}{{ url_for('groups_view.manage', id=group.id) }}{% else %}{{ url_for('groups_view.index') }}{% endif %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends 'proofing/base.html' %}
+{% import "macros/proofing.html" as m %}
+
+{% block title %}Revision: {{ project.display_title }}/{{ cur.slug }} | Ambuda{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  {{ m.page_header(project, cur, prev=prev, next=next) }}
+  {{ revision.created.strftime("%Y-%m-%d %H:%M:%S") }} by {{ revision.author.username }}
+</div>
+
+{{ m.page_status(revision.status.name) }}
+
+<div class="font-mono border p-2">
+{% for line in diff.splitlines() %}
+  {% set line = line.strip()|safe or '&nbsp;'|safe %}
+  {# Use <br> so <ins> and <del> can wrap lines. #}
+  {% if loop.index0 %}<br>{% endif %}
+  {{ line }}
+{% endfor %}
+</div>
+
+{% endblock %}

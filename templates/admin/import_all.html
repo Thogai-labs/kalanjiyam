@@ -1,0 +1,40 @@
+{% extends 'admin/master.html' %}
+
+{% block title %}Import All Projects | Kalanjiyam Admin{% endblock %}
+
+{% block body %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-8">Import All Projects</h1>
+    
+    <div class="max-w-2xl mx-auto">
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <form method="POST" enctype="multipart/form-data" class="space-y-4">
+                <div>
+                    <label for="projects_file" class="block text-sm font-medium text-gray-700 mb-2">
+                        Select Projects ZIP File
+                    </label>
+                    <input type="file" name="projects_file" accept=".zip" 
+                           class="w-full border border-gray-300 rounded px-3 py-2" required>
+                    <p class="text-sm text-gray-500 mt-1">Upload a ZIP file containing all projects exported from another Kalanjiyam instance.</p>
+                </div>
+                
+                <button type="submit" class="w-full bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded">
+                    Import All Projects
+                </button>
+            </form>
+            
+            <div class="mt-6 p-4 bg-red-50 rounded">
+                <h4 class="font-medium text-red-800 mb-2">🚨 High Risk Operation:</h4>
+                <ul class="text-sm text-red-700 space-y-1">
+                    <li>• This will import ALL projects from the ZIP file</li>
+                    <li>• Large imports may take several minutes</li>
+                    <li>• Importing will create many new users</li>
+                    <li>• Projects with duplicate slugs will be rejected</li>
+                    <li>• Import process is irreversible - backup your database first</li>
+                    <li>• Consider importing projects individually for better control</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends 'proofing/base-sidebar.html' %}
+{% import "macros/proofing.html" as m %}
+
+
+{% block title %}Download: {{ project.display_title }} | Ambuda{% endblock %}
+
+
+{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
+
+
+{% block content %}
+{{ m.project_header_nested('Download', project) }}
+{{ m.project_tabs(project=project, active='download', is_mod=current_user.is_moderator) }}
+
+<div class="prose">
+  <p>{% trans %}
+  You can use these links to download the latest version of the transcribed
+  project. To save these files to your local machine, right-click and click
+  <kbd>Save As &hellip;</kbd> or whatever similar option your computer gives
+  you.{% endtrans %}</p>
+
+<ul class="my-4 pb-4">
+  <li><a href="{{ url_for("proofing.project.download_as_text", slug=project.slug) }}">
+    {{ _('Download as plain text') }}
+  </a></li>
+  <li><a href="{{ url_for("proofing.project.download_as_xml", slug=project.slug) }}">
+    {{ _('Download as TEI XML') }}
+  </a></li>
+</ul>
+
+</div>
+{% endblock %}
