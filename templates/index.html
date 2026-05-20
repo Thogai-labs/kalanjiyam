@@ -3,8 +3,7 @@
 {% set mailing_url = 'https://groups.google.com/g/siddhasagaram-announce' %}
 {% set code_url = 'https://github.com/siddhasagaram/kalanjiyam' %}
 {% set contact_url = url_for('about.contact') %}
-{% set group = "https://groups.google.com/u/2/g/siddhasagaram-announce" %}
-
+{% set group = 'https://groups.google.com/u/2/g/siddhasagaram-announce' %}
 
 {% set links = [
   ('proofing.index', 'Proofing'),
@@ -14,44 +13,35 @@
 
 {% set mobile_only = ["proofing.index", "site.support"] %}
 
-
 {% block title %}{{ _('Kalanjiyam - Indian Knowledge Digital Repo') }}{% endblock %}
 
-
 {% block header %}
-<header class="bg-peacock-gradient text-white shrink-0 pb-16">
-  <div class="mb-4 fill-white">
+<header class="relative bg-transparent pt-16 pb-20 sm:pt-20 sm:pb-24 lg:pt-24 lg:pb-28">
+  <div class="relative z-30 mx-auto mb-8 max-w-7xl px-4 sm:px-6 lg:px-8">
     {% include("include/header.html") %}
   </div>
-
-  <div class="text-center">
-
-  <div class="max-w-4xl mx-auto mt-28 mb-4 p-4">
-    <div class="flex justify-center mb-6">
-      <img src="{{ url_for('static', filename='images/siddha-logo.svg') }}" alt="Siddha Logo" class="w-24 h-24">
+  <div class="relative mx-auto max-w-7xl overflow-hidden px-4 sm:px-6 lg:px-8">
+    <div class="absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-white via-slate-50 to-transparent"></div>
+    <div class="absolute left-6 top-24 h-44 w-44 rounded-full bg-sky-200/24 blur-3xl"></div>
+    <div class="absolute right-6 top-28 h-56 w-56 rounded-full bg-violet-200/24 blur-3xl"></div>
+    <div class="landing-hero glass-card hero-card relative z-10 border border-slate-200/70 bg-white/90 p-8 shadow-soft backdrop-blur-xl sm:p-10 lg:p-12">
+      <div class="text-center">
+        <span class="soft-pill mb-6 inline-flex items-center gap-2">
+          <strong class="text-slate-700">AI</strong>
+          <span class="text-sm text-slate-600">{{ _('A modern platform for Siddha text preservation and community proofing.') }}</span>
+        </span>
+        <h1 class="text-4xl font-semibold tracking-[-0.03em] text-slate-950 sm:text-5xl lg:text-6xl">{{ _('Digital Library') }}</h1>
+        <p class="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl">{{ _('All free online library dedicated to preserving and sharing wisdom.') }}</p>
+        <div class="hero-actions mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+          <a class="button-primary" href="{{ url_for('public.books.index') }}">{{ _('Browse Books') }}</a>
+          {% if current_user.is_admin %}
+          <a class="button-secondary" href="{{ url_for('proofing.index') }}">{{ _('Start Proofing') }}</a>
+          {% else %}
+          <a class="button-secondary" href="{{ url_for('auth.sign_in') }}">{{ _('Sign In') }}</a>
+          {% endif %}
+        </div>
+      </div>
     </div>
-    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold">{{ _('Digital Library') }}</h1>
-    <p class="mx-auto text-lg mt-4 mb-4 max-w-2xl text-teal-100">{% trans %}
-    All free online library 
-    dedicated to preserving and sharing  wisdom.
-    {% endtrans %}</p>
-  </div>
-
-  <div class="flex flex-col sm:flex-row gap-4 justify-center">
-    <a class="p-4 transition rounded btn bg-white text-peacock-primary hover:bg-peacock-light hover:text-peacock-primary peacock-shadow" href="{{ url_for("public.books.index") }}">
-        {{ _('Browse Books') }}
-    </a>
-    {% if current_user.is_admin %}
-    <a class="p-4 transition rounded btn bg-white text-peacock-primary hover:bg-peacock-light hover:text-peacock-primary peacock-shadow" href="{{ url_for("proofing.index") }}">
-        {{ _('Start Proofing') }}
-    </a>
-    {% else %}
-    <a class="p-4 transition rounded btn bg-white text-peacock-primary hover:bg-peacock-light hover:text-peacock-primary peacock-shadow" href="{{ url_for("auth.sign_in") }}">
-        {{ _('Sign In') }}
-    </a>
-    {% endif %}
-  </div>
-
   </div>
 </header>
 {% endblock %}
@@ -66,6 +56,32 @@
 
 {% block main %}
 <article>
+
+  <section class="landing-section bg-peacock-subtle">
+    <div class="landing-grid max-w-7xl mx-auto">
+      <div class="landing-feature">
+        <p class="text-sm uppercase tracking-[0.24em] text-slate-500">{{ _('Preservation') }}</p>
+        <h3 class="text-xl font-semibold text-slate-900">{{ _('Free access to Siddha texts') }}</h3>
+        <p>{{ _('A modern library for traditional medicine, alchemy, yoga, and devotional literature.') }}</p>
+      </div>
+      <div class="landing-feature">
+        <p class="text-sm uppercase tracking-[0.24em] text-slate-500">{{ _('Proofing') }}</p>
+        <h3 class="text-xl font-semibold text-slate-900">{{ _('Collaborative text verification') }}</h3>
+        <p>{{ _('Community-driven tools to review and preserve manuscripts with trusted digital proofing.') }}</p>
+      </div>
+      <div class="landing-feature">
+        <p class="text-sm uppercase tracking-[0.24em] text-slate-500">{{ _('Learning') }}</p>
+        <h3 class="text-xl font-semibold text-slate-900">{{ _('Read, search, contribute') }}</h3>
+        <p>{{ _('Search books, support translations, and grow the Siddha knowledge repository with contributors worldwide.') }}</p>
+      </div>
+    </div>
+
+    <div class="mt-12 text-center">
+      <p class="mx-auto max-w-3xl text-lg leading-8 text-slate-600">
+        {{ _('Kalanjiyam brings Siddha heritage online with a polished reading experience, modern proofing tools, and community support for open knowledge.') }}
+      </p>
+    </div>
+  </section>
 
   {#
 {% call section("text-peacock-primary") %}
