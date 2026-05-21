@@ -42,8 +42,8 @@ in the United States.
 {% endtrans %}</p>
 
 <p>{% trans %}
-<a href="{{ url_for('site.donate') }}">Donate now</a> to support our mission.
-{% endtrans %}</p>
+Please support our mission by helping us preserve Siddha knowledge.
+{% endtrans %} <a href="{{ url_for('site.donate') }}" class="button-primary">{{ _('Donate now') }}</a></p>
 
 <h2>{{ _('Volunteer contributions') }}</h2>
 
@@ -62,8 +62,7 @@ We welcome volunteers in many areas:
 
 <p>{% trans %}
 If you're interested in volunteering, please
-<a href="{{ url_for('about.contact') }}">contact us!</a>
-{% endtrans %}</p>
+{% endtrans %} <a href="{{ url_for('about.contact') }}">{{ _('contact us!') }}</a></p>
 
 <h2>{{ _('Expertise and knowledge') }}</h2>
 
@@ -81,8 +80,8 @@ related fields to help us:
 
 <p>{% trans %}
 If you have expertise in Siddha Knowledge Systems or related fields, we would love
-to hear from you. Please <a href="{{ url_for('about.contact') }}">contact us!</a>
-{% endtrans %}</p>
+to hear from you.
+{% endtrans %} <a href="{{ url_for('about.contact') }}" class="button-primary">{{ _('Contact us!') }}</a></p>
 
 <h2>{{ _('Technical contributions') }}</h2>
 

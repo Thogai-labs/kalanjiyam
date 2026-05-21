@@ -6,22 +6,19 @@
 {% block title %}{{ components.title(_('Register')) }}{% endblock %}
 
 
-{% block content %}
-{{ mf.show_errors_if_any(form.errors) }}
+{% block body %}
+<div class="auth-container">
+  {{ mf.show_errors_if_any(form.errors) }}
 
-<form method="POST" class="bg-white rounded p-8">
-  <h1 class="text-2xl font-bold text-center mb-8">
-    {{ _('Create a Kalanjiyam account') }}
-  </h1>
-  {{ form.csrf_token }}
-  {{ mf.auth_field(form.username) }}
-  {{ mf.auth_field(form.password) }}
-  {{ mf.auth_field(form.email) }}
-
-  <div class="mb-4">
-  {{ form.recaptcha }}
+  <div class="auth-card max-w-md mx-auto">
+    <h1 class="heading">{{ _('Create a Kalanjiyam account') }}</h1>
+    <form method="POST" class="auth-form">
+      {{ form.csrf_token }}
+      {{ mf.auth_field(form.username) }}
+      {{ mf.auth_field(form.password) }}
+      {{ mf.auth_field(form.email) }}
+      {{ mf.auth_submit(_("Create account")) }}
+    </form>
   </div>
-
-  {{ mf.auth_submit(_("Create account")) }}
-</form>
+</div>
 {% endblock %}

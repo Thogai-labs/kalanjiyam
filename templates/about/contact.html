@@ -16,7 +16,8 @@ Get in touch with the Kalanjiyam team. We'd love to hear from you.
 
 
 {% block main %}
-<article class="p-4 md:p-0 max-w-xl mx-auto md:my-24 md:mb-36">
+<article class="theme-content mx-auto mb-20 w-full max-w-xl px-4 sm:px-6 md:my-8">
+<div class="theme-card">
 <p>{% trans %}
 We'd love to hear from you! Please use the form below to get in touch with us.
 {% endtrans %}</p>
@@ -32,5 +33,6 @@ We'd love to hear from you! Please use the form below to get in touch with us.
   
   <input type="submit" class="btn btn-submit" value="{{ _('Send message') }}" />
 </form>
+</div>
 </article>
 {% endblock %}

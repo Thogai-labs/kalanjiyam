@@ -15,24 +15,266 @@
 
 {% block title %}{{ _('Kalanjiyam - Indian Knowledge Digital Repo') }}{% endblock %}
 
+{% block body_class %}min-h-screen bg-[#f8fafc] text-slate-900 antialiased index-home{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* --- Homepage: full viewport hero (below nav) --- */
+  .index-home-header {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100svh;
+    box-sizing: border-box;
+  }
+
+  /* --- Navbar: proper pill / “cylinder” bar (reference UX) --- */
+  .index-home-header .index-home-nav {
+    flex-shrink: 0;
+    width: 100%;
+    max-width: none;
+    padding: 0.75rem clamp(0.75rem, 4vw, 2.5rem) 0.5rem;
+    display: flex;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+  .index-home-header .index-home-nav .index-home-nav-pill {
+    width: 100%;
+    max-width: min(112rem, calc(100vw - 1.5rem));
+  }
+  .index-home-header .index-home-nav .header-nav {
+    width: 100%;
+    max-width: none !important;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.45rem 0.85rem 0.45rem 0.65rem !important;
+    border-radius: 9999px !important;
+    background: rgba(255, 255, 255, 0.82) !important;
+    border: 1px solid rgba(255, 255, 255, 0.95) !important;
+    box-shadow: 0 10px 40px rgba(15, 23, 42, 0.08), 0 1px 0 rgba(255, 255, 255, 0.9) inset !important;
+    backdrop-filter: blur(18px) saturate(1.2) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.2) !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .index-home-header .index-home-nav .header-nav::-webkit-scrollbar {
+    display: none;
+  }
+  .index-home-header .index-home-nav .header-nav #navbar {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-end;
+    flex-wrap: nowrap !important;
+    align-items: center;
+    width: auto !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 0 0 0.25rem !important;
+    gap: 0.25rem 0.5rem;
+  }
+  .index-home-header .index-home-nav .sticky-nav {
+    top: 0.75rem;
+  }
+  .index-home-header .index-home-nav .header-nav > .flex:first-child {
+    flex-shrink: 0;
+  }
+  .index-home-header .index-home-nav .header-nav > .flex:first-child a > div:first-child {
+    height: 2.25rem;
+    width: 2.25rem;
+    border-radius: 9999px !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+    border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  }
+  .index-home-header .index-home-nav .header-nav img[alt='Kalanjiyam'] {
+    height: 1.25rem;
+    width: 1.25rem;
+    object-fit: contain;
+    display: block;
+  }
+  .index-home-header .index-home-nav .glass-action {
+    height: 2.35rem;
+    width: 2.35rem;
+    min-height: 2.35rem;
+    min-width: 2.35rem;
+    border-radius: 9999px !important;
+  }
+  .index-home-header .index-home-nav .glass-action svg {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+  .index-home-header .index-home-nav .button-secondary {
+    padding: 0.45rem 1.1rem;
+    font-size: 0.8125rem;
+    border-radius: 9999px !important;
+    white-space: nowrap;
+  }
+  .index-home-header .index-home-nav .nav-link {
+    padding: 0.45rem 0.8rem;
+    font-size: 0.875rem;
+    border-radius: 9999px !important;
+    white-space: nowrap;
+  }
+
+  /* --- Hero: full remaining viewport height, full bleed width --- */
+  .index-home-header .index-hero-full-bleed {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    width: 100vw;
+    max-width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+    position: relative;
+    box-sizing: border-box;
+    padding: 0.75rem clamp(0.75rem, 4vw, 2.5rem) 1.25rem;
+    overflow: hidden;
+  }
+  .index-home-header .index-hero-card.hero-card {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-width: none !important;
+    width: 100%;
+    margin: 0;
+    border-radius: clamp(1rem, 2vw, 1.75rem);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+  .index-home-header .index-hero-card > .text-center {
+    width: 100%;
+    max-width: 48rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* --- Homepage footer: compact height, no vertical stretch --- */
+  .index-home-footer-shell {
+    width: 100%;
+    flex-grow: 0;
+    flex-shrink: 0;
+    margin-top: 0;
+    padding-top: 0.25rem;
+    border-top: 1px solid rgba(226, 232, 240, 0.9);
+    background: #f8fafc;
+  }
+  .index-home-footer-shell > footer {
+    display: block !important;
+    width: 100%;
+    max-width: min(80rem, calc(100vw - 1.5rem)) !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding: 1.75rem clamp(1rem, 3vw, 1.75rem) 1.25rem !important;
+    background: #ffffff !important;
+    border: 1px solid rgba(226, 232, 240, 0.85) !important;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    color: #334155;
+    box-sizing: border-box;
+  }
+  .index-home-footer-shell > footer > .mx-auto.flex {
+    display: flex !important;
+    width: 100% !important;
+    max-width: none !important;
+    flex-direction: column;
+    align-items: stretch;
+    flex-grow: 0 !important;
+    flex-shrink: 0 !important;
+    gap: 1.5rem !important;
+  }
+  @media (min-width: 1024px) {
+    .index-home-footer-shell > footer > .mx-auto.flex {
+      flex-direction: row;
+      flex-wrap: nowrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 2rem 2.5rem !important;
+    }
+    .index-home-footer-shell > footer > .mx-auto.flex > .max-w-xl {
+      max-width: 22rem;
+      flex: 0 0 auto;
+    }
+    /* Do not use flex:1 on the grid — it can stretch the footer tall in some layouts */
+    .index-home-footer-shell > footer > .mx-auto.flex > .grid {
+      flex: 0 1 auto !important;
+      width: min(100%, 42rem);
+      margin-left: auto;
+      align-self: start;
+    }
+  }
+  .index-home-footer-shell > footer .grid {
+    gap: 1.25rem 1.75rem !important;
+  }
+  .index-home-footer-shell > footer .site-footer-bottom {
+    margin-top: 1.25rem !important;
+    padding-top: 0.875rem !important;
+  }
+
+  .index-home-main {
+    width: 100%;
+    max-width: min(112rem, calc(100vw - 1.5rem));
+    margin-left: auto;
+    margin-right: auto;
+    padding-top: clamp(1.5rem, 4vw, 2.5rem);
+  }
+
+  /* Less duplicate top padding under the full-height hero */
+  body.index-home .page-shell {
+    padding-top: 1.25rem !important;
+  }
+
+  [data-theme='dark'] .index-home-header .index-home-nav .header-nav {
+    background: rgba(30, 41, 59, 0.82) !important;
+    border-color: rgba(148, 163, 184, 0.22) !important;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35) !important;
+  }
+  [data-theme='dark'] .index-home-footer-shell > footer {
+    background: rgba(15, 23, 42, 0.92) !important;
+    border-color: rgba(148, 163, 184, 0.2) !important;
+    color: #e2e8f0 !important;
+  }
+  [data-theme='dark'] .index-home-footer-shell .site-footer a {
+    color: #cbd5e1;
+  }
+  [data-theme='dark'] .index-home-footer-shell .site-footer a:hover {
+    color: #f8fafc;
+  }
+</style>
+{% endblock %}
+
 {% block header %}
-<header class="relative bg-transparent pt-16 pb-20 sm:pt-20 sm:pb-24 lg:pt-24 lg:pb-28">
-  <div class="relative z-30 mx-auto mb-8 max-w-7xl px-4 sm:px-6 lg:px-8">
-    {% include("include/header.html") %}
+<header class="index-home-header relative bg-transparent">
+  <div class="index-home-nav relative z-30">
+    <div class="index-home-nav-pill mx-auto">
+      {% include("include/header.html") %}
+    </div>
   </div>
-  <div class="relative mx-auto max-w-7xl overflow-hidden px-4 sm:px-6 lg:px-8">
-    <div class="absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-white via-slate-50 to-transparent"></div>
-    <div class="absolute left-6 top-24 h-44 w-44 rounded-full bg-sky-200/24 blur-3xl"></div>
-    <div class="absolute right-6 top-28 h-56 w-56 rounded-full bg-violet-200/24 blur-3xl"></div>
-    <div class="landing-hero glass-card hero-card relative z-10 border border-slate-200/70 bg-white/90 p-8 shadow-soft backdrop-blur-xl sm:p-10 lg:p-12">
+  <div class="index-hero-shell index-hero-full-bleed relative">
+    <div class="absolute inset-x-0 top-0 h-[min(50vh,24rem)] bg-gradient-to-b from-white via-slate-50 to-transparent"></div>
+    <div class="pointer-events-none absolute left-[10%] top-[18%] h-48 w-48 rounded-full bg-sky-200/24 blur-3xl sm:left-[14%] sm:h-56 sm:w-56"></div>
+    <div class="pointer-events-none absolute right-[8%] top-[22%] h-52 w-52 rounded-full bg-violet-200/24 blur-3xl sm:right-[12%] sm:h-60 sm:w-60"></div>
+    <div class="index-hero-card landing-hero glass-card hero-card relative z-10 w-full flex flex-col justify-center border border-slate-200/70 bg-white/90 px-6 py-12 shadow-soft backdrop-blur-xl sm:px-10 sm:py-16 lg:px-16 lg:py-24">
       <div class="text-center">
-        <span class="soft-pill mb-6 inline-flex items-center gap-2">
+        <span class="soft-pill mb-8 inline-flex max-w-xl flex-wrap items-center justify-center gap-2 px-4 py-2.5">
           <strong class="text-slate-700">AI</strong>
           <span class="text-sm text-slate-600">{{ _('A modern platform for Siddha text preservation and community proofing.') }}</span>
         </span>
-        <h1 class="text-4xl font-semibold tracking-[-0.03em] text-slate-950 sm:text-5xl lg:text-6xl">{{ _('Digital Library') }}</h1>
-        <p class="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl">{{ _('All free online library dedicated to preserving and sharing wisdom.') }}</p>
-        <div class="hero-actions mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+        <h1 class="text-5xl font-semibold tracking-[-0.03em] text-slate-950 sm:text-6xl lg:text-7xl">{{ _('Digital Library') }}</h1>
+        <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600 sm:text-xl">{{ _('All free online library dedicated to preserving and sharing wisdom.') }}</p>
+        <div class="hero-actions mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
+
           <a class="button-primary" href="{{ url_for('public.books.index') }}">{{ _('Browse Books') }}</a>
           {% if current_user.is_admin %}
           <a class="button-secondary" href="{{ url_for('proofing.index') }}">{{ _('Start Proofing') }}</a>
@@ -55,7 +297,7 @@
 {% endmacro %}
 
 {% block main %}
-<article>
+<article class="index-home-main">
 
   <section class="landing-section bg-peacock-subtle">
     <div class="landing-grid max-w-7xl mx-auto">
@@ -170,4 +412,8 @@ contribute to this sacred work.
 </section> #}
 
 </article>
+{% endblock %}
+
+{% block footer %}
+{% include "include/footer.html" %}
 {% endblock %}

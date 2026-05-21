@@ -1,26 +1,36 @@
 {% extends 'base.html' %}
 
-
-{% block body %}
-<body class="flex flex-col bg-white">
-{% block header %}
-<div class="text-peacock-primary bg-white border-b border-teal-200 mb-4 peacock-shadow">
-{% include "include/header.html" %}
-</div>
+{% block extra_head %}
+<style>
+  .page-header-nav {
+    width: 100%;
+    padding: 0.75rem clamp(0.75rem, 4vw, 2.5rem) 0.5rem;
+    display: flex;
+    justify-content: center;
+  }
+  .page-header-nav-pill {
+    width: 100%;
+    max-width: min(112rem, calc(100vw - 1.5rem));
+  }
+</style>
 {% endblock %}
 
-<div class="flex-1">
-{% block main %}{% endblock %}
+{% block body %}
+<div class="page-header-nav">
+<div class="page-header-nav-pill">
+{% block header %}
+  {% include "include/header.html" %}
+{% endblock %}
+</div>
 </div>
 
-
+<div class="page-shell">
+{% block main %}{% endblock %}
+</div>
 
 {% block scripts %}
     <script async defer data-domain="siddhasagaram.in" src="https://plausible.io/js/plausible.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@indic-transliteration/sanscript@1.2.7/sanscript.min.js"></script>
-    {# Load scripts before Alpine so that our init hooks are properly set up. #}
-    <script defer src="/static/gen/main.js"></script>
     <script src="https://unpkg.com/alpinejs@3.10.3/dist/cdn.min.js" defer></script>
 {% endblock %}
-</body>
 {% endblock %}

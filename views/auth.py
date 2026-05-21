@@ -18,7 +18,7 @@ import secrets
 import sys
 from datetime import datetime, timedelta
 
-from flask import Blueprint, flash, redirect, render_template, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, url_for
 from flask_babel import lazy_gettext as _l
 from flask_login import current_user, login_required, login_user, logout_user
 from flask_wtf import FlaskForm, RecaptchaField
@@ -150,11 +150,23 @@ def get_email_validators():
     return validators
 
 
+class OptionalRecaptchaField(RecaptchaField):
+    def __call__(self, **kwargs):
+        if not current_app.config.get("RECAPTCHA_PUBLIC_KEY"):
+            return ""
+        return super().__call__(**kwargs)
+
+    def pre_validate(self, form):
+        if not current_app.config.get("RECAPTCHA_PUBLIC_KEY"):
+            return
+        return super().pre_validate(form)
+
+
 class SignupForm(FlaskForm):
     username = StringField(_l("Username"), get_username_validators())
     password = PasswordField(_l("Password"), get_password_validators())
     email = EmailField(_l("Email address"), get_email_validators())
-    recaptcha = RecaptchaField()
+    recaptcha = OptionalRecaptchaField()
 
     def validate_username(self, username):
         # TODO: make username case insensitive
@@ -177,7 +189,7 @@ class SignInForm(FlaskForm):
 
 class ResetPasswordForm(FlaskForm):
     email = EmailField(_l("Email address"), get_email_validators())
-    recaptcha = RecaptchaField()
+    recaptcha = OptionalRecaptchaField()
 
 
 class ChangePasswordForm(FlaskForm):

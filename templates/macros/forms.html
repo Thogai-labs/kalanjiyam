@@ -54,13 +54,13 @@
 
 {# Main input for an auth field. #}
 {% macro auth_input(field) %}
-{{ field(class_="w-full p-2 mt-2 border border-teal-200 rounded") }}
+{{ field(class_="auth-input") }}
 {% endmacro %}
 
 
 {# Submit button for the authentication flow. #}
 {% macro auth_submit(text) %}
-<input type="submit" class="btn btn-submit w-full" value="{{ text }}" />
+<input type="submit" class="btn btn-submit auth-login-button w-full" value="{{ text }}" />
 {% endmacro %}
 
 

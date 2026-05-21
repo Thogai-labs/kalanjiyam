@@ -24,18 +24,22 @@
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="stylesheet" href="{{ asset('gen/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/premium-theme.css') }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css" integrity="sha384-GvrOXuhMATgEsSwCs4smul74iXGOixntILdUW9XmUC6+HX0sLNAK3q71HotJqlAn" crossorigin="anonymous">
     {% block extra_head %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}min-h-screen bg-[#f8fafc] text-slate-900 antialiased{% endblock %}">
     {% block body %}
-    {% include 'include/header.html' %}
+    {% block header %}{% endblock %}
     
-    <main class="{% block main_class %}{% endblock %}">
+    <main class="{% block main_class %}page-shell{% endblock %}">
         {% block main %}{% endblock %}
       </main>
+
+    {% block footer %}{% endblock %}
     
     <script src="{{ asset('gen/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
     {% block extra_scripts %}{% endblock %}
     {% endblock %}
 </body>

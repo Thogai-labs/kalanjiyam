@@ -4,64 +4,51 @@
 {%- set github = "https://github.com/AnaadiAI/kalanjiyam" -%}
 {%- set reddit = "https://reddit.com/u/learnsanskrit-org" -%}
 {%- set twitter = "https://twitter.com/ambuda_org" -%}
-{%- set support = url_for('site.support') -%}
 
+<footer class="site-footer bg-white/90 border-t border-slate-200/80 backdrop-blur-xl text-slate-700 px-5 py-9 sm:px-8 sm:py-10">
+  <div class="mx-auto flex max-w-7xl flex-col gap-8 lg:flex-row lg:justify-between lg:gap-10">
+    <div class="max-w-xl shrink-0">
+      <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Kalanjiyam</p>
+      <h2 class="mt-2 text-2xl font-semibold leading-snug text-slate-950 sm:text-3xl">Preserving Siddha knowledge together.</h2>
+      <p class="mt-2 text-sm text-slate-600 leading-relaxed sm:text-base">A modern digital library for ancient Siddha wisdom, community proofing, and learning.</p>
+      <div class="mt-4 flex flex-wrap gap-2 sm:gap-3">
+        <a class="button-secondary" href="{{ url_for('site.support') }}">{{ _('Support') }}</a>
+        <a class="button-primary" href="{{ url_for('public.books.index') }}">{{ _('Browse Books') }}</a>
+      </div>
+    </div>
 
-{%- macro _column(title_url, title, items) -%}
-<section class="mr-4 mb-4 basis-32">
-  <h3 class="font-bold mb-4"><a href="{{ title_url }}">{{ title }}</a></h3>
-  <ul>
-    {%- for url, name in items -%}
-    <li><a href="{{ url }}">{{ name }}</a>
-    {%- endfor -%}
-  </ul>
-</section>
-{%- endmacro -%}
+    <div class="grid shrink-0 grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 xl:grid-cols-3">
+      <div>
+        <h3 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ _('Explore') }}</h3>
+        <ul class="mt-2 space-y-1.5 text-sm text-slate-600">
+          <li><a class="hover:text-slate-900" href="{{ url_for('public.books.index') }}">{{ _('Books') }}</a></li>
+          <li><a class="hover:text-slate-900" href="{{ url_for('dictionaries.index') }}">{{ _('Dictionaries') }}</a></li>
+          <li><a class="hover:text-slate-900" href="{{ url_for('proofing.index') }}">{{ _('Proofing') }}</a></li>
+          <li><a class="hover:text-slate-900" href="{{ url_for('about.index') }}">{{ _('About') }}</a></li>
+        </ul>
+      </div>
 
+      <div>
+        <h3 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ _('Resources') }}</h3>
+        <ul class="mt-2 space-y-1.5 text-sm text-slate-600">
+          <li><a class="hover:text-slate-900" href="{{ url_for('about.mission') }}">{{ _('Mission') }}</a></li>
+          <li><a class="hover:text-slate-900" href="{{ url_for('about.code_and_data') }}">{{ _('Code and Data') }}</a></li>
+          <li><a class="hover:text-slate-900" href="{{ url_for('about.terms') }}">{{ _('Terms of Use') }}</a></li>
+          <li><a class="hover:text-slate-900" href="{{ url_for('about.privacy') }}">{{ _('Privacy Policy') }}</a></li>
+        </ul>
+      </div>
 
-<footer class="bg-slate-100 text-slate-800 a-hover-underline
-    text-sm p-4 md:p-12 xl:p-24 border-t border-slate-200">
-
-
-  <div class="md:flex flex-wrap justify-between max-w-3xl text-slate-600 mx-auto">
-  {{ _column(url_for('site.index'), _('Kalanjiyam'), [
-      (url_for('public.books.index'), _('Books')),
-      (url_for('dictionaries.index'), _('Dictionaries')),
-      (url_for('proofing.index'), _('Proofing')),
-      (url_for('about.contact'), _('Contact')),
-  ]) }}
-
-  {{ _column(url_for("about.index"), _('About'), [
-      (url_for('about.mission'), _('Mission')),
-      (url_for('about.values'), _('Values')),
-      (url_for('about.people.index'), _('People')),
-      (url_for('about.code_and_data'), _('Code and Data')),
-      (url_for('about.terms'), _('Terms of Use')),
-      (url_for('about.privacy'), _('Privacy Policy')),
-  ]) }}
-
-  {{ _column(url_for('site.donate'), _('Join Us'), [
-      (url_for('site.donate'), _('Donate')),
-      (url_for('site.sponsor'), _('Sponsor a book')),
-      (url_for('site.support'), _('Support')),
-  ]) }}
-
-  {{ _column(none, _('Community'), [
-      (blog, _('Blog')),
-      (discord, _('Discord')),
-      (github, _('GitHub')),
-      (reddit, _('Reddit')),
-      (twitter, _('Twitter')),
-  ]) }}
-
-  <section class="mr-4 mb-4">
-    <h3 class="font-bold mb-4">{{ _('Languages') }}</h3>
-    <ul>
-      {% for L in kalanjiyam_locales %}
-      <li><a href="{{ url_for('site.set_language', slug=L.slug) }}">{{ L.text }}</a></li>
-      {% endfor %}
-    </ul>
-  </section>
+      <div>
+        <h3 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ _('Community') }}</h3>
+        <ul class="mt-2 space-y-1.5 text-sm text-slate-600">
+          <li><a class="hover:text-slate-900" href="{{ blog }}">{{ _('Blog') }}</a></li>
+          <li><a class="hover:text-slate-900" href="{{ github }}">{{ _('GitHub') }}</a></li>
+          <li><a class="hover:text-slate-900" href="{{ discord }}">{{ _('Discord') }}</a></li>
+          <li><a class="hover:text-slate-900" href="{{ twitter }}">{{ _('Twitter') }}</a></li>
+        </ul>
+      </div>
+    </div>
   </div>
 
+  <div class="site-footer-bottom mt-8 border-t border-slate-200/70 pt-4 text-center text-xs text-slate-500 sm:text-sm">&copy; {{ current_year if current_year is defined else 2026 }} Kalanjiyam. {{ _('All rights reserved.') }}</div>
 </footer>

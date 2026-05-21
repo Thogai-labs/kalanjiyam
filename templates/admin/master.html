@@ -4,52 +4,71 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Kalanjiyam Admin{% endblock %}</title>
-    <meta name="description" content="A breakthrough Siddha Knowledge Systems library. Read our library of traditional Siddha texts with word-by-word analysis, integrated dictionary support, and so much more.">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <meta name="description" content="Admin dashboard for Kalanjiyam. Manage users, groups, and site data with clear modern controls.">
+    <link rel="stylesheet" href="{{ asset('gen/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/premium-theme.css') }}">
     <style>
         .admin-body {
-            background-color: #f8f9fa;
             margin: 0;
             padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f1f5f9;
+            color: #0f172a;
         }
         .admin-header {
-            background-color: #2c3e50;
+            background: rgba(15, 23, 42, 0.96);
             color: white;
             padding: 1rem 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
         }
         .admin-header-content {
             max-width: 1200px;
             margin: 0 auto;
             padding: 0 1rem;
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
             align-items: center;
+            gap: 1rem;
         }
         .admin-title {
             margin: 0;
-            font-size: 1.5rem;
-            font-weight: 600;
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
         }
         .admin-nav {
             display: flex;
-            gap: 1rem;
+            flex-wrap: wrap;
+            gap: 0.75rem;
         }
         .admin-nav-link {
             color: white;
             text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 0.25rem;
-            transition: background-color 0.2s;
+            padding: 0.75rem 1rem;
+            border-radius: 9999px;
+            background: rgba(255,255,255,0.08);
+            transition: background 0.2s ease;
         }
         .admin-nav-link:hover {
-            background-color: rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.16);
         }
         .admin-main {
             max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem 1rem;
+            margin: 2rem auto 4rem;
+            padding: 0 1rem;
+            min-height: calc(100vh - 110px);
+        }
+        .admin-card {
+            background: rgba(255,255,255,0.92);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            border-radius: 28px;
+            box-shadow: var(--shadow-soft);
+            padding: 1.75rem;
         }
     </style>
     {% block extra_head %}{% endblock %}
@@ -71,7 +90,6 @@
         {% block content %}{% endblock %}
     </main>
     
-    <!-- Admin scripts can be added here -->
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>

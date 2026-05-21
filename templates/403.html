@@ -4,9 +4,9 @@
 
 {% block content %}
 {% set contact_url = url_for('about.contact') %}
-<div class="prose">
-<h1>Forbidden (403)</h1>
-
-<p>Sorry, you don't have the access permissions needed to use this page.</p>
+<div class="error-card mx-auto max-w-2xl">
+  <h1 class="text-4xl font-semibold text-slate-950 mb-4">{{ _('Forbidden (403)') }}</h1>
+  <p class="text-slate-600 leading-7">{{ _('Sorry, you don't have the access permissions needed to use this page.') }}</p>
+  <p class="mt-4 text-sm text-slate-500">{{ _('If you think this is an error, please') }} <a class="text-slate-900 underline" href="{{ contact_url }}">{{ _('contact us') }}</a>.</p>
 </div>
 {% endblock %}

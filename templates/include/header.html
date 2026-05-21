@@ -1,35 +1,36 @@
-{# Header with layout but no color. Apply color in a wrapping parent element. #}
-{# https://css-tricks.com/snippets/svg/svg-hamburger-menu/ #}
-{% macro hamburger() %}
-<svg viewBox="0 0 100 80" width="20" height="20">
-  <rect width="100" height="10"></rect>
-  <rect y="30" width="100" height="10"></rect>
-  <rect y="60" width="100" height="10"></rect>
-</svg>
-{% endmacro %}
+{# Header with premium glass navigation, responsive controls, and a clean layout. #}
+<nav class="header-nav sticky-nav mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 rounded-full border border-white/70 bg-white/85 px-4 py-3 shadow-soft backdrop-blur-3xl transition duration-500">
+  <div class="flex items-center gap-3">
+    <a class="flex items-center gap-3" href="{{ url_for('site.index') }}">
+      <div class="flex h-12 w-12 items-center justify-center rounded-3xl bg-white/95 ring-1 ring-slate-200 shadow-soft">
+        <img src="{{ url_for('static', filename='images/siddha-logo.svg') }}" alt="Kalanjiyam" class="h-7 w-7">
+      </div>
+      <div class="hidden sm:block">
+        <p class="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">Kalanjiyam</p>
+        <p class="text-sm font-semibold text-slate-950">Knowledge Studio</p>
+      </div>
+    </a>
+  </div>
 
-<nav class="md:flex justify-between items-center a-hover-underline">
-  <div class="flex justify-between items-center">
-    <a class="p-4 font-bold text-lg" href="{{ url_for('site.index') }}">{{ _('Kalanjiyam') }}</a>
-    <div class="block p-4 md:hidden">
-      <button id="hamburger" type="button">{{ hamburger() }}</button>
+  <div id="navbar" class="w-full flex flex-wrap gap-3 rounded-3xl bg-white/95 p-4 shadow-soft backdrop-blur-3xl lg:w-auto lg:flex-row lg:items-center lg:justify-end lg:gap-4 lg:bg-transparent lg:p-0 lg:shadow-none">
+    <a class="nav-link" href="{{ url_for('public.books.index') }}">{{ _('Books') }}</a>
+    {% if current_user is defined and current_user.is_admin %}
+    <a class="nav-link" href="{{ url_for('proofing.index') }}">{{ _('Proofing') }}</a>
+    {% endif %}
+    <a class="nav-link" href="{{ url_for('about.index') }}">{{ _('About') }}</a>
+    <a class="nav-link" href="{{ url_for('site.support') }}">{{ _('Support') }}</a>
+    <div class="flex flex-wrap items-center gap-2 lg:ml-4">
+      <button type="button" data-theme-toggle class="glass-action text-slate-700" aria-label="{{ _('Toggle theme') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79Z"/>
+        </svg>
+      </button>
+      {% if current_user is defined and current_user.is_authenticated %}
+      {% set name = current_user.username %}
+      <a class="glass-action rounded-full px-3 py-2 text-sm font-semibold text-slate-900" href="{{ url_for('proofing.user.summary', username=name) }}">{{ name[:1]|upper }}</a>
+      {% else %}
+      <a class="button-secondary" href="{{ url_for('auth.sign_in') }}">{{ _('Sign In') }}</a>
+      {% endif %}
     </div>
   </div>
-  <ul id="navbar" class="hidden md:flex">
-    <li><a class="block p-4 py-2" href="{{ url_for('public.books.index') }}">{{ _('Books') }}</a></li>
-    {% if current_user is defined and current_user.is_admin %}
-    <li><a class="block p-4 py-2" href="{{ url_for('proofing.index') }}">{{ _('Proofing') }}</a></li>
-    {% endif %}
-    {% if current_user is defined and current_user.is_authenticated %}
-    {% set name = current_user.username %}
-    <li class="p-4 py-2">
-      <a href="{{ url_for("proofing.user.summary", username=name) }}">{{ name }}</a> |
-      <a href="{{ url_for("auth.sign_out") }}">{{ _('Sign out') }}</a>
-    </li>
-    {% else %}
-    <li class="p-4 py-2">
-      <a href="{{ url_for("auth.sign_in") }}">{{ _('Sign in') }}</a>
-    </li>
-    {% endif %}
-  </ul>
 </nav>

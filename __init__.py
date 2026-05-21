@@ -13,9 +13,11 @@ from dotenv import load_dotenv
 from flask import Flask, session
 from flask_babel import Babel, pgettext
 from sentry_sdk.integrations.flask import FlaskIntegration
-from sqlalchemy import exc
+from sqlalchemy import exc, create_engine
 
 import config
+from kalanjiyam.models.base import Base
+import kalanjiyam.database as database
 from kalanjiyam import admin as admin_manager
 from kalanjiyam import auth as auth_manager
 from kalanjiyam import checks, filters, queries
@@ -78,6 +80,15 @@ def _initialize_logger(log_level: int) -> None:
     logging.getLogger().addHandler(handler)
 
 
+def _ensure_database_schema(sqlalchemy_uri: str) -> None:
+    """Create missing tables automatically when the app starts."""
+    # Import the central database package so all model modules are registered
+    # with Base.metadata before creating missing tables.
+    _ = database
+    engine = create_engine(sqlalchemy_uri)
+    Base.metadata.create_all(engine)
+
+
 def create_app(config_env: str):
     """Initialize the Kalanjiyam application."""
 
@@ -101,7 +112,10 @@ def create_app(config_env: str):
 
     # Sanity checks
     assert config_env == config_spec.KALANJIYAM_ENVIRONMENT
-    if config_env != config.TESTING and not getattr(config_spec, 'SKIP_DB_CHECK', False):
+    if config_env != config.TESTING:
+        with app.app_context():
+            _ensure_database_schema(config_spec.SQLALCHEMY_DATABASE_URI)
+    if not getattr(config_spec, 'SKIP_DB_CHECK', False):
         with app.app_context():
             checks.check_database_uri(config_spec.SQLALCHEMY_DATABASE_URI)
 

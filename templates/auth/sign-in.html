@@ -8,29 +8,26 @@
 
 {% set forgot = url_for('auth.get_reset_password_token') %}
 {% block body %}
-<div class="max-w-md mx-auto mt-32 p-4">
-{{ mf.show_errors_if_any(form.errors) }}
-{{ components.flash_messages() }}
+<div class="auth-container">
+  {{ mf.show_errors_if_any(form.errors) }}
+  {{ components.flash_messages() }}
 
-<form method="POST" class="bg-white rounded p-8 peacock-shadow peacock-border">
-  <h1 class="text-2xl font-bold text-center mb-8 text-peacock-primary">{{ _('Sign in to Kalanjiyam') }}</h1>
+  <div class="auth-card max-w-md mx-auto">
+    <div class="heading">{{ _('Sign In') }}</div>
+    <form method="POST" class="auth-form">
+      {{ form.csrf_token }}
+      {{ mf.auth_field(form.username) }}
+      <div class="mb-4">
+        <div class="flex items-center justify-between">
+          {{ mf.auth_label(form.password) }}
+          <a class="forgot-password" href="{{ forgot }}">{{ _('Forgot Password ?') }}</a>
+        </div>
+        {{ mf.auth_input(form.password) }}
+      </div>
+      {{ mf.auth_submit(_("Sign In")) }}
+    </form>
 
-  {{ form.csrf_token }}
-  {{ mf.auth_field(form.username) }}
-
-  <div class="mb-4">
-  <div class="flex justify-between items-center">
-  {{ mf.auth_label(form.password) }}
-  <a class="hover:underline font-bold text-sm text-peacock-secondary" href="{{ forgot }}">{{ _('Forgot password?') }}</a>
+    <span class="agreement"><a href="#">{{ _('Learn user licence agreement') }}</a></span>
   </div>
-  {{ mf.auth_input(form.password) }}
-  </div>
-
-  {{ mf.auth_submit(_("Sign in")) }}
-</form>
-
-<p class="text-center text-md mt-4 text-peacock-secondary">
-  {{ _("Contact the site administrator to create an account.") }}
-</p>
 </div>
 {% endblock %}

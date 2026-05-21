@@ -7,14 +7,8 @@
 
 {% block content %}
 {% set contact_url = url_for('about.contact') %}
-<div class="prose">
-<h1>{{ _('Not Found (404)') }}</h1>
-
-<p>{% trans %}
-Sorry! We couldn't find what you were looking for. If you think you've found
-a bug in our project, <a href="{{ contact_url }}">let us know</a> and we'll fix
-it as soon as we can.
-{% endtrans %}</p>
-
-</div>
-{% endblock %}
+<div class="error-card mx-auto max-w-2xl">
+  <h1 class="text-4xl font-semibold text-slate-950 mb-4">{{ _('Page Not Found') }}</h1>
+  <p class="text-slate-600 leading-7">{% trans %}
+    Sorry! We couldn't find what you were looking for. If you think you've found a bug in our project, <a class="text-slate-900 underline" href="{{ contact_url }}">let us know</a> and we'll fix it as soon as we can.
+  {% endtrans %}</p>

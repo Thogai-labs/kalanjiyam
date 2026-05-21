@@ -4,9 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Kalanjiyam{% endblock %}</title>
+    <meta name="description" content="Sign in securely to Kalanjiyam to access Siddha texts, proofing tools, and the community library.">
     <link rel="stylesheet" href="{{ asset('gen/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/premium-theme.css') }}">
+    {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-white">
+<body class="min-h-screen bg-[#f8fafc] text-slate-900 antialiased">
     {% block body %}{% endblock %}
 </body>
 </html>

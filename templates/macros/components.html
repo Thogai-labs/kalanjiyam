@@ -37,13 +37,15 @@
 {% macro flash_messages() %}
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% if messages %}
+  <div class="theme-flash-group">
   {% for category, message in messages %}
     {% if category == 'success' %}
-      <p class="bg-emerald-100 my-4 p-2">{{ message }}</p>
+      <p class="theme-flash theme-flash-success">{{ message }}</p>
     {% else %}
-      <p class="bg-red-100 my-4 text-red-900 p-2">{{ message }}</p>
+      <p class="theme-flash theme-flash-error">{{ message }}</p>
     {% endif %}
   {% endfor %}
+  </div>
 {% endif %}
 {% endwith %}
 {% endmacro %}
@@ -51,15 +53,14 @@
 
 {# A list of tabs. #}
 {% macro tabs(urls, active) %}
-<nav class="md:border-b mb-8">
-  <ul class="border-l pl-4 md:border-0 md:p-0 md:flex a-hover-underline">
+<nav class="theme-tabs mb-8" aria-label="Section navigation">
+  <ul class="theme-tabs__list">
     {% for name, label, url in urls %}
     {% if name == active %}
-    <li class="md:p-4 font-semibold underline 
-        md:no-underline md:border-b-2 md:border-peacock-primary">{{ label }}</li>
+    <li class="theme-tabs__item is-active">{{ label }}</li>
     {% else %}
-    <li class="font-semibold border-b-2 border-transparent text-peacock-secondary">
-      <a class="block md:p-4" href="{{ url }}">{{ label }}</a>
+    <li class="theme-tabs__item">
+      <a class="theme-tabs__link" href="{{ url }}">{{ label }}</a>
     </li>
     {% endif %}
     {% endfor %}
@@ -68,15 +69,10 @@
 {% endmacro %}
 
 
-{# A basic header. #}
+{# Page hero below the main site nav (about contact, etc.). #}
 {% macro basic_header(title) %}
-<div class="text-peacock-primary bg-peacock-subtle border-b border-teal-200 mb-4">
-  <div class="border-teal-300">
-    {% include "include/header.html" %}
-  </div>
-
-  <header class="text-center py-16">
-    <h1 class="font-bold text-5xl">{{ title }}</h1>
-  </header>
+{% include "include/header.html" %}
+<div class="theme-page-hero border-b border-slate-200/80 bg-white/50 py-10 text-center backdrop-blur-sm md:py-14">
+  <h1 class="text-4xl font-bold tracking-tight text-slate-950 md:text-5xl">{{ title }}</h1>
 </div>
 {% endmacro %}

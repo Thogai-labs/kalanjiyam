@@ -2,44 +2,31 @@
 
 {% import "macros/components.html" as components %}
 
-
 {% block meta_description -%}
-A state-of-the-art Sanskrit proofreading platform with best-in-class OCR. Join today!
+A state-of-the-art Siddha text proofreading platform. Join our volunteer effort to digitize and preserve manuscripts.
 {%- endblock %}
 
-
-{% block header %}
-<div class="text-sky-900 bg-slate-100 border-b mb-4">
-  {% include "include/header-login.html" %}
-</div>
-{% endblock %}
-
-
 {% block main %}
-<article class="p-4 xl:p-0 max-w-6xl mx-auto mb-24">
+<article class="proofing-layout mx-auto mb-16 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+  {{ components.flash_messages() }}
 
-{{ components.flash_messages() }}
-
-{% if not current_user.is_authenticated %}
-<div class="bg-slate-100 p-4 pb-8 mb-8">
-  <p class="mb-4">{% trans %}
-  Thousands of Sanskrit texts are available only in print. Join our global
-  volunteer effort to digitize these texts and make them accessible to all.
-  {% endtrans %}</p>
-
-  <nav>
-  <a class="btn p-2 bg-black border border-black text-white transition
-  hover:bg-white hover:text-black" href="{{ url_for('auth.sign_in') }}">{{ _('Sign in') }}</a>
-  </nav>
-</div>
-{% endif %}
-
-<div class="md:flex md:mt-8">
-  <div class="md:mr-8 md:min-w-[16rem]">{% block sidebar %}{% endblock %}</div>
-  <div class="grow mt-8 md:mt-0">
-    {% block content %}{% endblock %}
+  {% if not current_user.is_authenticated %}
+  <div class="theme-alert theme-alert-info mb-8">
+    <p class="mb-4 text-slate-700">{% trans %}
+    Thousands of Siddha texts are available only in print. Join our global
+    volunteer effort to digitize these texts and make them accessible to all.
+    {% endtrans %}</p>
+    <a class="button-primary" href="{{ url_for('auth.sign_in') }}">{{ _('Sign in') }}</a>
   </div>
-</div>
+  {% endif %}
 
+  <div class="proofing-body md:flex md:gap-8 lg:gap-10">
+    <aside class="proofing-sidebar-wrap md:mb-0 md:w-56 md:shrink-0 lg:w-60">
+      {% block sidebar %}{% endblock %}
+    </aside>
+    <div class="proofing-content min-w-0 flex-1 md:mt-0">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
 </article>
 {% endblock %}
