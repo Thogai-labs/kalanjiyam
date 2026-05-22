@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String
 from sqlalchemy import Text as Text_
 from sqlalchemy.orm import relationship
 
@@ -17,6 +17,32 @@ def string():
 def text():
     """Create a non-nullable text column that defaults to the empty string."""
     return Column(Text_, nullable=False, default="")
+
+
+class OCRComparison(Base):
+    """Stores results of OCR comparison against ground truth."""
+
+    __tablename__ = "proof_ocr_comparisons"
+
+    #: Primary key.
+    id = pk()
+    #: The project this comparison belongs to.
+    project_id = foreign_key("proof_projects.id")
+    #: OCR engine used.
+    engine = Column(String, nullable=False)
+    #: Comparison status.
+    status = Column(String, default="pending", nullable=False)
+    #: Timestamp.
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    #: Overall metrics (JSON).
+    summary_metrics = Column(JSON, nullable=True)
+    #: Per-page results (JSON).
+    page_results = Column(JSON, nullable=True)
+    #: Error message if failed.
+    error_message = Column(Text_, nullable=True)
+
+    #: Relationship to project.
+    project = relationship("Project", backref="ocr_comparisons")
 
 
 class Genre(Base):

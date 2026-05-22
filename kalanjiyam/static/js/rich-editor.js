@@ -12,6 +12,7 @@ import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import Link from '@tiptap/extension-link';
 import Mathematics from '@tiptap/extension-mathematics';
+import { marked } from 'marked';
 import 'katex/dist/katex.min.css';
 
 
@@ -142,7 +143,45 @@ export function getEditorText(editor) {
  */
 export function setEditorText(editor, text) {
   if (!editor) return;
-  editor.commands.setContent(text || '');
+
+  if (!text) {
+    editor.commands.setContent('');
+    return;
+  }
+
+  try {
+    marked.use({
+      breaks: true,
+      gfm: true,
+    });
+
+    let processedText = text;
+    if (processedText) {
+      processedText = processedText.replace(
+        /([^\n])\s+(#{1,6}\s)/g,
+        '$1\n\n$2',
+      );
+    }
+
+    const htmlContent = marked.parse(processedText);
+    editor.commands.setContent(htmlContent);
+  } catch (error) {
+    console.error('Error parsing Markdown content:', error);
+
+    const escapedText = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    const fallbackContent = escapedText
+      .split('\n')
+      .map((line) => `<p>${line || '<br>'}</p>`)
+      .join('');
+
+    editor.commands.setContent(fallbackContent);
+  }
 }
 
 /**

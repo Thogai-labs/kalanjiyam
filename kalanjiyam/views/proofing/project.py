@@ -37,9 +37,12 @@ import redis
 
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
+from kalanjiyam.models.proofing import OCRComparison
 from kalanjiyam.tasks import app as celery_app
 from kalanjiyam.tasks import ocr as ocr_tasks
+from kalanjiyam.tasks.comparison import run_ocr_comparison_task
 from kalanjiyam.tasks import translation as translation_tasks
+from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
 from kalanjiyam.utils import project_utils, proofing_utils
 from kalanjiyam.utils.revisions import add_revision
 from kalanjiyam.views.proofing.decorators import moderator_required, p2_required
@@ -330,8 +333,69 @@ def stats(slug):
         abort(404)
 
     stats_ = calculate_stats(project_)
+    comparisons = (
+        q.get_session()
+        .query(OCRComparison)
+        .filter_by(project_id=project_.id)
+        .order_by(OCRComparison.created_at.desc())
+        .all()
+    )
     return render_template(
-        "proofing/projects/stats.html", project=project_, stats=stats_
+        "proofing/projects/stats.html",
+        project=project_,
+        stats=stats_,
+        comparisons=comparisons,
+        supported_engines=SUPPORTED_ENGINES,
+    )
+
+
+@bp.route("/<slug>/stats/compare", methods=["POST"])
+@moderator_required
+def run_comparison(slug):
+    """Run an OCR comparison against ground truth."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    engine = request.form.get("engine")
+    if not engine:
+        flash("Please select an engine.", "danger")
+        return redirect(url_for("proofing.project.stats", slug=slug))
+
+    if engine not in SUPPORTED_ENGINES:
+        flash(f"Unsupported OCR engine: {engine}", "danger")
+        return redirect(url_for("proofing.project.stats", slug=slug))
+
+    session = q.get_session()
+    comparison = OCRComparison(project_id=project_.id, engine=engine, status="pending")
+    session.add(comparison)
+    session.commit()
+
+    run_ocr_comparison_task.delay(
+        comparison.id, current_app.config["KALANJIYAM_ENVIRONMENT"]
+    )
+
+    flash(f"Comparison started with {engine}.", "success")
+    return redirect(url_for("proofing.project.stats", slug=slug))
+
+
+@bp.route("/<slug>/stats/compare/<int:comparison_id>")
+@moderator_required
+def comparison_details(slug, comparison_id):
+    """Show detailed results for a comparison."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    session = q.get_session()
+    comparison = session.query(OCRComparison).get(comparison_id)
+    if not comparison or comparison.project_id != project_.id:
+        abort(404)
+
+    return render_template(
+        "proofing/projects/comparison_details.html",
+        project=project_,
+        comparison=comparison,
     )
 
 
