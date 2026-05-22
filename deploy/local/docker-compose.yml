@@ -10,8 +10,14 @@ services:
         target: 5000
     volumes:
       - ${PWD}/kalanjiyam/static/:/app/kalanjiyam/static/
+    env_file:
+      - ${PWD}/.env
     environment:
-      - KALANJIYAM_BOT_PASSWORD=insecure bot password
+      - FLASK_ENV=${FLASK_ENV:-development}
+      - REDIS_URL=redis://kalanjiyam-redis:6379/0
+      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
+      - OCR_BACKEND=remote
+      - OCR_SERVICE_URL=${OCR_SERVICE_URL:-http://host.docker.internal:5001}
     depends_on:
       - kalanjiyam-db
       - kalanjiyam-redis
@@ -32,9 +38,20 @@ services:
 
   kalanjiyam-celery:
     image: ${KALANJIYAM_IMAGE}
-    command: celery -A kalanjiyam.tasks worker --loglevel=INFO --concurrency=2 --prefetch-multiplier=1
+    command: >
+      celery -A kalanjiyam.tasks worker
+      -Q default,ocr
+      --loglevel=INFO
+      --concurrency=2
+      --prefetch-multiplier=1
+    env_file:
+      - ${PWD}/.env
     environment:
-      - KALANJIYAM_BOT_PASSWORD=insecure bot password
+      - FLASK_ENV=${FLASK_ENV:-development}
+      - REDIS_URL=redis://kalanjiyam-redis:6379/0
+      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
+      - OCR_BACKEND=remote
+      - OCR_SERVICE_URL=${OCR_SERVICE_URL:-http://host.docker.internal:5001}
     depends_on:
       - kalanjiyam-db
       - kalanjiyam-redis

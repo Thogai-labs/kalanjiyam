@@ -4,6 +4,7 @@ services:
   kalanjiyam-web:
     image: ${KALANJIYAM_IMAGE}
     container_name: kalanjiyam-web
+    restart: unless-stopped
     ports:
       - host_ip: ${KALANJIYAM_HOST_IP}
         published: ${KALANJIYAM_HOST_PORT}
@@ -11,11 +12,11 @@ services:
     env_file:
       - ${PWD}/.env
     environment:
-      - FLASK_ENV=${FLASK_ENV:-staging}
+      - FLASK_ENV=production
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
-      - OCR_SERVICE_URL=${OCR_SERVICE_URL:-http://host.docker.internal:5001}
+      - OCR_SERVICE_URL=${OCR_SERVICE_URL}
     depends_on:
       - kalanjiyam-db
       - kalanjiyam-redis
@@ -23,19 +24,23 @@ services:
   kalanjiyam-db:
     image: postgres:15
     container_name: kalanjiyam-db
+    restart: unless-stopped
     environment:
       - POSTGRES_DB=kalanjiyam
       - POSTGRES_USER=kalanjiyam
-      - POSTGRES_PASSWORD=kalanjiyam
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kalanjiyam}
     volumes:
       - kalanjiyam-data:/var/lib/postgresql/data
 
   kalanjiyam-redis:
     image: redis:7
     container_name: kalanjiyam-redis
+    restart: unless-stopped
 
   kalanjiyam-celery:
     image: ${KALANJIYAM_IMAGE}
+    container_name: kalanjiyam-celery
+    restart: unless-stopped
     command: >
       celery -A kalanjiyam.tasks worker
       -Q default,ocr
@@ -45,11 +50,11 @@ services:
     env_file:
       - ${PWD}/.env
     environment:
-      - FLASK_ENV=${FLASK_ENV:-staging}
+      - FLASK_ENV=production
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
-      - OCR_SERVICE_URL=${OCR_SERVICE_URL:-http://host.docker.internal:5001}
+      - OCR_SERVICE_URL=${OCR_SERVICE_URL}
     depends_on:
       - kalanjiyam-db
       - kalanjiyam-redis

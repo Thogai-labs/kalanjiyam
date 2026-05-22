@@ -1,4 +1,4 @@
-# Environment. Valid values are: local, staging, and prod
+# Environment. Valid values are: local, staging, prod
 KALANJIYAM_DEPLOYMENT_ENV=local
 KALANJIYAM_HOST_IP=0.0.0.0
 KALANJIYAM_HOST_PORT=5000
@@ -152,15 +152,6 @@ memory-monitor:
 # Stop all Celery workers (useful for memory issues)
 celery-stop:
 	python scripts/monitor_memory.py --kill-workers
-
-# Test Surya OCR GPU configuration
-test-surya-gpu:
-	python scripts/test_surya_gpu.py
-
-# List available GPUs
-list-gpus:
-	python scripts/test_surya_gpu.py --list-gpus
-
 
 # Docker commands
 # ===============================================
