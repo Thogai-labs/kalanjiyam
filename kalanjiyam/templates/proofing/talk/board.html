@@ -3,27 +3,102 @@
 {% import "macros/proofing-talk.html" as m_talk %}
 {% from "macros/forms.html" import field %}
 
-
 {% block title %}Talk: {{ project.display_title }} | Ambuda{% endblock %}
-
-
 {% block sidebar %}{{ m.main_nav('talk', current_user=current_user) }}{% endblock %}
 
-
 {% block content %}
-{{ m.project_header_nested('Talk', project) }}
-{{ m.project_tabs(project=project, active='talk', is_mod=current_user.is_moderator) }}
 
-<div class="my-4">
-<a class="btn btn-basic" href="{{ url_for('proofing.talk.create_thread', slug=project.slug) }}">
-  {{ _('Create thread') }}
-</a>
+{# Header Card #}
+<div style="background:rgba(255,255,255,0.72);
+            backdrop-filter:blur(18px);
+            border:1.5px solid rgba(255,255,255,0.9);
+            border-radius:24px;
+            padding:26px 30px;
+            margin-bottom:18px;
+            box-shadow:0 8px 32px rgba(16,137,211,0.10);">
+
+  {{ m.project_header_nested('Talk', project) }}
+
+  <p style="margin:8px 0 0;color:#6a9abf;font-size:0.95rem;">
+    Discuss proofreading issues, improvements, and project coordination
+  </p>
 </div>
 
-{% if board.threads %}
-{{ m_talk.thread_list(project.slug, board.threads) }}
-{% else %}
-<p>This project doesn't have any ongoing discussion.</p>
-{% endif %}
+{# Tabs Card #}
+<div style="background:rgba(16,137,211,0.05);
+            border:1.5px solid rgba(16,137,211,0.12);
+            border-radius:18px;
+            padding:10px 14px;
+            margin-bottom:18px;">
+  {{ m.project_tabs(project=project, active='talk', is_mod=current_user.is_moderator) }}
+</div>
+
+{# Action Bar #}
+<div style="display:flex;justify-content:flex-end;margin-bottom:18px;">
+  <a href="{{ url_for('proofing.talk.create_thread', slug=project.slug) }}"
+     style="display:inline-flex;align-items:center;gap:8px;
+            background:linear-gradient(135deg,#1089d3,#12b1d1);
+            color:white;
+            padding:10px 16px;
+            border-radius:999px;
+            font-size:0.9rem;
+            font-weight:700;
+            text-decoration:none;
+            box-shadow:0 8px 20px rgba(16,137,211,0.25);
+            transition:all 0.2s;">
+    + Create thread
+  </a>
+</div>
+
+{# Threads Container #}
+<div style="background:rgba(255,255,255,0.72);
+            backdrop-filter:blur(18px);
+            border:1.5px solid rgba(255,255,255,0.9);
+            border-radius:24px;
+            padding:22px 26px;
+            box-shadow:0 8px 32px rgba(16,137,211,0.08);">
+
+  {% if board.threads %}
+
+    <div style="margin-bottom:10px;">
+      <h2 style="font-size:1.1rem;font-weight:800;color:#1a2a3a;margin:0;">
+        Active discussions
+      </h2>
+      <p style="margin:4px 0 14px;color:#6a9abf;font-size:0.9rem;">
+        Threads created by contributors and moderators
+      </p>
+    </div>
+
+    {{ m_talk.thread_list(project.slug, board.threads) }}
+
+  {% else %}
+
+    <div style="text-align:center;padding:30px 10px;">
+      <div style="font-size:2.5rem;">💬</div>
+      <h3 style="margin:10px 0 6px;font-size:1.1rem;font-weight:800;color:#1a2a3a;">
+        No discussions yet
+      </h3>
+      <p style="color:#6a9abf;font-size:0.9rem;margin:0;">
+        This project doesn't have any ongoing discussion.
+      </p>
+
+      <div style="margin-top:14px;">
+        <a href="{{ url_for('proofing.talk.create_thread', slug=project.slug) }}"
+           style="display:inline-block;
+                  background:linear-gradient(135deg,#1089d3,#12b1d1);
+                  color:white;
+                  padding:10px 16px;
+                  border-radius:999px;
+                  font-size:0.9rem;
+                  font-weight:700;
+                  text-decoration:none;">
+          Start first thread
+        </a>
+      </div>
+    </div>
+
+  {% endif %}
+
+</div>
 
 {% endblock %}

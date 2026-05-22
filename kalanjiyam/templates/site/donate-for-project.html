@@ -1,16 +1,43 @@
 {% extends 'site/base-donate.html' %}
 
-
 {% block header %}
-<h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold">{{ _('Thank you!') }}</h1>
-<div class="mx-auto text-lg max-w-xl">
-  <p class="my-4">{{ _('Please include the title of your book in your donation comment.') }}</p>
+
+<div class="max-w-2xl mx-auto text-center my-16">
+
+  {# MAIN CARD #}
+  <div class="bg-white/70 backdrop-blur-xl border border-teal-100 shadow-lg rounded-2xl p-8">
+
+    <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-peacock-primary">
+      {{ _('Thank you!') }}
+    </h1>
+
+    <p class="mt-4 text-peacock-secondary text-lg max-w-xl mx-auto">
+      {{ _('Please include the title of your book in your donation comment.') }}
+    </p>
+
+    {# DONATION SUMMARY CARD #}
+    <div class="mt-8 mx-auto w-[425px] bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl p-6 shadow">
+
+      <div class="text-sm font-semibold uppercase tracking-wide text-peacock-secondary mb-4">
+        {{ _('Donation Summary') }}
+      </div>
+
+      <ul class="space-y-2 text-xl font-bold">
+
+        <li class="text-peacock-primary">
+          {{ title }}
+        </li>
+
+        <li class="text-peacock-secondary">
+          ₹{{ cost }}
+        </li>
+
+      </ul>
+
+    </div>
+
+  </div>
+
 </div>
 
-{# Width matches the width of the donorbox #}
-<ul class="mx-auto font-bold w-[425px] text-2xl p-4 rounded my-8 bg-yellow-100
-    border border-yellow-300 text-yellow-900 text-center">
-  <li class="mb-4">{{ title }}</li>
-  <li>₹{{ cost }}</li>
-</ul>
 {% endblock %}

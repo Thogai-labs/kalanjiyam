@@ -1,10 +1,20 @@
 """General information about Kalanjiyam."""
 
 from flask import Blueprint, redirect, render_template, url_for
+from flask_babel import lazy_gettext as _l
+from flask_wtf import FlaskForm
+from wtforms import EmailField, StringField, TextAreaField
+from wtforms.validators import DataRequired, Email, Length
 
 from kalanjiyam import queries as q
 
 bp = Blueprint("about", __name__)
+
+
+class ContactForm(FlaskForm):
+    """Form for contact page."""
+    email = EmailField(_l("Email address"), validators=[DataRequired(), Email()])
+    message = StringField(_l("Message"), validators=[DataRequired(), Length(min=1, max=10000)])
 
 people = Blueprint("people", __name__)
 bp.register_blueprint(people, url_prefix="/people")
@@ -53,7 +63,8 @@ def name():
 
 @bp.route("/contact")
 def contact():
-    return render_template("about/contact.html")
+    form = ContactForm()
+    return render_template("about/contact.html", form=form)
 
 
 @bp.route("/terms")

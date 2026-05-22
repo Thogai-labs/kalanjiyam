@@ -1,13 +1,30 @@
 {% extends 'header-main-footer.html' %}
 
-
 {% block meta_description -%}
 Follow along with the latest updates on Ambuda.
 {%- endblock %}
 
-
 {% block main %}
-  <article class="p-4 xl:p-0 max-w-4xl mx-auto mb-24">
-  {% block content %}{% endblock %}
-  </article>
+
+<div style="max-width:1000px;margin:40px auto 80px;padding:0 16px;">
+
+  {# PAGE WRAPPER CARD #}
+  <div style="background:rgba(255,255,255,0.6);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.85);
+              border-radius:28px;
+              box-shadow:0 12px 36px rgba(16,137,211,0.08);
+              padding:0;">
+
+    {# INNER CONTENT AREA #}
+    <article style="padding:28px 28px 34px;">
+
+      {% block content %}{% endblock %}
+
+    </article>
+
+  </div>
+
+</div>
+
 {% endblock %}

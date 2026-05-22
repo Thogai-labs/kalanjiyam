@@ -11,83 +11,85 @@
 
 
 {% block content %}
-<h1 class="font-bold text-3xl mb-4">{{ project.display_title }}</h1>
-{{ m.project_tabs(project=project, active='summary', is_mod=current_user.is_moderator) }}
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:28px 32px;margin-bottom:24px;box-shadow:0 8px 32px rgba(16,137,211,0.1);">
+  <h1 style="font-size:2rem;font-weight:900;color:#1089d3;margin:0 0 8px;">{{ project.display_title }}</h1>
+  <p style="color:#6a9abf;font-size:0.95rem;margin:0;">Collaborative manuscript digitization project</p>
+</div>
+
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:10px 14px;margin-bottom:24px;">
+  {{ m.project_tabs(project=project, active='summary', is_mod=current_user.is_moderator) }}
+</div>
 
 {% if project.description %}
-<div class="prose">
-  <h2>{{ _('Description') }}</h2>
-  <blockquote>
-  {{ project.description|markdown|safe }}
-  </blockquote>
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:24px 28px;margin-bottom:24px;box-shadow:0 8px 32px rgba(16,137,211,0.05);">
+  <h2 style="font-size:1.1rem;font-weight:800;color:#1089d3;margin:0 0 12px;padding-bottom:8px;border-bottom:2px solid rgba(16,137,211,0.12);">{{ _('Description') }}</h2>
+  <div class="prose">
+    {{ project.description|markdown|safe }}
+  </div>
 </div>
 {% endif %}
 
-<div class="prose">
-  <h2>{{ _('Pages') }}</h2>
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:24px 28px;margin-bottom:24px;box-shadow:0 8px 32px rgba(16,137,211,0.05);">
+  <h2 style="font-size:1.1rem;font-weight:800;color:#1089d3;margin:0 0 16px;padding-bottom:8px;border-bottom:2px solid rgba(16,137,211,0.12);">{{ _('Pages') }}</h2>
+  <ul class="grid grid-cols-5 md:grid-cols-10 gap-2 text-center">
+  {% for page_title, p in pages %}
+    {% set colors = m.revision_colors(p.status.name) %}
+    {% set url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=p.slug)  %}
+    <li>
+      <a class="block rounded py-1 {{ colors }} text-xs font-medium transition hover:shadow-md" href="{{ url }}">{{ page_title }}</a>
+    </li>
+  {% endfor %}
+  </ul>
 </div>
 
-<ul class="grid grid-cols-5 md:grid-cols-10 gap-2 text-center">
-{% for page_title, p in pages %}
-  {% set colors = m.revision_colors(p.status.name) %}
-  {% set url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=p.slug)  %}
-  <li>
-    <a class="block rounded py-1 {{ colors }}" href="{{ url }}">{{ page_title }}</a>
-  </li>
-{% endfor %}
-</ul>
-
-<div class="prose">
-  <h2>{{ pgettext("project", "About") }}</h2>
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:24px 28px;margin-bottom:24px;box-shadow:0 8px 32px rgba(16,137,211,0.05);">
+  <h2 style="font-size:1.1rem;font-weight:800;color:#1089d3;margin:0 0 16px;padding-bottom:8px;border-bottom:2px solid rgba(16,137,211,0.12);">{{ pgettext("project", "About") }}</h2>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;font-size:0.9rem;">
+      <tr style="border-bottom:1px solid rgba(16,137,211,0.12);">
+        <td style="padding:12px 0;font-weight:600;color:#1089d3;width:200px;">{{ _('Title') }}</td>
+        <td style="padding:12px 0;color:#6a9abf;">{{ project.display_title or _('(none)') }}</td>
+      </tr>
+      <tr style="border-bottom:1px solid rgba(16,137,211,0.12);">
+        <td style="padding:12px 0;font-weight:600;color:#1089d3;">{{ _('Author') }}</td>
+        <td style="padding:12px 0;color:#6a9abf;">{{ project.author or _('(none)') }}</td>
+      </tr>
+      <tr style="border-bottom:1px solid rgba(16,137,211,0.12);">
+        <td style="padding:12px 0;font-weight:600;color:#1089d3;">{{ _('Editor') }}</td>
+        <td style="padding:12px 0;color:#6a9abf;">{{ project.editor or _('(none)') }}</td>
+      </tr>
+      <tr style="border-bottom:1px solid rgba(16,137,211,0.12);">
+        <td style="padding:12px 0;font-weight:600;color:#1089d3;">{{ _('Publisher') }}</td>
+        <td style="padding:12px 0;color:#6a9abf;">{{ project.publisher or _('(none)') }}</td>
+      </tr>
+      <tr>
+        <td style="padding:12px 0;font-weight:600;color:#1089d3;">{{ _('Publication year') }}</td>
+        <td style="padding:12px 0;color:#6a9abf;">{{ project.publication_year or _('(none)') }}</td>
+      </tr>
+    </table>
+  </div>
 </div>
 
-<div class="bg-slate-100 p-4 w-2/3">
-<table class="w-full">
-  <tr>
-    <th class="text-left">{{ _('Title') }}</th>
-    <td class="text-right">{{ project.display_title or _("(none)") }}</td>
-  </tr>
-  <tr>
-    <th class="text-left">{{ _('Author') }}</th>
-    <td class="text-right">{{ project.author or _("(none)") }}</td>
-  </tr>
-  <tr>
-    <th class="text-left">{{ _('Editor') }}</th>
-    <td class="text-right">{{ project.editor or _("(none)") }}</td></tr>
-  <tr>
-    <th class="text-left">{{ _('Publisher') }}</th>
-    <td class="text-right">{{ project.publisher or _("(none)") }}</td></tr>
-  <tr>
-    <th class="text-left">{{ _('Publication year') }}</th>
-    <td class="text-right">{{ project.publication_year or _("(none)") }}</td>
-  </tr>
-</table>
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:24px 28px;margin-bottom:24px;box-shadow:0 8px 32px rgba(16,137,211,0.05);">
+  <h2 style="font-size:1.1rem;font-weight:800;color:#1089d3;margin:0 0 16px;padding-bottom:8px;border-bottom:2px solid rgba(16,137,211,0.12);">{{ _('Recent discussion') }}</h2>
+  {% if project.board.threads[:3] %}
+    {{ m_talk.thread_list(project.slug, project.board.threads) }}
+  {% else %}
+    {% set new_thread_url = url_for('proofing.talk.create_thread', slug=project.slug) %}
+    <p style="color:#6a9abf;text-align:center;padding:20px;">{% trans %}
+    This project doesn't have any ongoing discussion.
+    <a href="{{ new_thread_url }}" style="color:#1089d3;font-weight:600;">Start a new thread?</a>
+    {% endtrans %}</p>
+  {% endif %}
 </div>
 
-<div class="prose">
-  <h2>{{ _('Recent discussion') }}</h2>
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:24px 28px;box-shadow:0 8px 32px rgba(16,137,211,0.05);">
+  <h2 style="font-size:1.1rem;font-weight:800;color:#1089d3;margin:0 0 16px;padding-bottom:8px;border-bottom:2px solid rgba(16,137,211,0.12);">{{ _('Recent changes') }}</h2>
+  {% if recent_revisions %}
+    {{ m.revision_list(recent_revisions) }}
+  {% else %}
+    <p style="color:#6a9abf;text-align:center;padding:20px;">{{ _(\"This project doesn't have any edits yet.\") }}</p>
+  {% endif %}
 </div>
-
-{% if project.board.threads[:3] %}
-{{ m_talk.thread_list(project.slug, project.board.threads) }}
-{% else %}
-{% set new_thread_url = url_for('proofing.talk.create_thread', slug=project.slug) %}
-<div class="prose">
-  <p>{% trans %}
-  This project doesn't have any ongoing discussion.
-  <a href="{{ new_thread_url }}">Start a new thread?</a>
-  {% endtrans %}</p>
-</div>
-{% endif %}
-
-<div class="prose">
-  <h2>{{ _('Recent changes') }}</h2>
-</div>
-
-{% if recent_revisions %}
-{{ m.revision_list(recent_revisions) }}
-{% else %}
-<p>{{ _("This project doesn't have any edits yet.") }}</p>
-{% endif %}
 
 {% endblock %}

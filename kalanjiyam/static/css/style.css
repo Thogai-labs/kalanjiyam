@@ -89,13 +89,13 @@
     @apply border-teal-200 bg-white text-peacock-secondary;
   }
   .ocr-engine-btn:hover:not(.active) {
-    @apply border-peacock-primary bg-peacock-subtle;
+    @apply border-teal-700 bg-peacock-subtle;
   }
   .ocr-engine-btn.active {
-    @apply border-peacock-primary bg-peacock-primary text-white shadow-sm;
+    @apply border-teal-700 bg-peacock-primary text-white shadow-sm;
   }
   .ocr-engine-btn.active:hover {
-    @apply border-peacock-secondary bg-peacock-secondary;
+    @apply border-cyan-600 bg-peacock-secondary;
   }
 
   /* Notification System */
@@ -136,10 +136,10 @@
   /* Enhanced Form Controls */
   .form-select-enhanced {
     @apply w-full p-2 text-sm border border-teal-200 rounded transition-colors;
-    @apply focus:border-peacock-primary focus:ring-1 focus:ring-peacock-primary focus:outline-none;
+    @apply focus:border-teal-700 focus:ring-1 focus:ring-teal-700 focus:outline-none;
   }
   .form-select-enhanced:hover {
-    @apply border-peacock-secondary;
+    @apply border-cyan-600;
   }
 
   /* Engine Info Panel */

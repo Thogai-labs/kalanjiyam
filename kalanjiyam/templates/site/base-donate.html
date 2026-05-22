@@ -1,31 +1,70 @@
 {% extends 'header-main-footer.html' %}
 {% import "macros/components.html" as m %}
 
-
 {% block title %}{{ m.title(_('Donate')) }}{% endblock %}
 
-
 {% block body %}
-<body class="bg-slate-100 text-sky-900">
 
-<nav class="md:flex justify-between items-center a-hover-underline mb-4">
-  <a class="p-4 font-bold text-lg" href="{{ url_for('site.index') }}">{{ _('Ambuda') }}</a>
-</nav>
+<div class="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 text-peacock-primary">
 
-<header class="max-w-4xl mx-auto mt-16 mb-4 p-4 text-center">
-  {% block header %}{% endblock %}
-</header>
+  {# NAV #}
+  <nav class="max-w-5xl mx-auto flex justify-between items-center py-4 px-4">
+    <a class="font-bold text-lg text-peacock-primary hover:opacity-80 transition"
+       href="{{ url_for('site.index') }}">
+      {{ _('Ambuda') }}
+    </a>
+  </nav>
 
-<main class="pb-24">
-  {# The Donorbox widget renders off-center by default. To fix:
-      1. Decrease the iframe width to 425px.
-      2. Add `class="mx-auto"` to the iframe.
-  #}
-  <script src="https://donorbox.org/widget.js" paypalExpress="false"></script>
-  <iframe src="https://donorbox.org/embed/ambuda?default_interval=o" name="donorbox" allowpaymentrequest="allowpaymentrequest" seamless="seamless" frameborder="0" scrolling="no" height="900px" width="100%" style="max-width: 425px; min-width: 250px; max-height:none!important" class="mx-auto"></iframe>
+  {# HEADER #}
+  <header class="max-w-3xl mx-auto mt-14 mb-8 text-center px-4">
 
-  {% block post_form %}{% endblock %}
-</main>
+    <div class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl shadow-lg p-6">
 
-</body>
+      {% block header %}
+      <h1 class="text-3xl sm:text-4xl font-bold text-peacock-primary mb-2">
+        {{ _('Support Our Work') }}
+      </h1>
+
+      <p class="text-peacock-secondary">
+        {{ _('Help us preserve and digitize knowledge systems for everyone.') }}
+      </p>
+      {% endblock %}
+
+    </div>
+
+  </header>
+
+  {# MAIN DONATION AREA #}
+  <main class="pb-24">
+
+    <div class="max-w-2xl mx-auto px-4">
+
+      {# DONATION CARD #}
+      <div class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl shadow-lg p-6">
+
+        <script src="https://donorbox.org/widget.js" paypalExpress="false"></script>
+
+        <iframe
+          src="https://donorbox.org/embed/ambuda?default_interval=o"
+          name="donorbox"
+          allowpaymentrequest="allowpaymentrequest"
+          seamless
+          frameborder="0"
+          scrolling="no"
+          height="900px"
+          width="100%"
+          class="mx-auto rounded-xl"
+          style="max-width: 425px; min-width: 250px; border: none;">
+        </iframe>
+
+      </div>
+
+      {% block post_form %}{% endblock %}
+
+    </div>
+
+  </main>
+
+</div>
+
 {% endblock %}

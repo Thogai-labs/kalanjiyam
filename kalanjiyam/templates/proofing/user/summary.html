@@ -2,35 +2,61 @@
 {% import "macros/components.html" as components %}
 {% import "macros/proofing.html" as m %}
 
-
 {% block title %}User: {{ user.username }} | Ambuda{% endblock %}
 
-
-{% block sidebar %}{{ m.main_nav('talk', current_user=current_user) }}{% endblock %}
-
-
-{% block content %}
-{{ m.title_and_subtitle(user.username) }}
-
-{{ m.user_tabs(user=user, active='about', is_mod=current_user.is_moderator) }}
-
-{% if user.description %}
-<div class="prose border p-4 my-8">
-{{ user.description|markdown|safe }}
-</div>
-{% else %}
-<div class="prose">
-  {% if current_user.id == user.id %}
-  <p>Tell others who you are by writing a short bio!</p>
-  {% else %}
-  <p>This user hasn't written anything about themselves.</p>
-  {% endif %}
-</div>
-{% endif %}
-
-{% if current_user.username == user.username %}
-<a class="btn btn-basic"
-    href="{{ url_for('proofing.user.edit', username=user.username) }}">Edit bio</a>
-{% endif %}
+{% block sidebar %}
+  {{ m.main_nav('talk', current_user=current_user) }}
 {% endblock %}
 
+{% block content %}
+
+<div class="max-w-3xl mx-auto space-y-6">
+
+  {# HEADER #}
+  <div class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl shadow-lg p-6">
+    {{ m.title_and_subtitle(user.username) }}
+    {{ m.user_tabs(user=user, active='about', is_mod=current_user.is_moderator) }}
+  </div>
+
+  {# BIO SECTION #}
+  <div class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl shadow p-6">
+
+    {% if user.description %}
+
+      <div class="prose max-w-none text-peacock-secondary">
+        {{ user.description|markdown|safe }}
+      </div>
+
+    {% else %}
+
+      <div class="prose text-peacock-secondary">
+
+        {% if current_user.id == user.id %}
+          <p>Tell others who you are by writing a short bio!</p>
+        {% else %}
+          <p>This user hasn't written anything about themselves.</p>
+        {% endif %}
+
+      </div>
+
+    {% endif %}
+
+  </div>
+
+  {# ACTION BUTTON #}
+  {% if current_user.username == user.username %}
+  <div class="flex justify-end">
+
+    <a
+      href="{{ url_for('proofing.user.edit', username=user.username) }}"
+      class="btn bg-peacock-primary hover:bg-teal-700 text-white px-6 py-2 rounded-xl shadow transition"
+    >
+      Edit bio
+    </a>
+
+  </div>
+  {% endif %}
+
+</div>
+
+{% endblock %}

@@ -2,12 +2,14 @@
 {% import "macros/about.html" as m_about %}
 {% import "macros/components.html" as m %}
 
-
 {% macro bio(name, resp, desc) %}
-<section>
-  <h1 class="mb-2 mt-8"><span class="font-bold">{{ name }}</span> &mdash; {{ resp|safe }}</h1>
-  <div class="prose">
-  {{ caller() }}
+<section class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl p-5 mt-6 shadow-sm">
+  <h1 class="mb-2">
+    <span class="font-bold text-peacock-primary">{{ name }}</span>
+    <span class="text-peacock-secondary">— {{ resp|safe }}</span>
+  </h1>
+  <div class="prose max-w-none text-peacock-secondary">
+    {{ caller() }}
   </div>
 </section>
 {% endmacro %}
@@ -15,21 +17,36 @@
 
 {% block title %}{{ m.title(_('People')) }}{% endblock %}
 
-
 {% block content %}
-<div class="prose">
-<h1>{{ _('People') }}</h1>
 
-{% set proofers_url = url_for('proofing.recent_changes') %}
-{% set coders_url = 'https://github.com/AnaadiAI/kalanjiyam/graphs/contributors' %}
-{% set translators_url = 'https://transifex.com/ambuda/ambuda' %}
+<div class="max-w-3xl mx-auto my-16 space-y-6">
 
-<p>{% trans %}
-Ambuda receives contributions from dozens of volunteer <a href="{{ proofers_url }}">proofers</a>,
-<a href="{{ translators_url }}">translators</a>, and <a href="{{ coders_url }}">programmers</a>
-who are passionate about making Sanskrit accessible to all.
-{% endtrans %}</p>
+  {# HEADER CARD #}
+  <div class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl p-6 shadow-lg">
+    <h1 class="text-3xl font-bold text-peacock-primary mb-3">
+      {{ _('People') }}
+    </h1>
+
+    {% set proofers_url = url_for('proofing.recent_changes') %}
+    {% set coders_url = 'https://github.com/AnaadiAI/kalanjiyam/graphs/contributors' %}
+    {% set translators_url = 'https://transifex.com/ambuda/ambuda' %}
+
+    <p class="text-peacock-secondary leading-relaxed">
+      {% trans %}
+      Ambuda receives contributions from dozens of volunteer
+      <a class="text-peacock-primary font-medium hover:underline" href="{{ proofers_url }}">proofers</a>,
+      <a class="text-peacock-primary font-medium hover:underline" href="{{ translators_url }}">translators</a>,
+      and <a class="text-peacock-primary font-medium hover:underline" href="{{ coders_url }}">programmers</a>
+      who are passionate about making Sanskrit accessible to all.
+      {% endtrans %}
+    </p>
+  </div>
+
+  {# CHILD CONTENT #}
+  <div class="space-y-4">
+    {% block people_content %}{% endblock %}
+  </div>
+
 </div>
 
-{% block people_content %}{% endblock %}
 {% endblock %}

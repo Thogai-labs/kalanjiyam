@@ -9,24 +9,35 @@
 
 
 {% block content %}
-{{ m.project_header_nested('Download', project) }}
-{{ m.project_tabs(project=project, active='download', is_mod=current_user.is_moderator) }}
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:24px 28px;margin-bottom:24px;box-shadow:0 8px 32px rgba(16,137,211,0.1);">
+  {{ m.project_header_nested('Download', project) }}
+  <p style="color:#6a9abf;font-size:0.95rem;margin:8px 0 0;">Export project in multiple formats</p>
+</div>
 
-<div class="prose">
-  <p>{% trans %}
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:10px 14px;margin-bottom:24px;">
+  {{ m.project_tabs(project=project, active='download', is_mod=current_user.is_moderator) }}
+</div>
+
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:24px 28px;box-shadow:0 8px 32px rgba(16,137,211,0.05);">
+  <p style="color:#6a9abf;line-height:1.6;margin-bottom:16px;">{% trans %}
   You can use these links to download the latest version of the transcribed
   project. To save these files to your local machine, right-click and click
   <kbd>Save As &hellip;</kbd> or whatever similar option your computer gives
   you.{% endtrans %}</p>
 
-<ul class="my-4 pb-4">
-  <li><a href="{{ url_for("proofing.project.download_as_text", slug=project.slug) }}">
-    {{ _('Download as plain text') }}
-  </a></li>
-  <li><a href="{{ url_for("proofing.project.download_as_xml", slug=project.slug) }}">
-    {{ _('Download as TEI XML') }}
-  </a></li>
-</ul>
-
+  <div style="display:flex;flex-direction:column;gap:10px;">
+    <a href="{{ url_for("proofing.project.download_as_text", slug=project.slug) }}"
+       style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:rgba(16,137,211,0.08);border:1px solid rgba(16,137,211,0.12);border-radius:12px;color:#1089d3;font-weight:600;text-decoration:none;transition:all 0.2s;"
+       onmouseover="this.style.background='rgba(16,137,211,0.12)'"
+       onmouseout="this.style.background='rgba(16,137,211,0.08)'">  
+      📄 {{ _('Download as plain text') }}
+    </a>
+    <a href="{{ url_for("proofing.project.download_as_xml", slug=project.slug) }}"
+       style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:rgba(16,137,211,0.08);border:1px solid rgba(16,137,211,0.12);border-radius:12px;color:#1089d3;font-weight:600;text-decoration:none;transition:all 0.2s;"
+       onmouseover="this.style.background='rgba(16,137,211,0.12)'"
+       onmouseout="this.style.background='rgba(16,137,211,0.08)'">  
+      📋 {{ _('Download as TEI XML') }}
+    </a>
+  </div>
 </div>
 {% endblock %}

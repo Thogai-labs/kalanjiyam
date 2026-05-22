@@ -1,65 +1,61 @@
 {# Page title template. #}
 {% macro title(text) %}{{ _('%(title)s | Kalanjiyam', title=text) }}{% endmacro %}
 
-{# Small warning box, e.g. for form errors. #}
+{# Small warning box #}
 {% macro p_warning() %}
-<p class="p-2 bg-red-100 text-red-900 rounded my-4 a-underline">
-  {{ caller() }}
-</p>
+<p class="glass-alert glass-alert-warn a-underline">{{ caller() }}</p>
 {% endmacro %}
 
-
-{# Large warning box, e.g. for form errors. #}
+{# Large warning box #}
 {% macro div_warning() %}
-<div class="p-2 md:p-4 bg-red-100 border border-red-200 text-red-900 rounded my-4">
-  {{ caller() }}
-</div>
+<div class="glass-alert glass-alert-warn">{{ caller() }}</div>
 {% endmacro %}
 
-
-{# Small notes box, e.g. for form info messages. #}
+{# Small notes box #}
 {% macro p_note() %}
-<p class="p-2 bg-emerald-200 text-emerald-900 rounded my-4">
-  {{ caller() }}
-</p>
+<p class="glass-alert glass-alert-info">{{ caller() }}</p>
 {% endmacro %}
 
-
-{# Large notes box, e.g. for form info messages. #}
+{# Large notes box #}
 {% macro div_note() %}
-<div class="p-2 md:p-4 bg-emerald-200 text-emerald-900 rounded my-4">
-  {{ caller() }}
-</div>
+<div class="glass-alert glass-alert-info">{{ caller() }}</div>
 {% endmacro %}
 
-
-{# Show messages added with the `flash()` call. #}
+{# Flash messages — safe to call anywhere #}
 {% macro flash_messages() %}
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% if messages %}
   {% for category, message in messages %}
     {% if category == 'success' %}
-      <p class="bg-emerald-100 my-4 p-2">{{ message }}</p>
+      <p class="glass-alert glass-alert-success">{{ message }}</p>
+    {% elif category in ('error', 'danger') %}
+      <p class="glass-alert glass-alert-error">{{ message }}</p>
+    {% elif category == 'warning' %}
+      <p class="glass-alert glass-alert-warn">{{ message }}</p>
     {% else %}
-      <p class="bg-red-100 my-4 text-red-900 p-2">{{ message }}</p>
+      <p class="glass-alert glass-alert-info">{{ message }}</p>
     {% endif %}
   {% endfor %}
 {% endif %}
 {% endwith %}
 {% endmacro %}
 
-
-{# A list of tabs. #}
+{# Tabs navigation #}
 {% macro tabs(urls, active) %}
-<nav class="md:border-b mb-8">
-  <ul class="border-l pl-4 md:border-0 md:p-0 md:flex a-hover-underline">
+<nav class="mb-8 border-b border-blue-100">
+  <ul class="flex flex-wrap gap-1 pb-0">
     {% for name, label, url in urls %}
     {% if name == active %}
-    <li class="md:p-4 font-semibold underline 
-        md:no-underline md:border-b-2 md:border-peacock-primary">{{ label }}</li>
+    <li>
+      <span class="block px-4 py-2 text-sm font-semibold rounded-t-xl"
+            style="background: linear-gradient(135deg,#1089d3,#12b1d1); color:white; border-bottom: 2px solid #1089d3;">
+        {{ label }}
+      </span>
+    </li>
     {% else %}
-    <li class="font-semibold border-b-2 border-transparent text-peacock-secondary">
-      <a class="block md:p-4" href="{{ url }}">{{ label }}</a>
+    <li>
+      <a class="block px-4 py-2 text-sm font-medium rounded-t-xl transition-all hover:bg-blue-50"
+         style="color:#1089d3;" href="{{ url }}">{{ label }}</a>
     </li>
     {% endif %}
     {% endfor %}
@@ -67,16 +63,22 @@
 </nav>
 {% endmacro %}
 
-
-{# A basic header. #}
+{#
+  Page banner — renders ONLY the coloured title strip.
+  The nav header is rendered by the layout template, NOT here,
+  so current_user is always available in the correct scope.
+#}
 {% macro basic_header(title) %}
-<div class="text-peacock-primary bg-peacock-subtle border-b border-teal-200 mb-4">
-  <div class="border-teal-300">
-    {% include "include/header.html" %}
-  </div>
-
-  <header class="text-center py-16">
-    <h1 class="font-bold text-5xl">{{ title }}</h1>
-  </header>
+<div style="
+  background: rgba(255,255,255,0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1.5px solid rgba(255,255,255,0.85);
+  border-radius: 20px;
+  padding: 24px 32px;
+  margin-bottom: 28px;
+  box-shadow: 0 4px 24px rgba(16,137,211,0.1);
+">
+  <h1 style="font-size:1.8rem;font-weight:800;color:#1089d3;margin:0;">{{ title }}</h1>
 </div>
 {% endmacro %}

@@ -2,26 +2,133 @@
 {% import "macros/components.html" as mc %}
 {% import 'macros/forms.html' as mf %}
 
-
 {% block title %}{{ mc.title('Delete post: {}'.format(post.title)) }}{% endblock %}
 
-
 {% block content %}
-<div class="prose">
-  <h1>Delete post: "{{ post.title }}"</h1>
+
+<div style="max-width:900px;margin:40px auto;">
+
+  {# HEADER CARD #}
+  <div style="background:rgba(255,255,255,0.75);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:26px;
+              padding:22px 26px;
+              margin-bottom:18px;
+              box-shadow:0 12px 36px rgba(16,137,211,0.10);">
+
+    <h1 style="font-size:1.7rem;font-weight:900;color:#1089d3;margin:0;">
+      Delete Post
+    </h1>
+
+    <p style="margin:6px 0 0;color:#6a9abf;font-size:0.95rem;">
+      This action is permanent and cannot be undone.
+    </p>
+
+  </div>
+
+  {# WARNING CARD #}
+  <div style="background:rgba(255,255,255,0.72);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(239,68,68,0.25);
+              border-left:6px solid #ef4444;
+              border-radius:24px;
+              padding:22px 24px;
+              box-shadow:0 10px 32px rgba(239,68,68,0.08);
+              margin-bottom:18px;">
+
+    <div class="prose" style="color:#4a6a8a;line-height:1.75;">
+
+      <h2 style="color:#ef4444;font-weight:900;margin-top:0;">
+        ⚠️ Warning
+      </h2>
+
+      <p>
+        You are about to permanently delete:
+        <strong style="color:#1089d3;">"{{ post.title }}"</strong>
+      </p>
+
+      <p>
+        This action cannot be reversed. All content, comments, and metadata will be removed.
+      </p>
+
+    </div>
+  </div>
+
+  {# FORM CARD #}
+  <div style="background:rgba(255,255,255,0.72);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:24px;
+              padding:22px 24px;
+              box-shadow:0 10px 32px rgba(16,137,211,0.08);">
+
+    {{ mf.show_errors_if_any(form.errors) }}
+
+    <form method="POST">
+
+      {{ form.csrf_token }}
+
+      <p style="color:#4a6a8a;font-size:0.95rem;line-height:1.6;">
+        To confirm deletion, type the slug:
+        <kbd style="background:rgba(16,137,211,0.08);
+                    padding:2px 6px;
+                    border-radius:6px;
+                    color:#1089d3;">
+          {{ post.slug }}
+        </kbd>
+      </p>
+
+      <input
+        type="text"
+        name="slug"
+        class="p-2 block w-full my-4 border"
+        style="border-radius:10px;
+               border:1px solid rgba(239,68,68,0.4);
+               padding:10px;
+               outline:none;
+               transition:all 0.2s;"
+        placeholder="Enter slug to confirm"
+      >
+
+      {# DELETE BUTTON #}
+      <div style="margin-top:10px;">
+
+        <input
+          type="submit"
+          value="Delete post"
+          style="width:100%;
+                 padding:10px 14px;
+                 font-weight:800;
+                 border-radius:12px;
+                 background:#ef4444;
+                 color:white;
+                 border:none;
+                 cursor:pointer;
+                 transition:all 0.2s;"
+          onmouseover="this.style.background='#dc2626'"
+          onmouseout="this.style.background='#ef4444'"
+        >
+
+      </div>
+
+    </form>
+
+  </div>
+
+  {# FOOT NOTE #}
+  <div style="margin-top:16px;
+              background:linear-gradient(135deg,rgba(239,68,68,0.08),rgba(16,137,211,0.06));
+              border:1.5px solid rgba(239,68,68,0.15);
+              border-radius:18px;
+              padding:14px 18px;
+              font-size:0.85rem;
+              color:#4a6a8a;
+              line-height:1.6;">
+
+    Tip: Deletion is permanent. Always double-check before confirming.
+  </div>
+
 </div>
-
-{{ mf.show_errors_if_any(form.errors) }}
-<form method="POST" class="border border-red-500 rounded p-4 my-4">
-{{ form.csrf_token }}
-
-<p>To confirm this decision, enter <kbd>{{ post.slug }}</kbd> in the field below.</p>
-{{ form.slug(class_="p-2 block w-full my-4 border") }}
-
-<div class="mt-4">
-  <input class="btn btn-submit" type="submit" value="Delete post">
-</div>
-</form>
 
 {% endblock %}
-

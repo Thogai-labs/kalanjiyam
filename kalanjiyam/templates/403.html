@@ -1,12 +1,18 @@
-{% extends 'base-text.html' %}
+{% extends 'base-auth-form.html' %}
 
-{% block title %}Forbidden (403) | Ambuda{% endblock %}
+{% block title %}Forbidden (403) | Kalanjiyam{% endblock %}
 
-{% block content %}
-{% set contact_url = url_for('about.contact') %}
-<div class="prose">
-<h1>Forbidden (403)</h1>
-
-<p>Sorry, you don't have the access permissions needed to use this page.</p>
+{% block body %}
+<div class="auth-card" style="text-align:center;">
+  <div style="font-size:64px; margin-bottom:8px;">🚫</div>
+  <div class="auth-heading">403</div>
+  <p class="auth-subheading" style="font-size:14px; color:#555; margin-top:8px;">
+    {% set contact_url = url_for('about.contact') %}
+    Sorry, you don't have the access permissions needed to use this page.
+  </p>
+  <hr class="auth-divider">
+  <span class="auth-link">
+    <a href="{{ url_for('site.index') }}">← Back to Home</a>
+  </span>
 </div>
 {% endblock %}

@@ -8,39 +8,92 @@ Learn about the meaning behind the name "Kalanjiyam" and its connection to Siddh
 {%- endblock %}
 
 {% block content %}
-<div class="prose">
-<h1>{{ _('Why "Kalanjiyam"?') }}</h1>
 
-<p>{% trans %}
-When we first started planning this project, we knew we wanted to build a platform to
-transcribe and preserve Siddha texts. Since the platform would store texts in a digital
-format and make them accessible to everyone, we wanted a name that reflected this
-purpose.
-{% endtrans %}</p>
+<div style="max-width:900px;margin:40px auto;">
 
-<p>{% trans %}
-After much consideration, we chose to name
-the project "Kalanjiyam," which means "treasure of knowledge" or "repository of wisdom"
-in Tamil. This name perfectly captures our mission to preserve and share the vast
-knowledge contained in Siddha texts.
-{% endtrans %}</p>
+  {# HEADER CARD #}
+  <div style="background:rgba(255,255,255,0.75);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:26px;
+              padding:26px 28px;
+              margin-bottom:18px;
+              box-shadow:0 12px 36px rgba(16,137,211,0.12);">
 
-<p>{% trans %}
-As a Tamil word, it is simple and meaningful to the ear. It represents the ancient
-wisdom and knowledge systems that we are working to preserve and make accessible.
-The word "Kalanjiyam" itself embodies the concept of a comprehensive collection
-of knowledge, which is exactly what we aim to create.
-{% endtrans %}</p>
+    <h1 style="font-size:1.9rem;font-weight:900;color:#1089d3;margin:0;">
+      Why "Kalanjiyam"?
+    </h1>
 
-<p>{% trans %}
-The name also reflects our commitment to preserving the cultural and linguistic
-heritage of the Siddha tradition, which has its roots in Tamil Nadu and has
-contributed significantly to the fields of medicine, alchemy, and spiritual knowledge.
-{% endtrans %}</p>
+    <p style="margin:8px 0 0;color:#6a9abf;font-size:0.95rem;line-height:1.6;">
+      The meaning and philosophy behind the name of our platform.
+    </p>
 
-<p>{% trans %}
-We believe that this name honors the tradition we serve while also being
-accessible and memorable to our global community of users and contributors.
-{% endtrans %}</p>
+  </div>
+
+  {# MAIN CONTENT CARD #}
+  <div style="background:rgba(255,255,255,0.72);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:24px;
+              padding:22px 24px;
+              box-shadow:0 10px 32px rgba(16,137,211,0.08);">
+
+    <div class="prose" style="color:#4a6a8a;font-size:0.95rem;line-height:1.85;">
+
+      <p>
+        When we first started planning this project, we knew we wanted to build a platform to
+        transcribe and preserve Siddha texts. Since the platform would store texts in a digital
+        format and make them accessible to everyone, we needed a name that reflected this purpose.
+      </p>
+
+      <hr style="border:none;height:1px;background:rgba(16,137,211,0.1);margin:18px 0;">
+
+      <p>
+        After much consideration, we chose the name
+        <strong style="color:#1089d3;">"Kalanjiyam"</strong>,
+        which means <strong>"treasure of knowledge"</strong> or <strong>"repository of wisdom"</strong>
+        in Tamil. This perfectly reflects our mission to preserve and share Siddha texts.
+      </p>
+
+      <p>
+        As a Tamil word, it is simple, elegant, and meaningful. It represents ancient wisdom systems
+        that we aim to preserve and make accessible to the world.
+      </p>
+
+      <p>
+        The word itself embodies the idea of a complete and curated collection of knowledge —
+        exactly what this platform is designed to become.
+      </p>
+
+      <hr style="border:none;height:1px;background:rgba(16,137,211,0.1);margin:18px 0;">
+
+      <p>
+        The name also reflects our commitment to preserving the cultural and linguistic heritage of
+        the Siddha tradition, rooted in Tamil Nadu and deeply connected to medicine, alchemy, and
+        spiritual knowledge systems.
+      </p>
+
+      <p>
+        We believe this name honors the tradition we serve while remaining accessible and memorable
+        to a global community of contributors and readers.
+      </p>
+
+    </div>
+  </div>
+
+  {# FOOT NOTE #}
+  <div style="margin-top:16px;
+              background:linear-gradient(135deg,rgba(16,137,211,0.08),rgba(18,177,209,0.06));
+              border:1.5px solid rgba(16,137,211,0.15);
+              border-radius:18px;
+              padding:14px 18px;
+              font-size:0.85rem;
+              color:#4a6a8a;
+              line-height:1.6;">
+
+    A name is not just identity — it is the philosophy of the system itself.
+  </div>
+
 </div>
+
 {% endblock %}

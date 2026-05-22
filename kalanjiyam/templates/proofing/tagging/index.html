@@ -7,21 +7,27 @@
 
 
 {% block content %}
-{{ m.title_and_subtitle(
-    _("Tagging"),
-    "(coming soon) Tools for tagging and parsing Sanskrit texts.") }}
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:28px 32px;margin-bottom:24px;box-shadow:0 8px 32px rgba(16,137,211,0.1);">
+  <h1 style="font-size:1.9rem;font-weight:900;color:#1089d3;margin:0 0 6px;">{{ _("Tagging") }}</h1>
+  <p style="color:#6a9abf;font-size:0.95rem;margin:0;">(coming soon) Tools for tagging and parsing Sanskrit texts.</p>
+</div>
 
-<div class="prose">
-<p class="p-1 bg-yellow-200">These pages are a work in progress.</p>
+<div style="background:rgba(255,165,0,0.1);border:1.5px solid rgba(255,165,0,0.2);border-radius:12px;padding:12px 16px;margin-bottom:24px;color:#8b5f00;font-size:0.9rem;font-weight:500;">
+  ⚠️ These pages are a work in progress.
+</div>
 
-<p>We aim to have a full word-by-word analysis for all texts in our library.</p>
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:24px 28px;box-shadow:0 8px 32px rgba(16,137,211,0.05);">
+  <p style="color:#6a9abf;line-height:1.6;margin-bottom:16px;">We aim to have a full word-by-word analysis for all texts in our library.</p>
 
-<ul>
-{% for text in texts %}
-<li>
-    <a href="{{ url_for('proofing.tagging.text', slug=text.slug) }}">{{ text.title|devanagari }}</a>
-</li>
-{% endfor %}
-</ul>
+  <div style="display:flex;flex-direction:column;gap:8px;">
+  {% for text in texts %}
+  <a href="{{ url_for('proofing.tagging.text', slug=text.slug) }}"
+     style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:rgba(16,137,211,0.06);border:1px solid rgba(16,137,211,0.12);border-radius:12px;color:#1089d3;font-weight:600;text-decoration:none;transition:all 0.2s;"
+     onmouseover="this.style.background='rgba(16,137,211,0.12)'"
+     onmouseout="this.style.background='rgba(16,137,211,0.06)'">  
+    {{ text.title|devanagari }}
+  </a>
+  {% endfor %}
+  </div>
 </div>
 {% endblock %}

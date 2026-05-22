@@ -33,3 +33,5 @@ production/
 
 # IDE config
 .vscode/
+
+myenv/

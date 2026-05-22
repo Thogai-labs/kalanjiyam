@@ -1,15 +1,21 @@
 {% extends 'proofing/base.html' %}
 
 {% block content %}
-<div class="prose">
-  <h1>{{ text.title|devanagari }} / {{ section.title }}</h1>
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:24px 28px;margin-bottom:24px;box-shadow:0 8px 32px rgba(16,137,211,0.1);">
+  <h1 style="font-size:1.6rem;font-weight:900;color:#1089d3;margin:0 0 8px;">{{ text.title|devanagari }}</h1>
+  <p style="color:#6a9abf;font-size:0.95rem;margin:0;">{{ section.title }}</p>
 </div>
 
-<ul class="grid grid-cols-10 gap-4 text-center a-hover-underline">
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;">
   {% for block in section.blocks %}
   {% set url = url_for('proofing.tagging.edit_block', text_slug=text.slug, block_slug=block.slug) %}
-  <li><a class="block" href="{{ url }}">{{ block.slug }}</a></li>
+  <a href="{{ url }}"
+     style="display:flex;align-items:center;justify-content:center;padding:12px 8px;background:rgba(16,137,211,0.08);border:1.5px solid rgba(16,137,211,0.12);border-radius:10px;color:#1089d3;font-weight:600;font-size:0.9rem;text-decoration:none;transition:all 0.2s;text-align:center;"
+     onmouseover="this.style.background='rgba(16,137,211,0.15)';this.style.boxShadow='0 4px 12px rgba(16,137,211,0.15)';"
+     onmouseout="this.style.background='rgba(16,137,211,0.08)';this.style.boxShadow='none';">  
+    {{ block.slug }}
+  </a>
   {% endfor %}
-</ul>
+</div>
 
 {% endblock %}

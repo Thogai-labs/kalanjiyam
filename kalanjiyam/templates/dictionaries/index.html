@@ -2,106 +2,200 @@
 {% import "macros/components.html" as mc %}
 {% import 'macros/dictionaries.html' as m %}
 
-
 {% block title %}{{ mc.title(_('Dictionaries')) }}{% endblock %}
 
-
 {% block meta_description -%}
-Our fast and simple dictionary toor supports six popular dictionaries in three
-different languages.
+Our fast and simple dictionary tool supports multiple dictionaries and scripts.
 {%- endblock %}
 
-
 {% macro dictionary_form() %}
-<form
-    id="dict--form"
-    class="my-4"
-    @submit.prevent="searchDictionary">
-  <div class="flex mb-2 drop-shadow-sm">
+<form id="dict--form"
+      @submit.prevent="searchDictionary"
+      style="
+        background:rgba(255,255,255,0.72);
+        backdrop-filter:blur(18px);
+        border:1.5px solid rgba(255,255,255,0.9);
+        border-radius:20px;
+        padding:16px;
+        box-shadow:0 8px 28px rgba(16,137,211,0.08);
+      ">
+
+  {# SEARCH BAR #}
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
     <input
-        name="q"
-        type="text"
-        placeholder="{{ _('राम, ರಾಮ, rāma, rAma, ...') }}"
-        class="border border-teal-200 text-lg p-2 flex-1 bg-white text-peacock-primary rounded-tl rounded-bl placeholder:text-peacock-secondary"
-        x-model="query"
-    >
-    </input>
+      name="q"
+      type="text"
+      placeholder="{{ _('राम, ರಾಮ, rāma, rAma, ...') }}"
+      x-model="query"
+      style="
+        flex:1;
+        padding:10px;
+        border-radius:12px;
+        border:1px solid rgba(16,137,211,0.2);
+        font-size:1rem;
+        color:#1089d3;
+        outline:none;
+      "
+    />
+
     <input type="submit" value="{{ _('Search') }}"
-        class="cursor-pointer btn-submit p-2 rounded-tr rounded-br"></input>
+      style="
+        background:#1089d3;
+        color:white;
+        border:none;
+        padding:10px 16px;
+        border-radius:12px;
+        font-weight:700;
+        cursor:pointer;
+      "
+    />
   </div>
 
-  <noscript>
-  <select id="dict--version" name="source" class="f-select">
-    {% include "include/dict-options.html" %}
-  </select>
-  </noscript>
-  <div x-cloak @click.outside="onClickOutsideOfSourceSelector"
-      class="relative text-sm select-none inline-block">
-    <div class="f-select px-2 cursor-pointer inline-block"
-         @click.prevent="toggleSourceSelector">
-        {{ _('(choose dictionaries)') }} <span class="text-xs">&#x25BC;</span>
-    </div>
-    <div x-show="showSourceSelector" class="dropdown-pane p-2 w-64">
-      {{ m.source_multiselect('sources') }}
-    </div>
-  </div>
+  {# OPTIONS ROW #}
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
 
-  <select
-      id="dict--script"
-      class="f-select"
-      x-model="uiScript"
-      @change="updateScript">
-    {% include 'include/script-options.html' %}
-  </select>
+    <div x-cloak
+         @click.outside="onClickOutsideOfSourceSelector"
+         style="position:relative;">
+
+      <div @click.prevent="toggleSourceSelector"
+           style="
+             padding:6px 12px;
+             border-radius:999px;
+             border:1px solid rgba(16,137,211,0.2);
+             color:#1089d3;
+             font-size:0.85rem;
+             cursor:pointer;
+             background:rgba(255,255,255,0.5);
+           ">
+        {{ _('Choose dictionaries') }} ▼
+      </div>
+
+      <div x-show="showSourceSelector"
+           style="
+             position:absolute;
+             top:40px;
+             left:0;
+             background:white;
+             border-radius:14px;
+             padding:10px;
+             box-shadow:0 10px 30px rgba(0,0,0,0.1);
+             width:260px;
+             z-index:50;
+           ">
+        {{ m.source_multiselect('sources') }}
+      </div>
+
+    </div>
+
+    <select id="dict--script"
+            x-model="uiScript"
+            @change="updateScript"
+            style="
+              padding:6px 10px;
+              border-radius:12px;
+              border:1px solid rgba(16,137,211,0.2);
+              color:#1089d3;
+              background:white;
+            ">
+      {% include 'include/script-options.html' %}
+    </select>
+
+  </div>
 </form>
 {% endmacro %}
 
 
 {% macro dictionary_history() %}
-<div class="text-sm my-4 pb-2 border-b border-teal-200 text-peacock-secondary
-     flex items-start justify-between"
-     x-cloak x-show="history.length">
-  <div class="flex flex-1 overflow-hidden">
-    <h3 class="font-bold mb-2">{{ _('History:') }}</h3>
-    <ul class="a-hover-underline flex">
-      <template x-for="q in history.slice().reverse()">
-        <li class="px-1">
-          <a href="#" x-text="q" @click.prevent="searchFor(q)"></a>
-        </li>
-      </template>
-    </ul>
+<div x-cloak x-show="history.length"
+     style="
+       margin-top:16px;
+       padding:12px;
+       border-radius:16px;
+       background:rgba(255,255,255,0.6);
+       border:1px solid rgba(16,137,211,0.15);
+       display:flex;
+       justify-content:space-between;
+       align-items:center;
+     ">
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <strong style="color:#1089d3;">History:</strong>
+
+    <template x-for="q in history.slice().reverse()">
+      <a href="#"
+         @click.prevent="searchFor(q)"
+         style="color:#4a6a8a;text-decoration:none;font-size:0.9rem;">
+        <span x-text="q"></span>
+      </a>
+    </template>
   </div>
-  <button class="btn btn-basic text-xs !p-0.5" @click.prevent="clearHistory">
+
+  <button @click.prevent="clearHistory"
+          style="
+            background:#ef4444;
+            color:white;
+            border:none;
+            padding:4px 10px;
+            border-radius:10px;
+            font-size:0.75rem;
+            cursor:pointer;
+          ">
     Clear
   </button>
+
 </div>
 {% endmacro %}
 
 
 {% macro dictionary_response(query, entries) %}
-<div id="dict--response">
-{% if query or entries %}
-  {% with query=query, entries=entries, dictionaries=dictionaries %}
-    {% include "htmx/dictionary-results.html" %}
-  {% endwith %}
-{% else  %}
-  {% include 'include/dictionary-help.html' %}
-{% endif %}
+<div id="dict--response"
+     style="margin-top:18px;">
+  {% if query or entries %}
+    {% with query=query, entries=entries, dictionaries=dictionaries %}
+      {% include "htmx/dictionary-results.html" %}
+    {% endwith %}
+  {% else %}
+    <div style="
+      background:rgba(255,255,255,0.72);
+      border-radius:20px;
+      padding:20px;
+      text-align:center;
+      color:#6a9abf;
+      border:1px solid rgba(16,137,211,0.12);
+    ">
+      {% include 'include/dictionary-help.html' %}
+    </div>
+  {% endif %}
 </div>
 {% endmacro %}
 
 
 {% block main %}
-<article class="mx-4 md:mx-auto max-w-2xl md:mt-12 mb-24 md:mb-36">
-<header>
-  <h1 class="text-2xl md:text-4xl font-bold text-peacock-primary my-4">
-    {{ _('Dictionary lookup') }}
-  </h1>
-</header>
-<div x-data="dictionary">
-  {{ dictionary_form() }}
-  {{ dictionary_history() }}
-  {{ dictionary_response(query, entries) }}
-</div>
+<article style="max-width:900px;margin:40px auto;padding:0 16px;">
+
+  {# HEADER CARD #}
+  <header style="
+    background:rgba(255,255,255,0.72);
+    backdrop-filter:blur(18px);
+    border:1.5px solid rgba(255,255,255,0.9);
+    border-radius:24px;
+    padding:24px;
+    margin-bottom:20px;
+    box-shadow:0 8px 28px rgba(16,137,211,0.08);
+  ">
+    <h1 style="font-size:2rem;font-weight:900;color:#1089d3;margin:0;">
+      {{ _('Dictionary lookup') }}
+    </h1>
+  </header>
+
+  <div x-data="dictionary">
+
+    {{ dictionary_form() }}
+    {{ dictionary_history() }}
+    {{ dictionary_response(query, entries) }}
+
+  </div>
+
 </article>
 {% endblock %}

@@ -9,32 +9,44 @@
 
 
 {% block content %}
-{{ m.project_header_nested('Stats', project) }}
-{{ m.project_tabs(project=project, active='stats', is_mod=current_user.is_moderator) }}
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:24px 28px;margin-bottom:24px;box-shadow:0 8px 32px rgba(16,137,211,0.1);">
+  {{ m.project_header_nested('Stats', project) }}
+  <p style="color:#6a9abf;font-size:0.95rem;margin:8px 0 0;">Project statistics and metrics</p>
+</div>
 
-<div class="prose">
-  <table>
-    <tr><th>&nbsp;</th><th>Total</th><th>Per page</th></tr>
-    <tr>
-        <th>Pages</th>
-        <td>{{ "{:,}".format(stats.num_pages) }}</td>
-        <td>&ndash;</td>
-    </tr>
-    <tr>
-        <th>Words</th>
-        <td>{{ "{:,}".format(stats.num_words) }}</td>
-        <td>{{ "{:,}".format(stats.num_words // stats.num_pages) }}</td>
-    </tr>
-    <tr>
-        <th>Roman characters</th>
-        <td>{{ "{:,}".format(stats.num_roman_characters) }}</td>
-        <td>{{ "{:,}".format(stats.num_roman_characters // stats.num_pages) }}</td></tr>
-    </tr>
-    <tr>
-        <th>Aksharas</th>
-        <td>{{ "{:,}".format(stats.num_aksharas) }}</td>
-        <td>{{ "{:,}".format(stats.num_aksharas // stats.num_pages) }}</td>
-    </tr>
-  </table>
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:10px 14px;margin-bottom:24px;">
+  {{ m.project_tabs(project=project, active='stats', is_mod=current_user.is_moderator) }}
+</div>
+
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:24px 28px;box-shadow:0 8px 32px rgba(16,137,211,0.05);">
+  <div style="overflow-x:auto;">
+    <table style="width:100%;font-size:0.9rem;">
+      <tr style="background:rgba(16,137,211,0.05);border-bottom:1px solid rgba(16,137,211,0.12);">
+        <th style="padding:12px;text-align:left;font-weight:700;color:#1089d3;">&nbsp;</th>
+        <th style="padding:12px;text-align:right;font-weight:700;color:#1089d3;">Total</th>
+        <th style="padding:12px;text-align:right;font-weight:700;color:#1089d3;">Per page</th>
+      </tr>
+      <tr style="border-bottom:1px solid rgba(16,137,211,0.12);">
+        <td style="padding:12px;font-weight:600;color:#1a2a3a;">Pages</td>
+        <td style="padding:12px;text-align:right;color:#6a9abf;">{{ "{:,}".format(stats.num_pages) }}</td>
+        <td style="padding:12px;text-align:right;color:#6a9abf;">&ndash;</td>
+      </tr>
+      <tr style="border-bottom:1px solid rgba(16,137,211,0.12);">
+        <td style="padding:12px;font-weight:600;color:#1a2a3a;">Words</td>
+        <td style="padding:12px;text-align:right;color:#6a9abf;">{{ "{:,}".format(stats.num_words) }}</td>
+        <td style="padding:12px;text-align:right;color:#6a9abf;">{{ "{:,}".format(stats.num_words // stats.num_pages) }}</td>
+      </tr>
+      <tr style="border-bottom:1px solid rgba(16,137,211,0.12);">
+        <td style="padding:12px;font-weight:600;color:#1a2a3a;">Roman characters</td>
+        <td style="padding:12px;text-align:right;color:#6a9abf;">{{ "{:,}".format(stats.num_roman_characters) }}</td>
+        <td style="padding:12px;text-align:right;color:#6a9abf;">{{ "{:,}".format(stats.num_roman_characters // stats.num_pages) }}</td>
+      </tr>
+      <tr>
+        <td style="padding:12px;font-weight:600;color:#1a2a3a;">Aksharas</td>
+        <td style="padding:12px;text-align:right;color:#6a9abf;">{{ "{:,}".format(stats.num_aksharas) }}</td>
+        <td style="padding:12px;text-align:right;color:#6a9abf;">{{ "{:,}".format(stats.num_aksharas // stats.num_pages) }}</td>
+      </tr>
+    </table>
+  </div>
 </div>
 {% endblock %}

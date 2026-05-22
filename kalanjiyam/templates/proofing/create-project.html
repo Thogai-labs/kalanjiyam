@@ -5,161 +5,196 @@
 {% import "macros/talk.html" as m_talk %}
 {% import "macros/forms.html" as mf %}
 
-
 {% macro step(n, text) %}
-<h2 class="text-2xl mt-8 mb-4 pb-2 border-b"><span class="font-bold">Step {{ n }}</span> &mdash; {{ text }}</h2>
-{% endmacro %}
-
-{% macro _radio2(field, model) %}
-<div class="flex items-center">
-  {{ field(**{"class_": "w-4 mr-2", "x-model": model}) }}
-  {{ field.label(class_="cursor-pointer text-lg") }}
+<div style="margin-top:28px;margin-bottom:14px;">
+  <h2 style="font-size:1.15rem;font-weight:900;color:#1a2a3a;margin:0;
+             display:flex;align-items:center;gap:10px;">
+    <span style="background:linear-gradient(135deg,#1089d3,#12b1d1);
+                 color:white;padding:4px 10px;border-radius:999px;
+                 font-size:0.8rem;">
+      Step {{ n }}
+    </span>
+    <span>{{ text }}</span>
+  </h2>
+  <div style="height:2px;background:linear-gradient(90deg,rgba(16,137,211,0.25),transparent);
+              margin-top:10px;border-radius:999px;"></div>
 </div>
 {% endmacro %}
 
-
+{% macro _radio2(field, model) %}
+<label style="display:flex;align-items:center;gap:10px;cursor:pointer;
+              padding:8px 10px;border-radius:10px;
+              transition:all 0.2s;">
+  {{ field(**{"class_": "w-4", "x-model": model}) }}
+  <span style="font-size:0.95rem;color:#1a2a3a;font-weight:600;">
+    {{ field.label.text }}
+  </span>
+</label>
+{% endmacro %}
 
 {% block title %}Create project | Ambuda{% endblock %}
-
-
 {% block sidebar %}{{ m.main_nav('create', current_user=current_user) }}{% endblock %}
 
-
 {% block content %}
-{{ m.title_and_subtitle(
-    _("Create project"),
-    "Use our simple uploader to create a new proofing project.") }}
 
+{# Header Card #}
+<div style="background:rgba(255,255,255,0.75);
+            backdrop-filter:blur(18px);
+            border:1.5px solid rgba(255,255,255,0.9);
+            border-radius:26px;
+            padding:28px 30px;
+            margin-bottom:22px;
+            box-shadow:0 12px 36px rgba(16,137,211,0.12);">
+
+  {{ m.title_and_subtitle(
+      _("Create project"),
+      "Upload and configure a new proofreading project in a few steps."
+  ) }}
+</div>
 
 {{ components.flash_messages() }}
 {{ mf.show_errors_if_any(form.errors) }}
 
-
 <form action="" method="POST" enctype="multipart/form-data"
-  x-data="{ source: '{{ form.pdf_source.data }}',
-  license: '{{ form.license.data }}'}">
+      x-data="{ source: '{{ form.pdf_source.data }}',
+                license: '{{ form.license.data }}'}">
+
 {{ form.csrf_token }}
 
+{# STEP 1 #}
+<div style="background:rgba(255,255,255,0.72);
+            backdrop-filter:blur(16px);
+            border:1.5px solid rgba(255,255,255,0.9);
+            border-radius:24px;
+            padding:22px 24px;
+            margin-bottom:18px;
+            box-shadow:0 8px 28px rgba(16,137,211,0.08);">
 
-{{ step(1, "Search") }}
+  {{ step(1, "Search") }}
 
-<div class="prose">
-<p>At Ambuda, we're interested in any book that has some connection to Sanskrit
-literature. This includes:</p>
-
-<ul>
-  <li>original texts</li>
-  <li>commentaries</li>
-  <li>translations</li>
-  <li>dictionaries</li>
-  <li>grammar books</li>
-</ul>
-
-<p>And anything else you think is relevant.</p>
-
-<p>To avoid duplicating effort, we suggest that you first check the Internet
-carefully to see if your book has been digitized elsewhere already. Try
-searching for exact words and phrases from the book.</p>
-</div>
-
-
-{{ step(2, "Upload") }}
-
-<div class="prose">
-<p>Right now, our uploader supports PDF documents only. Where is your PDF
-coming from?</p>
-</div>
-
-{% set radios = form.pdf_source|list %}
-<fieldset x-ref="source" class="p-4 bg-slate-100">
-  {# FIXME(arun): enable in a follow-up PR #}
-  {#
-  {{ _radio2(radios[0], "source") }}
-  <div class="ml-6 my-4" x-show="source === 'archive.org'">
-    <p>We'll fetch the PDF for you from archive.org. To do so, we need the
-    PDF's <dfn>identifier</dfn>, which is the short text ID that follows
-    <kbd>/details/</kbd> in the URL.</p>
-
-    <div class="my-4 bg-slate-100">
-    <kbd>https://archive.org/details/</kbd>
-    {{ form.archive_identifier(class_="rounded border p-1", placeholder="charucharya_hindi") }}
-    </div>
+  <div class="prose" style="color:#4a6a8a;">
+    <p>At Ambuda, we're interested in Sanskrit-related literature including texts, commentaries, translations, dictionaries, and grammar books.</p>
+    <p>Before uploading, check if the book already exists online to avoid duplication.</p>
   </div>
-  #}
+</div>
 
-  {{ _radio2(radios[1], "source") }}
-  <div class="ml-6 my-4" x-show="source === 'local'">
-    <p>We'll copy the PDF from your computer. Please use the form below to find
-    a PDF on your computer:</p>
+{# STEP 2 #}
+<div style="background:rgba(255,255,255,0.72);
+            backdrop-filter:blur(16px);
+            border:1.5px solid rgba(255,255,255,0.9);
+            border-radius:24px;
+            padding:22px 24px;
+            margin-bottom:18px;
+            box-shadow:0 8px 28px rgba(16,137,211,0.08);">
 
-    <div class="my-4 bg-slate-100">
+  {{ step(2, "Upload") }}
+
+  <div class="prose" style="color:#4a6a8a;">
+    <p>Select where your PDF comes from.</p>
+  </div>
+
+  {% set radios = form.pdf_source|list %}
+
+  <fieldset style="margin-top:10px;
+                   background:rgba(16,137,211,0.04);
+                   border:1.5px solid rgba(16,137,211,0.12);
+                   border-radius:16px;
+                   padding:14px;">
+
+    {# LOCAL UPLOAD #}
+    {{ _radio2(radios[1], "source") }}
+
+    <div x-show="source === 'local'"
+         style="margin-left:28px;margin-top:10px;
+                padding:12px;
+                background:rgba(255,255,255,0.6);
+                border-radius:14px;
+                border:1px solid rgba(255,255,255,0.8);">
+
+      <p style="color:#6a9abf;font-size:0.9rem;margin-bottom:10px;">
+        Upload a PDF from your device:
+      </p>
+
       {{ form.local_file }}
     </div>
 
-  </div>
-</fieldset>
-
-
-{{ step(3, "Describe") }}
-
-
-<div class="prose">
-<p>What is the title of this book? Please use the full title as it appears on
-the book's cover or title page.</p>
+  </fieldset>
 </div>
 
-<fieldset class="p-4 bg-slate-100">
-  {{ form.local_title(class_="p-2 block w-full", placeholder="My book title") }}
-  <p></p>
-</fieldset>
+{# STEP 3 #}
+<div style="background:rgba(255,255,255,0.72);
+            backdrop-filter:blur(16px);
+            border:1.5px solid rgba(255,255,255,0.9);
+            border-radius:24px;
+            padding:22px 24px;
+            margin-bottom:18px;
+            box-shadow:0 8px 28px rgba(16,137,211,0.08);">
 
+  {{ step(3, "Describe") }}
 
-{{ step(4, "Verify") }}
+  <div class="prose" style="color:#4a6a8a;">
+    <p>Enter the full title as shown on the book cover.</p>
+  </div>
 
-<div class="prose">
-<p>To the best of your knowledge, what is the license of this book?</p>
+  <div style="margin-top:10px;">
+    {{ form.local_title(class_="p-3 block w-full rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#1089d3]") }}
+  </div>
 </div>
 
-{% set radios = form.license|list %}
-<fieldset x-ref="license" class="p-4 bg-slate-100 my-4">
-  {{ _radio2(radios[0], "license") }}
-  <div class="prose ml-6 mt-4">
-  <p>Public domain books can be used by anyone for any purpose. The following
-  books are in the public domain by default:</p>
+{# STEP 4 #}
+<div style="background:rgba(255,255,255,0.72);
+            backdrop-filter:blur(16px);
+            border:1.5px solid rgba(255,255,255,0.9);
+            border-radius:24px;
+            padding:22px 24px;
+            margin-bottom:18px;
+            box-shadow:0 8px 28px rgba(16,137,211,0.08);">
 
-  <ul>
-    <li>Books published in India on or before 1957.</li>
-    <li>Books published in the United States on or before 1927.</li>
-  </ul>
+  {{ step(4, "Verify") }}
+
+  <div class="prose" style="color:#4a6a8a;">
+    <p>Select the appropriate license type for this book.</p>
   </div>
 
-  {{ _radio2(radios[1], "license") }}
-  <div class="prose ml-6 mt-4">
-    <p>Copyrighted books are owned by a specific person or group. We accept
-    copyrighted books under the following terms <strong>only</strong>:</p>
+  {% set radios = form.license|list %}
 
-  <ul>
-    <li><p>You are providing the book in good faith that its main text is out of
-        copyright. OR, you have received permission from the copyright
-        holder.</p></li>
-    <li><p>Ambuda will make the book available for personal and scholarly use
-        only. Those who wish to use the book beyond the scope of fair use are
-        responsible for any legal consequences and are encouraged to contact
-        the copyright holder directly.</p></li>
-    <li><p>Ambuda will remove the book immediately if the copyright holder
-        requests it.</p></li>
-  </ul>
-  </div>
+  <fieldset style="margin-top:10px;
+                   background:rgba(16,137,211,0.04);
+                   border:1.5px solid rgba(16,137,211,0.12);
+                   border-radius:16px;
+                   padding:14px;">
 
-  {{ _radio2(radios[2], "license") }}
-  <div class="prose ml-6 mt-4" x-show="license === 'other'">
-  <p>If this project falls under some other license, please say more about that
-  license here:</p>
+    {{ _radio2(radios[0], "license") }}
+    <div class="prose" style="margin-left:28px;color:#6a9abf;font-size:0.9rem;"></div>
 
-  {{ form.custom_license(class_="block w-full h-32 rounded my-4 p-2") }}
-  </div>
-</fieldset>
+    {{ _radio2(radios[1], "license") }}
+    <div class="prose" style="margin-left:28px;color:#6a9abf;font-size:0.9rem;"></div>
 
-<input class="block btn btn-submit" type="submit" value="Create project">
+    {{ _radio2(radios[2], "license") }}
+    <div x-show="license === 'other'"
+         style="margin-left:28px;margin-top:10px;">
+
+      {{ form.custom_license(class_="block w-full h-28 rounded-xl border border-slate-200 p-2") }}
+    </div>
+
+  </fieldset>
+</div>
+
+{# Submit Button #}
+<div style="display:flex;justify-content:flex-end;margin-top:10px;">
+  <input type="submit"
+         value="Create project"
+         style="background:linear-gradient(135deg,#1089d3,#12b1d1);
+                color:white;
+                padding:12px 18px;
+                border:none;
+                border-radius:999px;
+                font-weight:800;
+                font-size:0.95rem;
+                cursor:pointer;
+                box-shadow:0 10px 24px rgba(16,137,211,0.25);">
+</div>
+
 </form>
+
 {% endblock %}

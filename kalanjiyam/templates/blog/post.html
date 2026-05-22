@@ -1,31 +1,81 @@
 {% extends 'blog/base.html' %}
 {% import "macros/components.html" as m %}
 
-
 {% block title %}{{ m.title(post.title) }}{% endblock %}
 
-
 {% block content %}
-<div class="max-w-xl mx-auto mt-24">
 
-  <a class="block text-sm uppercase font-bold text-slate-400"
-    href="{{ url_for('blog.index') }}">&larr; All posts</a>
+<div style="max-width:900px;margin:60px auto;padding:0 20px;">
 
-  <header class="mt-4 mb-8">
-    <h1 class="font-bold text-5xl mb-2">{{ post.title }}</h1>
-    <p class="text-slate-500">
-      Created {{ post.created_at|time_ago }}
-      {% if current_user.is_moderator %}
-      &middot; <a href="{{ url_for('blog.edit_post', slug=post.slug) }}">Edit</a>
-      &middot; <a href="{{ url_for('blog.delete_post', slug=post.slug) }}">Delete</a>
-      {% endif %}
-    </p>
-  </header>
+  {# BACK LINK CARD #}
+  <a href="{{ url_for('blog.index') }}"
+     style="
+       display:inline-flex;
+       align-items:center;
+       gap:6px;
+       font-size:0.85rem;
+       font-weight:700;
+       color:#1089d3;
+       text-decoration:none;
+       margin-bottom:16px;
+     ">
+    ← All posts
+  </a>
 
-  <div class="prose">
-    {{ post.content|markdown|safe }}
-  </div>
+  {# MAIN CARD #}
+  <article style="
+    background:rgba(255,255,255,0.72);
+    backdrop-filter:blur(18px);
+    border:1.5px solid rgba(255,255,255,0.9);
+    border-radius:24px;
+    padding:32px;
+    box-shadow:0 8px 32px rgba(16,137,211,0.08);
+  ">
+
+    {# HEADER #}
+    <header style="margin-bottom:24px;">
+
+      <h1 style="
+        font-size:2.4rem;
+        font-weight:900;
+        color:#1089d3;
+        line-height:1.2;
+        margin-bottom:10px;
+      ">
+        {{ post.title }}
+      </h1>
+
+      <p style="font-size:0.85rem;color:#6a9abf;">
+        Created {{ post.created_at|time_ago }}
+
+        {% if current_user.is_moderator %}
+          ·
+          <a href="{{ url_for('blog.edit_post', slug=post.slug) }}"
+             style="color:#1089d3;font-weight:600;text-decoration:none;">
+            Edit
+          </a>
+
+          ·
+          <a href="{{ url_for('blog.delete_post', slug=post.slug) }}"
+             style="color:#ef4444;font-weight:600;text-decoration:none;">
+            Delete
+          </a>
+        {% endif %}
+      </p>
+
+    </header>
+
+    {# CONTENT #}
+    <div style="
+      color:#4a6a8a;
+      font-size:1rem;
+      line-height:1.85;
+    ">
+      {{ post.content|markdown|safe }}
+    </div>
+
+  </article>
 
 </div>
-{% endblock %}
 
+{% endblock %}

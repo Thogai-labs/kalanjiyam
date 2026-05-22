@@ -12,37 +12,143 @@ Learn about Kalanjiyam's mission to make Siddha Knowledge Systems accessible to 
 {%- endblock %}
 
 {% block content %}
-<div class="prose">
-<h1>{{ _('About Kalanjiyam') }}</h1>
 
-<p>{% trans %}
-Kalanjiyam's mission is to preserve and make accessible the ancient Siddha Knowledge Systems tradition. 
-Our platform focuses on collaborative proofing and digital preservation of Siddha texts, ensuring that 
-the wisdom of the Siddhas continues to enlighten future generations. Formal announcements about new 
-features and releases are posted to our <a href="{{ mailing_url }}">mailing list</a>.
-{% endtrans %}</p>
+<div style="max-width:900px;margin:40px auto;">
 
-<p>{% trans %}
-We are dedicated to the preservation of Siddha literature, including texts on medicine, alchemy, 
-yoga, and spiritual practices. Our work is guided by the spirit of the Siddhas - combining practical 
-knowledge with spiritual insight. <a href="{{ code_url }}">Our code</a> is open source and available 
-on GitHub, reflecting our commitment to transparency and community collaboration.
-{% endtrans %}</p>
+  {# HEADER CARD #}
+  <div style="background:rgba(255,255,255,0.75);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:26px;
+              padding:26px 28px;
+              margin-bottom:18px;
+              box-shadow:0 12px 36px rgba(16,137,211,0.12);">
 
-<p>{% trans %}
-If you have questions, comments, or suggestions, please
-<a href="{{ contact_url }}">contact us</a>.
-{% endtrans %}</p>
+    <h1 style="font-size:1.9rem;font-weight:900;color:#1089d3;margin:0;">
+      About Kalanjiyam
+    </h1>
 
-<h2>{{ _('Quick links') }}</h2>
+    <p style="margin:8px 0 0;color:#6a9abf;font-size:0.95rem;line-height:1.6;">
+      Preserving Siddha Knowledge Systems through collaborative digital archiving.
+    </p>
 
-<ul>
-<li><a href="{{ url_for('about.mission') }}">{{ _('Our mission') }}</a></li>
-<li><a href="{{ url_for('about.values') }}">{{ _('Our values') }}</a></li>
-<li><a href="{{ url_for('about.people.core') }}">{{ _('Our team') }}</a></li>
-<li><a href="{{ url_for('about.our_name') }}">{{ _('Why "Kalanjiyam"?') }}</a></li>
-<li><a href="{{ url_for('about.code_and_data') }}">{{ _('Code and data') }}</a></li>
-<li><a href="{{ contact_url }}">{{ _('Contact us') }}</a></li>
-</ul>
+  </div>
+
+  {# MAIN CONTENT CARD #}
+  <div style="background:rgba(255,255,255,0.72);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:24px;
+              padding:22px 24px;
+              box-shadow:0 10px 32px rgba(16,137,211,0.08);">
+
+    <div class="prose" style="color:#4a6a8a;font-size:0.95rem;line-height:1.85;">
+
+      <p>
+        Kalanjiyam's mission is to preserve and make accessible the ancient Siddha Knowledge Systems tradition.
+        Our platform focuses on collaborative proofing and digital preservation of Siddha texts, ensuring that
+        the wisdom of the Siddhas continues to enlighten future generations.
+      </p>
+
+      <p>
+        Formal announcements about new features and releases are posted to our
+        <a href="{{ mailing_url }}" style="color:#1089d3;font-weight:700;">mailing list</a>.
+      </p>
+
+      <hr style="border:none;height:1px;background:rgba(16,137,211,0.1);margin:18px 0;">
+
+      <p>
+        We are dedicated to the preservation of Siddha literature, including texts on medicine, alchemy,
+        yoga, and spiritual practices. Our work is guided by the spirit of the Siddhas — combining practical
+        knowledge with spiritual insight.
+      </p>
+
+      <p>
+        Our code is open source and available on
+        <a href="{{ code_url }}" style="color:#1089d3;font-weight:700;">GitHub</a>,
+        reflecting our commitment to transparency and community collaboration.
+      </p>
+
+      <hr style="border:none;height:1px;background:rgba(16,137,211,0.1);margin:18px 0;">
+
+      <p>
+        If you have questions, comments, or suggestions,
+        <a href="{{ contact_url }}" style="color:#1089d3;font-weight:700;">contact us</a>.
+      </p>
+
+      {# QUICK LINKS #}
+      <h2 style="margin-top:22px;color:#1089d3;font-weight:900;font-size:1.3rem;">
+        Quick links
+      </h2>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px;">
+
+        <a href="{{ url_for('about.mission') }}"
+           style="display:block;padding:10px 12px;border-radius:14px;
+                  background:rgba(16,137,211,0.06);
+                  border:1px solid rgba(16,137,211,0.15);
+                  color:#1089d3;font-weight:700;text-decoration:none;">
+          Our mission
+        </a>
+
+        <a href="{{ url_for('about.values') }}"
+           style="display:block;padding:10px 12px;border-radius:14px;
+                  background:rgba(16,137,211,0.06);
+                  border:1px solid rgba(16,137,211,0.15);
+                  color:#1089d3;font-weight:700;text-decoration:none;">
+          Our values
+        </a>
+
+        <a href="{{ url_for('about.people.core') }}"
+           style="display:block;padding:10px 12px;border-radius:14px;
+                  background:rgba(16,137,211,0.06);
+                  border:1px solid rgba(16,137,211,0.15);
+                  color:#1089d3;font-weight:700;text-decoration:none;">
+          Our team
+        </a>
+
+        <a href="{{ url_for('about.our_name') }}"
+           style="display:block;padding:10px 12px;border-radius:14px;
+                  background:rgba(16,137,211,0.06);
+                  border:1px solid rgba(16,137,211,0.15);
+                  color:#1089d3;font-weight:700;text-decoration:none;">
+          Why "Kalanjiyam"?
+        </a>
+
+        <a href="{{ url_for('about.code_and_data') }}"
+           style="display:block;padding:10px 12px;border-radius:14px;
+                  background:rgba(16,137,211,0.06);
+                  border:1px solid rgba(16,137,211,0.15);
+                  color:#1089d3;font-weight:700;text-decoration:none;">
+          Code and data
+        </a>
+
+        <a href="{{ contact_url }}"
+           style="display:block;padding:10px 12px;border-radius:14px;
+                  background:linear-gradient(135deg,#1089d3,#12b1d1);
+                  color:white;font-weight:800;text-decoration:none;
+                  text-align:center;">
+          Contact us
+        </a>
+
+      </div>
+
+    </div>
+  </div>
+
+  {# FOOT NOTE #}
+  <div style="margin-top:16px;
+              background:linear-gradient(135deg,rgba(16,137,211,0.08),rgba(18,177,209,0.06));
+              border:1.5px solid rgba(16,137,211,0.15);
+              border-radius:18px;
+              padding:14px 18px;
+              font-size:0.85rem;
+              color:#4a6a8a;
+              line-height:1.6;">
+
+    Built for long-term preservation, open collaboration, and knowledge accessibility.
+  </div>
+
 </div>
+
 {% endblock %}
