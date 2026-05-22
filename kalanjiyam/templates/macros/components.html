@@ -3,7 +3,7 @@
 
 {# Small warning box, e.g. for form errors. #}
 {% macro p_warning() %}
-<p class="p-2 bg-red-100 text-red-900 rounded my-4 a-underline">
+<p class="p-4 bg-red-50 text-red-700 rounded-2xl my-6 border border-red-100 font-bold shadow-sm">
   {{ caller() }}
 </p>
 {% endmacro %}
@@ -11,15 +11,20 @@
 
 {# Large warning box, e.g. for form errors. #}
 {% macro div_warning() %}
-<div class="p-2 md:p-4 bg-red-100 border border-red-200 text-red-900 rounded my-4">
-  {{ caller() }}
+<div class="p-6 bg-red-50 border border-red-100 text-red-700 rounded-3xl my-6 shadow-sm">
+  <div class="flex items-start gap-4">
+    <div class="w-10 h-10 rounded-full bg-red-400 flex items-center justify-center text-white shrink-0">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+    </div>
+    <div class="font-medium leading-relaxed">{{ caller() }}</div>
+  </div>
 </div>
 {% endmacro %}
 
 
 {# Small notes box, e.g. for form info messages. #}
 {% macro p_note() %}
-<p class="p-2 bg-emerald-200 text-emerald-900 rounded my-4">
+<p class="p-4 bg-royalblue/5 text-royalblue rounded-2xl my-6 border border-royalblue/10 font-bold shadow-sm">
   {{ caller() }}
 </p>
 {% endmacro %}
@@ -27,8 +32,13 @@
 
 {# Large notes box, e.g. for form info messages. #}
 {% macro div_note() %}
-<div class="p-2 md:p-4 bg-emerald-200 text-emerald-900 rounded my-4">
-  {{ caller() }}
+<div class="p-6 bg-royalblue/5 border border-royalblue/10 text-royalblue rounded-3xl my-6 shadow-sm">
+  <div class="flex items-start gap-4">
+    <div class="w-10 h-10 rounded-full bg-royalblue flex items-center justify-center text-white shrink-0">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+    </div>
+    <div class="font-medium leading-relaxed">{{ caller() }}</div>
+  </div>
 </div>
 {% endmacro %}
 
@@ -38,11 +48,16 @@
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% if messages %}
   {% for category, message in messages %}
-    {% if category == 'success' %}
-      <p class="bg-emerald-100 my-4 p-2">{{ message }}</p>
-    {% else %}
-      <p class="bg-red-100 my-4 text-red-900 p-2">{{ message }}</p>
-    {% endif %}
+    <div class="p-5 rounded-2xl mb-6 shadow-sm border font-bold flex items-center gap-4 {{ 'bg-emerald-50 text-emerald-700 border-emerald-100' if category == 'success' else 'bg-red-50 text-red-700 border-red-100' }}">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0 {{ 'bg-emerald-400' if category == 'success' else 'bg-red-400' }}">
+        {% if category == 'success' %}
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+        {% else %}
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        {% endif %}
+      </div>
+      {{ message }}
+    </div>
   {% endfor %}
 {% endif %}
 {% endwith %}
@@ -51,15 +66,16 @@
 
 {# A list of tabs. #}
 {% macro tabs(urls, active) %}
-<nav class="md:border-b mb-8">
-  <ul class="border-l pl-4 md:border-0 md:p-0 md:flex a-hover-underline">
+<nav class="border-b border-slate-100 mb-10 overflow-x-auto">
+  <ul class="flex gap-2">
     {% for name, label, url in urls %}
     {% if name == active %}
-    <li class="md:p-4 font-semibold underline 
-        md:no-underline md:border-b-2 md:border-peacock-primary">{{ label }}</li>
+    <li class="relative">
+      <div class="px-6 py-4 font-black text-royalblue border-b-4 border-royalblue transition-all">{{ label }}</div>
+    </li>
     {% else %}
-    <li class="font-semibold border-b-2 border-transparent text-peacock-secondary">
-      <a class="block md:p-4" href="{{ url }}">{{ label }}</a>
+    <li>
+      <a class="block px-6 py-4 font-bold text-slate-400 hover:text-slate-900 transition-all border-b-4 border-transparent hover:border-slate-200" href="{{ url }}">{{ label }}</a>
     </li>
     {% endif %}
     {% endfor %}
@@ -70,13 +86,16 @@
 
 {# A basic header. #}
 {% macro basic_header(title) %}
-<div class="text-peacock-primary bg-peacock-subtle border-b border-teal-200 mb-4">
-  <div class="border-teal-300">
+<div class="bg-white border-b border-slate-100 mb-8">
+  <div class="max-w-6xl mx-auto px-4">
     {% include "include/header.html" %}
   </div>
 
-  <header class="text-center py-16">
-    <h1 class="font-bold text-5xl">{{ title }}</h1>
+  <header class="text-center py-24 bg-gradient-to-b from-slate-50 to-white">
+    <h1 class="font-black text-6xl text-slate-900 flex items-center justify-center">
+        <span class="pulse-indicator"></span>
+        {{ title }}
+    </h1>
   </header>
 </div>
 {% endmacro %}

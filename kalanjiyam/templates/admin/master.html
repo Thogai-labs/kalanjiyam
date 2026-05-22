@@ -68,6 +68,9 @@
     </header>
     
     <main class="admin-main">
+        {% block page_body %}
+            {% block body %}{% endblock %}
+        {% endblock %}
         {% block content %}{% endblock %}
     </main>
     

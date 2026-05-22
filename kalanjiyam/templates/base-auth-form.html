@@ -5,8 +5,188 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Kalanjiyam{% endblock %}</title>
     <link rel="stylesheet" href="{{ asset('gen/style.css') }}">
+    <style>
+      :root {
+        --primary-color: royalblue;
+        --bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      }
+
+      body {
+        background: var(--bg-gradient);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      }
+
+      .auth-wrapper {
+        width: 100%;
+        max-width: 400px;
+        padding: 20px;
+      }
+
+      /* Premium Form Styles */
+      .form {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        background-color: #fff;
+        padding: 30px;
+        border-radius: 25px;
+        position: relative;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      }
+
+      .title {
+        font-size: 28px;
+        color: var(--primary-color);
+        font-weight: 700;
+        letter-spacing: -1px;
+        position: relative;
+        display: flex;
+        align-items: center;
+        padding-left: 30px;
+        margin-bottom: 5px;
+      }
+
+      .title::before, .title::after {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        border-radius: 50%;
+        left: 0px;
+        background-color: var(--primary-color);
+      }
+
+      .title::before {
+        width: 18px;
+        height: 18px;
+      }
+
+      .title::after {
+        width: 18px;
+        height: 18px;
+        animation: pulse 1.5s linear infinite;
+      }
+
+      @keyframes pulse {
+        from { transform: scale(0.9); opacity: 1; }
+        to { transform: scale(2); opacity: 0; }
+      }
+
+      .message {
+        color: #666;
+        font-size: 14px;
+        margin-bottom: 10px;
+      }
+
+      .form label {
+        position: relative;
+        display: block;
+      }
+
+      .form label .input {
+        width: 100%;
+        padding: 12px 12px 24px 12px;
+        outline: 0;
+        border: 1px solid #ddd;
+        border-radius: 12px;
+        font-size: 16px;
+        transition: border-color 0.3s;
+        box-sizing: border-box;
+      }
+
+      .form label .input:focus {
+        border-color: var(--primary-color);
+      }
+
+      .form label .input + span {
+        position: absolute;
+        left: 12px;
+        top: 16px;
+        color: #999;
+        font-size: 0.95em;
+        cursor: text;
+        transition: 0.3s ease;
+        pointer-events: none;
+      }
+
+      .form label .input:focus + span,
+      .form label .input:not(:placeholder-shown) + span {
+        top: 32px;
+        font-size: 0.75em;
+        font-weight: 600;
+        color: var(--primary-color);
+      }
+
+      .form label .input:valid + span {
+        color: #2e7d32;
+      }
+
+      .submit {
+        border: none;
+        outline: none;
+        background-color: var(--primary-color);
+        padding: 14px;
+        border-radius: 12px;
+        color: #fff;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s, background-color 0.2s, box-shadow 0.2s;
+        margin-top: 10px;
+        box-shadow: 0 4px 12px rgba(65, 105, 225, 0.3);
+      }
+
+      .submit:hover {
+        background-color: #3f51b5;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(65, 105, 225, 0.4);
+      }
+
+      .signin, .options {
+        text-align: center;
+        font-size: 14px;
+        color: #666;
+        margin-top: 10px;
+      }
+
+      .signin a, .options a {
+        color: var(--primary-color);
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .signin a:hover, .options a:hover {
+        text-decoration: underline;
+      }
+
+      .error-box {
+        margin-bottom: 15px;
+      }
+      
+      .description-text {
+        font-size: 14px;
+        color: #555;
+        line-height: 1.5;
+        margin-bottom: 15px;
+      }
+    </style>
+    {% block extra_css %}{% endblock %}
 </head>
-<body class="bg-white">
-    {% block body %}{% endblock %}
+<body class="">
+    <div class="auth-wrapper">
+        <div class="error-box">
+            {% block auth_errors %}
+                {{ mf.show_errors_if_any(form.errors if form else {}) }}
+                {{ components.flash_messages() }}
+            {% endblock %}
+        </div>
+        {% block body %}{% endblock %}
+        {% block content %}{% endblock %}
+    </div>
 </body>
 </html>

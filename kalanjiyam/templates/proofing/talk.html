@@ -4,32 +4,56 @@
 {% from "macros/forms.html" import field %}
 
 
-{% block title %}Talk | Ambuda{% endblock %}
+{% block title %}{{ _('Talk') }} | Kalanjiyam{% endblock %}
 
 
 {% block sidebar %}{{ m.main_nav('talk', current_user=current_user) }}{% endblock %}
 
 
 {% block content %}
-{{ m.title_and_subtitle(_('Talk'), 'Recent discussion across all projects') }}
+<div class="mb-12">
+    <h1 class="text-4xl font-black text-slate-900 flex items-center mb-2">
+        <span class="pulse-indicator"></span>
+        {{ _('Community Discussion') }}
+    </h1>
+    <p class="text-slate-500 font-medium">{{ _('Recent activity and threads across all proofing projects.') }}</p>
+</div>
 
+<div class="space-y-4">
 {% for project, thread in all_threads %}
   {% set project_url = url_for('proofing.project.summary', slug=project.slug) %}
   {% set thread_url = url_for('proofing.talk.thread', project_slug=project.slug, thread_id=thread.id) %}
   {% set author_url = url_for('proofing.user.summary', username=thread.author.username) %}
-  <li class="p-4 border-t a-hover-underline flex justify-between">
-    <div>
-      <a href="{{ thread_url }}">{{ thread.title }}</a>
-      <p class="text-sm text-slate-400">
-        <a href="{{ project_url }}">{{ project.display_title }}</a>
-        | Created by <a href="{{ author_url }}">{{ thread.author.username }}</a>
-      </p>
+  
+  <div class="premium-card p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div class="flex-1">
+      <a href="{{ thread_url }}" class="text-xl font-bold text-slate-900 hover:text-royalblue transition-colors">
+        {{ thread.title }}
+      </a>
+      <div class="flex items-center gap-3 mt-2 text-sm">
+        <a href="{{ project_url }}" class="font-bold text-royalblue hover:underline">{{ project.display_title }}</a>
+        <span class="text-slate-300">•</span>
+        <span class="text-slate-500">{{ _('Created by') }} <a href="{{ author_url }}" class="font-semibold text-slate-700 hover:text-royalblue">{{ thread.author.username }}</a></span>
+      </div>
     </div>
-    <p class="text-sm">{{ thread.updated_at|time_ago }}</p>
-  </li>
+    <div class="flex items-center gap-2 text-slate-400 font-medium text-sm whitespace-nowrap bg-slate-50 px-4 py-2 rounded-xl">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+      {{ thread.updated_at|time_ago }}
+    </div>
+  </div>
 {% else %}
-<p>There isn't any ongoing discussion yet. To start a discussion, go to the
-project you want to discuss and click on its <kbd>Talk</kbd> tab.</p>
+<div class="text-center py-20 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+  <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+      <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+      </svg>
+  </div>
+  <p class="text-slate-500 font-medium">There isn't any ongoing discussion yet.</p>
+  <p class="text-sm text-slate-400 mt-2">To start a discussion, go to a project and click on its <kbd class="px-2 py-1 bg-white rounded border border-slate-200 text-xs">Talk</kbd> tab.</p>
+</div>
 {% endfor %}
+</div>
 
 {% endblock %}

@@ -9,19 +9,19 @@
 
 
 {% macro status_legend() %}
-<div class="bg-white rounded-lg p-4 mb-6 peacock-shadow">
-  <h3 class="text-sm font-semibold text-peacock-primary mb-3">{{ _('Project Status Legend') }}</h3>
-  <ul class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-    <li class="flex items-center p-2 rounded-lg bg-red-50 border border-red-200">
+<div class="bg-white rounded-2xl p-5 mb-8 shadow-sm border border-slate-50">
+  <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">{{ _('Project Status Legend') }}</h3>
+  <ul class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-medium">
+    <li class="flex items-center p-3 rounded-xl bg-red-50 text-red-700 border border-red-100">
       {{ _badge("bg-red-400", "border-red-500") }} {{ _('Needs more work') }}
     </li>
-    <li class="flex items-center p-2 rounded-lg bg-yellow-50 border border-yellow-200">
+    <li class="flex items-center p-3 rounded-xl bg-yellow-50 text-yellow-700 border border-yellow-100">
       {{ _badge("bg-yellow-400", "border-yellow-500") }} {{ _('Proofed once') }}
     </li>
-    <li class="flex items-center p-2 rounded-lg bg-emerald-50 border border-emerald-200">
+    <li class="flex items-center p-3 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
       {{ _badge("bg-emerald-400", "border-emerald-500") }} {{ _('Proofed twice') }}
     </li>
-    <li class="flex items-center p-2 rounded-lg bg-slate-50 border border-slate-200">
+    <li class="flex items-center p-3 rounded-xl bg-slate-50 text-slate-600 border border-slate-200">
       {{ _badge("bg-slate-400", "border-slate-500") }} {{ _('Not relevant') }}
     </li>
   </ul>
@@ -36,14 +36,17 @@
 
 
 {% block content %}
-<div class="bg-white rounded-lg p-6 peacock-shadow">
-  <div class="flex items-center justify-between mb-6">
+<div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-50">
+  <div class="flex items-center justify-between mb-8">
     <div>
-      <h1 class="text-3xl font-bold text-peacock-primary">{{ _('Proofing Dashboard') }}</h1>
-      <p class="text-peacock-secondary mt-1">{{ _('Manage and edit Sanskrit texts') }}</p>
+      <h1 class="text-3xl font-extrabold text-slate-900 flex items-center">
+        <span class="pulse-indicator"></span>
+        {{ _('Proofing Dashboard') }}
+      </h1>
+      <p class="text-slate-500 mt-2 font-medium">{{ _('Manage and edit Sanskrit texts with precision') }}</p>
     </div>
     <a href="{{ url_for('proofing.create_project') }}" 
-       class="btn btn-submit flex items-center gap-2">
+       class="btn-premium">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
       </svg>
@@ -54,74 +57,79 @@
 {% if projects %}
 {{ status_legend() }}
 
-<div x-data="sortableList('title')" class="space-y-4">
+<div x-data="sortableList('title')" class="space-y-6">
 
-<div class="bg-peacock-subtle rounded-lg p-4">
-  <form class="flex items-center gap-4"
+<div class="bg-slate-50 rounded-2xl p-5">
+  <form class="flex flex-col md:flex-row items-center gap-4"
       x-cloak @submit.prevent>
-    <div class="flex-1 relative">
-      <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="flex-1 relative w-full">
+      <svg class="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
       </svg>
       <input type="text" placeholder="{{ _('Search projects...') }}" x-model="query"
-         class="w-full pl-10 pr-4 py-2 rounded-lg border border-teal-200 focus:border-peacock-primary focus:ring-2 focus:ring-peacock-light" @keyup="filter">
+         class="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all" @keyup="filter">
     </div>
-    <div class="flex items-center gap-2">
-      <label class="text-sm text-peacock-secondary">{{ _('Sort by:') }}</label>
-      <select class="bg-white border border-teal-200 rounded-lg px-3 py-2 text-sm focus:border-peacock-primary" x-model="field" @change="sort">
+    <div class="flex items-center gap-3 w-full md:w-auto">
+      <label class="text-sm font-semibold text-slate-500 whitespace-nowrap">{{ _('Sort:') }}</label>
+      <select class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:border-royalblue outline-none transition-all flex-1" x-model="field" @change="sort">
         <option value="title" selected>{{ _('Title') }}</option> 
         <option value="created">{{ _('Creation date') }}</option> 
         <option value="progress">{{ _('Progress') }}</option> 
       </select>
-      <select class="bg-white border border-teal-200 rounded-lg px-3 py-2 text-sm focus:border-peacock-primary" x-model="order" @change="sort">
-        <option value="asc" selected>{{ _('Ascending') }}</option> 
-        <option value="desc">{{ _('Descending') }}</option> 
+      <select class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:border-royalblue outline-none transition-all" x-model="order" @change="sort">
+        <option value="asc" selected>{{ _('Asc') }}</option> 
+        <option value="desc">{{ _('Desc') }}</option> 
       </select>
     </div>
   </form>
 </div>
 
-<div class="grid gap-4">
+<div class="grid gap-6">
   {% for p in projects %}
   <div data-key="{{ p.id }}"
        data-title="{{ p.display_title }}"
        data-created="{{ p.created_at }}"
        data-progress="{{ progress_per_project[p.id] }}"
        x-show="displayed.has('{{ p.id }}')"
-       class="bg-white border border-teal-200 rounded-lg p-4 hover:border-peacock-primary transition-colors">
+       class="premium-card p-6">
     
-    <div class="flex items-start justify-between mb-3">
+    <div class="flex items-start justify-between mb-4">
       <div class="flex-1">
         <a href="{{ url_for("proofing.project.summary", slug=p.slug) }}" 
-           class="text-lg font-semibold text-peacock-primary hover:text-peacock-secondary transition-colors">
+           class="text-xl font-bold text-slate-900 hover:text-royalblue transition-colors">
           {{ p.display_title }}
         </a>
         {% set count = pages_per_project[p.id] %}
-        <p class="text-sm text-peacock-secondary mt-1">
-          {{ ngettext('%(num)d page', '%(num)d pages', count) }}
-        </p>
+        <div class="flex items-center gap-3 mt-2">
+          <span class="text-xs font-bold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg uppercase tracking-wider">
+            {{ ngettext('%(num)d page', '%(num)d pages', count) }}
+          </span>
+          <span class="text-xs text-slate-400 font-medium">
+            {{ p.created_at.strftime('%b %d, %Y') }}
+          </span>
+        </div>
       </div>
-      <div class="flex items-center gap-2">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div class="p-2 bg-slate-50 rounded-xl text-slate-400">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
         </svg>
       </div>
     </div>
 
-    <div class="mb-3">
-      <div class="flex items-center justify-between text-xs text-peacock-secondary mb-1">
-        <span>{{ _('Progress') }}</span>
-        <span>{{ "%.1f"|format(progress_per_project[p.id] * 100) }}%</span>
+    <div class="mt-6">
+      <div class="flex items-center justify-between text-sm font-bold mb-2">
+        <span class="text-slate-500">{{ _('Completion') }}</span>
+        <span class="text-royalblue">{{ "%.1f"|format(progress_per_project[p.id] * 100) }}%</span>
       </div>
-      <div class="w-full bg-peacock-subtle rounded-full h-2">
+      <div class="w-full bg-slate-100 rounded-full h-3 flex overflow-hidden">
         {% for cls, fraction in statuses_per_project[p.id].items() %}
-          <div class="h-2 {{ cls }} rounded-full transition-all duration-300" style="width: {{ fraction * 100 }}%"></div>
+          <div class="h-full {{ cls }} transition-all duration-500" style="width: {{ fraction * 100 }}%"></div>
         {% endfor %}
       </div>
     </div>
 
     {% if p.description %}
-    <div class="text-sm text-peacock-secondary bg-peacock-subtle rounded-lg p-3">
+    <div class="mt-5 text-sm text-slate-600 leading-relaxed bg-slate-50/50 rounded-xl p-4 border border-slate-50">
       {{ p.description|markdown|safe }}
     </div>
     {% endif %}
@@ -130,15 +138,15 @@
 </div>
 </div>
 {% else %}
-<div class="text-center py-12">
-  <div class="w-24 h-24 mx-auto mb-6 bg-peacock-subtle rounded-full flex items-center justify-center">
-    <svg class="w-12 h-12 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<div class="text-center py-20">
+  <div class="w-24 h-24 mx-auto mb-8 bg-royalblue/5 rounded-full flex items-center justify-center">
+    <svg class="w-12 h-12 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
     </svg>
   </div>
-  <h3 class="text-xl font-semibold text-peacock-primary mb-2">{{ _('No projects yet') }}</h3>
-  <p class="text-peacock-secondary mb-6">{{ _('Get started by creating your first proofing project') }}</p>
-  <a href="{{ url_for('proofing.create_project') }}" class="btn btn-submit">
+  <h3 class="text-2xl font-bold text-slate-900 mb-2">{{ _('No projects yet') }}</h3>
+  <p class="text-slate-500 mb-8 max-w-sm mx-auto">{{ _('Ready to digitize some Sanskrit? Create your first project to get started.') }}</p>
+  <a href="{{ url_for('proofing.create_project') }}" class="btn-premium">
     {{ _('Create your first project') }}
   </a>
 </div>

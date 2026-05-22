@@ -2,26 +2,40 @@
 {% import "macros/components.html" as components %}
 {% import "macros/forms.html" as mf %}
 
-
 {% block title %}{{ components.title(_('Register')) }}{% endblock %}
 
-
 {% block content %}
-{{ mf.show_errors_if_any(form.errors) }}
+<form method="POST" class="form">
+    {{ form.csrf_token }}
+    <p class="title">{{ _('Register') }}</p>
+    <p class="message">{{ _('Create a Kalanjiyam account.') }}</p>
 
-<form method="POST" class="bg-white rounded p-8">
-  <h1 class="text-2xl font-bold text-center mb-8">
-    {{ _('Create a Kalanjiyam account') }}
-  </h1>
-  {{ form.csrf_token }}
-  {{ mf.auth_field(form.username) }}
-  {{ mf.auth_field(form.password) }}
-  {{ mf.auth_field(form.email) }}
+    <label>
+      {{ form.username(class_="input", placeholder=" ") }}
+      <span>{{ _('Username') }}</span>
+    </label> 
 
-  <div class="mb-4">
-  {{ form.recaptcha }}
-  </div>
+    <label>
+      {{ form.email(class_="input", placeholder=" ") }}
+      <span>{{ _('Email') }}</span>
+    </label> 
+        
+    <label>
+      {{ form.password(class_="input", placeholder=" ") }}
+      <span>{{ _('Password') }}</span>
+    </label>
 
-  {{ mf.auth_submit(_("Create account")) }}
+    {% if form.recaptcha %}
+    <div class="mb-4">
+      {{ form.recaptcha }}
+    </div>
+    {% endif %}
+
+    <button type="submit" class="submit">{{ _('Create account') }}</button>
+    
+    <p class="signin">
+      {{ _('Already have an account?') }} 
+      <a href="{{ url_for('auth.sign_in') }}">{{ _('Sign In') }}</a>
+    </p>
 </form>
 {% endblock %}

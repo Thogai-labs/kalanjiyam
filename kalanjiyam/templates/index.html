@@ -3,50 +3,140 @@
 {% set mailing_url = 'https://groups.google.com/g/siddhasagaram-announce' %}
 {% set code_url = 'https://github.com/siddhasagaram/kalanjiyam' %}
 {% set contact_url = url_for('about.contact') %}
-{% set group = "https://groups.google.com/u/2/g/siddhasagaram-announce" %}
 
 
-{% set links = [
-  ('proofing.index', 'Proofing'),
-  ('site.support', 'Support'),
-  ('about.index', 'About'),
-] %}
+{% block title %}{{ _('Kalanjiyam - Siddha Knowledge Digital Library') }}{% endblock %}
 
-{% set mobile_only = ["proofing.index", "site.support"] %}
+{% block extra_head %}
+<style>
+  :root {
+    --primary-color: royalblue;
+    --primary-hover: #3f51b5;
+    --premium-gradient: radial-gradient(circle at top, #ffffff, #f8fafc);
+    --premium-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+  }
 
+  .premium-hero {
+    background: var(--premium-gradient);
+    position: relative;
+    overflow: hidden;
+  }
 
-{% block title %}{{ _('Kalanjiyam - Indian Knowledge Digital Repo') }}{% endblock %}
+  .premium-hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(circle at 70% 30%, rgba(65, 105, 225, 0.03) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .pulse-indicator {
+    width: 12px;
+    height: 12px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    position: relative;
+    display: inline-block;
+    margin-right: 12px;
+  }
+  .pulse-indicator::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: inherit;
+    border-radius: inherit;
+    animation: pulse-ring 1.5s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(0.9); opacity: 0.8; }
+    100% { transform: scale(2.5); opacity: 0; }
+  }
+
+  .btn-premium-dark {
+    background: #0f172a;
+    color: white !important;
+    padding: 12px 32px;
+    border-radius: 14px;
+    font-weight: 800;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+  }
+  .btn-premium-dark:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 25px rgba(0, 0, 0, 0.2);
+    background: var(--primary-color);
+  }
+
+  .btn-premium-outline {
+    background: white;
+    color: #0f172a !important;
+    padding: 12px 32px;
+    border-radius: 14px;
+    font-weight: 800;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid #e2e8f0;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-premium-outline:hover {
+    border-color: #cbd5e1;
+    transform: translateY(-4px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+  }
+
+  .feature-card {
+    background: white;
+    padding: 40px;
+    border-radius: 24px;
+    border: 1px solid #f1f5f9;
+    transition: all 0.3s;
+  }
+  .feature-card:hover {
+    box-shadow: var(--premium-shadow);
+    transform: translateY(-5px);
+    border-color: var(--primary-color);
+  }
+</style>
+{% endblock %}
 
 
 {% block header %}
-<header class="bg-peacock-gradient text-white shrink-0 pb-16">
-  <div class="mb-4 fill-white">
+<header class="premium-hero text-slate-900 shrink-0 pb-32">
+  <div class="mb-4">
     {% include("include/header.html") %}
   </div>
 
-  <div class="text-center">
+  <div class="text-center px-4">
 
-  <div class="max-w-4xl mx-auto mt-28 mb-4 p-4">
-    <div class="flex justify-center mb-6">
-      <img src="{{ url_for('static', filename='images/siddha-logo.svg') }}" alt="Siddha Logo" class="w-24 h-24">
-    </div>
-    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold">{{ _('Digital Library') }}</h1>
-    <p class="mx-auto text-lg mt-4 mb-4 max-w-2xl text-teal-100">{% trans %}
-    All free online library 
-    dedicated to preserving and sharing  wisdom.
+  <div class="max-w-4xl mx-auto mt-24 mb-12">
+    <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black mb-6 tracking-tight flex items-center justify-center">
+        <span class="pulse-indicator"></span>
+        {{ _('Digital Library') }}
+    </h1>
+    <p class="mx-auto text-xl mt-4 mb-8 max-w-2xl text-slate-500 font-medium leading-relaxed">{% trans %}
+    A premium digital repository dedicated to preserving and sharing the ancient wisdom of the Siddhas.
     {% endtrans %}</p>
   </div>
 
-  <div class="flex flex-col sm:flex-row gap-4 justify-center">
-    <a class="p-4 transition rounded btn bg-white text-peacock-primary hover:bg-peacock-light hover:text-peacock-primary peacock-shadow" href="{{ url_for("public.books.index") }}">
+  <div class="flex flex-col sm:flex-row gap-6 justify-center">
+    <a class="btn-premium-dark" href="{{ url_for("public.books.index") }}">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
         {{ _('Browse Books') }}
     </a>
-    {% if current_user.is_admin %}
-    <a class="p-4 transition rounded btn bg-white text-peacock-primary hover:bg-peacock-light hover:text-peacock-primary peacock-shadow" href="{{ url_for("proofing.index") }}">
+    {% if current_user.is_authenticated %}
+    <a class="btn-premium-outline" href="{{ url_for("proofing.index") }}">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
         {{ _('Start Proofing') }}
     </a>
     {% else %}
-    <a class="p-4 transition rounded btn bg-white text-peacock-primary hover:bg-peacock-light hover:text-peacock-primary peacock-shadow" href="{{ url_for("auth.sign_in") }}">
+    <a class="btn-premium-outline" href="{{ url_for("auth.sign_in") }}">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path></svg>
         {{ _('Sign In') }}
     </a>
     {% endif %}
@@ -56,102 +146,49 @@
 </header>
 {% endblock %}
 
-{% macro section(classes = '') %}
-<section class="p-8 md:py-14 lg:py-20 {{ classes }}">
-<div class="prose max-w-2xl mx-auto">
-{{ caller() }}
-</div>
-</section>
-{% endmacro %}
 
 {% block main %}
-<article>
+<article class="max-w-6xl mx-auto px-4 py-24">
+    <div class="grid md:grid-cols-3 gap-8">
+        <div class="feature-card">
+            <div class="w-14 h-14 bg-royalblue/10 rounded-2xl flex items-center justify-center text-royalblue mb-6">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+            </div>
+            <h3 class="text-2xl font-black text-slate-900 mb-4">{{ _('Browse Books') }}</h3>
+            <p class="text-slate-500 font-medium leading-relaxed">{{ _('Explore our vast collection of digitised Siddha texts, manuscripts, and traditional wisdom.') }}</p>
+        </div>
 
-  {#
-{% call section("text-peacock-primary") %}
-<h2 class="!mt-0">{{ _("Preserving Ancient Siddha Knowledge") }}</h2>
+        <div class="feature-card">
+            <div class="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 mb-6">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+            </div>
+            <h3 class="text-2xl font-black text-slate-900 mb-4">{{ _('Start Proofing') }}</h3>
+            <p class="text-slate-500 font-medium leading-relaxed">{{ _('Join our global volunteer effort to digitise and verify ancient texts using state-of-the-art OCR tools.') }}</p>
+        </div>
 
-<p>{% trans %}
-Siddha texts, containing the wisdom of ancient sages and alchemists, are scattered 
-across manuscripts, palm leaves, and traditional repositories. Their knowledge of 
-medicine, alchemy, yoga, and spiritual practices has been preserved through generations.
-{% endtrans %}</p>
+        <div class="feature-card">
+            <div class="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600 mb-6">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+            </div>
+            <h3 class="text-2xl font-black text-slate-900 mb-4">{{ _('Community Support') }}</h3>
+            <p class="text-slate-500 font-medium leading-relaxed">{{ _('Join our community groups to discuss Siddha knowledge and support the preservation movement.') }}</p>
+        </div>
+    </div>
 
-<p>{% trans %}
-That's why Kalanjiyam is dedicated to building a comprehensive digital library of 
-Siddha literature. Our platform focuses on proofing and preserving these precious 
-texts, making them accessible to researchers, practitioners, and seekers of wisdom.
-{% endtrans %}</p>
-{% endcall %}
-
-
-{% call section("bg-peacock-subtle text-peacock-primary") %}
-<h2 class="!mt-0">{{ _('Murugan\'s Blessing - Knowledge for All') }}</h2>
-
-<p>{% trans %}
-What if you could access centuries-old Siddha wisdom anywhere for free? What if 
-reading and studying Siddha texts online were as beautiful as the peacock's dance? 
-What if you could contribute to preserving this ancient knowledge?
-{% endtrans %}</p>
-
-<p>{% trans %}
-We believe that Siddha knowledge should be freely accessible to all who seek it. 
-Our proofing platform allows volunteers to help digitize and preserve these texts, 
-ensuring that the wisdom of the Siddhas continues to enlighten future generations.
-{% endtrans %}</p>
-{% endcall %}
-
-
-{% call section("bg-peacock-light text-peacock-primary") %}
-<h2 class="!mt-0">{{ _('Digital Preservation with Traditional Wisdom') }}</h2>
-
-<p>{% trans %}
-Advanced proofing tools. Collaborative editing. Digital preservation. And so much more. 
-Our platform combines modern technology with respect for traditional knowledge, making 
-Siddha texts more accessible while maintaining their authenticity.
-{% endtrans %}</p>
-
-<p>{% trans %}
-Our work is guided by the spirit of the Siddhas - combining practical knowledge 
-with spiritual insight. We're building tools for text analysis, translation support, 
-and community collaboration to honor this ancient tradition.
-{% endtrans %}</p>
-{% endcall %}
-
-
-{% call section("bg-peacock-medium text-peacock-primary") %}
-<h2 class="!mt-0">{{ _('Community-Driven Preservation') }}</h2>
-{% set support_url = url_for('site.support') %}
-
-<p>{% trans %}
-Kalanjiyam is powered by volunteers who are passionate about preserving Siddha wisdom. 
-We welcome your support in whatever form you can provide - from proofing texts to 
-contributing knowledge. Learn more about how you can <a href="{{ support_url }}">help 
-preserve Siddha knowledge</a>.
-{% endtrans %}</p>
-
-<p>{% trans %}
-Join our community of Siddha enthusiasts. <a href="{{ mailing_url }}">Sign up for our 
-mailing list</a> to receive updates on new texts, features, and opportunities to 
-contribute to this sacred work.
-{% endtrans %}</p>
-{% endcall %}
-
- <section class="text-center text-peacock-primary shrink-0 pt-4 pb-32">
-  <div class="max-w-4xl mx-auto mt-28 mb-4 p-4">
-    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold peacock-text-gradient">
-      {{ _('Siddha Wisdom at Your Fingertips') }}
-    </h1>
-    <p class="mx-auto text-lg mt-4 mb-4 max-w-2xl">
-      {{ _('Join us in preserving and sharing the ancient wisdom of the Siddhas.') }}
-    </p>
-  </div>
-  <div>
-    <a class="p-4 btn btn-submit" href="{{ url_for("proofing.index") }}">
-      {{ _('Start Proofing') }}
-    </a>
-  </div>
-</section> #}
-
+    <div class="mt-32 p-12 bg-gradient-to-br from-blue-50 to-blue-200 rounded-[40px] text-slate-900 overflow-hidden relative shadow-lg border border-blue-100">
+        <div class="relative z-10 md:flex items-center justify-between">
+            <div class="max-w-lg">
+                <h2 class="text-4xl font-black mb-4">{{ _('Join the Preservation Movement') }}</h2>
+                <p class="text-slate-700 font-medium mb-8">{{ _('Ancient wisdom belongs to everyone. Help us make it accessible for future generations.') }}</p>
+                <div class="flex gap-4">
+                    <a href="{{ url_for('auth.sign_in') }}" class="bg-royalblue text-white font-extrabold px-8 py-3 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 hover:bg-blue-700 transition-all flex items-center gap-2">{{ _('Join Now') }}</a>
+                </div>
+            </div>
+            <div class="hidden md:block opacity-20">
+                <img src="{{ url_for('static', filename='images/siddha-logo.svg') }}" alt="Logo" class="w-64 h-64 filter brightness-0 invert">
+            </div>
+        </div>
+        <div class="absolute top-0 right-0 w-64 h-64 bg-royalblue blur-[120px] opacity-30"></div>
+    </div>
 </article>
 {% endblock %}

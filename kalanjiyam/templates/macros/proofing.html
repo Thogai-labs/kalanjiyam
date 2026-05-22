@@ -3,9 +3,12 @@
 
 {# Display a title+subtitle pair. #}
 {% macro title_and_subtitle(title, subtitle = none) %}
-<header class="mb-4">
-  <h1 class="font-bold text-4xl">{{ title|safe }}</h1>
-  {% if subtitle %}<p class="mt-1 text-lg text-slate-500">{{ subtitle|safe }}</p>{% endif %}
+<header class="mb-10">
+  <h1 class="font-extrabold text-4xl text-slate-900 flex items-center">
+    <span class="pulse-indicator"></span>
+    {{ title|safe }}
+  </h1>
+  {% if subtitle %}<p class="mt-2 text-lg text-slate-500 font-medium">{{ subtitle|safe }}</p>{% endif %}
 </header>
 {% endmacro %}
 
@@ -17,19 +20,24 @@
 
 
 {% macro nested_header(label, title, url) %}
-{% set css = "text-slate-400" %}
-<header class="a-hover-underline font-bold text-3xl mb-4">
-  <h1>
-  {{ _('%(label)s: <a class="%(css)s" href="%(url)s">%(title)s</a>',
-    label=label, css=css, url=url, title=title) }}
-</h1>
+{% set css = "text-royalblue hover:text-royalblue/80" %}
+<header class="font-bold text-3xl mb-8">
+  <h1 class="flex items-center">
+    <span class="pulse-indicator"></span>
+    {{ _('%(label)s: <a class="%(css)s transition-colors" href="%(url)s">%(title)s</a>',
+      label=label, css=css, url=url, title=title) }}
+  </h1>
 </header>
 {% endmacro %}
 
 {# Sidebar link #}
-{% macro _link(label, route, text) -%}
-{% if active == label %}<li class="font-bold text-black">{% else %}<li>{% endif %}
-<a href="{{ url_for(route) }}">{{ text }}</a>
+{% macro _link(label, route, text, active) -%}
+<li class="sidebar-nav-item">
+<a href="{{ url_for(route) }}" 
+   class="block px-4 py-2.5 rounded-xl transition-all duration-200 font-semibold
+   {{ 'bg-royalblue text-white shadow-md shadow-royalblue/20' if active == label else 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' }}">
+   {{ text }}
+</a>
 </li>
 {%- endmacro %}
 
@@ -38,29 +46,31 @@
 {% macro main_nav(active, current_user) %}
 
 {% if current_user.is_moderator %}
-<nav class="rounded bg-slate-200 text-slate-500 mb-2 p-4 a-hover-underline text-sm">
-<h1 class="font-bold">{{ _('Moderation') }}</h1>
-<ul class="list-disc pl-6">
-  {{ _link('stats', "proofing.dashboard", _("Dashboard")) }}
+<nav class="mb-6">
+<h1 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Moderation') }}</h1>
+<ul class="space-y-1">
+  {{ _link('stats', "proofing.dashboard", _("Dashboard"), active) }}
 </ul>
 </nav>
 {% endif %}
 
-<nav class="rounded bg-slate-100 text-slate-500 p-4 a-hover-underline text-sm">
-<h1 class="font-bold">{{ _('Help') }}</h1>
-<ul class="list-disc pl-6">
-  {{ _link('beginners', "proofing.beginners_guide", _("Beginner's guide")) }}
-  {{ _link('complete', "proofing.complete_guide", _("Complete guide")) }}
-  {{ _link('manual', "proofing.editor_guide", _("Editor manual")) }}
+<nav class="mb-6">
+<h1 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Help') }}</h1>
+<ul class="space-y-1">
+  {{ _link('beginners', "proofing.beginners_guide", _("Beginner's guide"), active) }}
+  {{ _link('complete', "proofing.complete_guide", _("Complete guide"), active) }}
+  {{ _link('manual', "proofing.editor_guide", _("Editor manual"), active) }}
 </ul>
+</nav>
 
-<h1 class="mt-2 font-bold">{{ _('Contribute') }}</h1>
-<ul class="list-disc pl-6">
-  {{ _link('projects', "proofing.index", _("Ongoing projects")) }}
-  {{ _link('create', "proofing.create_project", _("Create project")) }}
-  {{ _link('changes', "proofing.recent_changes", _("Recent changes")) }}
-  {{ _link('tagging', "proofing.tagging.index", _("Tagging")) }}
-  {{ _link('talk', "proofing.talk", _("Talk")) }}
+<nav>
+<h1 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Contribute') }}</h1>
+<ul class="space-y-1">
+  {{ _link('projects', "proofing.index", _("Ongoing projects"), active) }}
+  {{ _link('create', "proofing.create_project", _("Create project"), active) }}
+  {{ _link('changes', "proofing.recent_changes", _("Recent changes"), active) }}
+  {{ _link('tagging', "proofing.tagging.index", _("Tagging"), active) }}
+  {{ _link('talk', "proofing.talk", _("Talk"), active) }}
 </ul>
 </nav>
 {% endmacro %}
@@ -100,7 +110,7 @@
 
 {% macro _page_nav_link(project, page, full_text, short_text) %}
 {% set url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=page.slug) %}
-<a href="{{ url }}">
+<a href="{{ url }}" class="px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 hover:border-royalblue hover:text-royalblue transition-all shadow-sm">
   <span class="hidden md:inline">{{ full_text|safe }}</span>
   <span class="inline md:hidden">{{ short_text|safe }}</span>
 </a>
@@ -108,138 +118,180 @@
 
 
 {% macro page_header(project, cur, prev, next) %}
-<div class="a-hover-underline flex justify-between items-center my-4">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
   <div>
-    <h1 class="text-3xl">
-      <a class="text-slate-400 font-bold"
+    <h1 class="text-3xl font-black text-slate-900 flex items-center">
+      <span class="pulse-indicator"></span>
+      <a class="text-slate-400 hover:text-royalblue transition-colors"
           href="{{ url_for("proofing.project.summary", slug=project.slug) }}">
          {{ project.display_title }}</a>
-      /{{ cur.slug }}
+      <span class="mx-2 text-slate-300">/</span>
+      {{ cur.slug }}
     </h1>
 
     {% set edit_url = url_for("proofing.page.edit", project_slug=project.slug, page_slug=cur.slug) %}
     {% set history_url = url_for("proofing.page.history", project_slug=project.slug, page_slug=cur.slug) %}
-    <nav class="text-slate-500 text-sm">
-      <a href="{{ edit_url }}">Edit</a> |
-      <a href="{{ history_url }}">History</a>
+    <nav class="flex gap-4 mt-3">
+      <a href="{{ edit_url }}" class="text-sm font-bold text-royalblue hover:underline">{{ _('Edit') }}</a>
+      <span class="text-slate-300 text-sm">|</span>
+      <a href="{{ history_url }}" class="text-sm font-bold text-slate-500 hover:text-royalblue transition-colors">{{ _('History') }}</a>
     </nav>
   </div>
-  <p>
-    {{ _page_nav_link(project, prev, "&larr; Previous", "&larr;") }} |
-    {{ _page_nav_link(project, next, "Next &rarr;", "&rarr;") }}
-  </p>
+  <div class="flex items-center gap-3">
+    {{ _page_nav_link(project, prev, "&larr; " + _("Previous"), "&larr;") }}
+    {{ _page_nav_link(project, next, _("Next") + " &rarr;", "&rarr;") }}
+  </div>
 </div>
 {% endmacro %}
 
 
 {# A revision in an activity log. #}
 {% macro revision_li(r) %}
-<li class="my-2">
-  {% set revision_url = url_for('proofing.page.revision',
-      project_slug=r.project.slug, page_slug=r.page.slug, revision_id=r.id) %}
-  {% set page_url = url_for('proofing.page.edit',
-      project_slug=r.project.slug, page_slug=r.page.slug) %}
-  {% set author_url = url_for('proofing.user.summary',
-      username=r.author.username) %}
-  {% set page_title = r.project.display_title + "/" + r.page.slug %}
-  {% set author = r.author.username %}
+{% set revision_url = url_for('proofing.page.revision',
+    project_slug=r.project.slug, page_slug=r.page.slug, revision_id=r.id) %}
+{% set page_url = url_for('proofing.page.edit',
+    project_slug=r.project.slug, page_slug=r.page.slug) %}
+{% set author_url = url_for('proofing.user.summary',
+    username=r.author.username) %}
+{% set page_title = r.project.display_title + " / " + r.page.slug %}
+{% set author = r.author.username %}
 
-  <span class="{{ revision_colors(r.status.name) }} inline-block w-2 h-2 mr-0.5 rounded-sm"></span>
-  <a class="text-slate-400 text-sm p-0.5 rounded"
-      href="{{ revision_url }}">{{ r.created.strftime("%Y-%m-%d %H:%M") }}</a>
-  {{ _('<a href="%(page_url)s">%(page_title)s</a> by <a href="%(author_url)s">%(author)s</a>',
-    page_url=page_url, page_title=page_title, author_url=author_url, author=author) }}
-  {% if r.summary %}<i>({{ r.summary }})</i>{% endif %}
-</li>
+<div class="premium-card p-5 flex items-center justify-between gap-4 mb-3">
+  <div class="flex items-center gap-4">
+    <span class="{{ revision_colors(r.status.name) }} w-3 h-3 rounded-full shadow-sm"></span>
+    <div>
+        <div class="font-bold text-slate-900">
+            <a href="{{ page_url }}" class="hover:text-royalblue transition-colors">{{ page_title }}</a>
+        </div>
+        <div class="text-xs font-medium text-slate-400 mt-1">
+            <a href="{{ author_url }}" class="font-bold text-slate-600 hover:text-royalblue">{{ author }}</a> 
+            <span class="mx-1">•</span>
+            <a href="{{ revision_url }}" class="hover:underline">{{ r.created.strftime("%Y-%m-%d %H:%M") }}</a>
+            {% if r.summary %}
+                <span class="mx-1">•</span>
+                <span class="italic text-slate-500 font-normal">"{{ r.summary }}"</span>
+            {% endif %}
+        </div>
+    </div>
+  </div>
+  <svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+  </svg>
+</div>
 {% endmacro %}
 
 
 {# A project in an activity log #}
 {% macro project_li(p) %}
-<li class="my-2 flex justify-between">
-  {% set project_url = url_for('proofing.project.summary', slug=p.slug) %}
-  {% set title = p.display_title %}
-  {% set creator = p.creator.username %}
-  {% set creator_url = url_for('proofing.user.summary', username=creator) %}
-  <div>
-    <span class="border border-slate-500 inline-block w-2 h-2 mr-0.5 rounded-sm"></span>
-    <a class="text-slate-400 text-sm p-0.5 rounded"
-        href="{{ project_url }}">{{ p.created_at.strftime("%Y-%m-%d %H:%M") }}</a>
-    {{ _('%(title)s created by <a href="%(creator_url)s">%(creator)s</a>',
-        title=title, creator_url=creator_url, creator=creator) }}
-</li>
+{% set project_url = url_for('proofing.project.summary', slug=p.slug) %}
+{% set title = p.display_title %}
+{% set creator = p.creator.username %}
+{% set creator_url = url_for('proofing.user.summary', username=creator) %}
+
+<div class="premium-card p-5 flex items-center justify-between gap-4 mb-3 bg-royalblue/[0.02]">
+  <div class="flex items-center gap-4">
+    <span class="bg-royalblue/20 border-2 border-royalblue/30 w-3 h-3 rounded-full shadow-sm"></span>
+    <div>
+        <div class="font-black text-slate-900 text-lg">
+            <a href="{{ project_url }}" class="hover:text-royalblue transition-colors">{{ title }}</a>
+        </div>
+        <div class="text-xs font-medium text-slate-400 mt-1">
+            {{ _('New project created by') }} <a href="{{ creator_url }}" class="font-bold text-slate-600 hover:text-royalblue">{{ creator }}</a> 
+            <span class="mx-1">•</span>
+            <span class="font-bold text-royalblue/70">{{ p.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
+        </div>
+    </div>
+  </div>
+  <div class="px-3 py-1 bg-royalblue/10 text-royalblue text-[10px] font-black uppercase tracking-widest rounded-full">New Project</div>
+</div>
 {% endmacro %}
 
 
 {# List various activity (edits, new projects, etc.) #}
 {% macro activity_log(activity) %}
-<ul class="a-hover-underline">
+<div class="mt-8">
 {% for type_, _, obj in activity %}
   {% if type_ == 'revision' %}{{ revision_li(obj) }}
   {% elif type_ == 'project' %}{{ project_li(obj) }}
   {% endif %}
 {% endfor %}
-</ul>
+</div>
 {% endmacro %}
 
 
 {# List the given revisions. Revisions might correspond to multiple pages. #}
 {% macro revision_list(revisions) %}
-<ul class="a-hover-underline">
+<div class="mt-6">
   {% for r in revisions %}{{ revision_li(r) }}{% endfor %}
-</ul>
+</div>
 {% endmacro %}
 
 
 {# List the revisions for some page. #}
 {% macro page_revision_list(revisions) %}
-<ul class="a-hover-underline">
+<div class="space-y-3">
   {% for r in revisions %}
-  <li class="my-2">
     {% set revision_url = url_for('proofing.page.revision',
         project_slug=r.project.slug, page_slug=r.page.slug, revision_id=r.id) %}
     {% set page_url = url_for('proofing.page.edit',
         project_slug=r.project.slug, page_slug=r.page.slug) %}
     {% set author_url = url_for('proofing.user.summary',
         username=r.author.username) %}
-    {% set page_title = r.project.display_title + "/" + r.page.slug %}
+    {% set page_title = r.project.display_title + " / " + r.page.slug %}
     {% set author = r.author.username %}
 
-    <span class="{{ revision_colors(r.status.name) }} inline-block w-2 h-2 mr-0.5 rounded-full"></span>
-    <a class="text-slate-400 text-sm"
-        href="{{ revision_url }}">{{ r.created.strftime("%Y-%m-%d %H:%M") }}</a>
-    by <a href="{{ author_url }}">{{ author }}</a>
-    {% if r.summary %}<i>({{ r.summary }})</i>{% endif %}
-  </li>
+    <div class="flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors group">
+      <div class="flex items-center gap-3">
+        <span class="{{ revision_colors(r.status.name) }} w-2.5 h-2.5 rounded-full"></span>
+        <span class="text-sm font-bold text-slate-600">
+            <a href="{{ author_url }}" class="hover:text-royalblue">{{ author }}</a>
+        </span>
+        <span class="text-xs font-medium text-slate-400">{{ r.created.strftime("%Y-%m-%d %H:%M") }}</span>
+        {% if r.summary %}<span class="text-xs italic text-slate-500 font-normal">({{ r.summary }})</span>{% endif %}
+      </div>
+      <a href="{{ revision_url }}" class="text-xs font-black text-royalblue opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest">{{ _('View Revision') }}</a>
+    </div>
   {% endfor %}
-</ul>
+</div>
 {% endmacro %}
 
 
 {# CSS for each revision status. #}
 {% macro revision_colors(status) %}
 {% if status == 'reviewed-0' %}
-bg-red-200 text-red-800
+bg-red-400
 {% elif status == 'reviewed-1' %}
-bg-yellow-200 text-yellow-800
+bg-yellow-400
 {% elif status == 'reviewed-2' %}
-bg-green-200 text-green-800
+bg-emerald-400
 {% elif status == 'skip' %}
-bg-gray-200 text-gray-800
+bg-slate-400
 {% endif %}
 {% endmacro %}
 
 
 {# Displays the page's revision status as a human-readable banner. #}
 {% macro page_status(status) %}
+{% set base_cls = "p-5 rounded-2xl mb-8 flex items-center gap-4 font-bold border shadow-sm" %}
 {% if status == 'reviewed-0' %}
-<p class="p-2 my-4 {{ revision_colors(status) }}">This page has not been fully proofread.</p>
+<div class="{{ base_cls }} bg-red-50 text-red-700 border-red-100">
+    <div class="w-10 h-10 rounded-full bg-red-400 flex items-center justify-center text-white">!</div>
+    {{ _('This page has not been fully proofread.') }}
+</div>
 {% elif status == 'reviewed-1' %}
-<p class="p-2 my-4 {{ revision_colors(status) }}">This page has been fully proofread once and needs a second look.</p>
+<div class="{{ base_cls }} bg-yellow-50 text-yellow-700 border-yellow-100">
+    <div class="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center text-white">1</div>
+    {{ _('This page has been fully proofread once and needs a second look.') }}
+</div>
 {% elif status == 'reviewed-2' %}
-<p class="p-2 my-4 {{ revision_colors(status) }}">This page has been fully proofread twice.</p>
+<div class="{{ base_cls }} bg-emerald-50 text-emerald-700 border-emerald-100">
+    <div class="w-10 h-10 rounded-full bg-emerald-400 flex items-center justify-center text-white">✓</div>
+    {{ _('This page has been fully proofread twice.') }}
+</div>
 {% elif status == 'skip' %}
-<p class="p-2 my-4 {{ revision_colors(status) }}">This page does not need to be proofread.</p>
+<div class="{{ base_cls }} bg-slate-50 text-slate-600 border-slate-200">
+    <div class="w-10 h-10 rounded-full bg-slate-400 flex items-center justify-center text-white">−</div>
+    {{ _('This page does not need to be proofread.') }}
+</div>
 {% endif %}
 {% endmacro %}
-

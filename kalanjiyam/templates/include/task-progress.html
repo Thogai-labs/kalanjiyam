@@ -1,36 +1,73 @@
 {% import 'macros/components.html' as components %}
 
 {% macro progress_bar(percent) %}
-<div class="my-4 rounded w-full bg-slate-100 h-4">
-  <div class="rounded bg-green-300 h-4" style="width: {{ percent }}%">&nbsp;</div>
+<div class="my-8 max-w-lg mx-auto h-4 bg-slate-100 rounded-full overflow-hidden border border-slate-50">
+  <div class="h-full bg-royalblue rounded-full transition-all duration-700 ease-out shadow-sm shadow-royalblue/20" 
+       style="width: {{ percent }}%">
+  </div>
 </div>
 {% endmacro %}
 
-{# kwargs: current, total, percent #}
-{% if status == 'FAILURE' %}
-  {% call components.div_warning() %}
-  <p class="!mb-0">We weren't able to upload your project. Usually, this occurs
-  if a project with the same name already exists. If you believe this is an
-  error, please <a href="{{ url_for('about.contact') }}">let us know</a> and
-  we'll fix the error as soon as we can.
-  {% endcall %}
+<div class="text-center p-12 bg-white rounded-[40px] shadow-sm border border-slate-100 mt-12">
+  {# kwargs: current, total, percent #}
+  {% if status == 'FAILURE' %}
+    <div class="p-10 bg-red-50 rounded-[32px] border border-red-100">
+      <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center text-red-600 mx-auto mb-6">
+        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 15c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+      </div>
+      <h3 class="text-3xl font-black text-red-900 mb-4">{{ _('Upload Failed') }}</h3>
+      {% if error %}
+        <p class="text-red-700 font-bold mb-4 text-lg bg-white/50 py-2 px-4 rounded-xl inline-block">{{ error }}</p>
+      {% endif %}
+      <p class="text-red-700/60 font-medium max-w-md mx-auto">{{ _('If you believe this is an error, please') }} <a href="{{ url_for('about.contact') }}" class="text-red-700 underline font-black">{{ _('contact support') }}</a> {{ _("and we'll fix it immediately.") }}</p>
+    </div>
 
-{% elif status == 'PROGRESS' %}
-  {{ progress_bar(percent) }}
-  <p>Processed {{ current }} of {{ total }} total pages.</p>
+  {% elif status == 'PROGRESS' %}
+    <div class="mb-8">
+      <div class="inline-flex p-6 rounded-[32px] bg-royalblue/5 mb-8">
+        <svg class="w-16 h-16 text-royalblue animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+      </div>
+      <h3 class="text-4xl font-black text-slate-900 mb-4">{{ _('Splitting PDF...') }}</h3>
+      <p class="text-slate-500 font-medium text-lg">{{ _('We are converting your PDF pages into high-quality images for proofing.') }}</p>
+    </div>
+    {{ progress_bar(percent) }}
+    <div class="text-4xl font-black text-royalblue mb-4">{{ percent|round|int }}%</div>
+    <p class="text-slate-400 font-bold text-sm tracking-widest uppercase">{{ _('Processed') }} <span class="text-slate-900">{{ current }}</span> {{ _('of') }} <span class="text-slate-900">{{ total }}</span> {{ _('pages') }}</p>
 
-{% elif status == 'SUCCESS' %}
-  {{ progress_bar(100) }}
-  {% if slug %}
-    <p>Upload complete. <a href="{{ url_for('proofing.project.summary',
-      slug=slug) }}">Click here</a> to view your new project.</p>
+  {% elif status == 'SUCCESS' %}
+    <div class="mb-8">
+      <div class="inline-flex p-6 rounded-[32px] bg-emerald-100 mb-8 shadow-sm shadow-emerald-200">
+        <svg class="w-16 h-16 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+        </svg>
+      </div>
+      <h3 class="text-4xl font-black text-slate-900 mb-4">{{ _('Upload Complete!') }}</h3>
+    </div>
+    {{ progress_bar(100) }}
+    {% if slug %}
+      <div class="mt-12">
+        <a href="{{ url_for('proofing.project.summary', slug=slug) }}" class="btn-premium px-12 py-5 text-xl rounded-2xl shadow-xl">
+          {{ _('View Your New Project') }}
+        </a>
+      </div>
+    {% else %}
+      <p class="text-slate-500 font-medium">{{ _('Your project will be available on the') }} <a href="{{ url_for('proofing.index') }}" class="text-royalblue font-black hover:underline">{{ _('main dashboard') }}</a> {{ _('shortly.') }}</p>
+    {% endif %}
+
   {% else %}
-    <p>Upload complete. Your project will be available on the <a href="{{
-      url_for('proofing.index') }}">main page</a> shortly.</p>
+    <div class="mb-8">
+      <div class="inline-flex p-6 rounded-[32px] bg-royalblue/5 mb-8">
+          <div class="pulse-indicator"></div>
+      </div>
+      <h3 class="text-4xl font-black text-slate-900 mb-4">{{ _('Queueing Task...') }}</h3>
+      <p class="text-slate-500 font-medium text-lg">{{ _('Waiting for the server to start processing your file.') }}</p>
+    </div>
+    {{ progress_bar(0) }}
+    <p class="text-royalblue font-black uppercase tracking-widest text-xs animate-pulse mt-4">{{ _('Starting PDF extraction...') }}</p>
+
   {% endif %}
-
-{% else %}
-  {{ progress_bar(0) }}
-  <p>Beginning upload &hellip;</p>
-
-{% endif %}
+</div>

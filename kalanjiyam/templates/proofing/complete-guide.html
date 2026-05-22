@@ -4,78 +4,91 @@
 
 
 {% set contents = {
-  'what-is-our-goal': ('What is our goal?', {}),
-  'the-golden-rule': ('The golden rule', {}),
-  'characters': ('Characters', {
-    'eol-hyphens': 'Hyphens at the end of a line',
-    'eol-dashes': 'Hyphens and dashes',
-    'auto-spaces': '[auto] Spaces around punctuation characters',
-    'auto-quotes': '[auto] Quotation marks',
-    'auto-eol-spaces': '[auto] Spaces at the end of a line',
+  'what-is-our-goal': (_('What is our goal?'), {}),
+  'the-golden-rule': (_('The golden rule'), {}),
+  'characters': (_('Characters'), {
+    'eol-hyphens': _('Hyphens at the end of a line'),
+    'eol-dashes': _('Hyphens and dashes'),
+    'auto-spaces': _('[auto] Spaces around punctuation'),
+    'auto-quotes': _('[auto] Quotation marks'),
+    'auto-eol-spaces': _('[auto] Spaces at the end of a line'),
   }),
-  'paragraphs': ('Paragraphs', {
-    'para-breaks': 'Line breaks and line-ending hyphens',
-    'para-blank-lines': 'Spaces between paragraphs',
-    'para-headers': 'Page headers and page footers',
-    'para-footnotes': 'Footnotes',
-    'para-indenting': '[auto] Indenting paragraphs',
+  'paragraphs': (_('Paragraphs'), {
+    'para-breaks': _('Line breaks and line-ending hyphens'),
+    'para-blank-lines': _('Spaces between paragraphs'),
+    'para-headers': _('Page headers and page footers'),
+    'para-footnotes': _('Footnotes'),
+    'para-indenting': _('[auto] Indenting paragraphs'),
   }),
-  'pages': ('Pages', {}),
-  'annotations': ('Annotations', {
-    'errors': 'Errors and corrections',
-    'notes': 'Notes',
-    'uncertain': 'Uncertain text',
+  'pages': (_('Pages'), {}),
+  'annotations': (_('Annotations'), {
+    'errors': _('Errors and corrections'),
+    'notes': _('Notes'),
+    'uncertain': _('Uncertain text'),
   }),
-  'unanswered': ("If your question isn't answered here", {}),
+  'unanswered': (_("If your question isn't answered here"), {}),
 } %}
 
 
 {% macro _h(anchor) %}
-<h2 id="{{ anchor }}">{{ contents[anchor][0] }}</h2>
+<h2 id="{{ anchor }}" class="text-2xl font-black text-slate-800 mt-12 mb-6 border-b border-slate-100 pb-2">{{ contents[anchor][0] }}</h2>
 {% endmacro %}
 
 {% macro _h2(parent, anchor) %}
-<h3 id="{{ anchor }}">{{ contents[parent][1][anchor] }}</h3>
-{% endmacro %}
-
-{% macro _a(anchor) %}
+<h3 id="{{ anchor }}" class="text-xl font-bold text-slate-700 mt-8 mb-4 flex items-center gap-2">
+    <span class="w-1.5 h-6 bg-royalblue/20 rounded-full"></span>
+    {{ contents[parent][1][anchor] }}
+</h3>
 {% endmacro %}
 
 {% macro _compare(wrong, right) %}
-<aside class="mt-4 pl-4 border-l-4">
-    <p>Wrong: <span class="font-mono bg-red-100 text-red-600">{{ wrong }}</span></p>
-    <p>Right: <span class="bg-green-100 text-green-600">{{ right }}</span></p>
-</aside>
+<div class="grid md:grid-cols-2 gap-4 my-6">
+    <div class="p-4 bg-red-50 border border-red-100 rounded-xl">
+        <span class="text-[10px] font-black uppercase tracking-widest text-red-400 block mb-1">Wrong</span>
+        <code class="text-sm text-red-700 font-mono">{{ wrong }}</code>
+    </div>
+    <div class="p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
+        <span class="text-[10px] font-black uppercase tracking-widest text-emerald-400 block mb-1">Right</span>
+        <code class="text-sm text-emerald-700 font-mono">{{ right }}</code>
+    </div>
+</div>
 {% endmacro %}
 
 {% macro _example() %}
-<pre class="font-mono my-4 pl-4 border-l-4">{{ caller()|d }}</pre>
+<div class="my-6 bg-slate-900 rounded-2xl p-6 shadow-lg border border-slate-800">
+    <pre class="font-mono text-royalblue-light leading-relaxed text-sm overflow-x-auto"><code>{{ caller()|d }}</code></pre>
+</div>
 {% endmacro %}
 
 {% macro _example_en() %}
-<pre class="font-mono my-4 pl-4 border-l-4">{{ caller() }}</pre>
+<div class="my-6 bg-slate-900 rounded-2xl p-6 shadow-lg border border-slate-800">
+    <pre class="font-mono text-emerald-400 leading-relaxed text-sm overflow-x-auto"><code>{{ caller() }}</code></pre>
+</div>
 {% endmacro %}
 
 
 {% macro _table_of_contents(contents) %}
-<ul>
-  {% for slug, (title, children) in contents.items() %}
-  <li>
-    <a href="#{{ slug }}">{{ title }}</a>
-    {% if children %}
-    <ul>
-      {% for c_slug, c_title in children.items() %}
-      <li><a href="#{{ c_slug }}">{{ c_title }}</a></li>
+<div class="bg-slate-50 rounded-3xl p-8 my-10 border border-slate-100 shadow-inner">
+    <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">{{ _('Guide Contents') }}</h3>
+    <div class="grid md:grid-cols-2 gap-x-12 gap-y-6">
+      {% for slug, (title, children) in contents.items() %}
+      <div>
+        <a href="#{{ slug }}" class="font-black text-slate-800 hover:text-royalblue transition-colors block mb-2">{{ title }}</a>
+        {% if children %}
+        <ul class="space-y-1 ml-4 border-l-2 border-slate-200 pl-4">
+          {% for c_slug, c_title in children.items() %}
+          <li><a href="#{{ c_slug }}" class="text-sm font-medium text-slate-500 hover:text-royalblue transition-colors">{{ c_title }}</a></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
       {% endfor %}
-    </ul>
-    {% endif %}
-  </li>
-  {% endfor %}
-</ul>
+    </div>
+</div>
 {% endmacro %}
 
 
-{% block title %}Complete guide to proofing | Ambuda{% endblock %}
+{% block title %}{{ _('Complete guide to proofing') }} | Kalanjiyam{% endblock %}
 
 
 {% block sidebar %}{{ m.main_nav('complete', current_user=current_user) }}{% endblock %}
@@ -84,229 +97,151 @@
 {% block content %}
 {{ m.title_and_subtitle(
     _("Complete guide"),
-    "Comprehensive guidelines for proofing a text. And when in doubt:
-    don't change what the page says!") }}
+    _("Comprehensive guidelines for proofing a text. When in doubt: don't change what the page says!")) }}
 
-<div class="prose">
-<p>This document defines the proofreading guidelines we use on Ambuda.
-Generally, these guidelines apply to all of the projects we proof.
+<div class="prose prose-slate max-w-none prose-lg">
+<p class="text-slate-600 font-medium leading-relaxed">This document defines the proofreading guidelines we use on <span class="text-royalblue font-bold">Kalanjiyam</span>.
+Generally, these guidelines apply to all of the projects we proof.</p>
 
 {{ _table_of_contents(contents) }}
 
 
 {{ _h('what-is-our-goal') }}
 
-
-<p>We want to create machine-readable texts that we can display on Ambuda and
-share with others.
+<p>We want to create machine-readable texts that we can display on Kalanjiyam and
+share with others.</p>
 
 <p>We should create these texts at the highest quality we are capable of. We
 should establish credibility by making clear where these texts come from (which
 books, editions, editors, publishers, &hellip;), how they were created, and who
-was involved.
+was involved.</p>
 
 
 {{ _h('the-golden-rule') }}
 
-<p><strong>Don't change what the page says.</strong> We follow the conventions
-of the printed book as closely as we can.
+<div class="bg-amber-50 rounded-3xl p-8 border border-amber-100 my-8 shadow-sm">
+    <h3 class="m-0! text-amber-800 font-black flex items-center gap-3">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        {{ _("Don't change what the page says.") }}
+    </h3>
+    <p class="mt-4 mb-0! text-amber-900/70 font-medium">{{ _('We follow the conventions of the printed book as closely as we can.') }}</p>
+</div>
 
-<ul>
-<li>
-<p>
-<strong>Follow the book's spelling conventions.</strong> If the book says {{
-'kAryyate'|d }} or {{ 'saGgacchati'|d }}, then we write {{ 'kAryyate'|d }} (not
-{{ 'kAryate'|d }}) and {{ 'saGgacchati'|d }} (not {{ 'saMgacchati'|d }}). A
-similar idea applies for text in Roman print; if the book says <i>çru</i>, then
-we should write <i>çru</i> and not <i>śru</i>.
-
-
-<li>
-<p>
-<strong>Follow the book's script conventions.</strong> If the book uses
-Devanagari, we should use Devanagari, not Roman script or some other convention.
-
-
-<li>
-<p>
-<strong>Follow the book's word-splitting conventions.</strong> Different books
-have different conventions for splitting long blocks of Devanagari text or for
-adding and removing Sanskrit's sound changes ({{ 'sandhi'|d }}). We follow the
-conventions of the book regardless of our personal preference.
-
-
-<li>
-<p>
-<strong>Include everything meaningful on the page.</strong> If the book
-contains spurious verses and footnotes, we should include those as well.
+<ul class="grid md:grid-cols-2 gap-6 list-none! pl-0!">
+<li class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+    <p class="m-0! font-black text-slate-900 mb-2">{{ _("Follow spelling conventions.") }}</p>
+    <p class="m-0! text-sm text-slate-500 leading-relaxed">{{ _("If the book says 'kAryyate', write 'kAryyate' (not 'kAryate').") }}</p>
+</li>
+<li class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+    <p class="m-0! font-black text-slate-900 mb-2">{{ _("Follow script conventions.") }}</p>
+    <p class="m-0! text-sm text-slate-500 leading-relaxed">{{ _("If the book uses Devanagari, we use Devanagari.") }}</p>
+</li>
+<li class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+    <p class="m-0! font-black text-slate-900 mb-2">{{ _("Follow word-splitting.") }}</p>
+    <p class="m-0! text-sm text-slate-500 leading-relaxed">{{ _("Follow the book's sandhi conventions regardless of personal preference.") }}</p>
+</li>
+<li class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+    <p class="m-0! font-black text-slate-900 mb-2">{{ _("Include everything meaningful.") }}</p>
+    <p class="m-0! text-sm text-slate-500 leading-relaxed">{{ _("Include spurious verses and footnotes exactly as they appear.") }}</p>
+</li>
 </ul>
-
-<p>That said, our goal is not to create a pixel-for-pixel perfect copy of the
-text. (The scanned book already does that.) Instead, we want to capture the
-information and the structure in the original book as accurately as possible.
-For details on what we can include or exclude, see the sections below.
 
 
 {{ _h('characters') }}
 
 {% call components.div_note() %}
-Rules that start with [auto] can be fixed with software. Fixing them is not a
-good use of time.
+Rules that start with <span class="font-black">[auto]</span> can be fixed with software automatically. Fixing them manually is not a good use of your valuable time.
 {% endcall %}
 
 
 {{ _h2('characters', 'eol-hyphens') }}
 
-<p>If the printed line ends with a hyphen, we keep the hyphen. Our program uses
-these hyphens to stitch together different lines:
+<p>If the printed line ends with a hyphen, we keep the hyphen. Our program uses these hyphens to stitch together different lines:</p>
 
 {% call _example() -%}
 sa bhagavAnsRSTvedaM jagattasya ca sthitiM cikI-
 rSuH ...
 {%- endcall %}
 
-<p><strong>Exception:</strong> If the hyphen is part of a word that would
-otherwise have a hyphen (e.g. "front-end," "topsy-turvy"), join the words
-together so that our program preserves the hyphen.
+<p><strong>Exception:</strong> If the hyphen is part of a word that would otherwise have a hyphen (e.g. "front-end"), join the words together so that our program preserves the hyphen.</p>
 
 
 {{ _h2('characters', 'eol-dashes') }}
 
-Books often use two kinds of horizontal lines:
-
-<ul>
-<li><p>Hyphens (-) appear at the end of lines and between words in a compound.
-Write these with a single dash (<kbd>-</kbd>).
-
-<li><p>Em dashes (—) separate different phrases, usually for emphasis.  Write
-these with two dashes (<kbd>--</kbd>).
-</ul>
+<div class="grid md:grid-cols-2 gap-6 my-8">
+    <div class="premium-card p-6 border-l-4 border-l-royalblue">
+        <p class="font-black text-slate-900 mb-1">Hyphens (-)</p>
+        <p class="text-sm text-slate-500">{{ _('Use for end of lines or compounds. Write with a single dash.') }}</p>
+    </div>
+    <div class="premium-card p-6 border-l-4 border-l-emerald-400">
+        <p class="font-black text-slate-900 mb-1">Em dashes (—)</p>
+        <p class="text-sm text-slate-500">{{ _('Used to separate phrases. Write with two dashes (--).') }}</p>
+    </div>
+</div>
 
 
 {{ _h2('characters', 'auto-spaces') }}
 
-<p>We don't leave any space between a dash and the words around it:
+<p>We don't leave any space between a dash and the words around it:</p>
 
 {{ _compare('arthaH -- eka'|d, 'arthaH--eka'|d) }}
-
-<p>We remove the space to the right of a "(" or "[" character and to the left
-of a ")" or "]" character:
-
-{{ _compare('manuSyaH ( naraH ) iti'|d, 'manuSyaH (naraH) iti'|d) }}
 
 
 {{ _h2('characters', 'auto-quotes') }}
 
-We use "straight quotes" without any special formatting.
-
+<p>We use "straight quotes" without any special formatting.</p>
 
 {{ _compare('“naraH”'|d, '"naraH"'|d) }}
-
-
-{{ _h2('characters', 'auto-eol-spaces') }}
-
-We delete spaces at the end of a line:
-
-{{ _compare('naraH'|d + '&nbsp;&nbsp;&nbsp;'|safe, 'naraH'|d) }}
 
 
 {{ _h('paragraphs') }}
 
 {{ _h2('paragraphs', 'para-breaks') }}
 
-<p>Keep line breaks and line-ending hyphens.</p>
-
-<p>Proofing is easier when we can quickly compare our digitized text to the
-original image. Line breaks and line-breaking make our digitized text look more
-similar to the image, which means we can proofread more quickly. (A special
-program will remove these later.)
+<p>Keep line breaks and line-ending hyphens. Proofing is easier when we can quickly compare our digitized text to the original image.</p>
 
 
 {{ _h2('paragraphs', 'para-blank-lines') }}
 
-<p>Separate paragraphs and verses with blank lines.
+<p>Separate paragraphs and verses with blank lines to maintain structural clarity.</p>
 
 
 {{ _h2('paragraphs', 'para-headers') }}
 
-<p>Page headers and page footers (but not footnotes!) are the small text and
-page numbers that appear on every page. They don't have any useful information,
-and you should delete them.
+<div class="p-6 bg-slate-100 rounded-2xl border border-slate-200">
+    <p class="m-0! text-slate-600 font-medium italic">{{ _('Page headers and page footers (but not footnotes!) should be deleted. They do not contain useful digital information.') }}</p>
+</div>
 
 
 {{ _h2('paragraphs', 'para-footnotes') }}
 
-<p>In the main text, mark the character that indicates the footnote by wrapping
-it in brackets and placing a <kbd>^</kbd> character after the first bracket.
+<p>In the main text, mark the character that indicates the footnote by wrapping it in brackets and placing a <kbd class="px-2 py-0.5 bg-slate-100 rounded border border-slate-200">^</kbd> character after the first bracket.</p>
 
 {{ _compare('naraH1'|d, 'naraH[^1]'|d) }}
-
-<p>At the bottom of the page, begin the footnote with the same convention. An
-example:
-
-{% call _example() -%}
-prapede punarudbhedaH zucinAM[^1] kacchaketakaiH |
-upakriyAyAH sadRzaM nArebhe ravisUnunA || 7 ||
-
-[^1] cInAM | zUcInAM |
-{%- endcall %}
-
-
-{{ _h2('paragraphs', 'para-indenting') }}
-
-<p>You don't need to indent paragraphs. But if the paragraphs are indented, you
-can leave that spacing in. (A special program will remove indents later.)
 
 
 {{ _h('pages') }}
 
-<p>Skip any content that is not part of the original book. This includes
-handwritten notes, stamps, watermarks, dirt, stains, etc.
+<p>Skip any content that is not part of the original book. This includes handwritten notes, stamps, watermarks, dirt, stains, etc.</p>
 
 
 {{ _h('annotations') }}
 
 {{ _h2('annotations', 'errors') }}
 
-<p>If the text has a typographical error, wrap the error in the
-<kbd>&lt;error&gt;</kbd> tag. If needed, add a fix with the
-<kbd>&lt;fix&gt;</kbd> tag.
-
-{% call _example_en() -%}
-This is an &lt;error&gt;example&lt;/error&gt; &lt;fix&gt;example&lt;/fix&gt;.
-{%- endcall %}
-
-
-{{ _h2('annotations', 'notes') }}
-
-<p>If you need to make a note in the text, use the <kbd>&lt;note&gt;</kbd> tag:
-
-{% call _example_en() -%}
-&lt;note&gt;This is a transpositional error.&lt;/note&gt;.
-{%- endcall %}
-
-{{ _h2('annotations', 'uncertain') }}
-
-<p>If the text is confusing or uncertain, use the <kbd>&lt;flag&gt;</kbd> tag
-so that another proofer can notice and take a look.
-
-{% call _example_en() -%}
-This is a &lt;flag&gt;xople?&lt;/flag&gt;.
-{%- endcall %}
-
-
+<p>If the text has a typographical error, wrap the error in the <kbd class="px-2 py-0.5 bg-slate-100 rounded text-xs">&lt;error&gt;</kbd> tag. If needed, add a fix with the <kbd class="px-2 py-0.5 bg-slate-100 rounded text-xs">&lt;fix&gt;</kbd> tag.</p>
 
 
 {{ _h('unanswered') }}
 
-<p>These guidelines are a work in progress. If you don't see a clear answer to
-your question here, come discuss it with our team:
-
-<ol>
-  <li>Join our <a href="https://discord.gg/7rGdTyWY7Z">Discord server</a>.</li>
-  <li>Join the <kbd>#proofreading</kbd> channel.</li>
-  <li>Ask your question on the channel.</li>
-</ol>
+<div class="bg-royalblue rounded-3xl p-10 text-white shadow-xl shadow-royalblue/20">
+    <h3 class="m-0! text-2xl font-black mb-6">{{ _("Still have questions?") }}</h3>
+    <p class="mb-8 font-medium text-white/80">{{ _("Our guidelines are evolving. If you're stuck, come chat with our friendly community.") }}</p>
+    <div class="flex flex-wrap gap-4">
+        <a href="https://discord.gg/7rGdTyWY7Z" class="px-8 py-3 bg-white text-royalblue font-black rounded-xl hover:bg-slate-100 transition-all">{{ _('Join Discord') }}</a>
+        <div class="px-6 py-3 bg-white/10 rounded-xl font-bold border border-white/20">#proofreading</div>
+    </div>
+</div>
 
 </div>
 {% endblock %}

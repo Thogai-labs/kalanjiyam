@@ -7,21 +7,31 @@
 
 
 {% block content %}
-{{ m.title_and_subtitle(
-    _("Tagging"),
-    "(coming soon) Tools for tagging and parsing Sanskrit texts.") }}
+<div class="mb-10">
+    <h1 class="text-4xl font-black text-slate-900 flex items-center mb-4">
+        <span class="pulse-indicator"></span>
+        {{ _('Tagging') }}
+    </h1>
+    <p class="text-lg text-slate-500 font-medium">{{ _('Advanced tools for tagging and parsing Sanskrit texts.') }}</p>
+</div>
 
-<div class="prose">
-<p class="p-1 bg-yellow-200">These pages are a work in progress.</p>
+<div class="space-y-8">
+    <div class="bg-amber-50 rounded-2xl p-6 border border-amber-100 flex items-center gap-4">
+        <div class="w-10 h-10 rounded-full bg-amber-400 flex items-center justify-center text-white font-bold">!</div>
+        <p class="m-0! text-amber-800 font-bold tracking-tight">{{ _('These features are currently a work in progress.') }}</p>
+    </div>
 
-<p>We aim to have a full word-by-word analysis for all texts in our library.</p>
+    <div class="premium-card p-8">
+        <p class="text-slate-600 font-medium leading-relaxed mb-8">{{ _('We aim to provide a comprehensive word-by-word analysis for every text in our library. Explore the available projects below to start tagging.') }}</p>
 
-<ul>
-{% for text in texts %}
-<li>
-    <a href="{{ url_for('proofing.tagging.text', slug=text.slug) }}">{{ text.title|devanagari }}</a>
-</li>
-{% endfor %}
-</ul>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for text in texts %}
+            <a href="{{ url_for('proofing.tagging.text', slug=text.slug) }}" 
+               class="p-5 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-xl text-slate-800 hover:border-royalblue hover:text-royalblue transition-all text-center">
+                {{ text.title|devanagari }}
+            </a>
+        {% endfor %}
+        </div>
+    </div>
 </div>
 {% endblock %}

@@ -7,9 +7,11 @@
 A state-of-the-art Sanskrit proofreading platform with best-in-class OCR. Join today!
 {%- endblock %}
 
+{% block extra_css %}
+{% endblock %}
 
 {% block header %}
-<div class="text-sky-900 bg-slate-100 border-b mb-4">
+<div class="text-sky-900 bg-white border-b border-slate-100 mb-4 shadow-sm">
   {% include "include/header-login.html" %}
 </div>
 {% endblock %}
@@ -21,21 +23,24 @@ A state-of-the-art Sanskrit proofreading platform with best-in-class OCR. Join t
 {{ components.flash_messages() }}
 
 {% if not current_user.is_authenticated %}
-<div class="bg-slate-100 p-4 pb-8 mb-8">
-  <p class="mb-4">{% trans %}
+<div class="bg-slate-50 p-8 rounded-3xl mb-8 border border-slate-100 shadow-sm text-center">
+  <p class="mb-6 text-lg text-slate-600 font-medium">{% trans %}
   Thousands of Sanskrit texts are available only in print. Join our global
   volunteer effort to digitize these texts and make them accessible to all.
   {% endtrans %}</p>
 
   <nav>
-  <a class="btn p-2 bg-black border border-black text-white transition
-  hover:bg-white hover:text-black" href="{{ url_for('auth.sign_in') }}">{{ _('Sign in') }}</a>
+  <a class="btn-premium" href="{{ url_for('auth.sign_in') }}">{{ _('Sign in to get started') }}</a>
   </nav>
 </div>
 {% endif %}
 
 <div class="md:flex md:mt-8">
-  <div class="md:mr-8 md:min-w-[16rem]">{% block sidebar %}{% endblock %}</div>
+  <div class="md:mr-8 md:min-w-[16rem]">
+    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-50">
+      {% block sidebar %}{% endblock %}
+    </div>
+  </div>
   <div class="grow mt-8 md:mt-0">
     {% block content %}{% endblock %}
   </div>

@@ -4,90 +4,102 @@
 {% import "macros/proofing.html" as m %}
 
 
-{% block title %}{{ project.display_title }} | Ambuda{% endblock %}
+{% block title %}{{ project.display_title }} | Kalanjiyam{% endblock %}
 
 
 {% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
 
 {% block content %}
-<h1 class="font-bold text-3xl mb-4">{{ project.display_title }}</h1>
-{{ m.project_tabs(project=project, active='summary', is_mod=current_user.is_moderator) }}
-
-{% if project.description %}
-<div class="prose">
-  <h2>{{ _('Description') }}</h2>
-  <blockquote>
-  {{ project.description|markdown|safe }}
-  </blockquote>
-</div>
-{% endif %}
-
-<div class="prose">
-  <h2>{{ _('Pages') }}</h2>
+<div class="mb-8">
+    <h1 class="text-4xl font-black text-slate-900 flex items-center mb-4">
+        <span class="pulse-indicator"></span>
+        {{ project.display_title }}
+    </h1>
+    {{ m.project_tabs(project=project, active='summary', is_mod=current_user.is_moderator) }}
 </div>
 
-<ul class="grid grid-cols-5 md:grid-cols-10 gap-2 text-center">
-{% for page_title, p in pages %}
-  {% set colors = m.revision_colors(p.status.name) %}
-  {% set url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=p.slug)  %}
-  <li>
-    <a class="block rounded py-1 {{ colors }}" href="{{ url }}">{{ page_title }}</a>
-  </li>
-{% endfor %}
-</ul>
+<div class="grid lg:grid-cols-3 gap-10">
+    <div class="lg:col-span-2 space-y-12">
+        {% if project.description %}
+        <section>
+            <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">{{ _('Project Description') }}</h2>
+            <div class="prose prose-slate max-w-none bg-slate-50/50 p-8 rounded-3xl border border-slate-100 font-medium text-slate-600 italic">
+                {{ project.description|markdown|safe }}
+            </div>
+        </section>
+        {% endif %}
 
-<div class="prose">
-  <h2>{{ pgettext("project", "About") }}</h2>
+        <section>
+            <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">{{ _('Pages') }}</h2>
+            <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-3">
+                {% for page_title, p in pages %}
+                  {% set colors = m.revision_colors(p.status.name) %}
+                  {% set url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=p.slug)  %}
+                  <a href="{{ url }}" 
+                     class="flex items-center justify-center h-10 rounded-xl font-bold text-xs transition-all hover:scale-110 shadow-sm border border-black/5 {{ colors }}">
+                     {{ page_title }}
+                  </a>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section>
+            <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">{{ _('Recent activity') }}</h2>
+            {% if recent_revisions %}
+                {{ m.revision_list(recent_revisions) }}
+            {% else %}
+                <div class="p-8 rounded-3xl bg-slate-50 border border-dashed border-slate-200 text-center text-slate-400 font-medium">
+                    {{ _("No edits have been made to this project yet.") }}
+                </div>
+            {% endif %}
+        </section>
+    </div>
+
+    <div class="space-y-8">
+        <section class="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            <h3 class="bg-slate-50 px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">{{ _('About Project') }}</h3>
+            <div class="p-6">
+                <table class="w-full text-sm">
+                  <tr class="border-b border-slate-50">
+                    <th class="text-left py-3 text-slate-400 font-bold">{{ _('Title') }}</th>
+                    <td class="text-right py-3 font-bold text-slate-800">{{ project.display_title or _("(none)") }}</td>
+                  </tr>
+                  <tr class="border-b border-slate-50">
+                    <th class="text-left py-3 text-slate-400 font-bold">{{ _('Author') }}</th>
+                    <td class="text-right py-3 font-bold text-slate-800">{{ project.author or _("(none)") }}</td>
+                  </tr>
+                  <tr class="border-b border-slate-50">
+                    <th class="text-left py-3 text-slate-400 font-bold">{{ _('Editor') }}</th>
+                    <td class="text-right py-3 font-bold text-slate-800">{{ project.editor or _("(none)") }}</td>
+                  </tr>
+                  <tr class="border-b border-slate-50">
+                    <th class="text-left py-3 text-slate-400 font-bold">{{ _('Publisher') }}</th>
+                    <td class="text-right py-3 font-bold text-slate-800">{{ project.publisher or _("(none)") }}</td>
+                  </tr>
+                  <tr>
+                    <th class="text-left py-3 text-slate-400 font-bold">{{ _('Year') }}</th>
+                    <td class="text-right py-3 font-bold text-slate-800">{{ project.publication_year or _("(none)") }}</td>
+                  </tr>
+                </table>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            <h3 class="bg-royalblue/5 px-6 py-4 text-xs font-black text-royalblue uppercase tracking-widest border-b border-royalblue/10">{{ _('Recent Discussion') }}</h3>
+            <div class="p-6">
+                {% if project.board.threads[:3] %}
+                {{ m_talk.thread_list(project.slug, project.board.threads) }}
+                {% else %}
+                {% set new_thread_url = url_for('proofing.talk.create_thread', slug=project.slug) %}
+                <div class="text-center py-4">
+                  <p class="text-xs text-slate-500 font-medium mb-4">{{ _("No ongoing discussion.") }}</p>
+                  <a href="{{ new_thread_url }}" class="btn-premium py-2 px-4 text-[10px]">{{ _('Start Thread') }}</a>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+    </div>
 </div>
-
-<div class="bg-slate-100 p-4 w-2/3">
-<table class="w-full">
-  <tr>
-    <th class="text-left">{{ _('Title') }}</th>
-    <td class="text-right">{{ project.display_title or _("(none)") }}</td>
-  </tr>
-  <tr>
-    <th class="text-left">{{ _('Author') }}</th>
-    <td class="text-right">{{ project.author or _("(none)") }}</td>
-  </tr>
-  <tr>
-    <th class="text-left">{{ _('Editor') }}</th>
-    <td class="text-right">{{ project.editor or _("(none)") }}</td></tr>
-  <tr>
-    <th class="text-left">{{ _('Publisher') }}</th>
-    <td class="text-right">{{ project.publisher or _("(none)") }}</td></tr>
-  <tr>
-    <th class="text-left">{{ _('Publication year') }}</th>
-    <td class="text-right">{{ project.publication_year or _("(none)") }}</td>
-  </tr>
-</table>
-</div>
-
-<div class="prose">
-  <h2>{{ _('Recent discussion') }}</h2>
-</div>
-
-{% if project.board.threads[:3] %}
-{{ m_talk.thread_list(project.slug, project.board.threads) }}
-{% else %}
-{% set new_thread_url = url_for('proofing.talk.create_thread', slug=project.slug) %}
-<div class="prose">
-  <p>{% trans %}
-  This project doesn't have any ongoing discussion.
-  <a href="{{ new_thread_url }}">Start a new thread?</a>
-  {% endtrans %}</p>
-</div>
-{% endif %}
-
-<div class="prose">
-  <h2>{{ _('Recent changes') }}</h2>
-</div>
-
-{% if recent_revisions %}
-{{ m.revision_list(recent_revisions) }}
-{% else %}
-<p>{{ _("This project doesn't have any edits yet.") }}</p>
-{% endif %}
 
 {% endblock %}

@@ -3,61 +3,66 @@
 
 
 {# Show a button icon inline. #}
-{% macro _button(text) %}<span class="p-1 bg-slate-200">{{ text|safe }}</span>{% endmacro %}
+{% macro _button(text) %}<span class="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded font-bold text-xs text-slate-700">{{ text|safe }}</span>{% endmacro %}
 
 
 {# Embed an HTML widget as a figure. #}
 {% macro html_figure(caption) %}
-<figure class="my-12">
-  <div class="border p-4">
+<figure class="my-16">
+  <div class="border border-slate-100 rounded-3xl p-8 bg-white shadow-sm overflow-hidden">
     {{ caller() }}
   </div>
-  <figcaption class="text-sm text-slate-600 mt-2 text-center">{{ caption }}</figcaption>
+  <figcaption class="text-sm font-bold text-slate-400 mt-4 text-center uppercase tracking-widest">{{ caption }}</figcaption>
 </figure>
 {% endmacro %}
 
 
 {% macro text_box() %}
-<div class="border flex-1">
-  <div class="bg-slate-200 flex justify-between">
+<div class="border border-slate-200 rounded-2xl flex-1 overflow-hidden flex flex-col shadow-sm">
+  <div class="bg-slate-50 p-3 flex justify-between items-center border-b border-slate-200">
     <div>
-      <button type="button" class="btn bg-sky-700 text-white m-2 hover:bg-sky-900">
+      <button type="button" class="btn-premium py-2 px-4 text-sm">
         Run OCR
       </button>
     </div>
-    <div>
-      {{ editor.alpine_button("A<sup>+</sup>", "increaseTextSize") }}
-      {{ editor.alpine_button("A<sup>-</sup>", "decreaseTextSize") }}
+    <div class="flex gap-2">
+      <div class="flex bg-white rounded-lg border border-slate-200 p-1">
+        {{ editor.alpine_button("A<sup>+</sup>", "increaseTextSize") }}
+        {{ editor.alpine_button("A<sup>-</sup>", "decreaseTextSize") }}
+      </div>
     </div>
   </div>
   <textarea id="content" name="content" required=""
-    class="grow p-2 md:p-4 w-full resize-none h-32">{{ data }}</textarea>
+    class="grow p-6 w-full resize-none h-48 bg-white outline-none font-serif leading-relaxed text-lg">{{ data }}</textarea>
 </div>
 {% endmacro %}
 
 
 {% macro image_viewer() %}
-<div class="flex flex-col flex-1 border bg-slate-100 border">
-  <div class="bg-slate-200">
+<div class="flex flex-col flex-1 border border-slate-200 rounded-2xl bg-slate-50 overflow-hidden shadow-sm">
+  <div class="bg-slate-100 p-3 border-b border-slate-200 flex gap-2">
     {{ editor.alpine_button("&#x1f50d;<sup>+</sup>", "") }}
     {{ editor.alpine_button("&#x1f50d;&#x00b0;", "") }}
     {{ editor.alpine_button("&#x1f50d;<sup>-</sup>", "") }}
+    <div class="w-px h-6 bg-slate-300 mx-1"></div>
     {{ editor.osd_button("osd-rotate-left", "&#x27f2;") }}
     {{ editor.osd_button("osd-rotate-right", "&#x27f3;") }}
   </div>
 
-  <div id="osd-image" class="h-32"></div>
+  <div id="osd-image" class="h-48 bg-slate-200 flex items-center justify-center italic text-slate-400">
+      {{ _('Scan Preview Area') }}
+  </div>
 </div>
 {% endmacro %}
 
 
 {% macro submission_form() %}
-<div class="p-4 mt-4 bg-slate-200">
-  <label class="text-slate-600 mb-2 block">Summary of changes made</label>
-  <input type="text" class="block rounded bg-white w-full mb-4 p-2"></input>
+<div class="p-8 mt-6 bg-slate-50 rounded-3xl border border-slate-100 shadow-inner">
+  <label class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 block">Summary of changes made</label>
+  <input type="text" class="block rounded-xl border border-slate-200 w-full mb-6 p-4 outline-none focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 transition-all"></input>
 
-  <label class="text-slate-600 mb-2 block">Status</label>
-  <select class="block rounded bg-white w-full mb-4 p-2">
+  <label class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 block">Status</label>
+  <select class="block rounded-xl border border-slate-200 w-full mb-6 p-4 outline-none focus:border-royalblue transition-all bg-white font-bold text-slate-700">
     <option>Needs more work</option>
     <option>Proofread once</option>
     <option>Proofread twice</option>
@@ -65,9 +70,11 @@
   </select>
 
   {% set cc0 = "https://creativecommons.org/publicdomain/zero/1.0/" %}
-  <p class="my-4 text-sm">By saving your changes, you agree to release your
-  contribution under the <a class="underline" href="{{ cc0 }}">CC0 (public
+  <p class="mb-8 text-sm text-slate-500 font-medium">By saving your changes, you agree to release your
+  contribution under the <a class="text-royalblue font-bold hover:underline" href="{{ cc0 }}">CC0 (public
   domain) license</a>.</p>
-  <a href="#" class="inline-block btn btn-submit" type="submit">Publish changes</a>
+  <div class="text-center">
+    <a href="#" class="btn-premium px-12 py-4" type="submit">Publish changes</a>
+  </div>
 </div>
 {% endmacro %}
