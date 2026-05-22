@@ -131,7 +131,7 @@ db-seed-all: py-venv-check
 
 # For Docker try `make mode=dev docker-start`
 devserver: py-venv-check
-	./node_modules/.bin/concurrently "flask run -h 0.0.0.0 -p 5000" "npx tailwindcss -i kalanjiyam/static/css/style.css -o kalanjiyam/static/gen/style.css --watch" "npx esbuild kalanjiyam/static/js/main.js --outfile=kalanjiyam/static/gen/main.js --bundle --watch"
+	./node_modules/.bin/concurrently "flask run -h 0.0.0.0 -p 5000" "npx tailwindcss -i kalanjiyam/static/css/style.css -o kalanjiyam/static/gen/style.css --watch" "npx esbuild kalanjiyam/static/js/main.js --outfile=kalanjiyam/static/gen/main.js --bundle --watch --loader:.woff2=file --loader:.woff=file --loader:.ttf=file --asset-names=[name]-[hash]"
 	
 # Run a local Celery instance for background tasks.
 celery: 
@@ -255,11 +255,11 @@ css-prod:
 # Run esbuild to build our JavaScript, and rebuild our JavaScript every time a
 # relevant file changes.
 js-dev:
-	npx esbuild kalanjiyam/static/js/main.js --outfile=kalanjiyam/static/gen/main.js --bundle --watch
+	npx esbuild kalanjiyam/static/js/main.js --outfile=kalanjiyam/static/gen/main.js --bundle --watch --loader:.woff2=file --loader:.woff=file --loader:.ttf=file --asset-names=[name]-[hash]
 
 # Build JS for production.
 js-prod:
-	npx esbuild kalanjiyam/static/js/main.js --outfile=kalanjiyam/static/gen/main.js --bundle --minify
+	npx esbuild kalanjiyam/static/js/main.js --outfile=kalanjiyam/static/gen/main.js --bundle --minify --loader:.woff2=file --loader:.woff=file --loader:.ttf=file --asset-names=[name]-[hash]
 
 js-test:
 	npx jest
