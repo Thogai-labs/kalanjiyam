@@ -60,6 +60,10 @@ google-api-core==2.25.1
 google-auth==2.40.3
 google-cloud-vision==3.10.2
 googleapis-common-protos==1.70.0
+<<<<<<< HEAD
+=======
+deep-translator==1.11.4
+>>>>>>> dev_ui
 greenlet==3.2.4
 grpcio==1.74.0
 grpcio-status==1.74.0

@@ -2,70 +2,122 @@
 {% import "macros/components.html" as m %}
 {% import "macros/forms.html" as mf %}
 
-
 {% block title %}{{ m.title(_('Sponsor a Book')) }}{% endblock %}
-
 
 {% block content %}
 
-<h1 class="text-center font-bold text-5xl my-8">{{ _('Sponsor a Book') }}</h1>
+<div class="max-w-4xl mx-auto my-16 space-y-10">
 
-{% if current_user.is_moderator %}
-{% call m.p_note() %}
-{% set url = url_for('projectsponsorship.index_view') %}
-Moderators: <a class="underline" href="{{ url }}">Click here</a> to edit
-sponsorships.
-{% endcall %}
-{% endif %}
+  {# HERO #}
+  <div class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl shadow-lg p-8 text-center">
 
-<article class="prose">
-  <p>{% trans %}
-  Give the gift of knowledge today by sponsoring a book that is important to
-  you. Your support helps us hire expert proofreaders in India to transcribe
-  your book of choice and make it accessible to all.
-  {% endtrans %}</p>
+    <h1 class="font-bold text-4xl sm:text-5xl text-peacock-primary mb-4">
+      {{ _('Sponsor a Book') }}
+    </h1>
 
-  <p>{% trans %}
-  Partial sponsorships are more than welcome. We are grateful for any support
-  you can provide.
-  {% endtrans %}</p>
+    <p class="text-peacock-secondary">
+      {{ _('Support the preservation of Siddha Knowledge Systems through book sponsorship.') }}
+    </p>
 
-  {% set contact_url = url_for('site.contact') %}
-  <p>{% trans %}
-  If you want to sponsor a book that is not on this list, please <a href="{{
-  contact_url }}">reach out to us</a> and tell us about your choice. We welcome
-  any Sanskrit book or translation that has a public domain edition.
-  {% endtrans %}</p>
-</article>
-
-{% for s in sponsorships %}
-{% set title = s.sa_title or s.en_title %}
-{% set subtitle = s.en_title if s.sa_title else "" %}
-<article class="my-8 pt-8 border-t-2">
-  <header class="mb-4">
-    <h1 class="text-xl font-bold mb-2">{{ title }}</h1>
-    {% if subtitle %}
-      <p class="text-slate-500">{{ subtitle }}</p>
+    {% if current_user.is_moderator %}
+    <div class="mt-4 text-sm text-peacock-secondary">
+      {% call m.p_note() %}
+      {% set url = url_for('projectsponsorship.index_view') %}
+      Moderators:
+      <a class="text-peacock-primary underline hover:underline" href="{{ url }}">
+        Click here
+      </a>
+      to edit sponsorships.
+      {% endcall %}
+    </div>
     {% endif %}
-  </header>
 
-  <div class="prose mb-8">
-  {{ s.description|markdown|safe }}
   </div>
 
-  {% set cost = "₹{}".format(s.cost_inr) %}
-  <a href="{{ url_for('site.donate_for_project', title=title, cost=s.cost_inr) }}"
-    class="btn btn-submit p-3">{% trans %}
-    Sponsor this book for {{ cost }}
-  {% endtrans %}</a>
-</article>
-{% else %}
-<article class="prose border-t-2 my-8 pt-8">
-  <p>{% trans %}
-  There are no books available for sponsorships at this time. Please check
-  back soon.
-  {% endtrans %}</p>
-</article>
-{% endfor %}
+  {# INTRO #}
+  <article class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl p-6 shadow">
+
+    <div class="prose max-w-none text-peacock-secondary">
+
+      <p>
+        {% trans %}
+        Give the gift of knowledge by sponsoring a book. Your support helps us
+        hire expert proofreaders in India to transcribe your chosen text.
+        {% endtrans %}
+      </p>
+
+      <p>
+        {% trans %}
+        Partial sponsorships are welcome. Any contribution helps preserve knowledge.
+        {% endtrans %}
+      </p>
+
+      {% set contact_url = url_for('site.contact') %}
+
+      <p>
+        {% trans %}
+        If your book is not listed, please
+        <a class="text-peacock-primary font-medium hover:underline" href="{{ contact_url }}">
+          reach out to us
+        </a>.
+        {% endtrans %}
+      </p>
+
+    </div>
+  </article>
+
+  {# LIST #}
+  <div class="space-y-6">
+
+    {% for s in sponsorships %}
+
+    {% set title = s.sa_title or s.en_title %}
+    {% set subtitle = s.en_title if s.sa_title else "" %}
+    {% set cost = "₹{}".format(s.cost_inr) %}
+
+    <article class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl shadow p-6">
+
+      <header class="mb-4">
+        <h2 class="text-2xl font-bold text-peacock-primary">
+          {{ title }}
+        </h2>
+
+        {% if subtitle %}
+        <p class="text-peacock-secondary text-sm mt-1">
+          {{ subtitle }}
+        </p>
+        {% endif %}
+      </header>
+
+      <div class="prose max-w-none text-peacock-secondary mb-6">
+        {{ s.description|markdown|safe }}
+      </div>
+
+      <a href="{{ url_for('site.donate_for_project', title=title, cost=s.cost_inr) }}"
+         class="btn btn-submit inline-flex items-center gap-2">
+
+        {{ _('Sponsor this book —') }} {{ cost }}
+
+      </a>
+
+    </article>
+
+    {% else %}
+
+    <div class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl p-6 text-center shadow">
+
+      <p class="text-peacock-secondary">
+        {% trans %}
+        There are no books available for sponsorship at this time. Please check back soon.
+        {% endtrans %}
+      </p>
+
+    </div>
+
+    {% endfor %}
+
+  </div>
+
+</div>
 
 {% endblock %}

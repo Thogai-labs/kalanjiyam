@@ -1,20 +1,16 @@
-{% extends 'base-text.html' %}
+{% extends 'base-auth-form.html' %}
 {% import "macros/components.html" as m %}
-
-
 {% block title %}{{ m.title('Not Found (404)') }}{% endblock %}
-
-
-{% block content %}
-{% set contact_url = url_for('about.contact') %}
-<div class="prose">
-<h1>{{ _('Not Found (404)') }}</h1>
-
-<p>{% trans %}
-Sorry! We couldn't find what you were looking for. If you think you've found
-a bug in our project, <a href="{{ contact_url }}">let us know</a> and we'll fix
-it as soon as we can.
-{% endtrans %}</p>
-
+{% block body %}
+<div class="auth-card" style="text-align:center;">
+  <div style="font-size:4rem;margin-bottom:4px;">🔍</div>
+  <div class="auth-heading">404</div>
+  <p class="auth-subheading" style="font-size:0.875rem;color:#4a6a8a;margin-top:8px;">
+    {% set contact_url = url_for('about.contact') %}
+    {% trans %}Sorry! We couldn't find what you were looking for.
+    If you think you've found a bug, <a href="{{ contact_url }}" style="color:#1089d3;">let us know</a>.{% endtrans %}
+  </p>
+  <hr class="auth-divider">
+  <span class="auth-link"><a href="{{ url_for('site.index') }}">← {{ _('Back to Home') }}</a></span>
 </div>
 {% endblock %}

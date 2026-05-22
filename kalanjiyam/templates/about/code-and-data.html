@@ -1,12 +1,8 @@
 {% extends 'base-text.html' %}
 {% import "macros/components.html" as m %}
 
-
 {% block title %}{{ m.title(_('Code and Data')) }}{% endblock %}
-
-
 {% block meta_description %}All of the resources we used to build Ambuda.{% endblock %}
-
 
 {% set code_url = 'https://github.com/AnaadiAI/kalanjiyam' %}
 {% set host_url = 'https://digitalocean.com' %}
@@ -18,40 +14,121 @@
 {% set indic_dict = "https://github.com/indic-dict" %}
 {% set dcs = "http://sanskrit-linguistics.org/dcs/" %}
 
-
 {% block content %}
-<div class="prose">
-<h1>{{ _('Code and Data') }}</h1>
 
-<p>{% trans %}
-All of our code is available <a href="{{ code_url }}">on GitHub</a>. We use
-Python (Flask) for the backend, Tailwind for CSS, and native JavaScript for the
-rest. Our site is hosted <a href="{{ host_url }}">on DigitalOcean</a>.
-{% endtrans %}</p>
+<div style="max-width:900px;margin:40px auto;">
 
-<p>{% trans %}
-Much of our text data comes from <a href="{{ gretil }}">GRETIL</a>.
-For the <cite>Ramayana</cite> and <cite>Mahabharata</cite> specifically, we
-instead use the "official" electronic versions hosted on <a href="{{ smith
-}}">John D. Smith's website</a>. As our project grows, we will include other
-sources of textual data and even generate texts on our own.
-{% endtrans %}</p>
+  {# HEADER CARD #}
+  <div style="background:rgba(255,255,255,0.75);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:26px;
+              padding:26px 28px;
+              margin-bottom:18px;
+              box-shadow:0 12px 36px rgba(16,137,211,0.12);">
 
-<p>{% trans %}Dictionary data comes from various sources:{% endtrans %}</p>
+    <h1 style="font-size:1.9rem;font-weight:900;color:#1089d3;margin:0;">
+      Code and Data
+    </h1>
 
-<ul>
-  <li>Most of our dictionary data comes from the <a href="{{ cdsd }}">Cologne
-    Digital Sanskrit Dictionaries</a> project.
-  <li>Our Sanskrit-Hindi dictionary comes from Professor Amba Kulkarni's <a
-    href="{{ samsaadhanii }}">Samsaadhanii</a> project.</li>
-  <li>All other dictionary data comes from the <a href="{{ indic_dict
-    }}">indic-dict</a> project.</li>
-</ul>
+    <p style="margin:8px 0 0;color:#6a9abf;font-size:0.95rem;line-height:1.6;">
+      All resources, datasets, and infrastructure powering the platform.
+    </p>
 
-<p>{% trans %}
-Parse data comes from the <a href="{{ dcs }}">Digital Corpus of Sanskrit</a>
-(DCS) project.
-{% endtrans %}</p>
+  </div>
+
+  {# MAIN CARD #}
+  <div style="background:rgba(255,255,255,0.72);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:24px;
+              padding:22px 24px;
+              box-shadow:0 10px 32px rgba(16,137,211,0.08);">
+
+    <div class="prose" style="color:#4a6a8a;font-size:0.95rem;line-height:1.8;">
+
+      <h2 style="color:#1089d3;font-weight:900;">Codebase</h2>
+
+      <p>
+        All of our code is available
+        <a href="{{ code_url }}" style="color:#1089d3;font-weight:700;">on GitHub</a>.
+        We use Python (Flask) for the backend, Tailwind for CSS, and native JavaScript for the rest.
+        Our site is hosted on
+        <a href="{{ host_url }}" style="color:#1089d3;font-weight:700;">DigitalOcean</a>.
+      </p>
+
+      <hr style="border:none;height:1px;background:rgba(16,137,211,0.1);margin:18px 0;">
+
+      <h2 style="color:#1089d3;font-weight:900;">Text Sources</h2>
+
+      <p>
+        Much of our text data comes from
+        <a href="{{ gretil }}" style="color:#1089d3;font-weight:700;">GRETIL</a>.
+        For the <cite>Ramayana</cite> and <cite>Mahabharata</cite>, we use official electronic editions from
+        <a href="{{ smith }}" style="color:#1089d3;font-weight:700;">John D. Smith's archive</a>.
+      </p>
+
+      <p>
+        As the project grows, we will integrate more datasets and eventually generate new texts.
+      </p>
+
+      <hr style="border:none;height:1px;background:rgba(16,137,211,0.1);margin:18px 0;">
+
+      <h2 style="color:#1089d3;font-weight:900;">Dictionary Sources</h2>
+
+      <ul style="padding-left:18px;line-height:1.9;">
+
+        <li>
+          Most dictionary data comes from
+          <a href="{{ cdsd }}" style="color:#1089d3;font-weight:700;">
+            Cologne Digital Sanskrit Dictionaries
+          </a>.
+        </li>
+
+        <li>
+          Sanskrit-Hindi dictionary is from
+          <a href="{{ samsaadhanii }}" style="color:#1089d3;font-weight:700;">
+            Samsaadhanii project
+          </a>.
+        </li>
+
+        <li>
+          Additional dictionary data comes from
+          <a href="{{ indic_dict }}" style="color:#1089d3;font-weight:700;">
+            indic-dict
+          </a>.
+        </li>
+
+      </ul>
+
+      <hr style="border:none;height:1px;background:rgba(16,137,211,0.1);margin:18px 0;">
+
+      <h2 style="color:#1089d3;font-weight:900;">Linguistic Data</h2>
+
+      <p>
+        Parse data comes from the
+        <a href="{{ dcs }}" style="color:#1089d3;font-weight:700;">
+          Digital Corpus of Sanskrit (DCS)
+        </a>
+        project.
+      </p>
+
+    </div>
+  </div>
+
+  {# FOOT NOTE CARD #}
+  <div style="margin-top:16px;
+              background:linear-gradient(135deg,rgba(16,137,211,0.08),rgba(18,177,209,0.06));
+              border:1.5px solid rgba(16,137,211,0.15);
+              border-radius:18px;
+              padding:14px 18px;
+              font-size:0.85rem;
+              color:#4a6a8a;
+              line-height:1.6;">
+
+    This ecosystem is continuously evolving — new datasets are added as the project grows.
+  </div>
 
 </div>
+
 {% endblock %}

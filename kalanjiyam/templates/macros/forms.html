@@ -1,8 +1,8 @@
 {# Show form errors, if any exist. #}
 {% macro show_errors_if_any(errors) %}
 {% if errors %}
-<div class="prose p-2 bg-red-100 text-red-900 rounded my-4">
-  <ul>
+<div class="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl my-4 text-sm">
+  <ul class="list-disc list-inside space-y-1">
   {% for k, v in errors.items() %}
     <li>{{ v[0] }}</li>
   {% endfor %}
@@ -11,65 +11,59 @@
 {% endif %}
 {% endmacro %}
 
-
 {% macro label(L) %}
-{{ L(class_="block text-peacock-secondary my-2") }}
+{{ L(class_="block text-sm font-medium mb-1", style="color: rgb(16,137,211);") }}
 {% endmacro %}
-
 
 {# Render a form field. #}
 {% macro field(f) %}
-<div class="my-2">
+<div class="my-3">
   {{ label(f.label) }}
-  {{ f(class_="p-2 block w-full my-2") }}
+  {{ f(class_="w-full p-3 border border-blue-200 rounded-xl focus:outline-none focus:border-blue-400 bg-white text-sm") }}
 </div>
 {% endmacro %}
 
-
 {# Render a markdown text box. #}
 {% macro markdown_field(field) %}
-<div>
+<div class="my-3">
   {{ label(field.label) }}
-  {{ field(class_="border border-teal-200 block p-2 w-full min-h-[200px] rounded") }}
+  {{ field(class_="border border-blue-200 block p-3 w-full min-h-[200px] rounded-xl focus:outline-none focus:border-blue-400 bg-white text-sm") }}
   {% set help_url = "https://commonmark.org/help/" %}
-  <p class="text-sm text-peacock-secondary mt-2 mb-4 a-underline">{% trans %}
+  <p class="text-xs mt-2 mb-4 a-underline" style="color: rgb(18,177,209);">{% trans %}
     You can format this text with Markdown.
     <a href="{{ help_url }}">Click here to learn more.</a>
   {% endtrans %}</p>
 </div>
 {% endmacro %}
 
-
-{# Submit button for general forms. #}
+{# Submit button #}
 {% macro submit(text) %}
-<input type="submit" class="btn btn-submit" value="{{ text }}" />
+<button type="submit"
+  style="background: linear-gradient(45deg, rgb(16,137,211) 0%, rgb(18,177,209) 100%); box-shadow: rgba(133,189,215,0.88) 0px 10px 10px -8px;"
+  class="font-bold text-white px-6 py-2 rounded-xl border-none cursor-pointer transition-all hover:opacity-90 text-sm">
+  {{ text }}
+</button>
 {% endmacro %}
-
 
 {# Label for an auth field. #}
 {% macro auth_label(field) %}
-{{ field.label(class_="block text-peacock-secondary") }}
+{{ field.label(class_="block text-sm font-medium mb-1", style="color:#555;") }}
 {% endmacro %}
-
 
 {# Main input for an auth field. #}
 {% macro auth_input(field) %}
-{{ field(class_="w-full p-2 mt-2 border border-teal-200 rounded") }}
+{{ field(class_="auth-input") }}
 {% endmacro %}
-
 
 {# Submit button for the authentication flow. #}
 {% macro auth_submit(text) %}
-<input type="submit" class="btn btn-submit w-full" value="{{ text }}" />
+<button type="submit" class="auth-btn">{{ text }}</button>
 {% endmacro %}
 
-
-{# Render an authenticated_related form field. #}
+{# Render an auth form field. #}
 {% macro auth_field(field) %}
-<div class="mb-4">
+<div class="mb-2">
   {{ auth_label(field) }}
   {{ auth_input(field) }}
 </div>
 {% endmacro %}
-
-

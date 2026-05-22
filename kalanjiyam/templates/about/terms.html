@@ -8,103 +8,136 @@ Terms of service for using Kalanjiyam's platform and services.
 {%- endblock %}
 
 {% block content %}
-<div class="prose">
-<h1>{{ _('Terms of Service') }}</h1>
 
-<p>{% trans %}
-Welcome to Kalanjiyam! To fulfill our mission of making the Siddha Knowledge Systems tradition
-radically accessible, we provide a platform where users can read and study
-traditional Siddha literature and collaborate on proofing those texts.
-{% endtrans %}</p>
+<div style="max-width:900px;margin:40px auto;">
 
-<p>{% trans %}
-By using our service, you agree to these terms. If you disagree with any part of
-these terms, you may not access our service.
-{% endtrans %}</p>
+  {# HEADER CARD #}
+  <div style="background:rgba(255,255,255,0.75);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:26px;
+              padding:26px 28px;
+              margin-bottom:18px;
+              box-shadow:0 12px 36px rgba(16,137,211,0.12);">
 
-<h2>{{ _('Use License') }}</h2>
+    <h1 style="font-size:1.9rem;font-weight:900;color:#1089d3;margin:0;">
+      Terms of Service
+    </h1>
 
-<p>{% trans %}
-Permission is granted to temporarily download one copy of the materials on
-Kalanjiyam's website for personal, non-commercial transitory viewing only. This
-is the grant of a license, not a transfer of title, and under this license you
-may not:
-{% endtrans %}</p>
+    <p style="margin:8px 0 0;color:#6a9abf;font-size:0.95rem;line-height:1.6;">
+      Rules and guidelines for using the Kalanjiyam platform.
+    </p>
 
-<ul>
-<li>{{ _('modify or copy the materials') }}</li>
-<li>{{ _('use the materials for any commercial purpose or for any public display') }}</li>
-<li>{{ _('attempt to reverse engineer any software contained on Kalanjiyam\'s website') }}</li>
-<li>{{ _('remove any copyright or other proprietary notations from the materials') }}</li>
-<li>{{ _('transfer the materials to another person or "mirror" the materials on any other server') }}</li>
-</ul>
+  </div>
 
-<p>{% trans %}
-This license shall automatically terminate if you violate any of these restrictions
-and may be terminated by Kalanjiyam at any time.
-{% endtrans %}</p>
+  {# MAIN CARD #}
+  <div style="background:rgba(255,255,255,0.72);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:24px;
+              padding:22px 24px;
+              box-shadow:0 10px 32px rgba(16,137,211,0.08);">
 
-<h2>{{ _('Disclaimer') }}</h2>
+    <div class="prose" style="color:#4a6a8a;font-size:0.95rem;line-height:1.85;">
 
-<p>{% trans %}
-The materials on Kalanjiyam's website are provided on an \'as is\' basis. Kalanjiyam
-makes no warranties, expressed or implied, and hereby disclaims and negates all
-other warranties including without limitation, implied warranties or conditions of
-merchantability, fitness for a particular purpose, or non-infringement of
-intellectual property or other violation of rights.
-{% endtrans %}</p>
+      <p>
+        Welcome to Kalanjiyam! We provide a platform for reading, studying, and collaboratively
+        preserving Siddha Knowledge Systems texts.
+      </p>
 
-<h2>{{ _('Limitations') }}</h2>
+      <p>
+        By using our service, you agree to these terms. If you do not agree, please do not use the platform.
+      </p>
 
-<p>{% trans %}
-In no event shall Kalanjiyam or its suppliers be liable for any damages
-(including, without limitation, damages for loss of data or profit, or due to
-business interruption) arising out of the use or inability to use the materials
-on Kalanjiyam's website, even if Kalanjiyam or a Kalanjiyam authorized
-representative has been notified orally or in writing of the possibility of such
-damage.
-{% endtrans %}</p>
+      <hr style="border:none;height:1px;background:rgba(16,137,211,0.1);margin:18px 0;">
 
-<h2>{{ _('Accuracy of Materials') }}</h2>
+      <h2 style="color:#1089d3;font-weight:900;">Use License</h2>
 
-<p>{% trans %}
-The materials appearing on Kalanjiyam's website could include technical,
-typographical, or photographic errors. Kalanjiyam does not warrant that any of
-the materials on its website are accurate, complete or current. Kalanjiyam may
-make changes to the materials contained on its website at any time without
-notice.
-{% endtrans %}</p>
+      <p>
+        You are granted a limited, non-exclusive license for personal, non-commercial use only.
+      </p>
 
-<h2>{{ _('Links') }}</h2>
+      <ul style="padding-left:18px;line-height:1.85;">
 
-<p>{% trans %}
-Kalanjiyam has not reviewed all of the sites linked to its website and is not
-responsible for the contents of any such linked site. The inclusion of any link
-does not imply endorsement by Kalanjiyam of the site. Use of any such linked
-website is at the user\'s own risk.
-{% endtrans %}</p>
+        <li>Do not modify or copy platform materials.</li>
+        <li>Do not use content for commercial or public redistribution.</li>
+        <li>Do not reverse engineer or extract platform software.</li>
+        <li>Do not remove copyright or ownership notices.</li>
+        <li>Do not mirror or redistribute content on other servers.</li>
 
-<h2>{{ _('Modifications') }}</h2>
+      </ul>
 
-<p>{% trans %}
-Kalanjiyam may revise these terms of service for its website at any time without
-notice. By using this website you are agreeing to be bound by the then current
-version of these Terms of Service.
-{% endtrans %}</p>
+      <p>
+        This license may be terminated if terms are violated.
+      </p>
 
-<h2>{{ _('Governing Law') }}</h2>
+      <hr style="border:none;height:1px;background:rgba(16,137,211,0.1);margin:18px 0;">
 
-<p>{% trans %}
-These terms and conditions are governed by and construed in accordance with the
-laws and you irrevocably submit to the exclusive jurisdiction of the courts in
-that State or location.
-{% endtrans %}</p>
+      <h2 style="color:#1089d3;font-weight:900;">Disclaimer</h2>
 
-<h2>{{ _('Contact Information') }}</h2>
+      <p>
+        Content is provided “as is” without warranties of any kind.
+        We do not guarantee accuracy, completeness, or fitness for any purpose.
+      </p>
 
-<p>{% trans %}
-If you have any questions about these Terms of Service, please
-<a href="{{ url_for('about.contact') }}">contact us</a>.
-{% endtrans %}</p>
+      <h2 style="color:#1089d3;font-weight:900;">Limitations</h2>
+
+      <p>
+        We are not liable for any damages arising from use or inability to use the platform,
+        including loss of data, profit, or service interruptions.
+      </p>
+
+      <h2 style="color:#1089d3;font-weight:900;">Accuracy of Materials</h2>
+
+      <p>
+        Content may contain errors or outdated information and may be updated at any time
+        without notice.
+      </p>
+
+      <h2 style="color:#1089d3;font-weight:900;">Links</h2>
+
+      <p>
+        External links are not reviewed or controlled by Kalanjiyam.
+        We are not responsible for third-party content or policies.
+      </p>
+
+      <h2 style="color:#1089d3;font-weight:900;">Modifications</h2>
+
+      <p>
+        These terms may be updated at any time. Continued use means acceptance of updated terms.
+      </p>
+
+      <h2 style="color:#1089d3;font-weight:900;">Governing Law</h2>
+
+      <p>
+        These terms are governed by applicable laws and jurisdictions where the service operates.
+      </p>
+
+      <h2 style="color:#1089d3;font-weight:900;">Contact Information</h2>
+
+      <p>
+        If you have questions, please
+        <a href="{{ url_for('about.contact') }}" style="color:#1089d3;font-weight:600;">
+          contact us
+        </a>.
+      </p>
+
+    </div>
+  </div>
+
+  {# FOOT NOTE #}
+  <div style="margin-top:16px;
+              background:linear-gradient(135deg,rgba(16,137,211,0.08),rgba(18,177,209,0.06));
+              border:1.5px solid rgba(16,137,211,0.15);
+              border-radius:18px;
+              padding:14px 18px;
+              font-size:0.85rem;
+              color:#4a6a8a;
+              line-height:1.6;">
+
+    By using Kalanjiyam, you participate in a collaborative knowledge preservation system.
+  </div>
+
 </div>
+
 {% endblock %}

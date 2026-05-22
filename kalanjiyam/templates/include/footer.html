@@ -1,11 +1,9 @@
-{%- set index = url_for('site.index') -%}
 {%- set blog = url_for('blog.index') -%}
 {%- set discord = "https://discord.gg/7rGdTyWY7Z" -%}
 {%- set github = "https://github.com/AnaadiAI/kalanjiyam" -%}
-{%- set reddit = "https://reddit.com/u/learnsanskrit-org" -%}
 {%- set twitter = "https://twitter.com/ambuda_org" -%}
-{%- set support = url_for('site.support') -%}
 
+<<<<<<< HEAD
 
 {%- macro _column(title_url, title, items) -%}
 <section class="mr-4 mb-4 basis-32">
@@ -62,6 +60,54 @@
       {% endfor %}
     </ul>
   </section>
+=======
+<footer class="glass-footer">
+  <div class="footer-inner">
+    <div class="footer-col">
+      <h3>{{ _('Kalanjiyam') }}</h3>
+      <ul>
+        <li><a href="{{ url_for('texts.index') }}">{{ _('Texts') }}</a></li>
+        <li><a href="{{ url_for('dictionaries.index') }}">{{ _('Dictionaries') }}</a></li>
+        <li><a href="{{ url_for('proofing.index') }}">{{ _('Proofing') }}</a></li>
+        <li><a href="{{ url_for('about.contact') }}">{{ _('Contact') }}</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h3>{{ _('About') }}</h3>
+      <ul>
+        <li><a href="{{ url_for('about.mission') }}">{{ _('Mission') }}</a></li>
+        <li><a href="{{ url_for('about.values') }}">{{ _('Values') }}</a></li>
+        <li><a href="{{ url_for('about.people.index') }}">{{ _('People') }}</a></li>
+        <li><a href="{{ url_for('about.terms') }}">{{ _('Terms') }}</a></li>
+        <li><a href="{{ url_for('about.privacy') }}">{{ _('Privacy') }}</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h3>{{ _('Join Us') }}</h3>
+      <ul>
+        <li><a href="{{ url_for('site.donate') }}">{{ _('Donate') }}</a></li>
+        <li><a href="{{ url_for('site.sponsor') }}">{{ _('Sponsor a book') }}</a></li>
+        <li><a href="{{ url_for('site.support') }}">{{ _('Support') }}</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h3>{{ _('Community') }}</h3>
+      <ul>
+        <li><a href="{{ blog }}">{{ _('Blog') }}</a></li>
+        <li><a href="{{ discord }}">{{ _('Discord') }}</a></li>
+        <li><a href="{{ github }}">{{ _('GitHub') }}</a></li>
+        <li><a href="{{ twitter }}">{{ _('Twitter') }}</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h3>{{ _('Languages') }}</h3>
+      <ul>
+        {% for L in kalanjiyam_locales %}
+        <li><a href="{{ url_for('site.set_language', slug=L.slug) }}">{{ L.text }}</a></li>
+        {% endfor %}
+      </ul>
+    </div>
+>>>>>>> dev_ui
   </div>
-
+  <div class="footer-bottom">© 2024 Kalanjiyam · Preserving Siddha Knowledge</div>
 </footer>

@@ -1,27 +1,22 @@
 {% extends 'base-auth-form.html' %}
 {% import "macros/components.html" as components %}
 {% import "macros/forms.html" as mf %}
-
-
 {% block title %}{{ components.title(_('Register')) }}{% endblock %}
-
-
-{% block content %}
-{{ mf.show_errors_if_any(form.errors) }}
-
-<form method="POST" class="bg-white rounded p-8">
-  <h1 class="text-2xl font-bold text-center mb-8">
-    {{ _('Create a Kalanjiyam account') }}
-  </h1>
-  {{ form.csrf_token }}
-  {{ mf.auth_field(form.username) }}
-  {{ mf.auth_field(form.password) }}
-  {{ mf.auth_field(form.email) }}
-
-  <div class="mb-4">
-  {{ form.recaptcha }}
-  </div>
-
-  {{ mf.auth_submit(_("Create account")) }}
-</form>
+{% block body %}
+<div class="auth-card">
+  <div class="auth-logo">✦</div>
+  <div class="auth-heading">{{ _('Create Account') }}</div>
+  <p class="auth-subheading">{{ _('Join the Kalanjiyam community') }}</p>
+  {{ mf.show_errors_if_any(form.errors) }}
+  {{ components.flash_messages() }}
+  <form method="POST">
+    {{ form.csrf_token }}
+    {{ form.username(class_="auth-input", placeholder=_("Username")) }}
+    {{ form.password(class_="auth-input", placeholder=_("Password")) }}
+    {{ form.email(class_="auth-input", placeholder=_("Email address")) }}
+    <div style="margin-top:14px;">{{ form.recaptcha }}</div>
+    <button type="submit" class="auth-btn">{{ _('Create Account') }}</button>
+  </form>
+  <span class="auth-link"><a href="{{ url_for('auth.sign_in') }}">{{ _('Already have an account? Sign in') }}</a></span>
+</div>
 {% endblock %}

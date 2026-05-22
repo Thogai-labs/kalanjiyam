@@ -11,10 +11,17 @@
 
 
 {% block content %}
-{{ m.project_header_nested('Activity', project) }}
-{{ m.project_tabs(project=project, active='activity', is_mod=current_user.is_moderator) }}
-{% set search_url = url_for("proofing.project.search", slug=project.slug)  %}
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:24px 28px;margin-bottom:24px;box-shadow:0 8px 32px rgba(16,137,211,0.1);">
+  {{ m.project_header_nested('Activity', project) }}
+  <p style="color:#6a9abf;font-size:0.95rem;margin:8px 0 0;">Recent changes and contributions</p>
+</div>
 
-{{ m.activity_log(recent_activity) }}
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:10px 14px;margin-bottom:24px;">
+  {{ m.project_tabs(project=project, active='activity', is_mod=current_user.is_moderator) }}
+</div>
+
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:24px 28px;box-shadow:0 8px 32px rgba(16,137,211,0.05);">
+  {{ m.activity_log(recent_activity) }}
+</div>
 
 {% endblock %}

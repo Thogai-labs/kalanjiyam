@@ -2,22 +2,84 @@
 {% import "macros/components.html" as mc %}
 {% import 'macros/forms.html' as mf %}
 
-
 {% block title %}{{ mc.title('Create blog post') }}{% endblock %}
 
-
 {% block content %}
-<div class="prose">
-  <h1>Create post</h1>
+
+<div style="max-width:900px;margin:40px auto;">
+
+  {# HEADER CARD #}
+  <div style="background:rgba(255,255,255,0.75);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:26px;
+              padding:22px 26px;
+              margin-bottom:18px;
+              box-shadow:0 12px 36px rgba(16,137,211,0.12);">
+
+    <h1 style="font-size:1.8rem;font-weight:900;color:#1089d3;margin:0;">
+      Create blog post
+    </h1>
+
+    <p style="margin:6px 0 0;color:#6a9abf;font-size:0.95rem;">
+      Share updates, thoughts, and announcements with the community.
+    </p>
+
+  </div>
+
+  {# FORM CARD #}
+  <div style="background:rgba(255,255,255,0.72);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:24px;
+              padding:22px 24px;
+              box-shadow:0 10px 32px rgba(16,137,211,0.08);">
+
+    <form method="POST">
+
+      {{ form.csrf_token }}
+
+      {# TITLE FIELD #}
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-weight:700;color:#1089d3;margin-bottom:6px;">
+          Title
+        </label>
+        {{ mf.field(form.title) }}
+      </div>
+
+      {# CONTENT FIELD #}
+      <div style="margin-bottom:18px;">
+        <label style="display:block;font-weight:700;color:#1089d3;margin-bottom:6px;">
+          Content
+        </label>
+        {{ mf.markdown_field(form.content) }}
+      </div>
+
+      {# SUBMIT BUTTON #}
+      <input
+        type="submit"
+        value="Create post"
+        class="btn btn-submit"
+        style="width:100%;padding:10px 14px;font-weight:700;border-radius:12px;"
+      >
+
+    </form>
+
+  </div>
+
+  {# FOOT NOTE #}
+  <div style="margin-top:16px;
+              background:linear-gradient(135deg,rgba(16,137,211,0.08),rgba(18,177,209,0.06));
+              border:1.5px solid rgba(16,137,211,0.15);
+              border-radius:18px;
+              padding:14px 18px;
+              font-size:0.85rem;
+              color:#4a6a8a;
+              line-height:1.6;">
+
+    Tip: Write clearly structured posts — Markdown formatting is supported.
+  </div>
+
 </div>
 
-<form method="POST" class="bg-slate-100 p-4">
-
-{{ form.csrf_token }}
-{{ mf.field(form.title) }}
-{{ mf.markdown_field(form.content) }}
-
-<input class="btn btn-submit" type="submit" value="Create post">
-</form>
 {% endblock %}
-

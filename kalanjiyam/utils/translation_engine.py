@@ -42,11 +42,10 @@ class GoogleTranslateEngine(TranslationEngine):
     
     def __init__(self):
         try:
-            from googletrans import Translator
-            self.translator = Translator()
+            from deep_translator import GoogleTranslator  # noqa: F401 – validate import
             self._supported_languages = None
         except ImportError:
-            raise ImportError("googletrans library is required for Google Translate. Install with: pip install googletrans==4.0.0rc1")
+            raise ImportError("deep-translator library is required for Google Translate. Install with: pip install deep-translator")
     
     def translate(self, text: str, source_lang: str, target_lang: str, **kwargs) -> TranslationResponse:
         """Translate text using Google Translate."""
@@ -92,18 +91,16 @@ class GoogleTranslateEngine(TranslationEngine):
             # Clean and segment text
             segments = self._segment_text(text)
             translated_segments = []
-            last_result = None
             
             for segment in segments:
                 if segment.strip():
                     try:
-                        result = self.translator.translate(
-                            segment, 
-                            src=mapped_source, 
-                            dest=mapped_target
-                        )
-                        translated_segments.append(result.text)
-                        last_result = result
+                        from deep_translator import GoogleTranslator
+                        result_text = GoogleTranslator(
+                            source=mapped_source,
+                            target=mapped_target
+                        ).translate(segment)
+                        translated_segments.append(result_text)
                     except Exception as segment_error:
                         logging.error(f"Failed to translate segment '{segment[:50]}...': {segment_error}")
                         # Add original text if translation fails
@@ -118,7 +115,7 @@ class GoogleTranslateEngine(TranslationEngine):
                 source_language=source_lang,
                 target_language=target_lang,
                 engine='google',
-                metadata={'confidence': getattr(last_result, 'confidence', None) if last_result else None}
+                metadata={'confidence': None}
             )
         except Exception as e:
             logging.error(f"Google Translate failed: {e}")
@@ -128,8 +125,8 @@ class GoogleTranslateEngine(TranslationEngine):
         """Get supported language codes."""
         if self._supported_languages is None:
             try:
-                from googletrans import LANGUAGES
-                self._supported_languages = list(LANGUAGES.keys())
+                from deep_translator import GoogleTranslator
+                self._supported_languages = list(GoogleTranslator().get_supported_languages(as_dict=True).values())
             except:
                 # Fallback to common languages (excluding Sanskrit as it's not supported by Google)
                 self._supported_languages = ['en', 'hi', 'te', 'mr', 'bn', 'gu', 'kn', 'ml', 'ta', 'pa', 'or', 'ur', 'fr', 'de', 'es', 'ja', 'ko', 'zh', 'ru', 'ar', 'fa', 'th']

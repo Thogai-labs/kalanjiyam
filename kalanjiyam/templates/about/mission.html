@@ -1,116 +1,143 @@
 {% extends 'base-text.html' %}
 {% import "macros/components.html" as m %}
 
-
 {% block title %}{{ m.title(_('Mission')) }}{% endblock %}
 
-
 {% block meta_description -%}
-Kalanjiyam's mission is to make the Siddha Knowledge Systems tradition radically accessible. Learn
-more about what this means specifically.
+Kalanjiyam's mission is to make the Siddha Knowledge Systems tradition radically accessible.
 {%- endblock %}
 
-
 {% block content %}
-<div class="prose">
-<h1>{{ _('Mission') }}</h1>
 
-<p>{% trans %}
-Kalanjiyam's mission is to preserve and make accessible the ancient Siddha Knowledge Systems tradition 
-through collaborative digital preservation. Specifically, we have three goals:
-{% endtrans %}</p>
+<div style="max-width:900px;margin:40px auto;">
 
-<ol>
-<li>{% trans %}
-Create <strong>a comprehensive digital archive</strong> of traditional Siddha literature through collaborative proofing
-{% endtrans %}</li>
+  {# HEADER CARD #}
+  <div style="background:rgba(255,255,255,0.75);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:26px;
+              padding:26px 28px;
+              margin-bottom:18px;
+              box-shadow:0 12px 36px rgba(16,137,211,0.12);">
 
-<li>{% trans %}
-Preserve this archive in <strong>an open, accessible format</strong> for future generations.
-{% endtrans %}</li>
+    <h1 style="font-size:1.9rem;font-weight:900;color:#1089d3;margin:0;">
+      Mission
+    </h1>
 
-<li>{% trans %}
-Provide <strong>collaborative tools</strong> for researchers, practitioners, and community members to contribute to preservation efforts.
-{% endtrans %}</li>
-</ol>
+    <p style="margin:8px 0 0;color:#6a9abf;font-size:0.95rem;line-height:1.6;">
+      Making Siddha Knowledge Systems radically accessible through digital preservation.
+    </p>
 
+  </div>
 
-<h2>{{ _('A complete archive') }}</h2>
+  {# MAIN CARD #}
+  <div style="background:rgba(255,255,255,0.72);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:24px;
+              padding:22px 24px;
+              box-shadow:0 10px 32px rgba(16,137,211,0.08);">
 
-<p>{% trans %}
-The Siddha corpus is vast. Conservative estimates suggest that there are thousands
-of surviving Siddha manuscripts and texts covering medicine, alchemy, yoga, and
-spiritual knowledge. While many of these manuscripts are near-duplicates of each
-other, they still represent a literature that is rich and overflowing with ancient wisdom.
-{% endtrans %}</p>
+    <div class="prose" style="color:#4a6a8a;font-size:0.95rem;line-height:1.85;">
 
-<p>{% trans %}
-Of these manuscripts, only a few are available as published books. Of these
-books, only a few are available as digital scans. Of these scans, only a few
-are available as machine-readable text files. And of these files, only a few
-are reliable and error-free.
-{% endtrans %}</p>
+      <p>
+        Kalanjiyam's mission is to preserve and make accessible the ancient Siddha Knowledge Systems tradition
+        through collaborative digital preservation. Specifically, we have three goals:
+      </p>
 
-<p>{% trans %}
-There are several online Siddha archives that have made sincere efforts to
-preserve and display some of this vast literature. We are deeply grateful to
-our predecessors and their work. But sadly, creating a complete archive is
-a massive and multidisciplinary project, and it requires resources that most
-projects lack.
-{% endtrans %}</p>
+      {# GOALS #}
+      <ol style="padding-left:18px;line-height:1.9;">
+        <li>
+          Create <strong style="color:#1089d3;">a comprehensive digital archive</strong>
+          of traditional Siddha literature through collaborative proofing.
+        </li>
 
-<p>{% trans %}
-We believe that our collective engineering skill can drastically cut the cost
-of publishing these texts. By doing so, we hope to succeed at this massive task
-and build an archive that is as complete as possible.
-{% endtrans %}</p>
+        <li>
+          Preserve this archive in <strong style="color:#1089d3;">an open, accessible format</strong>
+          for future generations.
+        </li>
 
+        <li>
+          Provide <strong style="color:#1089d3;">collaborative tools</strong>
+          for researchers, practitioners, and community members.
+        </li>
+      </ol>
 
-<h2>{{ _('An open format') }}</h2>
+      <hr style="border:none;height:1px;background:rgba(16,137,211,0.1);margin:18px 0;">
 
-<p>{% trans %}
-A complete archive is of no use if it is difficult to access. We must publish
-this archive as openly as we can and remove the tedious barriers that impede
-access to Siddha literature.
-{% endtrans %}</p>
+      <h2 style="color:#1089d3;font-weight:900;">A complete archive</h2>
 
-<p>{% trans %}
-More concretely, we publish our texts on a free and public website under
-permissive licensing. We ensure that our texts are delightfully readable on a
-variety of devices. We share our work freely so that users can take what we
-produce and use it for their own needs, whatever they might be.
-{% endtrans %}</p>
+      <p>
+        The Siddha corpus is vast. Thousands of manuscripts exist across medicine, alchemy, yoga, and spiritual knowledge.
+        While many are near-duplicates, they collectively represent a deep and rich tradition.
+      </p>
 
-<p>{% trans %}
-Soon, our website will be available in multiple languages. That way, every
-reader can access and enjoy our collection in their native language.
-{% endtrans %}</p>
+      <p>
+        Only a fraction exist as published books, even fewer as digital scans, and fewer still as clean machine-readable text.
+        This fragmentation makes preservation difficult.
+      </p>
 
+      <p>
+        Existing archives have made sincere efforts, and we deeply respect their work. However, full-scale preservation
+        requires significantly more coordination and engineering effort.
+      </p>
 
-<h2>{{ _('Collaborative preservation tools') }}</h2>
+      <p>
+        We aim to reduce the cost of digitization through engineering systems that make large-scale collaborative proofing possible.
+      </p>
 
-<p>{% trans %}
-Our proofing platform provides the tools needed for community-driven preservation 
-of Siddha texts, making the archive more accessible and accurate for all.
-{% endtrans %}</p>
+      <hr style="border:none;height:1px;background:rgba(16,137,211,0.1);margin:18px 0;">
 
-<p>{% trans %}
-For volunteers and contributors, our proofing interface makes it easy to 
-transcribe and verify Siddha texts from manuscripts and printed sources. 
-The collaborative nature ensures accuracy and community involvement in preservation efforts.
-{% endtrans %}</p>
+      <h2 style="color:#1089d3;font-weight:900;">An open format</h2>
 
-<p>{% trans %}
-For researchers and practitioners, our platform provides access to preserved 
-texts with version control and revision history. This ensures that the 
-authenticity and integrity of traditional knowledge is maintained while 
-making it digitally accessible.
-{% endtrans %}</p>
+      <p>
+        A complete archive is meaningless if it is not accessible. We ensure that texts remain open, readable, and reusable.
+      </p>
 
-<p>{% trans %}
-For the broader community, our open platform allows anyone to contribute to 
-the preservation of Siddha wisdom, whether through proofing texts, providing 
-translations, or sharing knowledge about traditional practices.
-{% endtrans %}</p>
+      <p>
+        Our platform publishes content in open formats with permissive licensing and readable design across devices.
+      </p>
+
+      <p>
+        We are working toward multilingual support so knowledge can be accessed in native languages globally.
+      </p>
+
+      <hr style="border:none;height:1px;background:rgba(16,137,211,0.1);margin:18px 0;">
+
+      <h2 style="color:#1089d3;font-weight:900;">Collaborative preservation tools</h2>
+
+      <p>
+        Our proofing system enables community-driven preservation of Siddha texts with accuracy and version control.
+      </p>
+
+      <p>
+        Contributors can transcribe and verify manuscripts through structured workflows that improve data quality.
+      </p>
+
+      <p>
+        Researchers gain access to revision history and verified texts, ensuring authenticity is preserved.
+      </p>
+
+      <p>
+        The broader community can contribute through transcription, translation, and knowledge sharing.
+      </p>
+
+    </div>
+  </div>
+
+  {# FOOT NOTE #}
+  <div style="margin-top:16px;
+              background:linear-gradient(135deg,rgba(16,137,211,0.08),rgba(18,177,209,0.06));
+              border:1.5px solid rgba(16,137,211,0.15);
+              border-radius:18px;
+              padding:14px 18px;
+              font-size:0.85rem;
+              color:#4a6a8a;
+              line-height:1.6;">
+
+    Built for preservation, collaboration, and long-term accessibility of Siddha knowledge.
+  </div>
+
 </div>
+
 {% endblock %}

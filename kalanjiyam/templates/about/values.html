@@ -8,84 +8,125 @@ Learn about the values that guide Kalanjiyam's work in preserving and sharing Si
 {%- endblock %}
 
 {% block content %}
-<div class="prose">
-<h1>{{ _('Values') }}</h1>
 
-<p>{% trans %}
-Kalanjiyam's mission is to make the Siddha Knowledge Systems tradition radically accessible. This
-mission is guided by several core values that shape everything we do.
-{% endtrans %}</p>
+<div style="max-width:900px;margin:40px auto;">
 
-<h2>{{ _('Siddha Knowledge as human heritage') }}</h2>
+  {# HEADER CARD #}
+  <div style="background:rgba(255,255,255,0.75);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:26px;
+              padding:26px 28px;
+              margin-bottom:18px;
+              box-shadow:0 12px 36px rgba(16,137,211,0.12);">
 
-<p>{% trans %}
-Siddha Knowledge Systems literature is part of our collective human heritage, and we want to
-preserve and share this knowledge for future generations. The Siddha tradition encompasses
-not just medicine and alchemy, but also philosophy, spirituality, and practical wisdom
-that has been passed down through centuries.
-{% endtrans %}</p>
+    <h1 style="font-size:1.9rem;font-weight:900;color:#1089d3;margin:0;">
+      Values
+    </h1>
 
-<p>{% trans %}
-We believe that this knowledge belongs to all of humanity and should be freely accessible
-to anyone who wishes to learn from it, regardless of their background, location, or
-economic status.
-{% endtrans %}</p>
+    <p style="margin:8px 0 0;color:#6a9abf;font-size:0.95rem;line-height:1.6;">
+      Principles that guide how we preserve and share Siddha Knowledge Systems.
+    </p>
 
-<h2>{{ _('Radical accessibility') }}</h2>
+  </div>
 
-<p>{% trans %}
-We believe that knowledge should be accessible to everyone. This means not just making
-texts available online, but also providing tools and resources that make the content
-understandable and useful to people at all levels of expertise.
-{% endtrans %}</p>
+  {# MAIN CARD #}
+  <div style="background:rgba(255,255,255,0.72);
+              backdrop-filter:blur(18px);
+              border:1.5px solid rgba(255,255,255,0.9);
+              border-radius:24px;
+              padding:22px 24px;
+              box-shadow:0 10px 32px rgba(16,137,211,0.08);">
 
-<p>{% trans %}
-Our platform includes features like word-by-word analysis, integrated dictionaries,
-and contextual explanations to help readers understand complex Siddha texts. We also
-provide translations and commentaries to make the content accessible to non-Tamil speakers.
-{% endtrans %}</p>
+    <div class="prose" style="color:#4a6a8a;font-size:0.95rem;line-height:1.85;">
 
-<h2>{{ _('Open collaboration') }}</h2>
+      <p>
+        Kalanjiyam's mission to make Siddha Knowledge Systems radically accessible is guided by
+        a set of core values that define everything we build.
+      </p>
 
-<p>{% trans %}
-We believe that the best way to preserve and improve our knowledge base is through
-open collaboration. Our platform allows users to contribute corrections, translations,
-and additional content, creating a community-driven resource that grows and improves
-over time.
-{% endtrans %}</p>
+      <hr style="border:none;height:1px;background:rgba(16,137,211,0.1);margin:18px 0;">
 
-<p>{% trans %}
-We welcome contributions from scholars, students, and enthusiasts from around the world,
-recognizing that diverse perspectives and expertise enrich our understanding of the
-Siddha tradition.
-{% endtrans %}</p>
+      <h2 style="color:#1089d3;font-weight:900;">Siddha Knowledge as human heritage</h2>
 
-<h2>{{ _('Cultural respect') }}</h2>
+      <p>
+        Siddha literature is part of humanity’s shared heritage — spanning medicine, alchemy,
+        philosophy, spirituality, and practical wisdom passed through generations.
+      </p>
 
-<p>{% trans %}
-We approach the Siddha tradition with deep respect for its cultural and historical
-significance. We work closely with scholars and practitioners to ensure that our
-representations are accurate and respectful of the tradition's integrity.
-{% endtrans %}</p>
+      <p>
+        We believe this knowledge belongs to everyone and should remain freely accessible regardless
+        of background, geography, or economic status.
+      </p>
 
-<p>{% trans %}
-We also recognize that the Siddha tradition is a living tradition that continues to
-evolve and adapt. Our goal is to preserve the historical texts while also supporting
-contemporary practice and scholarship.
-{% endtrans %}</p>
+      <h2 style="color:#1089d3;font-weight:900;">Radical accessibility</h2>
 
-<h2>{{ _('Technical excellence') }}</h2>
+      <p>
+        Knowledge should not only be available — it should be understandable.
+      </p>
 
-<p>{% trans %}
-We believe that the best way to serve our mission is through technical excellence.
-Our platform is built with modern web technologies that provide a fast, reliable,
-and user-friendly experience.
-{% endtrans %}</p>
+      <p>
+        Our platform provides tools like word-by-word analysis, dictionaries, and contextual explanations
+        to make complex Siddha texts easier to understand.
+      </p>
 
-<p>{% trans %}
-We continuously improve our tools and infrastructure to better serve our users and
-preserve the texts in our care. We also make our code open source so that others
-can learn from and build upon our work.
-{% endtrans %}</p>
+      <p>
+        We also support translations and commentary systems to broaden accessibility across languages.
+      </p>
+
+      <h2 style="color:#1089d3;font-weight:900;">Open collaboration</h2>
+
+      <p>
+        Preservation is strongest when it is collective. Our platform enables users to contribute
+        corrections, translations, and annotations.
+      </p>
+
+      <p>
+        Scholars, students, and enthusiasts from around the world help improve the quality and depth
+        of the archive through collaboration.
+      </p>
+
+      <h2 style="color:#1089d3;font-weight:900;">Cultural respect</h2>
+
+      <p>
+        We treat Siddha tradition with deep respect, working with care to preserve its authenticity
+        and historical integrity.
+      </p>
+
+      <p>
+        At the same time, we recognize it as a living tradition that continues to evolve.
+      </p>
+
+      <h2 style="color:#1089d3;font-weight:900;">Technical excellence</h2>
+
+      <p>
+        We believe engineering quality directly impacts preservation quality.
+      </p>
+
+      <p>
+        Our platform is built with modern technologies to ensure speed, reliability, and long-term sustainability.
+      </p>
+
+      <p>
+        We maintain an open-source philosophy so others can study, improve, and extend our systems.
+      </p>
+
+    </div>
+  </div>
+
+  {# FOOT NOTE #}
+  <div style="margin-top:16px;
+              background:linear-gradient(135deg,rgba(16,137,211,0.08),rgba(18,177,209,0.06));
+              border:1.5px solid rgba(16,137,211,0.15);
+              border-radius:18px;
+              padding:14px 18px;
+              font-size:0.85rem;
+              color:#4a6a8a;
+              line-height:1.6;">
+
+    Values are not rules — they are the engineering of trust.
+  </div>
+
 </div>
+
 {% endblock %}

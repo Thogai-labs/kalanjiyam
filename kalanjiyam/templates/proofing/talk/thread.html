@@ -38,22 +38,35 @@
 
 
 {% block content %}
-{{ m.project_header_nested("Talk", project) }}
-{{ m.project_tabs(project=project, active='talk') }}
-
-<header class="flex justify-between items-center bg-slate-100 p-4">
-  <h1 class="text-xl font-bold">{{ thread.title }}</h1>
-  <p class="text-slate-500">Started {{ thread.updated_at|time_ago }}</p>
-</header>
-
-<div class="break-words">
-{% for p in thread.posts %}
-  {{ post(p, current_user) }}
-{% endfor %}
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:24px 28px;margin-bottom:24px;box-shadow:0 8px 32px rgba(16,137,211,0.1);">
+  {{ m.project_header_nested("Talk", project) }}
+  <p style="color:#6a9abf;font-size:0.95rem;margin:8px 0 0;">Discussion and coordination for this project</p>
 </div>
 
-<div class="mt-8 ml-4">
-<a href="{{ url_for('proofing.talk.create_post', project_slug=project.slug, thread_id=thread.id) }}" class="btn btn-submit">{{ _('Add a post') }}</a>
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:10px 14px;margin-bottom:24px;">
+  {{ m.project_tabs(project=project, active='talk') }}
+</div>
+
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;box-shadow:0 8px 32px rgba(16,137,211,0.05);overflow:hidden;">
+  <div style="background:rgba(16,137,211,0.08);border-bottom:1px solid rgba(16,137,211,0.12);padding:16px;">
+    <h1 style="font-size:1.2rem;font-weight:800;color:#1089d3;margin:0 0 4px;">{{ thread.title }}</h1>
+    <p style="color:#6a9abf;font-size:0.9rem;margin:0;">Started {{ thread.updated_at|time_ago }}</p>
+  </div>
+
+  <div class="break-words">
+  {% for p in thread.posts %}
+    {{ post(p, current_user) }}
+  {% endfor %}
+  </div>
+</div>
+
+<div style="display:flex;justify-content:flex-end;margin-top:24px;">
+  <a href="{{ url_for('proofing.talk.create_post', project_slug=project.slug, thread_id=thread.id) }}" 
+     style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#1089d3,#12b1d1);color:white;padding:10px 16px;border-radius:999px;font-weight:700;text-decoration:none;box-shadow:0 8px 20px rgba(16,137,211,0.25);transition:all 0.2s;"
+     onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 12px 28px rgba(16,137,211,0.35)';"
+     onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 8px 20px rgba(16,137,211,0.25)';">
+    + {{ _('Add a post') }}
+  </a>
 </div>
 
 {% endblock %}

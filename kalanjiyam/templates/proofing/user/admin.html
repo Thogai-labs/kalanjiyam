@@ -2,30 +2,52 @@
 {% import "macros/components.html" as components %}
 {% import "macros/proofing.html" as m %}
 
-
 {% block title %}User: {{ user.username }} | Ambuda{% endblock %}
-
 
 {% block sidebar %}{{ m.main_nav('talk', current_user=current_user) }}{% endblock %}
 
-
 {% block content %}
+
 {% set url = url_for('proofing.user.summary', username=user.username) %}
-{{ m.nested_header('Admin', user.username, url) }}
-{{ m.user_tabs(user=user, active='admin', is_mod=current_user.is_moderator) }}
 
-<p class="my-4">Set user permissions:</p>
+<div class="max-w-4xl mx-auto space-y-6">
 
-<form method="POST" class="p-4 bg-slate-100">
-  {{ form.csrf_token }}
-  {% for field in form if field.name.startswith("id_") %}
-  <div class="mb-4">
-    {{ field }}
-    {{ field.label }}
+  {{ components.flash_messages() }}
+
+  {# HEADER CARD #}
+  <div class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl shadow-lg p-6">
+    {{ m.nested_header('Admin', user.username, url) }}
+    {{ m.user_tabs(user=user, active='admin', is_mod=current_user.is_moderator) }}
   </div>
-  {% endfor %}
-  <input type="submit" class="btn btn-submit" value="Save changes">
-</form>
+
+  {# FORM SECTION #}
+  <div class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl shadow p-6">
+
+    <p class="text-peacock-secondary mb-4 font-medium">
+      Set user permissions:
+    </p>
+
+    <form method="POST" class="space-y-4">
+      {{ form.csrf_token }}
+
+      {% for field in form if field.name.startswith("id_") %}
+      <div class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+        {{ field(class_="accent-teal-600") }}
+        <label class="text-peacock-primary font-medium">
+          {{ field.label.text }}
+        </label>
+      </div>
+      {% endfor %}
+
+      <input
+        type="submit"
+        value="Save changes"
+        class="btn btn-submit bg-peacock-primary hover:bg-teal-700 text-white px-6 py-2 rounded-xl shadow transition"
+      >
+    </form>
+
+  </div>
+
+</div>
 
 {% endblock %}
-

@@ -4,56 +4,70 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Kalanjiyam Admin{% endblock %}</title>
-    <meta name="description" content="A breakthrough Siddha Knowledge Systems library. Read our library of traditional Siddha texts with word-by-word analysis, integrated dictionary support, and so much more.">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <style>
-        .admin-body {
-            background-color: #f8f9fa;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-        .admin-header {
-            background-color: #2c3e50;
-            color: white;
-            padding: 1rem 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .admin-header-content {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .admin-title {
-            margin: 0;
-            font-size: 1.5rem;
-            font-weight: 600;
-        }
-        .admin-nav {
-            display: flex;
-            gap: 1rem;
-        }
-        .admin-nav-link {
-            color: white;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 0.25rem;
-            transition: background-color 0.2s;
-        }
-        .admin-nav-link:hover {
-            background-color: rgba(255,255,255,0.1);
-        }
-        .admin-main {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem 1rem;
-        }
+      body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f7fb; }
+      .admin-header {
+        background: linear-gradient(90deg, rgb(16,137,211) 0%, rgb(18,177,209) 100%);
+        box-shadow: 0 4px 12px rgba(16,137,211,0.25);
+        padding: 0;
+      }
+      .admin-header-inner {
+        max-width: 1200px; margin: 0 auto; padding: 0 1.5rem;
+        display: flex; justify-content: space-between; align-items: center;
+        height: 56px;
+      }
+      .admin-title { color: white; font-size: 1.2rem; font-weight: 800; text-decoration: none; letter-spacing: 0.01em; }
+      .admin-nav { display: flex; gap: 4px; }
+      .admin-nav a {
+        color: white; text-decoration: none; padding: 6px 14px;
+        border-radius: 20px; font-size: 13px; font-weight: 500;
+        transition: background 0.2s;
+      }
+      .admin-nav a:hover { background: rgba(255,255,255,0.2); }
+      .admin-main { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
+      /* Cards */
+      .panel, .well, .box { background: white; border-radius: 16px; padding: 20px 24px; box-shadow: rgba(133,189,215,0.5) 0px 8px 20px -10px; margin-bottom: 20px; border: none; }
+      /* Tables */
+      table { width: 100%; border-collapse: collapse; background: white; border-radius: 16px; overflow: hidden; box-shadow: rgba(133,189,215,0.5) 0px 8px 20px -10px; }
+      th { background: linear-gradient(90deg, rgb(16,137,211) 0%, rgb(18,177,209) 100%); color: white; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600; }
+      td { padding: 10px 16px; border-bottom: 1px solid #f0f4f8; font-size: 13px; }
+      tr:last-child td { border-bottom: none; }
+      tr:hover td { background: #f0f9ff; }
+      /* Buttons */
+      .btn, button[type=submit], input[type=submit] {
+        background: linear-gradient(45deg, rgb(16,137,211) 0%, rgb(18,177,209) 100%);
+        color: white; border: none; padding: 8px 20px; border-radius: 20px;
+        font-weight: 600; font-size: 13px; cursor: pointer;
+        box-shadow: rgba(133,189,215,0.88) 0px 8px 8px -6px;
+        transition: all 0.2s; text-decoration: none; display: inline-block;
+      }
+      .btn:hover, button[type=submit]:hover, input[type=submit]:hover { opacity: 0.9; transform: scale(1.02); }
+      .btn-danger { background: linear-gradient(45deg, #ef4444, #f87171); }
+      .btn-default, .btn-secondary { background: white; color: rgb(16,137,211); border: 2px solid rgb(18,177,209); }
+      /* Forms */
+      input[type=text], input[type=email], input[type=password], input[type=number], select, textarea {
+        width: 100%; padding: 10px 14px; border: 2px solid #e0f0ff;
+        border-radius: 12px; font-size: 13px; background: white;
+        transition: border-color 0.2s; box-sizing: border-box;
+      }
+      input:focus, select:focus, textarea:focus { outline: none; border-color: rgb(18,177,209); }
+      label { font-size: 13px; font-weight: 500; color: #444; display: block; margin-bottom: 4px; }
+      .form-group { margin-bottom: 16px; }
+      /* Alerts */
+      .alert { border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; font-size: 13px; border: none; }
+      .alert-success { background: #dcfce7; color: #166534; }
+      .alert-danger, .alert-error { background: #fee2e2; color: #991b1b; }
+      .alert-info { background: #e0f2fe; color: #0c4a6e; }
+      .alert-warning { background: #fef9c3; color: #854d0e; }
+      /* Pagination */
+      .pagination { display: flex; gap: 4px; list-style: none; padding: 0; margin: 16px 0; }
+      .pagination li a, .pagination li span { padding: 6px 12px; border-radius: 10px; font-size: 13px; text-decoration: none; color: rgb(16,137,211); background: white; border: 1px solid #e0f0ff; }
+      .pagination li.active span { background: linear-gradient(45deg, rgb(16,137,211), rgb(18,177,209)); color: white; border-color: transparent; }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
+<<<<<<< HEAD
 <body class="admin-body">
     <header class="admin-header">
         <div class="admin-header-content">
@@ -73,5 +87,22 @@
     
     <!-- Admin scripts can be added here -->
     {% block extra_scripts %}{% endblock %}
+=======
+<body>
+  <header class="admin-header">
+    <div class="admin-header-inner">
+      <a href="{{ url_for('admin.index') }}" class="admin-title">⚙ Kalanjiyam Admin</a>
+      <nav class="admin-nav">
+        <a href="{{ url_for('admin.index') }}">Dashboard</a>
+        <a href="{{ url_for('site.index') }}">View Site</a>
+        <a href="{{ url_for('auth.sign_out') }}">Logout</a>
+      </nav>
+    </div>
+  </header>
+  <main class="admin-main">
+    {% block content %}{% endblock %}
+  </main>
+  {% block extra_scripts %}{% endblock %}
+>>>>>>> dev_ui
 </body>
 </html>

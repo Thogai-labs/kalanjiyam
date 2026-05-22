@@ -3,66 +3,124 @@
 
 {% block title %}{{ m.title(_('Support the future of Siddha Knowledge Systems')) }}{% endblock %}
 
-{% block meta_description -%}
+{% block meta_description %}
 Support Kalanjiyam's mission to preserve and share Siddha Knowledge Systems with the world.
-{%- endblock %}
+{% endblock %}
 
 {% block content %}
-<div class="prose">
-<h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold">{{ _('Support the future of Siddha Knowledge Systems') }}</h1>
 
-<p class="my-4">{{ _('Kalanjiyam is a breakthrough digital library of Siddha Knowledge Systems literature.') }}</p>
-<p class="my-4">{{ _('Donate today and help us make Siddha Knowledge Systems accessible to all.') }}</p>
+<div class="max-w-3xl mx-auto my-16 space-y-6">
 
-<div class="text-center my-8">
-  <a href="#" class="btn bg-blue-600 text-white px-8 py-4 text-lg font-semibold rounded-lg hover:bg-blue-700 transition-colors">
-    {{ _('Donate Now') }}
-  </a>
+  {# HERO CARD #}
+  <div class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl shadow-lg p-8 text-center">
+
+    <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-peacock-primary">
+      {{ _('Support the future of Siddha Knowledge Systems') }}
+    </h1>
+
+    <p class="mt-4 text-peacock-secondary">
+      {{ _('Kalanjiyam is a breakthrough digital library of Siddha Knowledge Systems literature.') }}
+    </p>
+
+    <p class="mt-2 text-peacock-secondary">
+      {{ _('Donate today and help us make Siddha Knowledge Systems accessible to all.') }}
+    </p>
+
+    <div class="mt-8">
+
+      {# ✅ FIXED BUTTON #}
+      <a href="#"
+         class="inline-flex items-center justify-center px-8 py-3 text-lg font-semibold rounded-xl shadow-md
+                bg-peacock-primary text-white
+                hover:bg-peacock-secondary
+                transition-colors duration-200">
+
+        {{ _('Donate Now') }}
+
+      </a>
+
+    </div>
+
+  </div>
+
+  {# WHY DONATE #}
+  <div class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl p-6 shadow">
+
+    <h2 class="text-2xl font-bold text-peacock-primary mb-3">
+      {{ _('Why donate to Kalanjiyam?') }}
+    </h2>
+
+    <p class="text-peacock-secondary leading-relaxed">
+      {% trans %}
+      Your donation helps us preserve and share the vast knowledge contained in Siddha texts.
+      Every contribution, no matter the size, makes a difference in our mission.
+      {% endtrans %}
+    </p>
+
+  </div>
+
+  {# IMPACT GRID #}
+  <div class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl p-6 shadow">
+
+    <h3 class="text-xl font-bold text-peacock-primary mb-4">
+      {{ _('What your donation supports:') }}
+    </h3>
+
+    <ul class="grid gap-2 text-peacock-secondary">
+      <li>• {{ _("Digitization of rare Siddha manuscripts and texts") }}</li>
+      <li>• {{ _("Development of tools for text analysis and translation") }}</li>
+      <li>• {{ _("Scholarship and research in Siddha Knowledge Systems") }}</li>
+      <li>• {{ _("Educational resources and training programs") }}</li>
+      <li>• {{ _("Technical infrastructure and platform development") }}</li>
+      <li>• {{ _("Community outreach and awareness programs") }}</li>
+    </ul>
+
+  </div>
+
+  {# OTHER SUPPORT #}
+  <div class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl p-6 shadow">
+
+    <h2 class="text-xl font-bold text-peacock-primary mb-3">
+      {{ _('Other ways to support') }}
+    </h2>
+
+    <ul class="space-y-2 text-peacock-secondary">
+
+      <li>
+        → <a class="text-peacock-primary hover:underline" href="{{ url_for('about.contact') }}">
+          {{ _('Volunteer your time and expertise') }}
+        </a>
+      </li>
+
+      <li>
+        → <a class="text-peacock-primary hover:underline" href="https://github.com/kalanjiyam-org/kalanjiyam">
+          {{ _('Contribute to our codebase') }}
+        </a>
+      </li>
+
+      <li>→ {{ _('Share our resources with your network') }}</li>
+      <li>→ {{ _('Provide feedback and suggestions for improvement') }}</li>
+
+    </ul>
+
+  </div>
+
+  {# CONTACT #}
+  <div class="bg-white/70 backdrop-blur-xl border border-teal-100 rounded-2xl p-6 shadow">
+
+    <h2 class="text-xl font-bold text-peacock-primary mb-2">
+      {{ _('Contact us') }}
+    </h2>
+
+    <p class="text-peacock-secondary">
+      {% trans %}
+      If you have questions about donating or would like to discuss other ways to support
+      our work, please contact us.
+      {% endtrans %}
+    </p>
+
+  </div>
+
 </div>
 
-<h2>{{ _('Why donate to Kalanjiyam?') }}</h2>
-
-<p>{% trans %}
-Your donation helps us preserve and share the vast knowledge contained in Siddha texts.
-Every contribution, no matter the size, makes a difference in our mission to make
-Siddha Knowledge Systems accessible to everyone.
-{% endtrans %}</p>
-
-<h3>{{ _('What your donation supports:') }}</h3>
-
-<ul>
-<li>{{ _("Digitization of rare Siddha manuscripts and texts") }}</li>
-<li>{{ _("Development of tools for text analysis and translation") }}</li>
-<li>{{ _("Scholarship and research in Siddha Knowledge Systems") }}</li>
-<li>{{ _("Educational resources and training programs") }}</li>
-<li>{{ _("Technical infrastructure and platform development") }}</li>
-<li>{{ _("Community outreach and awareness programs") }}</li>
-</ul>
-
-<h2>{{ _('Other ways to support') }}</h2>
-
-<p>{% trans %}
-In addition to financial contributions, there are many other ways you can support
-our mission:
-{% endtrans %}</p>
-
-<ul>
-<li><a href="{{ url_for('about.contact') }}">{{ _('Volunteer your time and expertise') }}</a></li>
-<li><a href="https://github.com/kalanjiyam-org/kalanjiyam">{{ _('Contribute to our codebase') }}</a></li>
-<li>{{ _('Share our resources with your network') }}</li>
-<li>{{ _('Provide feedback and suggestions for improvement') }}</li>
-</ul>
-
-<h2>{{ _('Contact us') }}</h2>
-
-<p>{% trans %}
-If you have questions about donating or would like to discuss other ways to support
-our work, please <a href="{{ url_for('about.contact') }}">contact us</a>.
-{% endtrans %}</p>
-
-<p>{% trans %}
-Thank you for your support in preserving and sharing Siddha Knowledge Systems
-with the world.
-{% endtrans %}</p>
-</div>
 {% endblock %}

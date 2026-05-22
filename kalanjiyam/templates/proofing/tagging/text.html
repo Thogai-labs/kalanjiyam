@@ -1,22 +1,29 @@
 {% extends 'proofing/base.html' %}
 
 {% block content %}
-<div class="prose">
-
-<h1>{{ text.title|devanagari }}</h1>
+<div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(18px);border:1.5px solid rgba(255,255,255,0.9);border-radius:24px;padding:28px 32px;margin-bottom:24px;box-shadow:0 8px 32px rgba(16,137,211,0.1);">
+  <h1 style="font-size:1.8rem;font-weight:900;color:#1089d3;margin:0;">{{ text.title|devanagari }}</h1>
+</div>
 
 {% if num_parsed_blocks == 0 %}
-<p class="bg-red-200 p-1">This text doesn't have any parse data.</p>
+<div style="background:rgba(220,38,38,0.1);border:1.5px solid rgba(220,38,38,0.2);border-radius:12px;padding:12px 16px;margin-bottom:24px;color:#7f1d1d;font-size:0.9rem;">
+  ❌ This text doesn't have any parse data.
+</div>
 {% else %}
-<p>{{ num_parsed_blocks }} / {{ num_blocks}} blocks have parse data.</p>
+<div style="background:rgba(16,137,211,0.08);border:1.5px solid rgba(16,137,211,0.12);border-radius:12px;padding:12px 16px;margin-bottom:24px;color:#4a6a8a;font-size:0.9rem;">
+  ✓ {{ num_parsed_blocks }} / {{ num_blocks}} blocks have parse data.
+</div>
 {% endif %}
 
-<ul>
+<div style="display:flex;flex-direction:column;gap:8px;">
 {% for section in text.sections %}
 {% set url = url_for("proofing.tagging.section", text_slug=text.slug, section_slug=section.slug)  %}
-<li><a href="{{ url }}">{{ section.title }}</a></li>
+<a href="{{ url }}"
+   style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:rgba(16,137,211,0.06);border:1px solid rgba(16,137,211,0.12);border-radius:12px;color:#1089d3;font-weight:600;text-decoration:none;transition:all 0.2s;"
+   onmouseover="this.style.background='rgba(16,137,211,0.12)'"
+   onmouseout="this.style.background='rgba(16,137,211,0.06)'">  
+  {{ section.title }}
+</a>
 {% endfor %}
-</ul>
-
 </div>
 {% endblock %}
