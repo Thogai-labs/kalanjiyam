@@ -21,7 +21,7 @@ from pathlib import Path
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
 from kalanjiyam.enums import SitePageStatus
-from kalanjiyam.utils import google_ocr, project_utils
+from kalanjiyam.utils import project_utils
 from kalanjiyam.utils.assets import get_page_image_filepath
 from kalanjiyam.utils.diff import revision_diff
 from kalanjiyam.utils.revisions import EditError, add_revision
@@ -348,63 +348,42 @@ def ocr(project_slug, page_slug):
     if not page_:
         abort(404)
 
-    # Get OCR parameters from query parameters
     engine = request.args.get('engine', 'google')
     language = request.args.get('language', 'sa')
-    
-    # Decode numeric engine values to actual engine names
-    engine_map = {
-        '1': 'google',
-        '2': 'tesseract',
-        '3': 'surya',
-        '4': 'nanonets',
-        '5': 'deepseek',
-        '6': 'chandra',
-        '7': 'qwen3'
-    }
+
+    from kalanjiyam.utils.ocr_runner import normalize_engine, run_ocr
+    from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
+
     original_engine = engine
-    if engine in engine_map:
-        engine = engine_map[engine]
-    
-    # Debug logging
-    logging.info(f"OCR API called with engine='{original_engine}' -> mapped to '{engine}', language='{language}'")
-    logging.info(f"OCR request for project={project_slug}, page={page_slug}")
-    
-    # Validate engine
-    from kalanjiyam.utils.ocr_engine import OcrEngineFactory
-    if engine not in OcrEngineFactory.get_supported_engines():
+    engine = normalize_engine(engine)
+
+    logging.info(
+        "OCR API called with engine='%s' -> mapped to '%s', language='%s', backend='%s'",
+        original_engine,
+        engine,
+        language,
+        'remote',
+    )
+
+    if engine not in SUPPORTED_ENGINES:
         abort(400, description=f"Unsupported OCR engine: {engine}")
 
     image_path = get_page_image_filepath(project_slug, page_slug)
-    logging.info(f"Image path: {image_path}")
-    
-    # Get GPU configuration for engines that need it
-    gpu_config = None
-    if engine == 'surya':
-        from kalanjiyam.utils.surya_gpu_config import get_gpu_config_from_env
-        gpu_config = get_gpu_config_from_env()
-    elif engine == 'nanonets':
-        # Nanonets OCR GPU configuration
-        gpu_config = {'device': 'auto'}  # Will use GPU-first, CPU fallback
-    elif engine == 'deepseek':
-        # DeepSeek OCR GPU configuration
-        gpu_config = {'device': 'auto'}  # Will use GPU-first, CPU fallback
-    elif engine == 'chandra':
-        # Chandra OCR GPU configuration
-        gpu_config = {'device': 'auto'}  # Will use GPU-first, CPU fallback
-        logging.info(f"Using Chandra OCR with GPU config: {gpu_config}")
-    elif engine == 'qwen3':
-        # Qwen 3 OCR GPU configuration
-        gpu_config = {'device': 'auto'}  # Will use GPU-first, CPU fallback
-    
+
     try:
-        from kalanjiyam.utils.ocr_engine import run_ocr
-        logging.info(f"Starting OCR with engine={engine}, language={language}")
-        ocr_response = run_ocr(image_path, engine_name=engine, language=language, gpu_config=gpu_config)
-        logging.info(f"OCR completed successfully, returning {len(ocr_response.text_content)} characters")
+        ocr_response = run_ocr(image_path, engine_name=engine, language=language)
+        logging.info("OCR completed successfully, returning %s characters", len(ocr_response.text_content))
         return ocr_response.text_content
     except Exception as e:
-        logging.error(f"OCR failed for {project_slug}/{page_slug} with engine {engine} and language {language}: {e}", exc_info=True)
+        logging.error(
+            "OCR failed for %s/%s with engine %s and language %s: %s",
+            project_slug,
+            page_slug,
+            engine,
+            language,
+            e,
+            exc_info=True,
+        )
         abort(500, description=f"OCR failed: {str(e)}")
 
 

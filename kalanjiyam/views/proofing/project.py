@@ -735,8 +735,8 @@ def batch_ocr(slug):
         engine = engine_map[engine]
         
         # Validate engine
-        from kalanjiyam.utils.ocr_engine import OcrEngineFactory
-        if engine not in OcrEngineFactory.get_supported_engines():
+        from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
+        if engine not in SUPPORTED_ENGINES:
             flash(_l("Unsupported OCR engine selected."))
             return render_template(
                 "proofing/projects/batch-ocr.html",

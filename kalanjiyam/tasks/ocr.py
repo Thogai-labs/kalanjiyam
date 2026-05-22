@@ -9,7 +9,7 @@ from kalanjiyam import database as db
 from kalanjiyam import queries as q
 from kalanjiyam.enums import SitePageStatus
 from kalanjiyam.tasks import app
-from kalanjiyam.utils import google_ocr
+from kalanjiyam.utils.ocr_types import serialize_bounding_boxes
 from kalanjiyam.utils.assets import get_page_image_filepath
 from kalanjiyam.utils.revisions import add_revision
 from config import create_config_only_app
@@ -25,18 +25,6 @@ def _run_ocr_for_page_inner(
     engine: str = 'google',
     language: str = 'sa',
 ) -> int:
-    # Decode numeric engine values to actual engine names
-    engine_map = {
-        '1': 'google',
-        '2': 'tesseract',
-        '3': 'surya',
-        '4': 'nanonets',
-        '5': 'deepseek',
-        '6': 'chandra',
-        '7': 'qwen3'
-    }
-    if engine in engine_map:
-        engine = engine_map[engine]
     """Must run in the application context."""
 
     flask_app = create_config_only_app(app_env)
@@ -48,27 +36,10 @@ def _run_ocr_for_page_inner(
         # The actual API call.
         image_path = get_page_image_filepath(project_slug, page_slug)
         
-        from kalanjiyam.utils.ocr_engine import run_ocr
-        
-        # Get GPU configuration for Surya OCR, Nanonets OCR, DeepSeek OCR, and Chandra OCR
-        gpu_config = None
-        if engine == 'surya':
-            from kalanjiyam.utils.surya_gpu_config import get_gpu_config_from_env
-            gpu_config = get_gpu_config_from_env()
-        elif engine == 'nanonets':
-            # Nanonets OCR GPU configuration
-            gpu_config = {'device': 'auto'}  # Will use GPU-first, CPU fallback
-        elif engine == 'deepseek':
-            # DeepSeek OCR GPU configuration
-            gpu_config = {'device': 'auto'}  # Will use GPU-first, CPU fallback
-        elif engine == 'chandra':
-            # Chandra OCR GPU configuration
-            gpu_config = {'device': 'auto'}  # Will use GPU-first, CPU fallback
-        elif engine == 'qwen3':
-            # Qwen 3 OCR GPU configuration
-            gpu_config = {'device': 'auto'}  # Will use GPU-first, CPU fallback
-        
-        ocr_response = run_ocr(image_path, engine_name=engine, language=language, gpu_config=gpu_config)
+        from kalanjiyam.utils.ocr_runner import normalize_engine, run_ocr
+
+        engine = normalize_engine(engine)
+        ocr_response = run_ocr(image_path, engine_name=engine, language=language)
 
         session = q.get_session()
         project = q.project(project_slug)
@@ -79,41 +50,9 @@ def _run_ocr_for_page_inner(
         if page is None:
             raise ValueError(f'Page "{page_slug}" not found in project "{project_slug}".')
 
-        # Use the appropriate serialize function based on engine
-        if engine == 'google':
-            page.ocr_bounding_boxes = google_ocr.serialize_bounding_boxes(
-                ocr_response.bounding_boxes
-            )
-        elif engine == 'surya':
-            from kalanjiyam.utils.surya_ocr import serialize_bounding_boxes
-            page.ocr_bounding_boxes = serialize_bounding_boxes(
-                ocr_response.bounding_boxes
-            )
-        elif engine == 'nanonets':
-            # Nanonets OCR uses the same bounding box format as Google OCR
-            page.ocr_bounding_boxes = google_ocr.serialize_bounding_boxes(
-                ocr_response.bounding_boxes
-            )
-        elif engine == 'deepseek':
-            # DeepSeek OCR uses the same bounding box format as Google OCR
-            page.ocr_bounding_boxes = google_ocr.serialize_bounding_boxes(
-                ocr_response.bounding_boxes
-            )
-        elif engine == 'chandra':
-            # Chandra OCR uses the same bounding box format as Google OCR
-            page.ocr_bounding_boxes = google_ocr.serialize_bounding_boxes(
-                ocr_response.bounding_boxes
-            )
-        elif engine == 'qwen3':
-            # Qwen 3 OCR uses the same bounding box format as Google OCR
-            page.ocr_bounding_boxes = google_ocr.serialize_bounding_boxes(
-                ocr_response.bounding_boxes
-            )
-        else:
-            from kalanjiyam.utils.tesseract_ocr import serialize_bounding_boxes
-            page.ocr_bounding_boxes = serialize_bounding_boxes(
-                ocr_response.bounding_boxes
-            )
+        page.ocr_bounding_boxes = serialize_bounding_boxes(
+            engine, ocr_response.bounding_boxes
+        )
         
         session.add(page)
         session.commit()

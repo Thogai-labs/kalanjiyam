@@ -148,6 +148,18 @@ class BaseConfig:
     #: We use Sentry to get notifications about server errors.
     SENTRY_DSN = _env("SENTRY_DSN")
 
+    #: OCR backend: ``local`` (in-process) or ``remote`` (OCR service API).
+    OCR_BACKEND = _env("OCR_BACKEND", "remote")
+
+    #: Base URL of the standalone OCR service.
+    OCR_SERVICE_URL = _env("OCR_SERVICE_URL", "http://localhost:8000")
+
+    #: API key for service-to-service OCR requests.
+    OCR_SERVICE_API_KEY = _env("OCR_SERVICE_API_KEY", "")
+
+    #: Timeout in seconds for OCR service HTTP requests.
+    OCR_SERVICE_TIMEOUT = int(_env("OCR_SERVICE_TIMEOUT", "300") or "300")
+
     # Test-only
     # ---------
 
