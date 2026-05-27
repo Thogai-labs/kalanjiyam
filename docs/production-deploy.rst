@@ -63,7 +63,18 @@ Gunicorn — ``wsgi.py`` reads ``FLASK_ENV`` (defaults to ``production``)::
    export FLASK_ENV=production
    gunicorn -w 4 -b 127.0.0.1:8000 wsgi:app
 
-See ``deploy/siddhasagaram-config.md`` for nginx samples.
+For a persistent service, run Gunicorn under systemd. Set ``APPLICATION_URL_PREFIX``
+if hosting under a subpath (e.g. ``/kalanjiyam``).
+
+Redis
+-----
+
+Redis is the Celery broker and result backend::
+
+   sudo apt update
+   sudo apt install redis-server
+   sudo systemctl enable redis-server.service
+   redis-cli ping
 
 Celery
 ------
@@ -71,6 +82,33 @@ Celery
 Batch OCR and OCR comparison use the **ocr** queue::
 
    celery -A kalanjiyam.tasks worker -Q default,ocr --loglevel=INFO --concurrency=2
+
+For a production Celery service, see the `Celery daemonizing guide`_.
+
+.. _Celery daemonizing guide: https://docs.celeryq.dev/en/stable/userguide/daemonizing.html
+
+nginx
+-----
+
+Put TLS in front of Gunicorn (or the Docker web container on port 5000)::
+
+   server {
+       listen 443 ssl http2;
+       server_name your-domain.com;
+
+       ssl_certificate     /path/to/cert.pem;
+       ssl_certificate_key /path/to/key.pem;
+
+       location / {
+           proxy_pass http://127.0.0.1:8000;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+
+Redirect HTTP to HTTPS on port 80.
 
 Docker deployment
 -----------------

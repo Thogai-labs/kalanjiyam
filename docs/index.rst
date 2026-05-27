@@ -19,7 +19,6 @@ Kalanjiyam locally or contribute to Kalanjiyam's technical work.
    background-tasks-with-celery
    batch-ocr-task-tracking
    production-deploy
-   running-in-production
    i18n-and-l10n
    tei-xml
 

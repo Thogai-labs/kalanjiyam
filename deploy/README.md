@@ -36,7 +36,7 @@ graph LR
     end
     style Environment fill:#edf7f6
 
-    kalanjiyam --> browser(https://www.siddhasagaram.in)
+    kalanjiyam --> browser(https://your-domain.com)
 ```
 
 ## What is the PR process?

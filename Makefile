@@ -145,14 +145,6 @@ redis:
 redis-stop:
 	redis-cli shutdown
 
-# Monitor memory usage of Celery workers and Surya OCR processes
-memory-monitor:
-	python scripts/monitor_memory.py
-
-# Stop all Celery workers (useful for memory issues)
-celery-stop:
-	python scripts/monitor_memory.py --kill-workers
-
 # Docker commands
 # ===============================================
 
