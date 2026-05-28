@@ -1195,10 +1195,13 @@ class ProjectView(BaseView):
 
 def create_admin_manager(app):
     session = q.get_session_class()
+    url_prefix = app.config.get("APPLICATION_URL_PREFIX", "")
+    admin_url = f"{url_prefix}/admin"
     admin = Admin(
         app,
         name="Kalanjiyam",
-        index_view=KalanjiyamIndexView(),
+        index_view=KalanjiyamIndexView(url=admin_url),
+        url=admin_url,
     )
 
     admin.add_view(
@@ -1221,7 +1224,7 @@ def create_admin_manager(app):
         )
     )
     # Redirect /admin/groups -> /admin/groups/ (Flask-Admin registers with trailing slash)
-    @app.route("/admin/groups")
+    @app.route(f"{admin_url}/groups")
     def _redirect_groups_trailing_slash():
         return redirect(url_for("groups_view.index"))
 
