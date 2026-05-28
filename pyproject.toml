@@ -42,6 +42,10 @@ dependencies = [
     "python-dotenv>=0.20",
     "aksharamukha>=2.3",
     "indic-transliteration>=2.3",
+    "python-Levenshtein>=0.27",
+    "httpx>=0.24",
+    "jiwer>=3.0",
+    "regex>=2022.6",
 ]
 
 [dependency-groups]

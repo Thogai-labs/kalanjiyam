@@ -118,7 +118,9 @@ case "${CMD}" in
     ;;
 
   stop)
-    docker compose -p "${PROJECT}" -f "${COMPOSE_FILE}" stop
+    check_env
+    KALANJIYAM_IMAGE="kalanjiyam-rel:latest" \
+        docker compose -p "${PROJECT}" -f "${COMPOSE_FILE}" stop
     docker compose -p "${PROJECT}" -f "${COMPOSE_FILE}" rm -f
     echo "✔  Services stopped"
     ;;
@@ -131,7 +133,9 @@ case "${CMD}" in
     ;;
 
   logs)
-    docker compose -p "${PROJECT}" -f "${COMPOSE_FILE}" logs -f
+    check_env
+    KALANJIYAM_IMAGE="kalanjiyam-rel:latest" \
+        docker compose -p "${PROJECT}" -f "${COMPOSE_FILE}" logs -f
     ;;
 
   *)

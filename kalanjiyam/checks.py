@@ -22,7 +22,7 @@ def _full_column_name(table_name: str, col: str) -> str:
     return f"{table_name}.{col}"
 
 
-def _check_column(app_col: Column, db_col: dict[str, str]) -> list[str]:
+def _check_column(app_col: Column, db_col: dict[str, str], pk_cols: set) -> list[str]:
     full_name = _full_column_name(app_col.table.name, app_col.name)
     errors = []
 
@@ -31,7 +31,7 @@ def _check_column(app_col: Column, db_col: dict[str, str]) -> list[str]:
     elif db_col["nullable"] and not app_col.nullable:
         errors.append(f'Column "{full_name}" is nullable in the db but not in the app.')
 
-    db_pk = db_col.get("primary_key", False)
+    db_pk = app_col.name in pk_cols
     if app_col.primary_key and not db_pk:
         errors.append(
             f'Column "{full_name}" is a primary key in the app but not in the db.'
@@ -92,12 +92,12 @@ def _check_app_schema_matches_db_schema(engine: Engine) -> list[str]:
                 full_name = _full_column_name(table_name, col)
                 errors.append(f'Column "{full_name}" found in db but missing in app.')
 
+        pk_cols = set(inspector.get_pk_constraint(table_name).get("constrained_columns", []))
         for col in app_column_names & db_column_names:
             app_col = app_columns[col]
             db_col = db_columns[col]
-            full_name = _full_column_name(table_name, col)
 
-            column_errors = _check_column(app_col, db_col)
+            column_errors = _check_column(app_col, db_col, pk_cols)
             if column_errors:
                 errors.extend(column_errors)
 

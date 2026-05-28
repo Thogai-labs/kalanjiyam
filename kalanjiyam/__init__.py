@@ -96,7 +96,8 @@ def create_app(config_env: str):
     if config_env == config.PRODUCTION:
         _initialize_sentry(config_spec.SENTRY_DSN)
 
-    app = Flask(__name__)
+    url_prefix = config_spec.APPLICATION_URL_PREFIX
+    app = Flask(__name__, static_url_path=f"{url_prefix}/static")
 
     # Trust one proxy hop (Nginx) for HTTPS scheme and real client IP.
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -139,7 +140,6 @@ def create_app(config_env: str):
     app.url_map.converters["list"] = ListConverter
 
     # Blueprints
-    url_prefix = config_spec.APPLICATION_URL_PREFIX
     app.register_blueprint(about, url_prefix=f"{url_prefix}/about")
     app.register_blueprint(api, url_prefix=f"{url_prefix}/api")
     app.register_blueprint(auth, url_prefix=url_prefix)
