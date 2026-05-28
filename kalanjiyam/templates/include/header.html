@@ -45,6 +45,16 @@
     </li>
     {% endif %}
 
+    {% if current_user.is_super_admin %}
+    <li class="relative z-10 block cursor-pointer px-4 py-2 font-bold text-xs uppercase tracking-widest text-slate-900 transition-colors" @mouseenter="moveCursor($el)">
+        <a class="block" href="{{ url_for('platform_view.index') }}">{{ _('Admin') }}</a>
+    </li>
+    {% elif current_user.is_org_admin %}
+    <li class="relative z-10 block cursor-pointer px-4 py-2 font-bold text-xs uppercase tracking-widest text-slate-900 transition-colors" @mouseenter="moveCursor($el)">
+        <a class="block" href="{{ url_for('org_admin_view.index') }}">{{ _('Admin') }}</a>
+    </li>
+    {% endif %}
+
     {% if current_user.is_authenticated %}
     {% set name = current_user.username %}
     <li class="relative z-10 block cursor-pointer px-4 py-2 font-bold text-xs uppercase tracking-widest text-slate-900 transition-colors" @mouseenter="moveCursor($el)">

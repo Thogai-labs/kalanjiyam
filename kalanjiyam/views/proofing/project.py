@@ -7,6 +7,7 @@ from datetime import datetime
 from celery.result import GroupResult
 from flask import (
     Blueprint,
+    abort as flask_abort,
     current_app,
     flash,
     make_response,
@@ -53,6 +54,19 @@ LOG = logging.getLogger(__name__)
 
 # Initialize Redis client
 redis_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+
+
+@bp.before_request
+def _enforce_project_access():
+    slug = request.view_args.get("slug") if request.view_args else None
+    if not slug:
+        return None
+    project_ = q.project(slug)
+    if project_ is None:
+        return None
+    if not q.user_can_view_project(current_user, project_):
+        flask_abort(403)
+    return None
 
 
 def _is_valid_page_number_spec(_, field):

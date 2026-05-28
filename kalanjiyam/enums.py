@@ -14,6 +14,10 @@ class SiteRole(str, Enum):
     MODERATOR = "moderator"
     #: Administrator. Has full access to the database.
     ADMIN = "admin"
+    #: Super administrator. Can manage all organizations and quotas.
+    SUPER_ADMIN = "super_admin"
+    #: Organization-level administrator.
+    ORG_ADMIN = "org_admin"
 
 
 class SitePageStatus(str, Enum):

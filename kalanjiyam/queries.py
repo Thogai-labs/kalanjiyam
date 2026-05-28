@@ -232,6 +232,31 @@ def create_user(*, username: str, email: str, raw_password: str) -> db.User:
     return user
 
 
+def organization_by_slug(slug: str) -> db.Group | None:
+    session = get_session()
+    return session.query(db.Group).filter_by(slug=slug).first()
+
+
+def create_organization(*, name: str, slug: str, description: str = "") -> db.Group:
+    session = get_session()
+    group = db.Group(name=name, slug=slug, description=description)
+    session.add(group)
+    session.commit()
+    return group
+
+
+def set_user_organization(*, user: db.User, organization: db.Group | None) -> None:
+    session = get_session()
+    user.organization_id = organization.id if organization else None
+    session.add(user)
+
+    # Keep user_groups synchronized for backward-compatible joins.
+    session.query(db.UserGroups).filter_by(user_id=user.id).delete()
+    if organization is not None:
+        session.add(db.UserGroups(user_id=user.id, group_id=organization.id))
+    session.commit()
+
+
 def blog_post(slug: str) -> db.BlogPost | None:
     """Fetch the given blog post."""
     session = get_session()
@@ -323,7 +348,7 @@ def texts_in_group(
 
 
 def add_user_to_group(user_id: int, group_id: int) -> None:
-    """Add a user to a group. Idempotent."""
+    """Add a user to a group. Idempotent. Syncs users.organization_id."""
     session = get_session()
     existing = (
         session.query(db.UserGroups)
@@ -332,15 +357,23 @@ def add_user_to_group(user_id: int, group_id: int) -> None:
     )
     if not existing:
         session.add(db.UserGroups(user_id=user_id, group_id=group_id))
-        session.commit()
+    user = session.query(db.User).filter_by(id=user_id).first()
+    if user is not None:
+        user.organization_id = group_id
+        session.add(user)
+    session.commit()
 
 
 def remove_user_from_group(user_id: int, group_id: int) -> None:
-    """Remove a user from a group."""
+    """Remove a user from a group. Clears organization_id when it matches."""
     session = get_session()
     session.query(db.UserGroups).filter_by(
         user_id=user_id, group_id=group_id
     ).delete()
+    user = session.query(db.User).filter_by(id=user_id).first()
+    if user is not None and user.organization_id == group_id:
+        user.organization_id = None
+        session.add(user)
     session.commit()
 
 
@@ -390,7 +423,7 @@ def _text_ids_in_any_group() -> set[int]:
     return {r[0] for r in rows}
 
 
-def user_can_view_text(user, text: db.Text) -> bool:
+def user_can_view_text_legacy(user, text: db.Text) -> bool:
     """True if the user may view this library text (group access + admin).
 
     When group access is enforced: admins can view all; texts in no group are
@@ -424,7 +457,7 @@ def _project_ids_in_any_group() -> set[int]:
     return {r[0] for r in rows}
 
 
-def user_can_view_project(user, project: db.Project) -> bool:
+def user_can_view_project_legacy(user, project: db.Project) -> bool:
     """True if the user may view this proofing project (group access + admin).
 
     When group access is enforced: admins can view all; projects in no group are
@@ -449,6 +482,20 @@ def user_can_view_project(user, project: db.Project) -> bool:
         .first()
     )
     return row is not None
+
+
+def user_can_view_text(user, text: db.Text) -> bool:
+    """Tenant-aware text visibility wrapper."""
+    from kalanjiyam.utils.org_access import user_can_access_text
+
+    return user_can_access_text(user, text)
+
+
+def user_can_view_project(user, project: db.Project) -> bool:
+    """Tenant-aware project visibility wrapper."""
+    from kalanjiyam.utils.org_access import user_can_access_project
+
+    return user_can_access_project(user, project)
 
 
 def projects_in_group(

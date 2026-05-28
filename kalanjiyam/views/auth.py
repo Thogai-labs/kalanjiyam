@@ -325,6 +325,14 @@ def reset_password_from_token(username, raw_token):
 @bp.route("/change-password", methods=["GET", "POST"])
 @login_required
 def change_password():
+    if current_user.is_super_admin:
+        flash(
+            "Super-admin passwords can only be changed from the server CLI "
+            "(./cli.py change-password).",
+            "error",
+        )
+        return redirect(url_for("proofing.index"))
+
     form = ChangePasswordForm()
     if not form.validate_on_submit():
         return render_template("auth/change-password.html", form=form)

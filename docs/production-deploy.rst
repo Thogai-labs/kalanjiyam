@@ -56,7 +56,29 @@ Required production environment variables:
 
 Database::
 
+   alembic upgrade head
    python scripts/add_ocr_comparison_table.py
+
+Multi-tenant bootstrap
+----------------------
+
+After migrations, create the platform super admin and first organization via CLI::
+
+   ./cli.py create-super-admin
+   ./cli.py create-organization --name "Default Org" --slug default
+   ./cli.py assign-org-admin --org default --username orgadmin --email orgadmin@example.com
+
+Run safety checks before enabling tenancy in production ``.env``::
+
+   python scripts/migrate_multi_tenant.py
+   python scripts/migrate_multi_tenant.py --apply --default-org-slug default
+
+Recommended production flags::
+
+   MULTI_TENANT_MODE=true
+   ENFORCE_ORG_ACCESS=true
+   ENFORCE_GROUP_ACCESS_FOR_PROJECTS=true
+   DEFAULT_PROJECT_REQUIRES_ORG=true
 
 Gunicorn — ``wsgi.py`` reads ``FLASK_ENV`` (defaults to ``production``)::
 
@@ -128,6 +150,9 @@ Pre-go-live checklist
 - OCR service healthy; API key matches Kalanjiyam ``.env``
 - PostgreSQL (not SQLite) in production
 - ``proof_ocr_comparisons`` table created
+- Alembic migrations applied; ``migrate_multi_tenant.py`` reports no warnings (or fixes applied)
+- Super admin created via ``./cli.py create-super-admin``; at least one organization and org admin exist
+- ``MULTI_TENANT_MODE=true`` and related access flags set when rolling out tenancy
 - ``FLASK_ENV=production`` for Gunicorn / Docker web
 - Celery worker includes ``ocr`` queue
 - Static assets built (``make css js``)

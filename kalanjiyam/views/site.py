@@ -6,6 +6,7 @@ from pathlib import Path
 from kalanjiyam import queries as q
 from kalanjiyam.consts import LOCALES
 from kalanjiyam.utils.assets import get_page_image_filepath
+from flask_login import current_user
 
 bp = Blueprint("site", __name__)
 
@@ -54,6 +55,12 @@ def page_image(project_slug, page_slug):
     In production, this is typically handled by nginx, but we allow
     Flask to serve it if the file exists.
     """
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+    if not q.user_can_view_project(current_user, project_):
+        abort(403)
+
     image_path = get_page_image_filepath(project_slug, page_slug)
     
     # Check if the image file exists
@@ -70,6 +77,12 @@ def editor_image(project_slug, filename):
     In production, this is typically handled by nginx, but we allow
     Flask to serve it if the file exists.
     """
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+    if not q.user_can_view_project(current_user, project_):
+        abort(403)
+
     upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
     image_path = upload_folder / "projects" / project_slug / "images" / filename
     

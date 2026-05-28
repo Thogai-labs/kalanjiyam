@@ -1,11 +1,22 @@
 """Manages an internal admin view for site data."""
 
-from flask import abort, render_template, request, flash, redirect, url_for, send_file, current_app
+from flask import (
+    abort,
+    after_this_request,
+    render_template,
+    request,
+    flash,
+    redirect,
+    url_for,
+    send_file,
+    current_app,
+)
 from flask_admin import Admin, AdminIndexView, expose, BaseView as AdminBaseView
 from flask_wtf.csrf import generate_csrf
 from flask_admin.contrib import sqla
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
+from slugify import slugify
 import json
 import zipfile
 from datetime import datetime
@@ -20,6 +31,31 @@ from kalanjiyam.utils.assets import get_page_image_filepath
 
 
 
+def _promote_org_admin(session, org: db.Group, admin_user_id: int | None) -> None:
+    """Grant org_admin role and organization membership for the designated admin."""
+    if not admin_user_id:
+        return
+    user = session.query(db.User).filter_by(id=admin_user_id).first()
+    if user is None:
+        return
+    org_admin_role = session.query(db.Role).filter_by(name=db.SiteRole.ORG_ADMIN.value).first()
+    if org_admin_role and org_admin_role not in user.roles:
+        user.roles.append(org_admin_role)
+    user.organization_id = org.id
+    session.query(db.UserGroups).filter_by(user_id=user.id).delete()
+    session.add(db.UserGroups(user_id=user.id, group_id=org.id))
+    session.add(user)
+
+
+def _schedule_zip_cleanup(zip_path: Path) -> None:
+    """Delete export ZIP after the response is sent."""
+
+    @after_this_request
+    def _cleanup(response):
+        zip_path.unlink(missing_ok=True)
+        return response
+
+
 class KalanjiyamIndexView(AdminIndexView):
     def is_accessible(self):
         return current_user.is_authenticated and current_user.is_moderator
@@ -29,25 +65,33 @@ class KalanjiyamIndexView(AdminIndexView):
     
     @expose("/")
     def index(self):
-        # For admin users, show the export/import dashboard
-        if current_user.is_admin:
-            projects = q.projects()
-            print(f"DEBUG: Rendering admin dashboard with {len(projects)} projects")
-            return render_template("admin/export_import.html", projects=projects)
+        if current_user.is_super_admin:
+            return redirect(url_for("platform_view.index"))
+        if current_user.is_org_admin:
+            return redirect(url_for("org_admin_view.index"))
         
         # For moderators, show the default admin interface
         return super().index()
     
+    def _projects_for_current_admin(self):
+        projects = q.projects()
+        if current_user.is_super_admin or current_user.is_admin:
+            return projects
+        org_id = getattr(current_user, "organization_id", None)
+        return [p for p in projects if any(g.id == org_id for g in p.groups)]
+
     @expose('/export/project/<project_slug>')
     @login_required
     def export_project(self, project_slug):
         """Export a single project as a ZIP file."""
-        if not current_user.is_admin:
+        if not (current_user.is_super_admin or current_user.is_org_admin):
             abort(404)
         
         project = q.project(project_slug)
         if not project:
             abort(404)
+        if project not in self._projects_for_current_admin():
+            abort(403)
         
         # Create temporary directory for export
         export_dir = Path(current_app.config["UPLOAD_FOLDER"]) / "exports" / f"{project_slug}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -97,6 +141,7 @@ class KalanjiyamIndexView(AdminIndexView):
             import shutil
             shutil.rmtree(export_dir)
             
+            _schedule_zip_cleanup(zip_path)
             return send_file(
                 zip_path,
                 as_attachment=True,
@@ -116,10 +161,10 @@ class KalanjiyamIndexView(AdminIndexView):
     @login_required
     def export_all_projects(self):
         """Export all projects as a single ZIP file."""
-        if not current_user.is_admin:
+        if not (current_user.is_super_admin or current_user.is_org_admin):
             abort(404)
         
-        projects = q.projects()
+        projects = self._projects_for_current_admin()
         
         # Create temporary directory for export
         export_dir = Path(current_app.config["UPLOAD_FOLDER"]) / "exports" / f"all_projects_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -130,7 +175,7 @@ class KalanjiyamIndexView(AdminIndexView):
                 'export_info': {
                     'exported_at': datetime.now().isoformat(),
                     'total_projects': len(projects),
-                    'version': '1.0'
+                    'version': '2.0'
                 },
                 'projects': []
             }
@@ -139,20 +184,41 @@ class KalanjiyamIndexView(AdminIndexView):
                 project_data = self._export_project_data(project)
                 all_projects_data['projects'].append(project_data)
             
-            # Save JSON data
+            # Create project folders with JSON and files.
+            for project in projects:
+                project_dir = export_dir / "projects" / project.slug
+                project_dir.mkdir(parents=True, exist_ok=True)
+                with open(project_dir / "project_data.json", "w", encoding="utf-8") as f:
+                    json.dump(self._export_project_data(project), f, indent=2, ensure_ascii=False)
+                files_dir = project_dir / "files"
+                files_dir.mkdir(exist_ok=True)
+                pdf_source = (
+                    Path(current_app.config["UPLOAD_FOLDER"]) / "projects" / project.slug / "pdf" / "source.pdf"
+                )
+                if pdf_source.exists():
+                    (files_dir / "source.pdf").write_bytes(pdf_source.read_bytes())
+                pages_dir = files_dir / "pages"
+                pages_dir.mkdir(exist_ok=True)
+                for page in project.pages:
+                    image_path = get_page_image_filepath(project.slug, page.slug)
+                    if image_path.exists():
+                        (pages_dir / f"{page.slug}.jpg").write_bytes(image_path.read_bytes())
+
             json_file = export_dir / "all_projects_data.json"
             with open(json_file, 'w', encoding='utf-8') as f:
                 json.dump(all_projects_data, f, indent=2, ensure_ascii=False)
-            
-            # Create ZIP file
+
             zip_path = export_dir.parent / "all_projects_export.zip"
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                zipf.write(json_file, "all_projects_data.json")
+                for file_path in export_dir.rglob("*"):
+                    if file_path.is_file():
+                        zipf.write(file_path, str(file_path.relative_to(export_dir)))
             
             # Clean up temporary directory
             import shutil
             shutil.rmtree(export_dir)
             
+            _schedule_zip_cleanup(zip_path)
             return send_file(
                 zip_path,
                 as_attachment=True,
@@ -168,11 +234,20 @@ class KalanjiyamIndexView(AdminIndexView):
             flash(f"Export failed: {str(e)}")
             return redirect(url_for('admin.index'))
     
+    @expose('/export-import')
+    @login_required
+    def export_import_dashboard(self):
+        """Export/import dashboard for super admins."""
+        if not current_user.is_super_admin:
+            abort(404)
+        projects = self._projects_for_current_admin()
+        return render_template("admin/export_import.html", projects=projects)
+
     @expose('/import', methods=['GET', 'POST'])
     @login_required
     def import_project(self):
         """Import a project from a ZIP file."""
-        if not current_user.is_admin:
+        if not current_user.is_super_admin:
             abort(404)
         
         if request.method == "POST":
@@ -220,7 +295,7 @@ class KalanjiyamIndexView(AdminIndexView):
     @login_required
     def import_all_projects(self):
         """Import all projects from a ZIP file."""
-        if not current_user.is_admin:
+        if not current_user.is_super_admin:
             abort(404)
         
         if request.method == "POST":
@@ -269,7 +344,25 @@ class KalanjiyamIndexView(AdminIndexView):
                     
                     for project_data in all_projects_data['projects']:
                         try:
-                            project = self._import_project_data(session, project_data)
+                            slug = project_data["metadata"]["slug"]
+                            project_dir = extract_path / "projects" / slug
+                            if project_dir.exists():
+                                project_json = project_dir / "project_data.json"
+                                if not project_json.exists():
+                                    raise ValueError(f"Missing project_data.json for {slug}")
+                                files_dir = project_dir / "files"
+                                temp_single_zip = extract_path / f"{slug}_single.zip"
+                                with zipfile.ZipFile(temp_single_zip, "w", zipfile.ZIP_DEFLATED) as zipf2:
+                                    zipf2.write(project_json, "project_data.json")
+                                    if files_dir.exists():
+                                        for file_path in files_dir.rglob("*"):
+                                            if file_path.is_file():
+                                                zipf2.write(file_path, f"files/{file_path.relative_to(files_dir)}")
+                                result = self._extract_and_import_project(temp_single_zip, session)
+                                project = result["project"]
+                                temp_single_zip.unlink(missing_ok=True)
+                            else:
+                                project = self._import_project_data(session, project_data)
                             imported_projects.append(project.display_title)
                         except Exception as e:
                             flash(f"Failed to import project {project_data['metadata']['display_title']}: {str(e)}")
@@ -296,6 +389,8 @@ class KalanjiyamIndexView(AdminIndexView):
         
         # Export project metadata
         project_data = {
+            'format_version': '2.0',
+            'organization_slug': project.groups[0].slug if project.groups else None,
             'metadata': {
                 'slug': project.slug,
                 'display_title': project.display_title,
@@ -337,6 +432,7 @@ class KalanjiyamIndexView(AdminIndexView):
             # Export revisions for this page
             for revision in page.revisions:
                 revision_data = {
+                    'revision_key': revision.id,
                     'page_slug': page.slug,
                     'author_username': revision.author.username if revision.author else None,
                     'status_name': revision.status.name if revision.status else None,
@@ -349,7 +445,8 @@ class KalanjiyamIndexView(AdminIndexView):
                 # Export translations for this revision
                 for translation in revision.translations:
                     translation_data = {
-                        'revision_id': revision.id,
+                        'revision_key': revision.id,
+                        'page_slug': page.slug,
                         'author_username': translation.author.username if translation.author else None,
                         'content': translation.content,
                         'source_language': translation.source_language,
@@ -523,7 +620,7 @@ class KalanjiyamIndexView(AdminIndexView):
             page_mapping[page_data['slug']] = page
         
         # Create revisions
-        revision_mapping = {}  # Map revision IDs to revision objects
+        revision_mapping = {}  # Map revision keys to revision objects
         for revision_data in project_data['revisions']:
             page = page_mapping.get(revision_data['page_slug'])
             if not page:
@@ -543,7 +640,7 @@ class KalanjiyamIndexView(AdminIndexView):
             )
             session.add(revision)
             session.flush()
-            revision_mapping[revision_data.get('revision_id')] = revision
+            revision_mapping[revision_data.get('revision_key')] = revision
         
         # Create translations
         for translation_data in project_data['translations']:
@@ -551,7 +648,7 @@ class KalanjiyamIndexView(AdminIndexView):
             
             translation = db.Translation(
                 page_id=page_mapping[translation_data['page_slug']].id if 'page_slug' in translation_data else None,
-                revision_id=revision_mapping.get(translation_data['revision_id']).id if translation_data.get('revision_id') in revision_mapping else None,
+                revision_id=revision_mapping.get(translation_data['revision_key']).id if translation_data.get('revision_key') in revision_mapping else None,
                 author_id=author.id if author else None,
                 content=translation_data['content'],
                 source_language=translation_data['source_language'],
@@ -562,6 +659,12 @@ class KalanjiyamIndexView(AdminIndexView):
                 updated_at=datetime.fromisoformat(translation_data['updated_at'])
             )
             session.add(translation)
+
+        org_slug = project_data.get("organization_slug")
+        if org_slug:
+            org = q.organization_by_slug(org_slug)
+            if org:
+                session.add(db.ProjectGroups(group_id=org.id, project_id=project.id))
         
         return project
     
@@ -617,11 +720,34 @@ class KalanjiyamIndexView(AdminIndexView):
             }
 
 
+class PlatformView(AdminBaseView):
+    """Super-admin platform overview."""
+
+    def is_accessible(self):
+        return current_user.is_authenticated and current_user.is_super_admin
+
+    def inaccessible_callback(self, name, **kwargs):
+        abort(404)
+
+    @expose("/")
+    def index(self):
+        orgs = q.groups()
+        total_storage_used = sum(g.storage_used_bytes or 0 for g in orgs)
+        total_ocr_used = sum(g.ocr_credits_used or 0 for g in orgs)
+        return render_template(
+            "admin/platform_dashboard.html",
+            orgs=orgs,
+            org_count=len(orgs),
+            total_storage_used=total_storage_used,
+            total_ocr_used=total_ocr_used,
+        )
+
+
 class GroupsView(AdminBaseView):
     """Super-admin group management: list/create/edit/delete groups, manage users and books."""
 
     def is_accessible(self):
-        return current_user.is_authenticated and current_user.is_admin
+        return current_user.is_authenticated and current_user.is_super_admin
 
     def inaccessible_callback(self, name, **kwargs):
         abort(404)
@@ -646,39 +772,64 @@ class GroupsView(AdminBaseView):
 
     @expose("/create", methods=["GET", "POST"])
     def create(self):
+        all_users = q.all_users_for_group_select()
         if request.method == "POST":
             name = (request.form.get("name") or "").strip()
             description = (request.form.get("description") or "").strip()
+            slug = (request.form.get("slug") or slugify(name)).strip()
+            storage_quota_mb = request.form.get("storage_quota_mb", type=int)
+            ocr_credit_limit = request.form.get("ocr_credit_limit", type=int)
+            admin_user_id = request.form.get("admin_user_id", type=int)
             if not name:
                 flash("Name is required.", "error")
-                return render_template("admin/group_form.html", group=None, csrf_token=generate_csrf())
+                return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
             session = q.get_session()
-            group = db.Group(name=name, description=description)
+            group = db.Group(
+                name=name,
+                slug=slug,
+                description=description,
+                storage_quota_bytes=(storage_quota_mb * 1024 * 1024) if storage_quota_mb else None,
+                ocr_credit_limit=ocr_credit_limit,
+                admin_user_id=admin_user_id,
+            )
             session.add(group)
+            session.flush()
+            _promote_org_admin(session, group, admin_user_id)
             session.commit()
             flash("Group created.")
             return redirect(url_for("groups_view.manage", id=group.id))
-        return render_template("admin/group_form.html", group=None, csrf_token=generate_csrf())
+        return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
 
     @expose("/edit/<int:id>", methods=["GET", "POST"])
     def edit(self, id):
         group = q.group(id)
+        all_users = q.all_users_for_group_select()
         if not group:
             abort(404)
         if request.method == "POST":
             name = (request.form.get("name") or "").strip()
             description = (request.form.get("description") or "").strip()
+            slug = (request.form.get("slug") or slugify(name)).strip()
+            storage_quota_mb = request.form.get("storage_quota_mb", type=int)
+            ocr_credit_limit = request.form.get("ocr_credit_limit", type=int)
+            admin_user_id = request.form.get("admin_user_id", type=int)
             if not name:
                 flash("Name is required.", "error")
-                return render_template("admin/group_form.html", group=group, csrf_token=generate_csrf())
+                return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())
             group.name = name
+            group.slug = slug
             group.description = description
+            group.storage_quota_bytes = (storage_quota_mb * 1024 * 1024) if storage_quota_mb else None
+            group.ocr_credit_limit = ocr_credit_limit
+            group.admin_user_id = admin_user_id
             session = q.get_session()
             session.add(group)
+            session.flush()
+            _promote_org_admin(session, group, admin_user_id)
             session.commit()
             flash("Group updated.")
             return redirect(url_for("groups_view.index"))
-        return render_template("admin/group_form.html", group=group, csrf_token=generate_csrf())
+        return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())
 
     @expose("/delete/<int:id>", methods=["POST"])
     def delete(self, id):
@@ -759,14 +910,65 @@ class GroupsView(AdminBaseView):
         )
 
 
+class OrgAdminView(AdminBaseView):
+    """Organization-scoped admin dashboard."""
+
+    def is_accessible(self):
+        return current_user.is_authenticated and current_user.is_org_admin
+
+    def inaccessible_callback(self, name, **kwargs):
+        abort(404)
+
+    @expose("/", methods=["GET", "POST"])
+    def index(self):
+        org_id = getattr(current_user, "organization_id", None)
+        if org_id is None:
+            abort(403)
+        org = q.group(org_id)
+        if org is None:
+            abort(404)
+
+        if request.method == "POST":
+            action = request.form.get("action")
+            session = q.get_session()
+            if action == "create_user":
+                username = (request.form.get("username") or "").strip()
+                email = (request.form.get("email") or "").strip()
+                password = (request.form.get("password") or "").strip()
+                if not username or not email or not password:
+                    flash("Username, email, and password are required.", "error")
+                else:
+                    user = db.User(username=username, email=email, organization_id=org.id)
+                    user.set_password(password)
+                    p1_role = session.query(db.Role).filter_by(name=db.SiteRole.P1.value).first()
+                    if p1_role:
+                        user.roles.append(p1_role)
+                    session.add(user)
+                    session.flush()
+                    session.add(db.UserGroups(user_id=user.id, group_id=org.id))
+                    session.commit()
+                    flash("User created.", "success")
+                return redirect(url_for("org_admin_view.index"))
+
+        users = q.users_in_group(org.id)
+        projects, _ = q.projects_in_group(org.id, page=1, per_page=200)
+        return render_template(
+            "admin/org_dashboard.html",
+            org=org,
+            users=users,
+            projects=projects,
+            csrf_token=generate_csrf(),
+        )
+
+
 class BaseView(sqla.ModelView):
     """Base view for models.
 
-    By default, only admins can see model data.
+    By default, only super admins can see model data.
     """
 
     def is_accessible(self):
-        return current_user.is_admin
+        return current_user.is_super_admin
 
     def inaccessible_callback(self, name, **kw):
         abort(404)
@@ -829,7 +1031,23 @@ def create_admin_manager(app):
     )
 
     admin.add_view(
+        PlatformView(
+            name="Platform",
+            category="Access",
+            url="platform",
+            endpoint="platform_view",
+        )
+    )
+    admin.add_view(
         GroupsView(name="Groups", category="Access", url="groups", endpoint="groups_view")
+    )
+    admin.add_view(
+        OrgAdminView(
+            name="My Organization",
+            category="Access",
+            url="org",
+            endpoint="org_admin_view",
+        )
     )
     # Redirect /admin/groups -> /admin/groups/ (Flask-Admin registers with trailing slash)
     @app.route("/admin/groups")

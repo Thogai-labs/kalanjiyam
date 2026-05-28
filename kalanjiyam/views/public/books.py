@@ -7,6 +7,7 @@ from sqlalchemy import and_, or_
 import kalanjiyam.database as db
 import kalanjiyam.queries as q
 from kalanjiyam.utils.assets import get_page_image_filepath
+from kalanjiyam.utils.org_access import is_multi_tenant_enabled
 
 bp = Blueprint("books", __name__)
 
@@ -23,7 +24,7 @@ def get_public_projects():
         .distinct()
         .all()
     )
-    if current_app.config.get("ENFORCE_GROUP_ACCESS_FOR_PROJECTS"):
+    if current_app.config.get("ENFORCE_GROUP_ACCESS_FOR_PROJECTS") or is_multi_tenant_enabled():
         projects_with_content = [
             p for p in projects_with_content if q.user_can_view_project(current_user, p)
         ]
@@ -92,7 +93,7 @@ def book(project_slug):
     project = q.project(project_slug)
     if project is None:
         abort(404)
-    if current_app.config.get("ENFORCE_GROUP_ACCESS_FOR_PROJECTS") and not q.user_can_view_project(
+    if (current_app.config.get("ENFORCE_GROUP_ACCESS_FOR_PROJECTS") or is_multi_tenant_enabled()) and not q.user_can_view_project(
         current_user, project
     ):
         abort(403)
@@ -143,7 +144,7 @@ def page(project_slug, page_slug):
     project = q.project(project_slug)
     if project is None:
         abort(404)
-    if current_app.config.get("ENFORCE_GROUP_ACCESS_FOR_PROJECTS") and not q.user_can_view_project(
+    if (current_app.config.get("ENFORCE_GROUP_ACCESS_FOR_PROJECTS") or is_multi_tenant_enabled()) and not q.user_can_view_project(
         current_user, project
     ):
         abort(403)

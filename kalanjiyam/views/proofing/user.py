@@ -125,7 +125,11 @@ def admin(username):
     session = q.get_session()
     # Exclude admin.
     # (Admin roles should be added manually by the server administrator.)
-    all_roles = [r for r in session.query(db.Role).all() if r.name != "admin"]
+    all_roles = [
+        r
+        for r in session.query(db.Role).all()
+        if r.name not in {"admin", "super_admin"}
+    ]
     all_roles = sorted(all_roles, key=lambda x: x.name)
 
     form = _make_role_form(all_roles, user_)

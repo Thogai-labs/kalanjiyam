@@ -38,6 +38,11 @@ class User(KalanjiyamUserMixin, Base):
 
     #: If the user has verified their email.
     is_verified = Column(Boolean, nullable=False, default=False)
+    #: Primary organization/group for this user.
+    organization_id = Column(
+        Integer, ForeignKey("groups.id"), nullable=True, index=True
+    )
+    organization = relationship("Group", foreign_keys=[organization_id])
 
     #: All roles available for this user.
     roles = relationship("Role", secondary="user_roles")

@@ -24,10 +24,29 @@ from kalanjiyam.enums import SitePageStatus
 from kalanjiyam.utils import project_utils
 from kalanjiyam.utils.assets import get_page_image_filepath
 from kalanjiyam.utils.diff import revision_diff
+from kalanjiyam.utils.quotas import (
+    add_storage_usage_for_project,
+    consume_ocr_credit_for_project,
+    ensure_ocr_quota_for_project,
+    ensure_storage_quota_for_user,
+)
 from kalanjiyam.utils.revisions import EditError, add_revision
 from kalanjiyam.views.api import bp as api
 
 bp = Blueprint("page", __name__)
+
+
+@bp.before_request
+def _enforce_project_access():
+    project_slug = request.view_args.get("project_slug") if request.view_args else None
+    if not project_slug:
+        return None
+    project_ = q.project(project_slug)
+    if project_ is None:
+        return None
+    if not q.user_can_view_project(current_user, project_):
+        abort(403)
+    return None
 
 
 @dataclass
@@ -343,6 +362,8 @@ def ocr(project_slug, page_slug):
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
+    if not q.user_can_view_project(current_user, project_):
+        abort(403)
 
     page_ = q.page(project_.id, page_slug)
     if not page_:
@@ -371,7 +392,9 @@ def ocr(project_slug, page_slug):
     image_path = get_page_image_filepath(project_slug, page_slug)
 
     try:
+        ensure_ocr_quota_for_project(project_)
         ocr_response = run_ocr(image_path, engine_name=engine, language=language)
+        consume_ocr_credit_for_project(project_)
         logging.info("OCR completed successfully, returning %s characters", len(ocr_response.text_content))
         return ocr_response.text_content
     except Exception as e:
@@ -394,6 +417,8 @@ def translate(project_slug, page_slug):
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
+    if not q.user_can_view_project(current_user, project_):
+        abort(403)
 
     page_ = q.page(project_.id, page_slug)
     if not page_:
@@ -478,6 +503,8 @@ def upload_image(project_slug, page_slug):
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
+    if not q.user_can_view_project(current_user, project_):
+        abort(403)
 
     page_ = q.page(project_.id, page_slug)
     if not page_:
@@ -508,6 +535,7 @@ def upload_image(project_slug, page_slug):
     max_size = 10 * 1024 * 1024  # 10MB
     if file_size > max_size:
         abort(400, description=f"File size ({file_size / 1024 / 1024:.2f}MB) exceeds maximum allowed size (10MB)")
+    ensure_storage_quota_for_user(current_user, file_size)
     
     try:
         # Create images directory for this project
@@ -524,6 +552,7 @@ def upload_image(project_slug, page_slug):
         
         # Save file
         file.save(str(file_path))
+        add_storage_usage_for_project(project_slug)
         
         # Generate URL for the image
         # Use the site blueprint to serve images

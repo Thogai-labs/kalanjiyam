@@ -32,6 +32,14 @@ class KalanjiyamAnonymousUser(AnonymousUserMixin):
         return False
 
     @property
+    def is_super_admin(self) -> bool:
+        return False
+
+    @property
+    def is_org_admin(self) -> bool:
+        return False
+
+    @property
     def is_ok(self) -> bool:
         return True
 
@@ -58,11 +66,22 @@ class KalanjiyamUserMixin(UserMixin):
 
     @property
     def is_moderator(self) -> bool:
-        return self.has_any_role(SiteRole.MODERATOR, SiteRole.ADMIN)
+        return self.has_any_role(SiteRole.MODERATOR, SiteRole.ADMIN, SiteRole.SUPER_ADMIN)
 
     @property
     def is_admin(self) -> bool:
-        return self.has_role(SiteRole.ADMIN)
+        # Backward-compatible alias while migrating from `admin` to `super_admin`.
+        return self.has_any_role(SiteRole.ADMIN, SiteRole.SUPER_ADMIN)
+
+    @property
+    def is_super_admin(self) -> bool:
+        return self.has_role(SiteRole.SUPER_ADMIN)
+
+    @property
+    def is_org_admin(self) -> bool:
+        return self.has_role(SiteRole.ORG_ADMIN) and bool(
+            getattr(self, "organization_id", None)
+        )
 
     @property
     def is_ok(self) -> bool:

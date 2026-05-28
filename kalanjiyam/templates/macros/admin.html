@@ -1,0 +1,177 @@
+{% macro _nav_link(route, label, text, active) %}
+<li>
+  <a href="{{ url_for(route) }}"
+     class="block px-4 py-2.5 rounded-xl transition-all duration-200 font-semibold text-sm
+     {{ 'bg-royalblue text-white shadow-md shadow-royalblue/20' if active else 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' }}">
+    {{ text }}
+  </a>
+</li>
+{% endmacro %}
+
+
+{% macro nav(active, current_user) %}
+{% if current_user.is_super_admin %}
+<nav class="mb-6">
+  <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Platform') }}</h2>
+  <ul class="space-y-1">
+    {{ _nav_link('platform_view.index', 'platform', _('Overview'), active == 'platform') }}
+    {{ _nav_link('groups_view.index', 'organizations', _('Organizations'), active == 'organizations') }}
+    {{ _nav_link('admin.export_import_dashboard', 'export', _('Export / Import'), active == 'export') }}
+  </ul>
+</nav>
+<nav class="mb-6">
+  <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Data') }}</h2>
+  <ul class="space-y-1">
+    {{ _nav_link('project.index_view', 'projects', _('Projects'), active == 'projects') }}
+    {{ _nav_link('user.index_view', 'users', _('Users'), active == 'users') }}
+    {{ _nav_link('dictionary.index_view', 'dictionary', _('Dictionary'), active == 'dictionary') }}
+    {{ _nav_link('genre.index_view', 'genres', _('Genres'), active == 'genres') }}
+    {{ _nav_link('projectsponsorship.index_view', 'sponsorship', _('Sponsorships'), active == 'sponsorship') }}
+    {{ _nav_link('contributorinfo.index_view', 'contributors', _('Contributors'), active == 'contributors') }}
+  </ul>
+</nav>
+<nav class="mb-6">
+  <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Site') }}</h2>
+  <ul class="space-y-1">
+    {{ _nav_link('proofing.index', 'proofing', _('Proofing'), active == 'proofing') }}
+    {{ _nav_link('public.books.index', 'books', _('Books'), active == 'books') }}
+    {{ _nav_link('site.index', 'home', _('Home'), active == 'home') }}
+  </ul>
+</nav>
+{% elif current_user.is_moderator %}
+<nav class="mb-6">
+  <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Content') }}</h2>
+  <ul class="space-y-1">
+    {{ _nav_link('genre.index_view', 'genres', _('Genres'), active == 'genres') }}
+    {{ _nav_link('projectsponsorship.index_view', 'sponsorship', _('Sponsorships'), active == 'sponsorship') }}
+    {{ _nav_link('contributorinfo.index_view', 'contributors', _('Contributors'), active == 'contributors') }}
+  </ul>
+</nav>
+{% elif current_user.is_org_admin %}
+<nav>
+  <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Organization') }}</h2>
+  <ul class="space-y-1">
+    {{ _nav_link('org_admin_view.index', 'org', _('My organization'), active == 'org') }}
+    {{ _nav_link('proofing.create_project', 'upload', _('Upload book'), active == 'upload') }}
+  </ul>
+</nav>
+{% endif %}
+{% endmacro %}
+
+
+{% macro page_header(title, subtitle=None) %}
+<header class="mb-8">
+  <h1 class="text-3xl font-extrabold text-slate-900 flex items-center">
+    <span class="pulse-indicator"></span>
+    {{ title }}
+  </h1>
+  {% if subtitle %}
+  <p class="text-slate-500 mt-2 font-medium">{{ subtitle }}</p>
+  {% endif %}
+</header>
+{% endmacro %}
+
+
+{% macro stat_card(label, value, accent='royalblue') %}
+<div class="premium-card p-6">
+  <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ label }}</p>
+  <p class="text-3xl font-extrabold text-slate-900">{{ value }}</p>
+</div>
+{% endmacro %}
+
+
+{% macro card(title=None) %}
+<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 mb-6">
+  {% if title %}
+  <h2 class="text-lg font-bold text-slate-900 mb-4">{{ title }}</h2>
+  {% endif %}
+  {{ caller() }}
+</div>
+{% endmacro %}
+
+
+{% macro btn_primary(text, href=None, type='button') %}
+{% if href %}
+<a href="{{ href }}" class="btn-premium">{{ text }}</a>
+{% else %}
+<button type="{{ type }}" class="btn-premium">{{ text }}</button>
+{% endif %}
+{% endmacro %}
+
+
+{% macro btn_secondary(text, href=None, type='button') %}
+{% if href %}
+<a href="{{ href }}" class="inline-flex items-center px-5 py-2.5 rounded-xl font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors">{{ text }}</a>
+{% else %}
+<button type="{{ type }}" class="inline-flex items-center px-5 py-2.5 rounded-xl font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors">{{ text }}</button>
+{% endif %}
+{% endmacro %}
+
+
+{% macro btn_danger(text, type='submit') %}
+<button type="{{ type }}" class="inline-flex items-center px-3 py-1.5 rounded-lg font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-100 transition-colors text-sm">{{ text }}</button>
+{% endmacro %}
+
+
+{% macro input_class() %}w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900{% endmacro %}
+
+
+{% macro select_class() %}w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all bg-white text-slate-900{% endmacro %}
+
+
+{% macro label_class() %}block text-sm font-semibold text-slate-600 mb-1.5{% endmacro %}
+
+
+{% macro table_wrap() %}
+<div class="overflow-x-auto rounded-xl border border-slate-100">
+  <table class="min-w-full text-sm">
+    {{ caller() }}
+  </table>
+</div>
+{% endmacro %}
+
+
+{% macro thead_row() %}
+<thead class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+  {{ caller() }}
+</thead>
+{% endmacro %}
+
+
+{% macro th() %}<th class="px-4 py-3">{% endmacro %}
+
+
+{% macro link_action(text, href) %}
+<a href="{{ href }}" class="text-royalblue hover:text-royalblue/80 font-semibold text-sm transition-colors">{{ text }}</a>
+{% endmacro %}
+
+
+{% macro pagination(page, num_pages, total, label, base_url_kwargs) %}
+{% if num_pages > 1 %}
+<div class="mt-6 flex items-center justify-between text-sm">
+  <span class="text-slate-500 font-medium">Page {{ page }} of {{ num_pages }} ({{ total }} {{ label }})</span>
+  <div class="flex gap-2">
+    {% if page > 1 %}
+    <a href="{{ url_for(request.endpoint, page=page - 1, **base_url_kwargs) }}" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 transition-colors">{{ _('Previous') }}</a>
+    {% endif %}
+    {% if page < num_pages %}
+    <a href="{{ url_for(request.endpoint, page=page + 1, **base_url_kwargs) }}" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 transition-colors">{{ _('Next') }}</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+
+{% macro callout_warning() %}
+<div class="mt-6 p-5 bg-amber-50 border border-amber-100 text-amber-900 rounded-2xl text-sm font-medium space-y-1">
+  {{ caller() }}
+</div>
+{% endmacro %}
+
+
+{% macro callout_info() %}
+<div class="mt-6 p-5 bg-royalblue/5 border border-royalblue/10 text-slate-700 rounded-2xl text-sm font-medium space-y-1">
+  {{ caller() }}
+</div>
+{% endmacro %}

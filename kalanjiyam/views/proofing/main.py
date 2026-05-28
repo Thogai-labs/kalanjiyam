@@ -17,6 +17,7 @@ from kalanjiyam import database as db
 from kalanjiyam import queries as q
 from kalanjiyam.enums import SitePageStatus
 from kalanjiyam.tasks import projects as project_tasks
+from kalanjiyam.utils.quotas import ensure_storage_quota_for_user
 from kalanjiyam.views.proofing.decorators import moderator_required, p2_required
 
 bp = Blueprint("proofing", __name__)
@@ -112,7 +113,7 @@ def index():
         SitePageStatus.SKIP: "bg-slate-100",
     }
 
-    projects = q.projects()
+    projects = [p for p in q.projects() if q.user_can_view_project(current_user, p)]
     statuses_per_project = {}
     progress_per_project = {}
     pages_per_project = {}
@@ -170,6 +171,11 @@ def editor_guide():
 def create_project():
     form = CreateProjectForm()
     if form.validate_on_submit():
+        if current_app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True) and not getattr(
+            current_user, "organization_id", None
+        ):
+            flash("Your account is not assigned to an organization.")
+            return render_template("proofing/create-project.html", form=form)
         title = form.local_title.data
 
         # TODO: add timestamp to slug for extra uniqueness?
@@ -181,6 +187,13 @@ def create_project():
         if not _is_allowed_document_file(filename):
             flash("Please upload a PDF.")
             return render_template("proofing/create-project.html", form=form)
+        upload_size = 0
+        if form.local_file.data and hasattr(form.local_file.data, "stream"):
+            cur_pos = form.local_file.data.stream.tell()
+            form.local_file.data.stream.seek(0, 2)
+            upload_size = form.local_file.data.stream.tell()
+            form.local_file.data.stream.seek(cur_pos)
+        ensure_storage_quota_for_user(current_user, upload_size)
 
         # Create all directories for this project ahead of time.
         # FIXME(arun): push this further into the Celery task.

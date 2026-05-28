@@ -11,6 +11,7 @@ from kalanjiyam.enums import SitePageStatus
 from kalanjiyam.tasks import app
 from kalanjiyam.utils.ocr_types import serialize_bounding_boxes
 from kalanjiyam.utils.assets import get_page_image_filepath
+from kalanjiyam.utils.quotas import consume_ocr_credit_for_project, ensure_ocr_quota_for_project
 from kalanjiyam.utils.revisions import add_revision
 from config import create_config_only_app
 from typing import Optional, List
@@ -45,6 +46,7 @@ def _run_ocr_for_page_inner(
         project = q.project(project_slug)
         if project is None:
             raise ValueError(f'Project "{project_slug}" not found.')
+        ensure_ocr_quota_for_project(project)
         
         page = q.page(project.id, page_slug)
         if page is None:
@@ -59,7 +61,7 @@ def _run_ocr_for_page_inner(
 
         summary = f"Run OCR ({engine}, {language})"
         try:
-            return add_revision(
+            revision_id = add_revision(
                 page=page,
                 summary=summary,
                 content=ocr_response.text_content,
@@ -67,6 +69,8 @@ def _run_ocr_for_page_inner(
                 version=0,
                 author_id=bot_user.id,
             )
+            consume_ocr_credit_for_project(project)
+            return revision_id
         except Exception as e:
             raise ValueError(
                 f'OCR failed for page "{project.slug}/{page.slug}" with engine {engine} and language {language}.'

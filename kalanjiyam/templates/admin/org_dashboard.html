@@ -1,0 +1,95 @@
+{% extends 'admin/master.html' %}
+{% import 'macros/admin.html' as admin %}
+
+{% block title %}{{ org.name }} | {{ _('Admin') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('org', current_user) }}
+{% endblock %}
+
+{% block content %}
+{{ admin.page_header(org.name, _('Manage users and books for your organization.')) }}
+
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+  <div class="premium-card p-6">
+    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ _('Storage') }}</p>
+    <p class="text-2xl font-extrabold text-slate-900">
+      {{ ((org.storage_used_bytes or 0) // (1024 * 1024)) }}MB
+      <span class="text-base font-semibold text-slate-400">/ {{ (org.storage_quota_bytes // (1024 * 1024)) if org.storage_quota_bytes is not none else _('unlimited') }}</span>
+    </p>
+  </div>
+  <div class="premium-card p-6">
+    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ _('OCR credits') }}</p>
+    <p class="text-2xl font-extrabold text-slate-900">
+      {{ org.ocr_credits_used or 0 }}
+      <span class="text-base font-semibold text-slate-400">/ {{ org.ocr_credit_limit if org.ocr_credit_limit is not none else _('unlimited') }}</span>
+    </p>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
+    <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Create user') }}</h2>
+    <form method="post" action="{{ url_for('org_admin_view.index') }}" class="space-y-4">
+      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+      <input type="hidden" name="action" value="create_user">
+      <div>
+        <label class="{{ admin.label_class() }}">{{ _('Username') }}</label>
+        <input type="text" name="username" class="{{ admin.input_class() }}" required>
+      </div>
+      <div>
+        <label class="{{ admin.label_class() }}">{{ _('Email') }}</label>
+        <input type="email" name="email" class="{{ admin.input_class() }}" required>
+      </div>
+      <div>
+        <label class="{{ admin.label_class() }}">{{ _('Password') }}</label>
+        <input type="password" name="password" class="{{ admin.input_class() }}" required>
+      </div>
+      {{ admin.btn_primary(_('Create user'), type='submit') }}
+    </form>
+  </div>
+
+  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 flex flex-col justify-center">
+    <h2 class="text-lg font-bold text-slate-900 mb-3">{{ _('Quick actions') }}</h2>
+    {{ admin.btn_primary(_('Upload a new book'), href=url_for('proofing.create_project')) }}
+  </div>
+</div>
+
+<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 mb-6">
+  <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Users') }} <span class="text-sm font-normal text-slate-400">({{ users|length }})</span></h2>
+  {% if users %}
+  <ul class="divide-y divide-slate-100">
+    {% for u in users %}
+    <li class="py-3 flex items-center gap-3">
+      <span class="w-8 h-8 rounded-full bg-royalblue/10 text-royalblue flex items-center justify-center text-sm font-bold">{{ u.username[0]|upper }}</span>
+      <div>
+        <p class="font-semibold text-slate-900">{{ u.username }}</p>
+        <p class="text-sm text-slate-400">{{ u.email }}</p>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-slate-400 text-sm font-medium">{{ _('No users yet.') }}</p>
+  {% endif %}
+</div>
+
+<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
+  <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Books') }} <span class="text-sm font-normal text-slate-400">({{ projects|length }})</span></h2>
+  {% if projects %}
+  <ul class="divide-y divide-slate-100">
+    {% for p in projects %}
+    <li class="py-3 flex justify-between items-center gap-4">
+      <div>
+        <p class="font-semibold text-slate-900">{{ p.display_title }}</p>
+        <p class="text-xs font-mono text-slate-400">{{ p.slug }}</p>
+      </div>
+      {{ admin.link_action(_('Export'), url_for('admin.export_project', project_slug=p.slug)) }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-slate-400 text-sm font-medium">{{ _('No books in this organization yet.') }}</p>
+  {% endif %}
+</div>
+{% endblock %}

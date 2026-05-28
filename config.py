@@ -98,6 +98,19 @@ class BaseConfig:
         _env("ENFORCE_GROUP_ACCESS_FOR_PROJECTS", "false").lower()
         in ("true", "1", "yes")
     )
+    #: Master switch for strict organization-based tenancy rules.
+    MULTI_TENANT_MODE = (
+        _env("MULTI_TENANT_MODE", "false").lower() in ("true", "1", "yes")
+    )
+    #: If True, enforce org-level access checks across projects/texts when
+    #: MULTI_TENANT_MODE is enabled.
+    ENFORCE_ORG_ACCESS = (
+        _env("ENFORCE_ORG_ACCESS", "true").lower() in ("true", "1", "yes")
+    )
+    #: If True, newly created projects must be attached to an organization.
+    DEFAULT_PROJECT_REQUIRES_ORG = (
+        _env("DEFAULT_PROJECT_REQUIRES_ORG", "true").lower() in ("true", "1", "yes")
+    )
 
     #: Logger setup
     LOG_LEVEL = logging.ERROR

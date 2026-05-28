@@ -1,6 +1,8 @@
-"""Models for access groups: users and content (texts/projects) per group."""
+"""Models for access groups / organizations and their memberships."""
 
-from sqlalchemy import Column, ForeignKey, Integer, String
+from datetime import datetime
+
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy import Text as Text_
 from sqlalchemy.orm import relationship
 
@@ -8,7 +10,7 @@ from kalanjiyam.models.base import Base, foreign_key, pk
 
 
 class Group(Base):
-    """A group that can be assigned users and content (texts/projects)."""
+    """An organization/group that can be assigned users and content."""
 
     __tablename__ = "groups"
 
@@ -16,8 +18,27 @@ class Group(Base):
     id = pk()
     #: Human-readable name.
     name = Column(String, nullable=False)
+    #: URL-safe unique identifier.
+    slug = Column(String, nullable=False, unique=True, index=True)
     #: Optional description.
     description = Column(Text_, nullable=False, default="")
+    #: Current organization status.
+    is_active = Column(Boolean, nullable=False, default=True)
+    #: Optional storage quota in bytes. Null means unlimited.
+    storage_quota_bytes = Column(BigInteger, nullable=True)
+    #: Cached storage usage in bytes.
+    storage_used_bytes = Column(BigInteger, nullable=False, default=0)
+    #: Optional OCR credit limit. Null means unlimited.
+    ocr_credit_limit = Column(Integer, nullable=True)
+    #: OCR credits consumed.
+    ocr_credits_used = Column(Integer, nullable=False, default=0)
+    #: Optional user designated as organization admin.
+    admin_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    #: Timestamps.
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow
+    )
 
     #: Users in this group (many-to-many).
     users = relationship(
@@ -37,6 +58,7 @@ class Group(Base):
         secondary="project_groups",
         backref="groups",
     )
+    admin_user = relationship("User", foreign_keys=[admin_user_id])
 
     def __str__(self):
         return self.name
