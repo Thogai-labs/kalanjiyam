@@ -156,12 +156,20 @@ def _get_role(session: Session, role_name: str):
 
 @cli.command()
 def create_super_admin():
-    """Create a super-admin user (CLI-only flow)."""
+    """Create the platform super-admin user (CLI-only; only one allowed)."""
     username = input("Username: ")
     email = input("Email: ")
     raw_password = getpass.getpass("Password: ")
 
     with Session(engine) as session:
+        from kalanjiyam.admin_user import count_super_admins
+
+        if count_super_admins(session) >= 1:
+            raise click.ClickException(
+                "A super admin already exists. Only one is allowed. "
+                "Use ./cli.py change-password to update that account."
+            )
+
         existing = (
             session.query(db.User)
             .where(or_(db.User.username == username, db.User.email == email))

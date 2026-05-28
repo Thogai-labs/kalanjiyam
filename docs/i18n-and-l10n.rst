@@ -114,6 +114,12 @@ We can do all of this with the following command::
     # NOTE: you must run this command within a virtual environment.
     make install-i18n
 
+The command clones ``AnaadiAI/kalanjiyam-i18n`` from GitHub. If that repository is
+private or the clone prompts for credentials, you can skip ``make install-i18n`` for
+local English-only development, or clone the repo manually into
+``data/kalanjiyam-i18n`` and run ``make babel-compile``. Production deploy notes are
+in :doc:`production-deploy`.
+
 
 5. Update the app UI
 --------------------

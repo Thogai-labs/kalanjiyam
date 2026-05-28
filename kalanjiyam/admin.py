@@ -1,5 +1,7 @@
 """Manages an internal admin view for site data."""
 
+import logging
+
 from flask import (
     abort,
     after_this_request,
@@ -12,9 +14,13 @@ from flask import (
     current_app,
 )
 from flask_admin import Admin, AdminIndexView, expose, BaseView as AdminBaseView
+from flask_admin.babel import gettext
+from flask_admin.form import SecureForm
+from flask_admin.helpers import flash_errors, get_redirect_target
 from flask_wtf.csrf import generate_csrf
 from flask_admin.contrib import sqla
 from flask_login import current_user, login_required
+from wtforms import PasswordField, SelectField, SelectMultipleField, validators
 from werkzeug.utils import secure_filename
 from slugify import slugify
 import json
@@ -25,6 +31,23 @@ from typing import Dict, Any, Optional
 
 import kalanjiyam.database as db
 import kalanjiyam.queries as q
+
+log = logging.getLogger(__name__)
+from kalanjiyam.admin_user import (
+    WEB_ASSIGNABLE_ROLES,
+    assignable_role_choices,
+    organization_choices,
+    soft_delete_user,
+    sync_user_org_and_roles,
+    validate_user_deletable,
+)
+from kalanjiyam.enums import SiteRole
+from kalanjiyam.utils.admin_access import (
+    is_platform_super_admin,
+    platform_admin_inaccessible,
+    require_org_admin,
+    require_platform_super_admin,
+)
 from kalanjiyam.utils.assets import get_page_image_filepath
 
 
@@ -65,7 +88,7 @@ class KalanjiyamIndexView(AdminIndexView):
     
     @expose("/")
     def index(self):
-        if current_user.is_super_admin:
+        if is_platform_super_admin():
             return redirect(url_for("platform_view.index"))
         if current_user.is_org_admin:
             return redirect(url_for("org_admin_view.index"))
@@ -75,16 +98,18 @@ class KalanjiyamIndexView(AdminIndexView):
     
     def _projects_for_current_admin(self):
         projects = q.projects()
-        if current_user.is_super_admin or current_user.is_admin:
+        if is_platform_super_admin():
             return projects
         org_id = getattr(current_user, "organization_id", None)
+        if org_id is None:
+            return []
         return [p for p in projects if any(g.id == org_id for g in p.groups)]
 
     @expose('/export/project/<project_slug>')
     @login_required
     def export_project(self, project_slug):
         """Export a single project as a ZIP file."""
-        if not (current_user.is_super_admin or current_user.is_org_admin):
+        if not (is_platform_super_admin() or current_user.is_org_admin):
             abort(404)
         
         project = q.project(project_slug)
@@ -161,7 +186,7 @@ class KalanjiyamIndexView(AdminIndexView):
     @login_required
     def export_all_projects(self):
         """Export all projects as a single ZIP file."""
-        if not (current_user.is_super_admin or current_user.is_org_admin):
+        if not (is_platform_super_admin() or current_user.is_org_admin):
             abort(404)
         
         projects = self._projects_for_current_admin()
@@ -238,7 +263,9 @@ class KalanjiyamIndexView(AdminIndexView):
     @login_required
     def export_import_dashboard(self):
         """Export/import dashboard for super admins."""
-        if not current_user.is_super_admin:
+        if not is_platform_super_admin():
+            if current_user.is_org_admin:
+                return redirect(url_for("org_admin_view.index"))
             abort(404)
         projects = self._projects_for_current_admin()
         return render_template("admin/export_import.html", projects=projects)
@@ -247,7 +274,7 @@ class KalanjiyamIndexView(AdminIndexView):
     @login_required
     def import_project(self):
         """Import a project from a ZIP file."""
-        if not current_user.is_super_admin:
+        if not is_platform_super_admin():
             abort(404)
         
         if request.method == "POST":
@@ -295,7 +322,7 @@ class KalanjiyamIndexView(AdminIndexView):
     @login_required
     def import_all_projects(self):
         """Import all projects from a ZIP file."""
-        if not current_user.is_super_admin:
+        if not is_platform_super_admin():
             abort(404)
         
         if request.method == "POST":
@@ -724,13 +751,14 @@ class PlatformView(AdminBaseView):
     """Super-admin platform overview."""
 
     def is_accessible(self):
-        return current_user.is_authenticated and current_user.is_super_admin
+        return is_platform_super_admin()
 
     def inaccessible_callback(self, name, **kwargs):
-        abort(404)
+        return platform_admin_inaccessible()
 
     @expose("/")
     def index(self):
+        require_platform_super_admin()
         orgs = q.groups()
         total_storage_used = sum(g.storage_used_bytes or 0 for g in orgs)
         total_ocr_used = sum(g.ocr_credits_used or 0 for g in orgs)
@@ -747,13 +775,14 @@ class GroupsView(AdminBaseView):
     """Super-admin group management: list/create/edit/delete groups, manage users and books."""
 
     def is_accessible(self):
-        return current_user.is_authenticated and current_user.is_super_admin
+        return is_platform_super_admin()
 
     def inaccessible_callback(self, name, **kwargs):
-        abort(404)
+        return platform_admin_inaccessible()
 
     @expose("/")
     def index(self):
+        require_platform_super_admin()
         page = request.args.get("page", 1, type=int)
         if page < 1:
             page = 1
@@ -772,6 +801,7 @@ class GroupsView(AdminBaseView):
 
     @expose("/create", methods=["GET", "POST"])
     def create(self):
+        require_platform_super_admin()
         all_users = q.all_users_for_group_select()
         if request.method == "POST":
             name = (request.form.get("name") or "").strip()
@@ -802,6 +832,7 @@ class GroupsView(AdminBaseView):
 
     @expose("/edit/<int:id>", methods=["GET", "POST"])
     def edit(self, id):
+        require_platform_super_admin()
         group = q.group(id)
         all_users = q.all_users_for_group_select()
         if not group:
@@ -833,6 +864,7 @@ class GroupsView(AdminBaseView):
 
     @expose("/delete/<int:id>", methods=["POST"])
     def delete(self, id):
+        require_platform_super_admin()
         group = q.group(id)
         if not group:
             abort(404)
@@ -844,6 +876,7 @@ class GroupsView(AdminBaseView):
 
     @expose("/manage/<int:id>", methods=["GET", "POST"])
     def manage(self, id):
+        require_platform_super_admin()
         group = q.group(id)
         if not group:
             abort(404)
@@ -921,9 +954,7 @@ class OrgAdminView(AdminBaseView):
 
     @expose("/", methods=["GET", "POST"])
     def index(self):
-        org_id = getattr(current_user, "organization_id", None)
-        if org_id is None:
-            abort(403)
+        org_id = require_org_admin()
         org = q.group(org_id)
         if org is None:
             abort(404)
@@ -948,15 +979,43 @@ class OrgAdminView(AdminBaseView):
                     session.add(db.UserGroups(user_id=user.id, group_id=org.id))
                     session.commit()
                     flash("User created.", "success")
-                return redirect(url_for("org_admin_view.index"))
+            elif action == "add_user":
+                user_id = request.form.get("user_id", type=int)
+                if user_id:
+                    q.add_user_to_group(user_id=user_id, group_id=org.id)
+                    flash("User added to organization.", "success")
+            elif action == "remove_user":
+                user_id = request.form.get("user_id", type=int)
+                if user_id and user_id != org.admin_user_id:
+                    q.remove_user_from_group(user_id=user_id, group_id=org.id)
+                    flash("User removed from organization.", "success")
+            elif action == "add_project":
+                project_id = request.form.get("project_id", type=int)
+                if project_id:
+                    q.add_project_to_group(project_id=project_id, group_id=org.id)
+                    flash("Book added to organization.", "success")
+            elif action == "remove_project":
+                project_id = request.form.get("project_id", type=int)
+                if project_id:
+                    q.remove_project_from_group(project_id=project_id, group_id=org.id)
+                    flash("Book removed from organization.", "success")
+            return redirect(url_for("org_admin_view.index"))
 
         users = q.users_in_group(org.id)
         projects, _ = q.projects_in_group(org.id, page=1, per_page=200)
+        all_users = q.all_users_for_group_select()
+        all_projects = q.all_projects_for_group_select()
+        users_in_group_ids = {u.id for u in users}
+        projects_in_group_ids = {p.id for p in projects}
         return render_template(
             "admin/org_dashboard.html",
             org=org,
             users=users,
             projects=projects,
+            all_users=all_users,
+            all_projects=all_projects,
+            users_in_group_ids=users_in_group_ids,
+            projects_in_group_ids=projects_in_group_ids,
             csrf_token=generate_csrf(),
         )
 
@@ -964,62 +1023,148 @@ class OrgAdminView(AdminBaseView):
 class BaseView(sqla.ModelView):
     """Base view for models.
 
-    By default, only super admins can see model data.
+    By default, only platform super admins can see model data.
     """
 
     def is_accessible(self):
-        return current_user.is_super_admin
-
-    def inaccessible_callback(self, name, **kw):
-        abort(404)
-
-
-class ModeratorBaseView(sqla.ModelView):
-    """Base view for models that moderators are allowed to access."""
-
-    def is_accessible(self):
-        return current_user.is_moderator
+        return is_platform_super_admin()
 
     def inaccessible_callback(self, name, **kw):
         abort(404)
 
 
 class UserView(BaseView):
-    column_list = form_columns = ["username", "email"]
-    can_delete = False
+    """Platform user CRUD for super admins. Super-admin accounts are CLI-only."""
+
+    can_delete = True
+    can_create = True
+    can_edit = True
+    list_template = "admin/user_list.html"
+    create_template = "admin/user_form.html"
+    edit_template = "admin/user_form.html"
+    column_list = ["username", "email", "organization_id"]
+    column_labels = {"organization_id": "Organization"}
+    column_formatters = {
+        "organization_id": lambda v, c, m, p: (
+            f"{m.organization.name} ({m.organization.slug})"
+            if m.organization
+            else "—"
+        ),
+        "email": lambda v, c, m, p: (
+            f"{m.email}  [{', '.join(sorted(r.name for r in m.roles))}]"
+            if m.roles
+            else m.email
+        ),
+    }
+    form_excluded_columns = [
+        "password_hash",
+        "description",
+        "created_at",
+        "is_deleted",
+        "is_banned",
+        "is_verified",
+        "organization_id",
+        "roles",
+        "organization",
+    ]
+    form_columns = ["username", "email", "password", "organization_pick", "role_ids"]
+    form_extra_fields = {
+        "password": PasswordField(
+            "Password",
+            validators=[validators.Optional()],
+            description="Required when creating a user. Leave blank on edit to keep the current password.",
+        ),
+        "organization_pick": SelectField(
+            "Organization",
+            coerce=int,
+            choices=[],
+            validators=[validators.Optional()],
+        ),
+        "role_ids": SelectMultipleField("Roles", coerce=int, choices=[]),
+    }
+    form_base_class = SecureForm
+
+    def get_query(self):
+        return super().get_query().filter_by(is_deleted=False)
+
+    def get_count_query(self):
+        return super().get_count_query().filter_by(is_deleted=False)
+
+    def _prepare_user_form(self, form, model=None):
+        form.role_ids.choices = assignable_role_choices(self.session)
+        form.organization_pick.choices = organization_choices()
+        if model is not None:
+            form.role_ids.data = [
+                r.id for r in model.roles if r.name in WEB_ASSIGNABLE_ROLES
+            ]
+            form.organization_pick.data = model.organization_id or 0
+
+    def create_form(self, obj=None):
+        form = super().create_form(obj)
+        self._prepare_user_form(form)
+        return form
+
+    def edit_form(self, obj=None):
+        form = super().edit_form(obj)
+        self._prepare_user_form(form, obj)
+        return form
+
+    def validate_form(self, form):
+        if not super().validate_form(form):
+            return False
+        if hasattr(form, "password") and not form._obj and not form.password.data:
+            form.password.errors.append("Password is required when creating a user.")
+            return False
+        return True
+
+    def on_model_change(self, form, model, is_created):
+        sync_user_org_and_roles(form, model, self.session, is_created=is_created)
+
+    @expose("/delete/", methods=("POST",))
+    def delete_view(self):
+        """Delete without the generic Flask-Admin success flash (we message in delete_model)."""
+        return_url = get_redirect_target() or self.get_url(".index_view")
+        if not self.can_delete:
+            return redirect(return_url)
+        form = self.delete_form()
+        if self.validate_form(form):
+            model = self.get_one(form.id.data)
+            if model is None:
+                flash(gettext("Record does not exist."), "error")
+            elif self.delete_model(model):
+                return redirect(return_url)
+        else:
+            flash_errors(form, message="Failed to delete record. %(error)s")
+        return redirect(return_url)
+
+    def delete_model(self, model):
+        try:
+            validate_user_deletable(model)
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return False
+        username = model.username
+        try:
+            soft_delete_user(model, self.session)
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            log.exception("Failed to delete user %s", model.id)
+            flash("Failed to delete user. Check server logs.", "error")
+            return False
+        flash(
+            f'User "{username}" removed. You can recreate with the same username/email.',
+            "success",
+        )
+        return True
 
 
 class ProjectView(BaseView):
+    """Super-admin list/edit for proofing projects (books)."""
+
+    list_template = "admin/project_list.html"
     column_list = ["slug", "display_title", "creator"]
     form_excluded_columns = ["creator", "board", "pages", "created_at", "updated_at"]
-
-
-class DictionaryView(BaseView):
-    column_list = form_columns = ["slug", "title"]
-
-
-class GenreView(ModeratorBaseView):
-    pass
-
-
-class SponsorshipView(ModeratorBaseView):
-    column_labels = dict(
-        sa_title="Sanskrit title",
-        en_title="English title",
-        cost_inr="Estimated cost (INR)",
-    )
-    create_template = "admin/sponsorship_create.html"
-    edit_template = "admin/sponsorship_edit.html"
-
-
-class ContributorInfoView(ModeratorBaseView):
-    column_labels = dict(
-        sa_title="Sanskrit title",
-        title="Title, occupation, role, etc.",
-        description="Description (short biography)",
-    )
-    create_template = "admin/sponsorship_create.html"
-    edit_template = "admin/sponsorship_edit.html"
 
 
 def create_admin_manager(app):
@@ -1054,11 +1199,7 @@ def create_admin_manager(app):
     def _redirect_groups_trailing_slash():
         return redirect(url_for("groups_view.index"))
 
-    admin.add_view(DictionaryView(db.Dictionary, session))
     admin.add_view(ProjectView(db.Project, session))
     admin.add_view(UserView(db.User, session))
-    admin.add_view(GenreView(db.Genre, session))
-    admin.add_view(SponsorshipView(db.ProjectSponsorship, session))
-    admin.add_view(ContributorInfoView(db.ContributorInfo, session))
 
     return admin

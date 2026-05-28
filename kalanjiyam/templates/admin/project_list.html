@@ -1,0 +1,13 @@
+{% extends 'admin/model/list.html' %}
+{% import 'macros/admin.html' as admin %}
+
+{% block title %}{{ _('Projects') }} | {{ _('Admin') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('projects', current_user) }}
+{% endblock %}
+
+{% block content %}
+{{ admin.page_header(_('Projects'), _('Proofing books registered on the platform.')) }}
+{{ super() }}
+{% endblock %}

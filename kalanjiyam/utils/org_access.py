@@ -17,7 +17,9 @@ def user_organization_id(user) -> int | None:
 
 def user_can_access_project(user, project: db.Project) -> bool:
     """True if user can access a project under current tenancy rules."""
-    if getattr(user, "is_super_admin", False) or getattr(user, "is_admin", False):
+    if getattr(user, "is_super_admin", False):
+        return True
+    if getattr(user, "is_admin", False) and not is_multi_tenant_enabled():
         return True
 
     if not is_multi_tenant_enabled():
@@ -36,7 +38,9 @@ def user_can_access_project(user, project: db.Project) -> bool:
 
 def user_can_access_text(user, text: db.Text) -> bool:
     """True if user can access a text under current tenancy rules."""
-    if getattr(user, "is_super_admin", False) or getattr(user, "is_admin", False):
+    if getattr(user, "is_super_admin", False):
+        return True
+    if getattr(user, "is_admin", False) and not is_multi_tenant_enabled():
         return True
 
     if not is_multi_tenant_enabled():

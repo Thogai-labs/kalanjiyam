@@ -1,0 +1,92 @@
+{% extends 'admin/master.html' %}
+{% import 'admin/lib.html' as lib with context %}
+{% import 'macros/admin.html' as admin %}
+{% import "macros/forms.html" as mf %}
+
+{% block title %}
+{% if request.endpoint and 'create' in request.endpoint %}{{ _('Create user') }}{% else %}{{ _('Edit user') }}{% endif %}
+| {{ _('Admin') }}
+{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('users', current_user) }}
+{% endblock %}
+
+{% block head %}
+{{ super() }}
+{{ lib.form_css() }}
+{% endblock %}
+
+{% block content %}
+{% set is_create = not form._obj %}
+{{ admin.page_header(is_create and _('Create user') or _('Edit user'), is_create and _('Add a platform user with organization and roles.') or _('Update account details. Password is optional on edit.')) }}
+
+<nav class="flex flex-wrap gap-2 mb-6 text-sm font-semibold">
+  <a href="{{ return_url }}" class="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 transition-colors">{{ _('Users') }}</a>
+  {% if admin_view.can_create and not is_create %}
+  <a href="{{ get_url('.create_view', url=return_url) }}" class="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 transition-colors">{{ _('Create') }}</a>
+  {% endif %}
+  <span class="px-4 py-2 rounded-xl bg-royalblue text-white shadow-md shadow-royalblue/20">
+    {{ is_create and _('Create') or _('Edit') }}
+  </span>
+</nav>
+
+<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 max-w-2xl mb-8">
+  <form method="POST" action="" class="space-y-1">
+    {% for field in form %}
+      {% if field.name != 'csrf_token' %}
+      <div class="my-4">
+        {{ mf.label(field.label) }}
+        {% if field.type == 'SelectMultipleField' %}
+        {{ field(class_='w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all bg-white text-slate-900', size=5) }}
+        {% elif field.type in ('SelectField',) %}
+        {{ field(class_=admin.select_class()) }}
+        {% else %}
+        {{ field(class_=admin.input_class()) }}
+        {% endif %}
+        {% if field.description %}
+        <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ field.description }}</p>
+        {% endif %}
+        {% for error in field.errors %}
+        <p class="text-xs text-red-600 mt-1 font-semibold">{{ error }}</p>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endfor %}
+
+    <div class="flex flex-wrap gap-3 pt-4">
+      {{ admin.btn_primary(_('Save'), type='submit') }}
+      {{ admin.btn_secondary(_('Cancel'), href=return_url) }}
+    </div>
+  </form>
+</div>
+
+{% if not is_create and admin_view.can_delete %}
+{% set pk = request.args.get('id') %}
+{% set del_form = admin_view.delete_form() %}
+<div class="max-w-2xl">
+  <h2 class="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
+    <span class="w-2 h-2 rounded-full bg-red-500"></span>
+    {{ _('Danger zone') }}
+  </h2>
+  <p class="text-sm text-slate-500 mb-4 font-medium">
+    {{ _('Soft-deletes this user and frees their username and email for a new account.') }}
+  </p>
+  <form method="POST" action="{{ get_url('.delete_view') }}"
+        class="bg-red-50/50 border border-red-100 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+        onsubmit="return confirm('{{ _('Permanently remove this user?') }}');">
+    {{ del_form.id(value=pk) }}
+    {{ del_form.url(value=return_url) }}
+    {% if del_form.csrf_token is defined %}
+    {{ del_form.csrf_token }}
+    {% endif %}
+    {{ admin.btn_danger(_('Delete user')) }}
+  </form>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block tail %}
+{{ super() }}
+{{ lib.form_js() }}
+{% endblock %}

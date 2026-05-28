@@ -56,16 +56,39 @@
 </div>
 
 <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 mb-6">
-  <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Users') }} <span class="text-sm font-normal text-slate-400">({{ users|length }})</span></h2>
+  <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Users') }}</h2>
+  <form method="post" action="{{ url_for('org_admin_view.index') }}" class="mb-5 flex flex-col sm:flex-row gap-2">
+    {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+    <input type="hidden" name="action" value="add_user">
+    <select name="user_id" class="{{ admin.select_class() }} flex-1" required>
+      <option value="">{{ _('Add existing user…') }}</option>
+      {% for u in all_users %}
+      {% if u.id not in users_in_group_ids %}
+      <option value="{{ u.id }}">{{ u.username }} ({{ u.email }})</option>
+      {% endif %}
+      {% endfor %}
+    </select>
+    {{ admin.btn_primary(_('Add'), type='submit') }}
+  </form>
   {% if users %}
   <ul class="divide-y divide-slate-100">
     {% for u in users %}
-    <li class="py-3 flex items-center gap-3">
-      <span class="w-8 h-8 rounded-full bg-royalblue/10 text-royalblue flex items-center justify-center text-sm font-bold">{{ u.username[0]|upper }}</span>
-      <div>
-        <p class="font-semibold text-slate-900">{{ u.username }}</p>
-        <p class="text-sm text-slate-400">{{ u.email }}</p>
+    <li class="py-3 flex justify-between items-center gap-4">
+      <div class="flex items-center gap-3">
+        <span class="w-8 h-8 rounded-full bg-royalblue/10 text-royalblue flex items-center justify-center text-sm font-bold">{{ u.username[0]|upper }}</span>
+        <div>
+          <p class="font-semibold text-slate-900">{{ u.username }}</p>
+          <p class="text-sm text-slate-400">{{ u.email }}</p>
+        </div>
       </div>
+      {% if u.id != org.admin_user_id %}
+      <form method="post" action="{{ url_for('org_admin_view.index') }}" class="shrink-0">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+        <input type="hidden" name="action" value="remove_user">
+        <input type="hidden" name="user_id" value="{{ u.id }}">
+        {{ admin.btn_danger(_('Remove')) }}
+      </form>
+      {% endif %}
     </li>
     {% endfor %}
   </ul>
@@ -75,7 +98,20 @@
 </div>
 
 <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
-  <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Books') }} <span class="text-sm font-normal text-slate-400">({{ projects|length }})</span></h2>
+  <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Books') }}</h2>
+  <form method="post" action="{{ url_for('org_admin_view.index') }}" class="mb-5 flex flex-col sm:flex-row gap-2">
+    {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+    <input type="hidden" name="action" value="add_project">
+    <select name="project_id" class="{{ admin.select_class() }} flex-1" required>
+      <option value="">{{ _('Add book to organization…') }}</option>
+      {% for p in all_projects %}
+      {% if p.id not in projects_in_group_ids %}
+      <option value="{{ p.id }}">{{ p.slug }} — {{ p.display_title[:60] }}</option>
+      {% endif %}
+      {% endfor %}
+    </select>
+    {{ admin.btn_primary(_('Add'), type='submit') }}
+  </form>
   {% if projects %}
   <ul class="divide-y divide-slate-100">
     {% for p in projects %}
@@ -84,7 +120,15 @@
         <p class="font-semibold text-slate-900">{{ p.display_title }}</p>
         <p class="text-xs font-mono text-slate-400">{{ p.slug }}</p>
       </div>
-      {{ admin.link_action(_('Export'), url_for('admin.export_project', project_slug=p.slug)) }}
+      <div class="flex items-center gap-3 shrink-0">
+        {{ admin.link_action(_('Export'), url_for('admin.export_project', project_slug=p.slug)) }}
+        <form method="post" action="{{ url_for('org_admin_view.index') }}">
+          {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+          <input type="hidden" name="action" value="remove_project">
+          <input type="hidden" name="project_id" value="{{ p.id }}">
+          {{ admin.btn_danger(_('Remove')) }}
+        </form>
+      </div>
     </li>
     {% endfor %}
   </ul>

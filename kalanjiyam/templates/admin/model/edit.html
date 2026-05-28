@@ -37,12 +37,20 @@
   {% endblock %}
 
   {% block delete_form %}
-  {% set id = request.args.get('id') %}
+  {% if admin_view.can_delete %}
+  {% set pk = request.args.get('id') %}
+  {% set del_form = admin_view.delete_form() %}
   <h2 class="font-bold text-xl mt-12">Danger zone</h2>
-  <form method="POST" action="{{ get_url('.delete_view', id=id) }}"
+  <form method="POST" action="{{ get_url('.delete_view') }}"
       class="p-4 border border-red-400 rounded my-4 text-right">
+    {{ del_form.id(value=pk) }}
+    {{ del_form.url(value=return_url) }}
+    {% if del_form.csrf_token is defined %}
+    {{ del_form.csrf_token }}
+    {% endif %}
     <input type="submit" class="btn text-white bg-red-600" value="Delete" />
   </form>
+  {% endif %}
   {% endblock %}
 {% endblock %}
 

@@ -70,7 +70,8 @@ class KalanjiyamUserMixin(UserMixin):
 
     @property
     def is_admin(self) -> bool:
-        # Backward-compatible alias while migrating from `admin` to `super_admin`.
+        # Legacy site-wide moderator access (proofing, etc.). Not the same as
+        # platform super admin — use is_super_admin for /admin/platform/ access.
         return self.has_any_role(SiteRole.ADMIN, SiteRole.SUPER_ADMIN)
 
     @property

@@ -10,14 +10,6 @@
 
 <h1 class="text-center font-bold text-5xl my-8">{{ _('Sponsor a Book') }}</h1>
 
-{% if current_user.is_moderator %}
-{% call m.p_note() %}
-{% set url = url_for('projectsponsorship.index_view') %}
-Moderators: <a class="underline" href="{{ url }}">Click here</a> to edit
-sponsorships.
-{% endcall %}
-{% endif %}
-
 <article class="prose">
   <p>{% trans %}
   Give the gift of knowledge today by sponsoring a book that is important to

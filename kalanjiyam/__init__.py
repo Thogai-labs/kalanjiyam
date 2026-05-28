@@ -12,6 +12,7 @@ import sentry_sdk
 from dotenv import load_dotenv
 from flask import Flask, session
 from flask_babel import Babel, pgettext
+from flask_wtf.csrf import generate_csrf
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sqlalchemy import exc
 
@@ -117,6 +118,10 @@ def create_app(config_env: str):
 
     # Extensions
     Babel(app, locale_selector=get_locale)
+
+    @app.context_processor
+    def inject_csrf_token():
+        return dict(csrf_token=generate_csrf())
 
     login_manager = auth_manager.create_login_manager()
     login_manager.init_app(app)

@@ -24,10 +24,6 @@
   <ul class="space-y-1">
     {{ _nav_link('project.index_view', 'projects', _('Projects'), active == 'projects') }}
     {{ _nav_link('user.index_view', 'users', _('Users'), active == 'users') }}
-    {{ _nav_link('dictionary.index_view', 'dictionary', _('Dictionary'), active == 'dictionary') }}
-    {{ _nav_link('genre.index_view', 'genres', _('Genres'), active == 'genres') }}
-    {{ _nav_link('projectsponsorship.index_view', 'sponsorship', _('Sponsorships'), active == 'sponsorship') }}
-    {{ _nav_link('contributorinfo.index_view', 'contributors', _('Contributors'), active == 'contributors') }}
   </ul>
 </nav>
 <nav class="mb-6">
@@ -36,15 +32,6 @@
     {{ _nav_link('proofing.index', 'proofing', _('Proofing'), active == 'proofing') }}
     {{ _nav_link('public.books.index', 'books', _('Books'), active == 'books') }}
     {{ _nav_link('site.index', 'home', _('Home'), active == 'home') }}
-  </ul>
-</nav>
-{% elif current_user.is_moderator %}
-<nav class="mb-6">
-  <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Content') }}</h2>
-  <ul class="space-y-1">
-    {{ _nav_link('genre.index_view', 'genres', _('Genres'), active == 'genres') }}
-    {{ _nav_link('projectsponsorship.index_view', 'sponsorship', _('Sponsorships'), active == 'sponsorship') }}
-    {{ _nav_link('contributorinfo.index_view', 'contributors', _('Contributors'), active == 'contributors') }}
   </ul>
 </nav>
 {% elif current_user.is_org_admin %}

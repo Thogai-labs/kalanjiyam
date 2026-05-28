@@ -16,6 +16,7 @@ Kalanjiyam locally or contribute to Kalanjiyam's technical work.
    values-and-principles
    managing-the-database
    creating-data-from-the-command-line
+   multi-tenant
    background-tasks-with-celery
    batch-ocr-task-tracking
    production-deploy
