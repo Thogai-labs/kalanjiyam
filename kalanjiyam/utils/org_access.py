@@ -15,11 +15,18 @@ def user_organization_id(user) -> int | None:
     return getattr(user, "organization_id", None)
 
 
+def is_project_publicly_viewable(project: db.Project) -> bool:
+    return bool(getattr(project, "is_publicly_viewable", False))
+
+
 def user_can_access_project(user, project: db.Project) -> bool:
     """True if user can access a project under current tenancy rules."""
     if getattr(user, "is_super_admin", False):
         return True
     if getattr(user, "is_admin", False) and not is_multi_tenant_enabled():
+        return True
+
+    if is_multi_tenant_enabled() and is_project_publicly_viewable(project):
         return True
 
     if not is_multi_tenant_enabled():

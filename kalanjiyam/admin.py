@@ -906,6 +906,18 @@ class GroupsView(AdminBaseView):
                 if project_id:
                     q.remove_project_from_group(project_id=project_id, group_id=id)
                     flash("Project removed from group.")
+            elif action == "set_project_public":
+                project_id = request.form.get("project_id", type=int)
+                is_public = request.form.get("is_public") == "1"
+                if project_id:
+                    updated = q.set_project_publicly_viewable(
+                        project_id=project_id, group_id=id, is_public=is_public
+                    )
+                    if updated is None:
+                        flash("Book not found in this organization.", "error")
+                    else:
+                        label = "public on /books/" if is_public else "organization-only"
+                        flash(f'"{updated.display_title}" is now {label}.', "success")
             return redirect(
                 url_for(
                     "groups_view.manage",
@@ -999,6 +1011,18 @@ class OrgAdminView(AdminBaseView):
                 if project_id:
                     q.remove_project_from_group(project_id=project_id, group_id=org.id)
                     flash("Book removed from organization.", "success")
+            elif action == "set_project_public":
+                project_id = request.form.get("project_id", type=int)
+                is_public = request.form.get("is_public") == "1"
+                if project_id:
+                    updated = q.set_project_publicly_viewable(
+                        project_id=project_id, group_id=org.id, is_public=is_public
+                    )
+                    if updated is None:
+                        flash("Book not found in this organization.", "error")
+                    else:
+                        label = "public on /books/" if is_public else "organization-only"
+                        flash(f'"{updated.display_title}" is now {label}.', "success")
             return redirect(url_for("org_admin_view.index"))
 
         users = q.users_in_group(org.id)
@@ -1163,7 +1187,9 @@ class ProjectView(BaseView):
     """Super-admin list/edit for proofing projects (books)."""
 
     list_template = "admin/project_list.html"
-    column_list = ["slug", "display_title", "creator"]
+    column_list = ["slug", "display_title", "is_publicly_viewable", "creator"]
+    column_labels = {"is_publicly_viewable": "Public on /books/"}
+    form_columns = ["slug", "display_title", "is_publicly_viewable", "description"]
     form_excluded_columns = ["creator", "board", "pages", "created_at", "updated_at"]
 
 

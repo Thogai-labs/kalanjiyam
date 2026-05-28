@@ -64,7 +64,7 @@
 
   <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
     <h2 class="text-lg font-bold text-slate-900 mb-2">{{ _('Books') }}</h2>
-    <p class="text-sm text-slate-500 mb-4">{{ _('Proofing projects that power the public reader at') }} <span class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">/books/</span></p>
+    <p class="text-sm text-slate-500 mb-4">{{ _('Org admins can publish books to') }} <span class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">/books/</span>{{ _('. Super admins can toggle visibility here too.') }}</p>
     <form method="post" action="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page, texts_page=texts_page) }}"
           class="mb-5 flex flex-col sm:flex-row gap-2">
       {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
@@ -85,20 +85,37 @@
     {% if projects %}
     <ul class="divide-y divide-slate-100">
       {% for p in projects %}
-      <li class="py-3 flex justify-between items-start gap-4">
-        <span class="text-sm text-slate-800">
+      <li class="py-3 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+        <div class="text-sm text-slate-800">
           <span class="font-mono text-xs text-royalblue">{{ p.slug }}</span>
           <span class="text-slate-400 mx-1">—</span>
           {{ p.display_title[:70] }}{% if p.display_title|length > 70 %}…{% endif %}
-        </span>
-        <form method="post" action="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page, texts_page=texts_page) }}" class="shrink-0">
-          {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
-          <input type="hidden" name="action" value="remove_project">
-          <input type="hidden" name="project_id" value="{{ p.id }}">
-          <input type="hidden" name="projects_page" value="{{ projects_page }}">
-          <input type="hidden" name="texts_page" value="{{ texts_page }}">
-          {{ admin.btn_danger(_('Remove')) }}
-        </form>
+          {% if p.is_publicly_viewable %}
+          <span class="ml-2 text-xs font-bold uppercase text-emerald-700">{{ _('Public') }}</span>
+          {% endif %}
+        </div>
+        <div class="flex flex-wrap gap-2 shrink-0">
+          <form method="post" action="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page, texts_page=texts_page) }}">
+            {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+            <input type="hidden" name="action" value="set_project_public">
+            <input type="hidden" name="project_id" value="{{ p.id }}">
+            <input type="hidden" name="is_public" value="{{ '0' if p.is_publicly_viewable else '1' }}">
+            <input type="hidden" name="projects_page" value="{{ projects_page }}">
+            {% if p.is_publicly_viewable %}
+            {{ admin.btn_secondary(_('Make private'), type='submit') }}
+            {% else %}
+            {{ admin.btn_primary(_('Make public'), type='submit') }}
+            {% endif %}
+          </form>
+          <form method="post" action="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page, texts_page=texts_page) }}">
+            {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+            <input type="hidden" name="action" value="remove_project">
+            <input type="hidden" name="project_id" value="{{ p.id }}">
+            <input type="hidden" name="projects_page" value="{{ projects_page }}">
+            <input type="hidden" name="texts_page" value="{{ texts_page }}">
+            {{ admin.btn_danger(_('Remove')) }}
+          </form>
+        </div>
       </li>
       {% endfor %}
     </ul>

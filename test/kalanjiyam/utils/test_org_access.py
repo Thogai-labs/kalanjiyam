@@ -67,3 +67,9 @@ def test_user_can_access_project_scoped_by_org(app):
         assert user_can_access_project(member, project) is True
         assert user_can_access_project(other, project) is False
         assert user_can_access_project(KalanjiyamAnonymousUser(), project) is False
+
+        project.is_publicly_viewable = True
+        session.add(project)
+        session.commit()
+        assert user_can_access_project(other, project) is True
+        assert user_can_access_project(KalanjiyamAnonymousUser(), project) is True

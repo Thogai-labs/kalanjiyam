@@ -135,6 +135,23 @@ At ``/admin/user/`` (sidebar **Users**), platform super admins can:
 
 Org admins manage their own users at ``/admin/org/`` (not ``/admin/user/``).
 
+Public books (``/books/``)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+By default, multi-tenant mode hides books from guests and from other organizations.
+Org admins can mark a book **public** on ``/admin/org/`` (**Make public**). That
+book then appears on ``/books/`` for everyone (including anonymous visitors) once it
+has OCR content. Proofing, page images, and translations work the same; only the
+access gate changes. Books stay owned by the organization for quotas and admin.
+
+Super admins can toggle the same flag under **Organizations → manage** or on
+``/admin/project/`` (column **Public on /books/**).
+
+Run the migration that adds ``proof_projects.is_publicly_viewable`` before using
+this feature::
+
+   alembic upgrade head
+
 Flask-Admin CRUD for **users** and **projects** remains at ``/admin/`` for platform
 super admins. Dictionary metadata, genres, sponsorships, and contributor bios are
 managed via seed scripts or the database, not the admin UI.

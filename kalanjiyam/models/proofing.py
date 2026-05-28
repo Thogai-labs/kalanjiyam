@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String
 from sqlalchemy import Text as Text_
 from sqlalchemy.orm import relationship
 
@@ -111,6 +111,8 @@ class Project(Base):
     creator_id = Column(Integer, ForeignKey("users.id"), index=True)
     #: The genre of this project.
     genre_id = Column(Integer, ForeignKey("genres.id"), index=True)
+    #: When true, anyone (including guests) can read this book at /books/ in multi-tenant mode.
+    is_publicly_viewable = Column(Boolean, nullable=False, default=False)
 
     creator = relationship("User")
     board = relationship("Board", cascade="delete")

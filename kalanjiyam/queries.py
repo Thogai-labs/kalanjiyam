@@ -464,6 +464,8 @@ def user_can_view_project_legacy(user, project: db.Project) -> bool:
     public; otherwise the user must be in at least one group that contains
     this project. Anonymous users can only view public (ungrouped) projects.
     """
+    if getattr(project, "is_publicly_viewable", False):
+        return True
     if getattr(user, "is_admin", False):
         return True
     restricted_ids = _project_ids_in_any_group()
@@ -538,6 +540,32 @@ def remove_project_from_group(project_id: int, group_id: int) -> None:
         group_id=group_id, project_id=project_id
     ).delete()
     session.commit()
+
+
+def project_belongs_to_group(project_id: int, group_id: int) -> bool:
+    session = get_session()
+    return (
+        session.query(db.ProjectGroups)
+        .filter_by(group_id=group_id, project_id=project_id)
+        .first()
+        is not None
+    )
+
+
+def set_project_publicly_viewable(
+    *, project_id: int, group_id: int, is_public: bool
+) -> db.Project | None:
+    """Set whether a book is visible on /books/ to everyone. Project must belong to group."""
+    session = get_session()
+    if not project_belongs_to_group(project_id, group_id):
+        return None
+    project = session.query(db.Project).filter_by(id=project_id).first()
+    if project is None:
+        return None
+    project.is_publicly_viewable = is_public
+    session.add(project)
+    session.commit()
+    return project
 
 
 def all_projects_for_group_select() -> list[db.Project]:
