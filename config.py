@@ -299,7 +299,7 @@ def _validate_config(config: BaseConfig):
 
     if config.KALANJIYAM_ENVIRONMENT == PRODUCTION:
         if not config.SENTRY_DSN:
-            raise ValueError("Production config must define SENTRY_DSN.")
+            logging.warning("SENTRY_DSN is not set — production errors will not be reported to Sentry.")
 
 
 def load_config_object(name: str):

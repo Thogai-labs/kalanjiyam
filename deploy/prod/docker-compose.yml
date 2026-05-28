@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   kalanjiyam-web:
     image: ${KALANJIYAM_IMAGE}
@@ -14,9 +12,12 @@ services:
     environment:
       - FLASK_ENV=production
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
-      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
+      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
       - OCR_SERVICE_URL=${OCR_SERVICE_URL}
+      - FLASK_UPLOAD_FOLDER=/data/uploads
+    volumes:
+      - ${HOME}/kalanjiyam-data/uploads:/data/uploads
     depends_on:
       - kalanjiyam-db
       - kalanjiyam-redis
@@ -52,7 +53,7 @@ services:
     environment:
       - FLASK_ENV=production
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
-      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
+      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
       - OCR_SERVICE_URL=${OCR_SERVICE_URL}
     depends_on:

@@ -11,6 +11,7 @@ import sys
 import sentry_sdk
 from dotenv import load_dotenv
 from flask import Flask, session
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_babel import Babel, pgettext
 from flask_wtf.csrf import generate_csrf
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -96,6 +97,9 @@ def create_app(config_env: str):
         _initialize_sentry(config_spec.SENTRY_DSN)
 
     app = Flask(__name__)
+
+    # Trust one proxy hop (Nginx) for HTTPS scheme and real client IP.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     # Config
     app.config.from_object(config_spec)

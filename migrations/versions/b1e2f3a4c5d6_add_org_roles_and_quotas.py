@@ -41,7 +41,7 @@ def upgrade() -> None:
     if not _has_column(conn, "groups", "is_active"):
         op.add_column(
             "groups",
-            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         )
     if not _has_column(conn, "groups", "storage_quota_bytes"):
         op.add_column("groups", sa.Column("storage_quota_bytes", sa.BigInteger(), nullable=True))

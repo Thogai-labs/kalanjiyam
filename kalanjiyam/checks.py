@@ -31,11 +31,12 @@ def _check_column(app_col: Column, db_col: dict[str, str]) -> list[str]:
     elif db_col["nullable"] and not app_col.nullable:
         errors.append(f'Column "{full_name}" is nullable in the db but not in the app.')
 
-    if app_col.primary_key and not db_col["primary_key"]:
+    db_pk = db_col.get("primary_key", False)
+    if app_col.primary_key and not db_pk:
         errors.append(
             f'Column "{full_name}" is a primary key in the app but not in the db.'
         )
-    elif db_col["primary_key"] and not app_col.primary_key:
+    elif db_pk and not app_col.primary_key:
         errors.append(
             f'Column "{full_name}" is a primary key in the db but not in the app.'
         )
