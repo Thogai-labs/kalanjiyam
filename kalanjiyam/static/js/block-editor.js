@@ -1,6 +1,6 @@
 /* Block list editor panel. */
 
-import { newBlockId, reorderBlocks } from './page-document.js';
+import { newBlockId, reorderBlocks, normalizeUnicodeText } from './page-document.js';
 
 export class BlockEditor {
   constructor(container, options = {}) {
@@ -41,10 +41,10 @@ export class BlockEditor {
 
     blocks.forEach((block, index) => {
       const row = document.createElement('div');
-      row.className = `ocr-block-row border rounded-lg p-3 mb-2 ${
+      row.className = `ocr-block-row border-b border-slate-100 py-2 ${
         this.selectedId === block.id
-          ? 'border-royalblue bg-blue-50'
-          : 'border-slate-200 bg-white'
+          ? 'bg-amber-50'
+          : 'bg-transparent'
       }`;
       row.dataset.blockId = block.id;
 
@@ -81,10 +81,11 @@ export class BlockEditor {
 
       const textarea = document.createElement('textarea');
       textarea.className =
-        'w-full text-sm border border-slate-200 rounded p-2 min-h-[4rem] font-sans';
-      textarea.value = block.content || '';
+        'book-editor-text w-full text-base border-0 rounded p-2 min-h-[3rem] bg-transparent resize-y focus:outline-none focus:ring-1 focus:ring-slate-300';
+      textarea.setAttribute('lang', 'und');
+      textarea.value = normalizeUnicodeText(block.content || '');
       textarea.addEventListener('input', () => {
-        block.content = textarea.value;
+        block.content = normalizeUnicodeText(textarea.value);
         this._emitChange();
       });
       textarea.addEventListener('focus', () => {

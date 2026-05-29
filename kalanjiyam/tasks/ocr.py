@@ -52,7 +52,7 @@ def _run_ocr_for_page_inner(
         if page is None:
             raise ValueError(f'Page "{page_slug}" not found in project "{project_slug}".')
 
-        doc = apply_ocr_to_page(page, ocr_response, engine)
+        doc = apply_ocr_to_page(page, ocr_response, engine, image_path=image_path)
         session.add(page)
         session.commit()
 

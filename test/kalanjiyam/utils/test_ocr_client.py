@@ -12,6 +12,24 @@ def test_parse_bounding_boxes_tsv():
     assert boxes == [(0, 0, 100, 20, "word"), (120, 25, 300, 45, "another")]
 
 
+def test_parse_bounding_boxes_surya_json():
+    from kalanjiyam.utils.ocr_client import _parse_bounding_boxes as parse_fn
+    blob = '[{"x1": 1.5, "y1": 2.0, "x2": 10.0, "y2": 20.0, "text": "hi"}]'
+    assert parse_fn(blob, "surya") == [(1.5, 2.0, 10.0, 20.0, "hi")]
+
+
+def test_parse_bounding_boxes_surya_bbox_array():
+    from kalanjiyam.utils.ocr_client import _parse_bounding_boxes as parse_fn
+    items = [{"bbox": [10, 20, 100, 40], "text": "line"}]
+    assert parse_fn(items, "surya") == [(10.0, 20.0, 100.0, 40.0, "line")]
+
+
+def test_parse_bounding_boxes_surya_list():
+    from kalanjiyam.utils.ocr_client import _parse_bounding_boxes as parse_fn
+    items = [{"x1": 0, "y1": 0, "x2": 5, "y2": 5, "text": "a"}]
+    assert parse_fn(items, "surya") == [(0.0, 0.0, 5.0, 5.0, "a")]
+
+
 def test_run_ocr_remote(flask_app):
     with flask_app.app_context():
         flask_app.config.update(

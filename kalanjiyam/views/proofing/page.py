@@ -160,6 +160,21 @@ def _page_document_dict(cur: db.Page) -> dict:
             doc.page_width = cur.page_width
         if cur.page_height:
             doc.page_height = cur.page_height
+        from kalanjiyam.utils.page_document import enrich_document_from_page_ocr
+
+        doc = enrich_document_from_page_ocr(doc, cur)
+    if (not doc.page_width or not doc.page_height) and cur.project:
+        try:
+            from PIL import Image
+
+            image_path = get_page_image_filepath(cur.project.slug, cur.slug)
+            with Image.open(image_path) as img:
+                if not doc.page_width:
+                    doc.page_width = int(img.size[0])
+                if not doc.page_height:
+                    doc.page_height = int(img.size[1])
+        except Exception:
+            pass
     return doc.to_dict()
 
 
@@ -179,6 +194,7 @@ def _editor_template_kwargs(
     translation_content, translation_metadata, available_translations = _translation_context(
         cur
     )
+    page_document = _page_document_dict(cur)
     return {
         "conflict": conflict,
         "cur": cur,
@@ -194,10 +210,10 @@ def _editor_template_kwargs(
         "available_translations": available_translations,
         "ocr_status": ocr_status,
         "engine_choices": engine_choices,
-        "page_document": _page_document_dict(cur),
+        "page_document": page_document,
         "ocr_bounding_boxes": cur.ocr_bounding_boxes or "",
-        "page_width": cur.page_width,
-        "page_height": cur.page_height,
+        "page_width": cur.page_width or page_document.get("page_width"),
+        "page_height": cur.page_height or page_document.get("page_height"),
     }
 
 
@@ -414,7 +430,7 @@ def ocr(project_slug, page_slug):
         ensure_ocr_quota_for_project(project_)
         ocr_response = run_ocr(image_path, engine_name=engine, language=language)
         consume_ocr_credit_for_project(project_)
-        apply_ocr_to_page(page_, ocr_response, engine)
+        apply_ocr_to_page(page_, ocr_response, engine, image_path=image_path)
         session = q.get_session()
         session.add(page_)
         session.commit()

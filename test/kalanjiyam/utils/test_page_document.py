@@ -62,3 +62,19 @@ def test_find_block_for_bbox():
     hit = find_block_for_bbox(blocks, [10, 10, 90, 40])
     assert hit is not None
     assert hit.id == "b1"
+
+
+def test_enrich_document_from_surya_boxes():
+    from kalanjiyam.utils.page_document import enrich_document_from_page_ocr
+
+    class FakePage:
+        ocr_bounding_boxes = (
+            '[{"x1": 0, "y1": 0, "x2": 100, "y2": 20, "text": "word one"},'
+            ' {"x1": 110, "y1": 0, "x2": 200, "y2": 20, "text": "two"}]'
+        )
+        page_width = 1000
+        page_height = 1400
+
+    doc = enrich_document_from_page_ocr(PageDocument.empty(), FakePage())
+    assert len(doc.blocks) == 2
+    assert doc.blocks[0].bbox == [0, 0, 100, 20]

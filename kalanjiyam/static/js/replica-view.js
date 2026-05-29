@@ -1,5 +1,8 @@
 /* Bbox-scaled replica canvas for page layout editing. */
 
+import { scaleBoxesToImage } from './osd-overlay.js';
+import { normalizeUnicodeText } from './page-document.js';
+
 export class ReplicaView {
   constructor(container, options = {}) {
     this.container = container;
@@ -23,13 +26,24 @@ export class ReplicaView {
     const doc = this.document;
     const pw = doc.page_width || 1000;
     const ph = doc.page_height || 1400;
-    const blocks = [...(doc.blocks || [])].sort(
+    let blocks = [...(doc.blocks || [])].sort(
       (a, b) => (a.reading_order || 0) - (b.reading_order || 0),
     );
+    blocks = blocks.map((block) => {
+      const [x1, y1, x2, y2] = block.bbox || [0, 0, 0, 0];
+      const scaled = scaleBoxesToImage(
+        [{ x1, y1, x2, y2 }],
+        pw,
+        ph,
+      )[0];
+      if (!scaled) return block;
+      return { ...block, bbox: [scaled.x1, scaled.y1, scaled.x2, scaled.y2] };
+    });
 
     this.container.innerHTML = '';
     const page = document.createElement('div');
-    page.className = 'ocr-replica-page relative bg-white border border-slate-200 shadow-inner mx-auto';
+    page.className = 'ocr-replica-page book-editor-text relative mx-auto';
+    page.style.background = '#faf8f5';
     page.style.aspectRatio = `${pw} / ${ph}`;
     page.style.maxWidth = '100%';
     page.style.width = '100%';
@@ -38,11 +52,12 @@ export class ReplicaView {
     blocks.forEach((block) => {
       const [x1, y1, x2, y2] = block.bbox || [0, 0, 0, 0];
       const el = document.createElement('div');
-      el.className = `ocr-replica-block absolute overflow-hidden text-sm leading-snug p-1 ${
+      el.className = `ocr-replica-block book-editor-text absolute overflow-hidden text-base leading-relaxed p-1 ${
         this.selectedId === block.id
-          ? 'ring-2 ring-royalblue bg-blue-50/80 z-10'
-          : 'bg-white/90 hover:bg-amber-50/90'
+          ? 'ring-2 ring-amber-600 z-10 bg-amber-50'
+          : 'bg-white hover:bg-amber-50'
       }`;
+      el.setAttribute('lang', 'und');
       el.dataset.blockId = block.id;
       if (x2 > x1 && y2 > y1) {
         el.style.left = `${(100 * x1) / pw}%`;
@@ -55,9 +70,9 @@ export class ReplicaView {
         el.style.marginBottom = '0.5rem';
       }
       el.contentEditable = 'true';
-      el.innerText = block.content || '';
+      el.innerText = normalizeUnicodeText(block.content || '');
       el.addEventListener('input', () => {
-        block.content = el.innerText;
+        block.content = normalizeUnicodeText(el.innerText);
         this.onChange(this.document);
       });
       el.addEventListener('focus', () => {

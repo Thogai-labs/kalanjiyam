@@ -545,6 +545,115 @@
     @apply font-sans;
   }
 
+  /* Book editor — image + text focused layout */
+  .book-editor-page {
+    @apply min-h-screen flex flex-col;
+    background: #e8e4dc;
+  }
+
+  .book-editor-shell {
+    @apply flex flex-col flex-1 min-h-0;
+  }
+
+  .book-editor-toolbar {
+    @apply flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-white border-b border-slate-200 shrink-0;
+  }
+
+  .book-editor-toolbar-left,
+  .book-editor-toolbar-right {
+    @apply flex items-center gap-1 sm:gap-2 min-w-0;
+  }
+
+  .book-editor-toolbar-center {
+    @apply flex items-center justify-center;
+  }
+
+  .book-editor-back {
+    @apply text-sm font-semibold truncate;
+  }
+
+  .book-editor-page-label {
+    @apply text-sm font-bold text-slate-800 px-2 py-0.5 bg-slate-100 rounded;
+  }
+
+  .book-editor-mode-toggle {
+    @apply inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-semibold;
+  }
+
+  .book-editor-mode-toggle button {
+    @apply px-3 py-1.5 rounded-md text-slate-600 transition-colors;
+  }
+
+  .book-editor-mode-toggle button.active {
+    @apply bg-white text-slate-900 shadow-sm;
+  }
+
+  .book-editor-publish {
+    @apply px-4 py-1.5 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-700 transition-colors;
+  }
+
+  .book-editor-workspace {
+    @apply grid grid-cols-1 lg:grid-cols-2 flex-1 min-h-0;
+    height: calc(100vh - 3.25rem);
+  }
+
+  .book-editor-image-pane {
+    @apply relative min-h-[40vh] lg:min-h-0 bg-gray-800 border-b lg:border-r border-slate-300;
+  }
+
+  .book-editor-image-viewport {
+    @apply h-full min-h-[40vh] lg:min-h-0;
+  }
+
+  .book-editor-image-controls {
+    @apply absolute bottom-3 right-3 flex gap-1 rounded-lg p-1 z-20;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+  }
+
+  .book-editor-image-controls button {
+    @apply w-8 h-8 rounded text-sm font-bold transition-colors;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .book-editor-image-controls button:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  .book-editor-content-pane {
+    @apply min-h-[40vh] lg:min-h-0 overflow-hidden;
+    background: #faf8f5;
+  }
+
+  .book-editor-text-pane {
+    @apply h-full;
+    background: #faf8f5;
+  }
+
+  .book-editor-meta {
+    @apply border-t border-slate-200 bg-white shrink-0;
+  }
+
+  .book-editor-meta-inner {
+    @apply max-w-5xl mx-auto p-4;
+  }
+
+  .book-editor-text,
+  .book-editor-text .ProseMirror,
+  #rich-editor .ProseMirror {
+    font-family: 'Noto Sans Tamil', 'Noto Sans Devanagari', 'Noto Sans Telugu',
+      'Noto Sans Kannada', 'Noto Sans Malayalam', 'Noto Sans', system-ui, sans-serif;
+    font-feature-settings: 'liga' 1, 'calt' 1;
+    unicode-bidi: plaintext;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.65;
+  }
+
+  .book-editor-text .ProseMirror {
+    @apply min-h-full outline-none;
+  }
+
   .ocr-replica-page {
     @apply relative w-full bg-white;
   }

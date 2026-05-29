@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from kalanjiyam import database as db
@@ -9,13 +10,34 @@ from kalanjiyam.utils.ocr_types import OcrResponse, serialize_bounding_boxes
 from kalanjiyam.utils.page_document import PageDocument
 
 
-def apply_ocr_to_page(page: db.Page, ocr: OcrResponse, engine: str) -> PageDocument:
+def _image_size(path: Path) -> tuple[int, int] | None:
+    try:
+        from PIL import Image
+
+        with Image.open(path) as img:
+            return int(img.size[0]), int(img.size[1])
+    except Exception:
+        return None
+
+
+def apply_ocr_to_page(
+    page: db.Page,
+    ocr: OcrResponse,
+    engine: str,
+    *,
+    image_path: Path | None = None,
+) -> PageDocument:
     """Update page geometry/boxes from OCR response."""
     page.ocr_bounding_boxes = serialize_bounding_boxes(engine, ocr.bounding_boxes)
     if ocr.page_width:
         page.page_width = int(ocr.page_width)
     if ocr.page_height:
         page.page_height = int(ocr.page_height)
+    if image_path and (not page.page_width or not page.page_height):
+        size = _image_size(image_path)
+        if size:
+            page.page_width = page.page_width or size[0]
+            page.page_height = page.page_height or size[1]
     return PageDocument.from_ocr_response(ocr)
 
 

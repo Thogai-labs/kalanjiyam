@@ -10,31 +10,79 @@ import httpx
 from flask import current_app
 
 from kalanjiyam.utils.ocr_types import OcrResponse
+from kalanjiyam.utils.text_utils import normalize_unicode_text
 
 logger = logging.getLogger(__name__)
 
 
-def _parse_bounding_boxes(blob: str | None, engine: str) -> list[tuple[int, int, int, int, str]]:
+def _box_from_item(item: dict) -> tuple[float, float, float, float, str] | None:
+    """Parse one Surya/OCR box dict (x1/y1 keys or bbox array)."""
+    text = str(normalize_unicode_text(item.get("text") or item.get("label") or ""))
+    if "x1" in item and "y1" in item and "x2" in item and "y2" in item:
+        return (
+            float(item["x1"]),
+            float(item["y1"]),
+            float(item["x2"]),
+            float(item["y2"]),
+            text,
+        )
+    bbox = item.get("bbox")
+    if isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
+        return (float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3]), text)
+    polygon = item.get("polygon")
+    if isinstance(polygon, (list, tuple)) and len(polygon) >= 4:
+        xs = polygon[0::2]
+        ys = polygon[1::2]
+        if xs and ys:
+            return (float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys)), text)
+    return None
+
+
+def _parse_bounding_boxes(
+    blob: str | list | None, engine: str
+) -> list[tuple[float, float, float, float, str]]:
     if not blob:
         return []
-    if engine == "surya":
-        try:
-            items = json.loads(blob)
-        except json.JSONDecodeError:
+    items: list | None = None
+    if isinstance(blob, list):
+        items = blob
+    elif isinstance(blob, str):
+        trimmed = blob.strip()
+        if not trimmed:
             return []
-        return [
-            (item["x1"], item["y1"], item["x2"], item["y2"], item["text"])
-            for item in items
-            if isinstance(item, dict) and "text" in item
-        ]
-    boxes: list[tuple[int, int, int, int, str]] = []
-    for line in blob.splitlines():
-        parts = line.split("\t")
-        if len(parts) >= 5:
+        if trimmed.startswith("["):
             try:
-                boxes.append((int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3]), parts[4]))
-            except ValueError:
-                continue
+                items = json.loads(trimmed)
+            except json.JSONDecodeError:
+                return []
+        else:
+            boxes: list[tuple[float, float, float, float, str]] = []
+            for line in trimmed.splitlines():
+                parts = line.split("\t")
+                if len(parts) >= 5:
+                    try:
+                        boxes.append(
+                            (
+                                float(parts[0]),
+                                float(parts[1]),
+                                float(parts[2]),
+                                float(parts[3]),
+                                normalize_unicode_text(parts[4]),
+                            )
+                        )
+                    except ValueError:
+                        continue
+            return boxes
+    if not isinstance(items, list):
+        return []
+    boxes: list[tuple[float, float, float, float, str]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        parsed = _box_from_item(item)
+        if parsed is not None:
+            x1, y1, x2, y2, text = parsed
+            boxes.append((x1, y1, x2, y2, normalize_unicode_text(text)))
     return boxes
 
 

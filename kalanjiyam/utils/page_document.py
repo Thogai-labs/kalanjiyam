@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from kalanjiyam.utils.ocr_types import OcrResponse, post_process
+from kalanjiyam.utils.text_utils import normalize_unicode_text
 
 BLOCK_TYPES = frozenset(
     {"paragraph", "heading", "verse", "table", "figure", "list_item"}
@@ -45,7 +46,7 @@ class Block:
             id=str(data.get("id") or _new_block_id()),
             type=block_type,
             bbox=[int(x) for x in bbox],
-            content=str(data.get("content") or ""),
+            content=str(normalize_unicode_text(data.get("content") or "")),
             reading_order=int(data.get("reading_order") or 0),
             children=list(data.get("children") or []),
         )
@@ -163,7 +164,9 @@ class PageDocument:
                 blocks=blocks,
             )
 
-        blocks = _blocks_from_bounding_boxes(ocr.bounding_boxes)
+        blocks = _blocks_from_bounding_boxes(
+            _scale_boxes_to_image(ocr.bounding_boxes, ocr.page_width, ocr.page_height)
+        )
         if not blocks and ocr.text_content.strip():
             blocks = [
                 Block(
@@ -224,8 +227,24 @@ def _new_block_id() -> str:
     return f"b{uuid.uuid4().hex[:8]}"
 
 
+def _scale_boxes_to_image(
+    boxes: list[tuple[float, float, float, float, str]],
+    width: int | None,
+    height: int | None,
+) -> list[tuple[float, float, float, float, str]]:
+    if not boxes or not width or not height:
+        return boxes
+    max_coord = max(max(b[0], b[1], b[2], b[3]) for b in boxes)
+    if max_coord > 0 and max_coord <= 1.5:
+        return [
+            (b[0] * width, b[1] * height, b[2] * width, b[3] * height, b[4])
+            for b in boxes
+        ]
+    return boxes
+
+
 def _blocks_from_bounding_boxes(
-    boxes: list[tuple[int, int, int, int, str]],
+    boxes: list[tuple[float, float, float, float, str]],
 ) -> list[Block]:
     if not boxes:
         return []
@@ -234,14 +253,14 @@ def _blocks_from_bounding_boxes(
     for x1, y1, x2, y2, text in boxes:
         if not text.strip():
             continue
-        key = (y1 // 20, x1)
+        key = (int(y1) // 20, int(x1))
         lines.setdefault(key, []).append((x1, y1, x2, y2, text))
 
     blocks: list[Block] = []
     order = 1
     for key in sorted(lines.keys()):
         row_boxes = sorted(lines[key], key=lambda b: b[0])
-        texts = [post_process(b[4]) for b in row_boxes]
+        texts = [post_process(normalize_unicode_text(b[4])) for b in row_boxes]
         content = " ".join(texts).strip()
         if not content:
             continue
@@ -254,7 +273,7 @@ def _blocks_from_bounding_boxes(
             Block(
                 id=_new_block_id(),
                 type=block_type,
-                bbox=[x1, y1, x2, y2],
+                bbox=[int(x1), int(y1), int(x2), int(y2)],
                 content=content,
                 reading_order=order,
             )
@@ -307,25 +326,66 @@ def _blocks_to_replica_html(
     )
 
 
+def _blocks_lack_spatial_bboxes(blocks: list[Block]) -> bool:
+    if not blocks:
+        return True
+    return all(not b.bbox or b.bbox == [0, 0, 0, 0] for b in blocks)
+
+
+def enrich_document_from_page_ocr(
+    doc: PageDocument,
+    page: Any | None,
+    *,
+    engine: str = "surya",
+) -> PageDocument:
+    """Fill dimensions and spatial blocks from stored page OCR boxes (Surya JSON)."""
+    if page is None:
+        return doc
+    raw_boxes = getattr(page, "ocr_bounding_boxes", None)
+    if not raw_boxes:
+        return doc
+    from kalanjiyam.utils.ocr_client import _parse_bounding_boxes
+
+    boxes = _parse_bounding_boxes(raw_boxes, engine)
+    if not boxes:
+        return doc
+    page_width = doc.page_width or getattr(page, "page_width", None)
+    page_height = doc.page_height or getattr(page, "page_height", None)
+    if page_width:
+        doc.page_width = int(page_width)
+    if page_height:
+        doc.page_height = int(page_height)
+    if _blocks_lack_spatial_bboxes(doc.blocks):
+        scaled = _scale_boxes_to_image(boxes, doc.page_width, doc.page_height)
+        built = _blocks_from_bounding_boxes(scaled)
+        if built:
+            doc.blocks = built
+            doc.content_format = "blocks"
+    return doc
+
+
 def document_for_revision(
     revision: Any,
     page: Any | None = None,
 ) -> PageDocument:
     """Load PageDocument from revision, with legacy fallback."""
     if revision is None:
-        return PageDocument.empty()
-    doc = getattr(revision, "document", None)
-    if doc:
-        return PageDocument.from_dict(doc)
-    page_width = getattr(page, "page_width", None) if page else None
-    page_height = getattr(page, "page_height", None) if page else None
-    fmt = getattr(revision, "content_format", None) or "plain"
-    return PageDocument.from_legacy_content(
-        revision.content,
-        page_width=page_width,
-        page_height=page_height,
-        content_format=fmt,
-    )
+        doc = PageDocument.empty()
+        return enrich_document_from_page_ocr(doc, page)
+    doc_data = getattr(revision, "document", None)
+    if doc_data:
+        doc = PageDocument.from_dict(doc_data)
+    else:
+        page_width = getattr(page, "page_width", None) if page else None
+        page_height = getattr(page, "page_height", None) if page else None
+        fmt = getattr(revision, "content_format", None) or "plain"
+        doc = PageDocument.from_legacy_content(
+            revision.content,
+            page_width=page_width,
+            page_height=page_height,
+            content_format=fmt,
+        )
+    return enrich_document_from_page_ocr(doc, page)
 
 
 def iou(a: list[int], b: list[int]) -> float:

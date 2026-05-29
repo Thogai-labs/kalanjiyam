@@ -9,7 +9,7 @@ from dataclasses import dataclass
 @dataclass
 class OcrResponse:
     text_content: str
-    bounding_boxes: list[tuple[int, int, int, int, str]]
+    bounding_boxes: list[tuple[float, float, float, float, str]]
     layout_html: str | None = None
     blocks: list[dict] | None = None
     content_format: str = "plain"
@@ -78,7 +78,7 @@ def post_process(text: str) -> str:
 
 
 def serialize_bounding_boxes(
-    engine: str, boxes: list[tuple[int, int, int, int, str]]
+    engine: str, boxes: list[tuple[float, float, float, float, str]]
 ) -> str:
     if not boxes:
         return ""

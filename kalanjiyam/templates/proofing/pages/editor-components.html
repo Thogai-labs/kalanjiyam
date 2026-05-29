@@ -47,6 +47,129 @@ these components in our help text and documentation.
 {% endmacro %}
 
 
+{# Compact toolbar for book editing: navigation + OCR/tools + publish. #}
+{% macro book_toolbar(ctx, page_number, image_number, num_images, ocr_status="unavailable", engine_choices=[]) %}
+{% set project = ctx.project %}
+{% set button_css = "p-2 rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors" %}
+<header class="book-editor-toolbar">
+  <div class="book-editor-toolbar-left">
+    <a class="book-editor-back text-slate-600 hover:text-slate-900 truncate max-w-[12rem] sm:max-w-xs"
+       href="{{ url_for('proofing.project.summary', slug=project.slug) }}"
+       title="{{ project.display_title }}">
+      {{ project.display_title }}
+    </a>
+    <span class="book-editor-page-label">{{ image_number }}</span>
+    {% if image_number != page_number %}
+    <span class="text-xs text-slate-400 hidden sm:inline">({{ _('Page') }} {{ page_number }})</span>
+    {% endif %}
+    {{ status_badge(ctx.cur.status.name) }}
+  </div>
+
+  <div class="book-editor-toolbar-center">
+    <div class="book-editor-mode-toggle">
+      <button type="button"
+              :class="editorMode === 'split' ? 'active' : ''"
+              @click.prevent="setEditorMode('split')">{{ _('Split') }}</button>
+      <button type="button"
+              :class="editorMode === 'replica' ? 'active' : ''"
+              @click.prevent="setEditorMode('replica')">{{ _('Replica') }}</button>
+      <button type="button"
+              :class="editorMode === 'flow' ? 'active' : ''"
+              @click.prevent="setEditorMode('flow')">{{ _('Flow') }}</button>
+    </div>
+  </div>
+
+  <div class="book-editor-toolbar-right">
+    {% set prev_url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=ctx.prev.slug) %}
+    {% set next_url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=ctx.next.slug) %}
+    {% set history_url = url_for("proofing.page.history", project_slug=project.slug, page_slug=ctx.cur.slug) %}
+
+    <a class="{{ button_css }}" href="{{ history_url }}" title="{{ _('History') }}">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+    </a>
+    <a class="{{ button_css }}" href="{{ prev_url }}" title="{{ _('Previous') }}">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+    </a>
+    <a class="{{ button_css }}" href="{{ next_url }}" title="{{ _('Next') }}">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+    </a>
+
+    <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></span>
+
+    {# OCR — reuse dropdown from menu_bar #}
+    {{ _book_ocr_controls(ocr_status, engine_choices, button_css) }}
+
+    <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></span>
+
+    <button type="button" class="{{ button_css }}"
+            @click.prevent="showMetaPanel = !showMetaPanel"
+            :class="showMetaPanel ? 'bg-slate-100' : ''"
+            title="{{ _('Publish & status') }}">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+    </button>
+
+    {% if current_user is defined and current_user.is_authenticated %}
+    <button type="submit" class="book-editor-publish hidden sm:inline-flex"
+            @click="syncContentBeforeSubmit()">
+      {{ _('Publish') }}
+    </button>
+    {% endif %}
+
+    <span class="book-editor-unsaved text-xs text-amber-600 font-medium" x-show="hasUnsavedChanges" x-cloak>{{ _('Unsaved') }}</span>
+  </div>
+</header>
+{% endmacro %}
+
+
+{% macro _book_ocr_controls(ocr_status, engine_choices, button_css) %}
+<div class="relative">
+  <button class="{{ button_css }}"
+     @click.prevent="ocrDropdownOpen=!ocrDropdownOpen"
+     @click.outside="ocrDropdownOpen=false"
+     title="{{ _('OCR') }}">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+    </svg>
+  </button>
+  <div x-show="ocrDropdownOpen" x-cloak class="dropdown-pane w-80 right-0 left-auto">
+    <ul class="text-sm" @click.prevent="ocrDropdownOpen=false">
+      <li class="mb-3 px-3 pt-2">
+        <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('OCR engine') }}</label>
+        {% if ocr_status == "unavailable" %}
+        <p class="text-xs text-red-600">{{ _('OCR service unavailable') }}</p>
+        {% elif engine_choices %}
+        <div class="grid grid-cols-2 gap-2" x-init="selectOcrEngine('{{ engine_choices[0].value }}')">
+          {% for e in engine_choices %}
+          <button @click.prevent.stop="selectOcrEngine('{{ e.value }}')"
+                  class="ocr-engine-btn"
+                  :class="selectedEngine === '{{ e.value }}' ? 'active' : ''">{{ e.label }}</button>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </li>
+      <li class="mb-3 px-3">
+        <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Language') }}</label>
+        <select class="form-select-enhanced w-full" x-model="selectedLanguage" id="language-select" @click.stop></select>
+      </li>
+      <li class="mb-3 px-3" x-show="selectedEngine === '2' || selectedEngine === '3'">
+        <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Additional language') }}</label>
+        <select class="form-select-enhanced w-full" id="additional-language-select" @click.stop>
+          <option value="">{{ _('None') }}</option>
+        </select>
+      </li>
+      <li class="border-t border-slate-100 pt-2 px-3 pb-2">
+        <button type="button"
+                class="w-full bg-slate-800 text-white rounded-lg py-2 text-sm hover:bg-slate-700 transition-colors"
+                @click.prevent.stop="runOCR(); ocrDropdownOpen=false"
+                :disabled="isRunningOCR"
+                x-text="isRunningOCR ? '{{ _("Running OCR ...") }}' : '{{ _("Run OCR") }}'"></button>
+      </li>
+    </ul>
+  </div>
+</div>
+{% endmacro %}
+
+
 {# Page information and navigation options. #}
 {% macro navigation_bar(ctx, page_number, image_number, num_images) %}
 {% set project = ctx.project %}
@@ -455,25 +578,12 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
 
 {# Text editing area with rich text editor. #}
 {% macro text_box(content) %}
-<div class="bg-white border border-teal-200 rounded-lg p-4 peacock-shadow"
+<div class="book-editor-text-pane h-full flex flex-col"
      @dragover.prevent="handleDragOver"
      @dragleave="handleDragLeave"
      @drop.prevent="handleDrop"
-     :class="isDragging ? 'ring-2 ring-peacock-primary border-peacock-primary' : ''">
-  <div class="flex items-center justify-between mb-4">
-    <h3 class="text-lg font-semibold text-peacock-primary">{{ _('Text Editor') }}</h3>
-    <div class="flex items-center gap-2">
-      <span class="text-sm text-peacock-secondary" x-show="hasUnsavedChanges">
-        {{ _('Unsaved changes') }}
-      </span>
-      <span x-show="isDragging" class="text-sm text-peacock-primary font-medium">
-        {{ _('Drop image here') }}
-      </span>
-    </div>
-  </div>
-  
-  {# TipTap Simple UI Toolbar - Matching TipTap's official design #}
-  <div id="rich-editor-toolbar" class="px-2 py-1.5" x-show="richEditor">
+     :class="isDragging ? 'ring-2 ring-amber-400' : ''">
+  <div id="rich-editor-toolbar" class="book-editor-flow-toolbar px-2 py-1 border-b border-slate-100 shrink-0" x-show="richEditor">
     <div class="flex items-center gap-0 flex-wrap">
       {# Undo/Redo #}
       <div class="toolbar-group">
@@ -692,165 +802,81 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
     </div>
   </div>
 
-  {# Hidden textarea for form submission - keeps content in sync #}
-  <textarea
-      id="content"
-      name="content"
-      class="hidden">{{ content }}</textarea>
-  {# Rich text editor container - TipTap Simple UI style #}
-  <div id="rich-editor" class="w-full h-[600px] overflow-y-auto bg-white border-t border-gray-200 focus-within:outline-none prose prose-lg max-w-none"></div>
+  <textarea id="content" name="content" class="hidden">{{ content }}</textarea>
+  <div id="rich-editor" class="book-editor-text flex-1 w-full overflow-y-auto px-4 py-3 focus-within:outline-none" style="background:#faf8f5"></div>
 </div>
 {% endmacro %}
 
 
 {% macro block_editor_pane() %}
-<div class="bg-white border border-teal-200 rounded-lg p-4 peacock-shadow flex flex-col h-[600px]">
-  <h3 class="text-lg font-semibold text-peacock-primary mb-3">{{ _('Blocks') }}</h3>
-  <div id="ocr-block-list" class="flex-1 overflow-y-auto"></div>
+<div class="book-editor-text-pane h-full flex flex-col">
+  <div id="ocr-block-list" class="flex-1 overflow-y-auto book-editor-text px-3 py-2"></div>
 </div>
 {% endmacro %}
 
 
 {% macro replica_pane() %}
-<div class="bg-white border border-teal-200 rounded-lg p-4 peacock-shadow h-[600px] overflow-auto">
-  <h3 class="text-lg font-semibold text-peacock-primary mb-3">{{ _('Page replica') }}</h3>
+<div class="book-editor-text-pane h-full overflow-auto px-2 py-2">
   <div id="ocr-replica-root"></div>
 </div>
 {% endmacro %}
 
 
-{# Image viewing area with toggle for translation. #}
+{# Image viewing area — minimal chrome, controls overlay the scan. #}
 {% macro image_box(translation_content=None, translation_metadata=None, available_translations=None) %}
-<div class="bg-white border border-teal-200 rounded-lg p-4 peacock-shadow" x-data="{ 
+<div class="book-editor-image-pane" x-data="{ 
   showTranslation: false, 
   dynamicTranslation: null, 
   translation_content: {{ 'true' if translation_content else 'false' }},
-  getTranslationSourceLang() { return this.dynamicTranslation && this.dynamicTranslation.sourceLang ? this.dynamicTranslation.sourceLang.toUpperCase() : ''; },
-  getTranslationTargetLang() { return this.dynamicTranslation && this.dynamicTranslation.targetLang ? this.dynamicTranslation.targetLang.toUpperCase() : ''; },
-  getTranslationEngine() { return this.dynamicTranslation && this.dynamicTranslation.engine ? this.dynamicTranslation.engine : ''; },
   getTranslationContent() { return this.dynamicTranslation && this.dynamicTranslation.content ? this.dynamicTranslation.content : ''; },
   switchTranslation(event) {
     const selectedOption = event.target.options[event.target.selectedIndex];
-    const translationData = {
+    this.dynamicTranslation = {
       content: selectedOption.dataset.content,
       sourceLang: selectedOption.dataset.sourceLang,
       targetLang: selectedOption.dataset.targetLang,
       engine: selectedOption.dataset.engine
     };
-    
-    console.log('Alpine.js switching to translation:', translationData);
-    this.dynamicTranslation = translationData;
   }
 }">
-  <div class="flex items-center justify-between mb-4">
-    <h3 class="text-lg font-semibold text-peacock-primary" x-text="showTranslation ? '{{ _('Translation') }}' : '{{ _('Original Image') }}'"></h3>
-    <div class="flex items-center gap-2">
-      <!-- Translation Language Selector -->
-      {% if available_translations and available_translations|length > 1 %}
-      <div class="flex items-center gap-2 mr-4">
-        <label class="text-sm font-medium text-peacock-secondary">Language:</label>
-        <select id="translation-language-select" 
-                class="text-sm border border-teal-200 rounded px-2 py-1 bg-white text-peacock-secondary" 
-                x-show="showTranslation"
-                @change="switchTranslation($event)">
-          {% for translation in available_translations %}
-            <option value="{{ translation.id }}" 
-                    data-content="{{ translation.content|e }}"
-                    data-source-lang="{{ translation.source_language }}"
-                    data-target-lang="{{ translation.target_language }}"
-                    data-engine="{{ translation.engine }}">
-              {{ translation.target_language.upper() }} ({{ translation.engine }})
-            </option>
-          {% endfor %}
-        </select>
-      </div>
-      {% else %}
-      <!-- Debug: No translations available -->
-      <div class="text-xs text-gray-500" x-show="showTranslation">
-        Available translations: {{ available_translations|length if available_translations else 0 }}
-      </div>
-      {% endif %}
-      <button type="button" 
-              @click="showTranslation = !showTranslation"
-              class="flex items-center gap-2 p-2 hover:bg-peacock-light rounded transition-colors"
-              :class="showTranslation ? 'bg-peacock-light' : ''"
-              title="{{ _('Toggle between image and translation') }}">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-show="!showTranslation">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z"></path>
-        </svg>
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-show="showTranslation">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-        </svg>
-        <span x-text="showTranslation ? '{{ _('Show Image') }}' : '{{ _('Show Translation') }}'" class="text-sm"></span>
-      </button>
-      <button type="button" id="osd-zoom-in" class="p-2 hover:bg-peacock-light rounded transition-colors" title="{{ _('Zoom in') }}" x-show="!showTranslation">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-        </svg>
-      </button>
-      <button type="button" id="osd-zoom-out" class="p-2 hover:bg-peacock-light rounded transition-colors" title="{{ _('Zoom out') }}" x-show="!showTranslation">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-        </svg>
-      </button>
-      <button type="button" id="osd-home" class="p-2 hover:bg-peacock-light rounded transition-colors" title="{{ _('Reset view') }}" x-show="!showTranslation">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
-        </svg>
-      </button>
-      <button type="button" id="osd-rotate-left" class="p-2 hover:bg-peacock-light rounded transition-colors" title="{{ _('Rotate left') }}" x-show="!showTranslation">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-        </svg>
-      </button>
-      <button type="button" id="osd-rotate-right" class="p-2 hover:bg-peacock-light rounded transition-colors" title="{{ _('Rotate right') }}" x-show="!showTranslation">
-        <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
-        </svg>
-      </button>
-    </div>
-  </div>
-  
-  <!-- Image content -->
-  <div x-show="!showTranslation" class="w-full h-[600px] bg-peacock-subtle rounded-lg border border-teal-100">
+  <div x-show="!showTranslation" class="book-editor-image-viewport relative h-full">
     <div id="osd-image" class="w-full h-full"></div>
+    <div class="book-editor-image-controls">
+      <button type="button" id="osd-zoom-in" title="{{ _('Zoom in') }}">+</button>
+      <button type="button" id="osd-zoom-out" title="{{ _('Zoom out') }}">−</button>
+      <button type="button" id="osd-home" title="{{ _('Reset') }}">⌂</button>
+      <button type="button" id="osd-rotate-left" title="{{ _('Rotate left') }}">↺</button>
+      <button type="button" id="osd-rotate-right" title="{{ _('Rotate right') }}">↻</button>
+      {% if translation_content or (available_translations and available_translations|length > 0) %}
+      <button type="button" @click="showTranslation = true" title="{{ _('Translation') }}">T</button>
+      {% endif %}
+    </div>
   </div>
-  
-  <!-- Translation content -->
-  <div x-show="showTranslation" class="w-full h-[600px] bg-peacock-subtle rounded-lg border border-teal-100 p-4 overflow-y-auto">
-    <!-- Dynamic translation content (set via JavaScript) -->
-    <div x-show="dynamicTranslation && dynamicTranslation.sourceLang && dynamicTranslation.targetLang && dynamicTranslation.engine && dynamicTranslation.content" class="prose max-w-none">
-      <h4 class="text-lg font-semibold text-peacock-primary mb-3">
-        Translation (<span x-text="getTranslationSourceLang()"></span> → <span x-text="getTranslationTargetLang()"></span>)
-        <span class="text-sm font-normal text-peacock-secondary">via <span x-text="getTranslationEngine()"></span></span>
-      </h4>
-      <div class="text-sm leading-relaxed whitespace-pre-wrap" x-text="getTranslationContent()"></div>
+
+  <div x-show="showTranslation" x-cloak class="book-editor-translation-view h-full overflow-y-auto p-4">
+    <div class="flex items-center justify-between mb-3">
+      {% if available_translations and available_translations|length > 1 %}
+      <select id="translation-language-select" class="text-sm border border-slate-200 rounded px-2 py-1"
+              @change="switchTranslation($event)">
+        {% for translation in available_translations %}
+        <option value="{{ translation.id }}"
+                data-content="{{ translation.content|e }}"
+                data-source-lang="{{ translation.source_language }}"
+                data-target-lang="{{ translation.target_language }}"
+                data-engine="{{ translation.engine }}">
+          {{ translation.target_language.upper() }}
+        </option>
+        {% endfor %}
+      </select>
+      {% endif %}
+      <button type="button" class="text-sm text-slate-600 hover:text-slate-900 ml-auto" @click="showTranslation = false">
+        {{ _('Show scan') }}
+      </button>
     </div>
-    
-    <!-- Server-side translation content -->
-    <div x-show="!dynamicTranslation && translation_content" class="prose max-w-none">
-      <h4 class="text-lg font-semibold text-peacock-primary mb-3">
-        {% if translation_metadata %}
-          {{ _('Translation') }} ({{ translation_metadata.source_language.upper() }} → {{ translation_metadata.target_language.upper() }})
-          <span class="text-sm font-normal text-peacock-secondary">via {{ translation_metadata.engine }}</span>
-        {% else %}
-          {{ _('Translation') }}
-        {% endif %}
-      </h4>
-      <div class="text-sm leading-relaxed whitespace-pre-wrap">{{ translation_content }}</div>
-    </div>
-    
-    <!-- No translation available -->
-    <div x-show="!dynamicTranslation && !translation_content" class="flex items-center justify-center h-full">
-      <div class="text-center">
-        <svg class="w-16 h-16 text-peacock-secondary mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
-        </svg>
-        <h4 class="text-lg font-semibold text-peacock-primary mb-2">{{ _('No Translation Available') }}</h4>
-        <p class="text-peacock-secondary">{{ _('Translation has not been generated for this page yet.') }}</p>
-        <p class="text-sm text-peacock-secondary mt-2">{{ _('Use the batch translation feature to generate translations for this project.') }}</p>
-      </div>
+    <div x-show="dynamicTranslation && dynamicTranslation.content" class="book-editor-text text-base leading-relaxed whitespace-pre-wrap" x-text="getTranslationContent()"></div>
+    <div x-show="!dynamicTranslation && translation_content" class="book-editor-text text-base leading-relaxed whitespace-pre-wrap">{{ translation_content }}</div>
+    <div x-show="!dynamicTranslation && !translation_content" class="text-sm text-slate-400 text-center py-12">
+      {{ _('No translation for this page yet.') }}
     </div>
   </div>
 </div>

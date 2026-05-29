@@ -1,14 +1,13 @@
 {% extends 'proofing/base.html' %}
 {% import "macros/proofing.html" as m %}
 {% import "macros/components.html" as mc %}
-{% import "proofing/pages/editor-components.html" as editor %}
+{% import "proofing/pages/editor-components.html" as editor with context %}
 
 
-{# Render a radiobutton as a clickable button. #}
 {% macro _status(field, peer_classes) %}
 <div>
   {{ field(class_="hidden peer") }}
-  {{ field.label(class_="block border border-slate-200 rounded-xl p-4 mr-2 text-slate-500 hover:bg-slate-50 transition-all font-bold text-sm " + peer_classes + " peer-checked:shadow-inner cursor-pointer text-center") }}
+  {{ field.label(class_="block border border-slate-200 rounded-lg px-3 py-2 mr-1 text-slate-500 hover:bg-slate-50 transition-all text-xs font-semibold peer-checked:shadow-inner cursor-pointer text-center " + peer_classes + " peer-checked:shadow-inner") }}
 </div>
 {% endmacro %}
 
@@ -16,8 +15,16 @@
 {% block title %}{{ _('Edit') }}: {{ project.display_title }}/{{ cur.slug }} | Kalanjiyam{% endblock %}
 
 
+{% block extra_css %}
+{{ super() }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;600&family=Noto+Sans+Devanagari:wght@400;600&family=Noto+Sans+Telugu:wght@400;600&family=Noto+Sans+Kannada:wght@400;600&family=Noto+Sans+Malayalam:wght@400;600&family=Noto+Sans:wght@400;600&display=swap" rel="stylesheet">
+{% endblock %}
+
+
 {% block main %}
-<article class="p-6 max-w-[1600px] mx-auto">
+<article class="book-editor-page">
   {% if not current_user.is_authenticated -%}
   {% call mc.div_warning() %}{% trans %}
   Since you are not logged in, some functions (such as the OCR button) have
@@ -27,111 +34,91 @@
   {%- endif %}
 
   {% set num_images = project.pages|length %}
-  {{ editor.navigation_bar(page_context, page_number, image_number, num_images) }}
   {{ mc.flash_messages() }}
 
   {% if conflict %}
-  <div class="bg-red-50 border border-red-200 rounded-2xl p-6 mb-8 shadow-sm">
-    <h3 class="text-red-800 font-black mb-3 flex items-center gap-2">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-        {{ _('Conflict detected') }}
-    </h3>
-    <pre class="text-red-700 text-sm bg-white/50 p-4 rounded-xl border border-red-100 overflow-x-auto">{{ conflict.content }}</pre>
+  <div class="mx-4 mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
+    <h3 class="text-red-800 font-semibold mb-2">{{ _('Conflict detected') }}</h3>
+    <pre class="book-editor-text text-red-700 text-sm bg-white/50 p-3 rounded overflow-x-auto">{{ conflict.content }}</pre>
   </div>
   {% endif %}
 
-  <form x-data="proofer" method="POST">
+  <form x-data="proofer" method="POST" class="book-editor-shell">
     {{ form.csrf_token }}
     {{ form.version }}
     <input type="hidden" name="document" id="document" value="">
 
+    {{ editor.book_toolbar(page_context, page_number, image_number, num_images, ocr_status=ocr_status, engine_choices=engine_choices) }}
+
     {% if not has_edits %}
-      {% set command = _("Tools &rarr; Run OCR") %}
-      {% call mc.p_note() %}{% trans %}
-      This page has not been edited yet. Run <i>{{ command }}</i> to get started.
-      {% endtrans %}{% endcall %}
+    <p class="book-editor-hint px-4 py-2 text-sm text-slate-500 border-b border-slate-200 bg-amber-50">
+      {% trans %}This page has not been edited yet. Use <strong>OCR</strong> in the toolbar to get started.{% endtrans %}
+    </p>
     {% endif %}
 
-    {{ editor.menu_bar(ocr_status=ocr_status, engine_choices=engine_choices) }}
-
-    {# Single image pane; swap editor column by mode #}
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 min-h-[700px]">
+    <div class="book-editor-workspace">
       {{ editor.image_box(translation_content, translation_metadata, available_translations) }}
 
-      <div class="min-h-[600px]">
-        <div x-show="editorMode === 'split'">
+      <section class="book-editor-content-pane">
+        <div x-show="editorMode === 'split'" class="h-full">
           {{ editor.block_editor_pane() }}
         </div>
-        <div x-show="editorMode === 'replica'" x-cloak>
+        <div x-show="editorMode === 'replica'" x-cloak class="h-full">
           {{ editor.replica_pane() }}
         </div>
-        <div x-show="editorMode === 'flow'" x-cloak>
+        <div x-show="editorMode === 'flow'" x-cloak class="h-full">
           {{ editor.text_box(form.content.data or "") }}
         </div>
-      </div>
+      </section>
     </div>
 
-    <div class="mt-10 bg-white border border-slate-100 rounded-3xl p-8 shadow-sm">
-      <div class="grid md:grid-cols-2 gap-10">
+    <div class="book-editor-meta" x-show="showMetaPanel" x-cloak x-transition>
+      <div class="book-editor-meta-inner">
+        <div class="grid md:grid-cols-2 gap-6">
           <div>
-            <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">{{ form.summary.label.text }}</label>
-            {{ form.summary(class_="block rounded-2xl bg-slate-50 w-full p-4 border border-slate-100 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-medium",
+            <label class="block text-xs font-semibold text-slate-500 mb-2">{{ form.summary.label.text }}</label>
+            {{ form.summary(class_="block rounded-lg bg-white w-full p-3 border border-slate-200 focus:border-slate-400 outline-none text-sm",
                 placeholder=_("Fixed various OCR errors")) }}
           </div>
-
           <div>
-            <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">{{ form.status.label.text }}</label>
+            <label class="block text-xs font-semibold text-slate-500 mb-2">{{ form.status.label.text }}</label>
             {% set radios = form.status|list %}
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {{ _status(radios[0],
-              "peer-checked:bg-red-400 peer-checked:text-white peer-checked:border-red-500") }}
-              {{ _status(radios[1],
-              "peer-checked:bg-yellow-400 peer-checked:text-white peer-checked:border-yellow-500") }}
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {{ _status(radios[0], "peer-checked:bg-red-400 peer-checked:text-white peer-checked:border-red-500") }}
+              {{ _status(radios[1], "peer-checked:bg-yellow-400 peer-checked:text-white peer-checked:border-yellow-500") }}
               {% if not is_r0 %}
-              {{ _status(radios[2],
-              "peer-checked:bg-emerald-400 peer-checked:text-white peer-checked:border-emerald-500") }}
+              {{ _status(radios[2], "peer-checked:bg-emerald-400 peer-checked:text-white peer-checked:border-emerald-500") }}
               {% endif %}
-              {{ _status(radios[3],
-              "peer-checked:bg-slate-400 peer-checked:text-white peer-checked:border-slate-500") }}
+              {{ _status(radios[3], "peer-checked:bg-slate-400 peer-checked:text-white peer-checked:border-slate-500") }}
             </div>
           </div>
-      </div>
+        </div>
 
-      <div class="mt-10 pt-10 border-t border-slate-50 flex flex-col md:flex-row items-center justify-between gap-6">
-          {% if current_user.is_authenticated %}
-          {% set cc0 = "https://creativecommons.org/publicdomain/zero/1.0/" %}
-          <div class="max-w-md">
-            <p class="text-sm text-slate-400 font-medium">{% trans %}
-            By saving your changes, you agree to release your contribution under the
-            <a class="text-royalblue font-bold hover:underline" href="{{ cc0 }}">CC0 (public domain) license</a>.
-            {% endtrans %}</p>
-          </div>
-
-          <div class="flex items-center gap-6">
-            <div class="flex flex-col items-end">
-                <button class="btn-premium px-12 py-4 text-xl rounded-2xl"
-                        type="submit"
-                        @click="syncContentBeforeSubmit()">
-                  {{ _('Publish changes') }}
-                </button>
-                <span class="text-xs font-black text-amber-500 uppercase tracking-widest mt-2 animate-pulse" x-show="hasUnsavedChanges">
-                  {{ _('Unsaved changes') }}
-                </span>
-            </div>
-          </div>
-          {% endif %}
+        {% if current_user.is_authenticated %}
+        {% set cc0 = "https://creativecommons.org/publicdomain/zero/1.0/" %}
+        <div class="mt-4 pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <p class="text-xs text-slate-500 max-w-lg">{% trans %}
+          By saving, you release your contribution under the
+          <a class="text-royalblue hover:underline" href="{{ cc0 }}">CC0 license</a>.
+          {% endtrans %}</p>
+          <button class="btn-premium px-8 py-2.5 text-base rounded-xl shrink-0"
+                  type="submit"
+                  @click="syncContentBeforeSubmit()">
+            {{ _('Publish changes') }}
+          </button>
+        </div>
+        {% endif %}
       </div>
     </div>
   </form>
 
   {% if not current_user.is_authenticated %}
   {% set log_in = url_for("auth.sign_in") %}
-  <div class="mt-8">
-      {% call mc.div_warning() %}
-      Only registered users can save changes. Contact the site administrator to create an
-          account or <a href="{{ log_in }}" class="font-bold underline">sign in</a> to save your
-      changes.
-      {% endcall %}
+  <div class="p-4">
+    {% call mc.div_warning() %}
+    Only registered users can save changes.
+    <a href="{{ log_in }}" class="font-semibold underline">{{ _('Sign in') }}</a>
+    {% endcall %}
   </div>
   {% endif %}
 </article>

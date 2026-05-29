@@ -17,8 +17,10 @@ import {
   documentToPlainText,
   fromOcrPayload,
   parseBoundingBoxes,
+  overlayBoxesFromPayload,
+  boxesFromDocumentBlocks,
 } from './page-document.js';
-import { OsdBboxOverlay } from './osd-overlay.js';
+import { OsdBboxOverlay, scaleBoxesToImage } from './osd-overlay.js';
 import { BlockEditor } from './block-editor.js';
 import { ReplicaView } from './replica-view.js';
 
@@ -77,6 +79,7 @@ export default () => ({
 
   // Editor mode: split | replica | flow
   editorMode: 'split',
+  showMetaPanel: false,
   pageDocument: null,
   _bboxOverlay: null,
   _blockEditor: null,
@@ -488,9 +491,29 @@ export default () => ({
       if (this._replicaView) {
         this._replicaView.setDocument(this.pageDocument);
       }
+      this._setOverlayBoxes(
+        typeof OCR_BOUNDING_BOXES !== 'undefined' ? OCR_BOUNDING_BOXES : '',
+      );
       this._syncDocumentToForm();
     };
     img.src = IMAGE_URL;
+  },
+
+  _setOverlayBoxes(source) {
+    if (!this._bboxOverlay) return;
+    let boxes = [];
+    if (source && (source.bounding_boxes || source.blocks)) {
+      boxes = overlayBoxesFromPayload(source, this.pageDocument);
+    } else if (typeof source === 'string') {
+      boxes = parseBoundingBoxes(source);
+      if (!boxes.length) {
+        boxes = boxesFromDocumentBlocks(this.pageDocument?.blocks);
+      }
+    } else {
+      boxes = boxesFromDocumentBlocks(this.pageDocument?.blocks);
+    }
+    this._bboxOverlay.setBoxes(boxes);
+    this._bboxOverlay.setBlocksForMatching(this.pageDocument?.blocks || []);
   },
 
   initPageDocumentEditor() {
@@ -538,9 +561,6 @@ export default () => ({
         this._replicaView.setDocument(this.pageDocument);
       }
       if (this.imageViewer) {
-        const boxes = parseBoundingBoxes(
-          typeof OCR_BOUNDING_BOXES !== 'undefined' ? OCR_BOUNDING_BOXES : '',
-        );
         this._bboxOverlay = new OsdBboxOverlay(this.imageViewer, {
           onBoxClick: ({ block, bbox }) => {
             if (block && this._blockEditor) {
@@ -551,8 +571,9 @@ export default () => ({
             }
           },
         });
-        this._bboxOverlay.setBlocksForMatching(this.pageDocument.blocks || []);
-        this._bboxOverlay.setBoxes(boxes);
+        this._setOverlayBoxes(
+          typeof OCR_BOUNDING_BOXES !== 'undefined' ? OCR_BOUNDING_BOXES : '',
+        );
       }
       this._syncDocumentToForm();
     }, 200);
@@ -585,9 +606,10 @@ export default () => ({
     if (this._blockEditor) this._blockEditor.setDocument(this.pageDocument);
     if (this._replicaView) this._replicaView.setDocument(this.pageDocument);
     if (this._bboxOverlay) {
-      const boxes = parseBoundingBoxes(payload.bounding_boxes || '');
-      this._bboxOverlay.setBoxes(boxes);
-      this._bboxOverlay.setBlocksForMatching(this.pageDocument.blocks || []);
+      this._setOverlayBoxes(payload);
+      requestAnimationFrame(() => {
+        if (this._bboxOverlay) this._setOverlayBoxes(payload);
+      });
     }
     this._syncDocumentToForm();
     this.hasUnsavedChanges = true;
