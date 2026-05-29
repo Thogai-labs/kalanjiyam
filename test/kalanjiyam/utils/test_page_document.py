@@ -74,7 +74,25 @@ def test_enrich_document_from_surya_boxes():
         )
         page_width = 1000
         page_height = 1400
+        project = None
 
     doc = enrich_document_from_page_ocr(PageDocument.empty(), FakePage())
-    assert len(doc.blocks) == 2
-    assert doc.blocks[0].bbox == [0, 0, 100, 20]
+    assert len(doc.blocks) == 1
+    assert doc.blocks[0].bbox == [0, 0, 200, 20]
+
+
+def test_normalize_geometry_scales_to_image():
+    from kalanjiyam.utils.page_document import normalize_geometry
+
+    boxes = [(0.0, 0.0, 0.5, 0.1, "hello")]
+    scaled, _, pw, ph = normalize_geometry(
+        boxes,
+        None,
+        ocr_width=1000,
+        ocr_height=1400,
+        image_width=1700,
+        image_height=2200,
+    )
+    assert pw == 1700
+    assert ph == 2200
+    assert scaled[0][2] == 850

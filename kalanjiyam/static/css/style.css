@@ -547,8 +547,12 @@
 
   /* Book editor — image + text focused layout */
   .book-editor-page {
-    @apply min-h-screen flex flex-col;
+    @apply flex flex-col flex-1 min-h-0;
     background: #e8e4dc;
+  }
+
+  .book-editor-site-header nav {
+    @apply my-2;
   }
 
   .book-editor-shell {
@@ -594,7 +598,6 @@
 
   .book-editor-workspace {
     @apply grid grid-cols-1 lg:grid-cols-2 flex-1 min-h-0;
-    height: calc(100vh - 3.25rem);
   }
 
   .book-editor-image-pane {

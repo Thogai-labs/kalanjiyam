@@ -191,9 +191,117 @@ export function boxesFromDocumentBlocks(blocks) {
 }
 
 export function overlayBoxesFromPayload(payload, pageDocument) {
-  const fromBlob = parseBoundingBoxes(payload?.bounding_boxes);
-  if (fromBlob.length) return fromBlob;
-  return boxesFromDocumentBlocks(pageDocument?.blocks);
+  const fromBlocks = boxesFromDocumentBlocks(pageDocument?.blocks);
+  if (fromBlocks.length) return fromBlocks;
+  const lines = parseBoundingBoxes(payload?.bounding_boxes);
+  return clusterBoxesToParagraphs(lines);
+}
+
+export function blocksLookLikeLines(blocks, pageHeight) {
+  if (!blocks || blocks.length < 4) return false;
+  const spatial = blocks.filter(
+    (b) => b.bbox && b.bbox.length === 4 && b.bbox[2] > b.bbox[0] && b.bbox[3] > b.bbox[1],
+  );
+  if (spatial.length < 4) return false;
+  const heights = spatial.map((b) => b.bbox[3] - b.bbox[1]);
+  const avgH = heights.reduce((a, b) => a + b, 0) / heights.length;
+  if (pageHeight && avgH < pageHeight * 0.045) return true;
+  const shortLines = blocks.filter(
+    (b) => !String(b.content || '').includes('\n') && String(b.content || '').trim().length < 120,
+  ).length;
+  return shortLines >= Math.max(6, Math.floor(blocks.length * 0.75));
+}
+
+export function reclusterDocumentBlocks(doc) {
+  if (!doc?.blocks?.length || !blocksLookLikeLines(doc.blocks, doc.page_height)) {
+    return doc;
+  }
+  const boxes = doc.blocks
+    .map((b) => ({
+      x1: b.bbox[0],
+      y1: b.bbox[1],
+      x2: b.bbox[2],
+      y2: b.bbox[3],
+      text: b.content || '',
+    }))
+    .filter((b) => b.x2 > b.x1 && b.y2 > b.y1);
+  const paras = clusterBoxesToParagraphs(boxes);
+  if (!paras.length || paras.length >= doc.blocks.length) return doc;
+  return {
+    ...doc,
+    content_format: 'blocks',
+    blocks: paras.map((p, i) => ({
+      id: newBlockId(),
+      type: 'paragraph',
+      bbox: [Math.round(p.x1), Math.round(p.y1), Math.round(p.x2), Math.round(p.y2)],
+      content: p.text,
+      reading_order: i + 1,
+      children: [],
+    })),
+  };
+}
+
+function clusterBoxesToParagraphs(boxes) {
+  if (!boxes.length) return [];
+  const sorted = [...boxes].sort((a, b) => a.y1 - b.y1 || a.x1 - b.x1);
+  const lines = [];
+  sorted.forEach((box) => {
+    if (!box.text || !String(box.text).trim()) return;
+    const centerY = (box.y1 + box.y2) / 2;
+    let placed = false;
+    for (const line of lines) {
+      const ref = line[0];
+      const refCenter = (ref.y1 + ref.y2) / 2;
+      const lineH = Math.max(ref.y2 - ref.y1, box.y2 - box.y1, 8);
+      if (Math.abs(centerY - refCenter) <= lineH * 0.6) {
+        line.push(box);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) lines.push([box]);
+  });
+
+  const lineRecords = lines
+    .map((line) => {
+      line.sort((a, b) => a.x1 - b.x1);
+      const x1 = Math.min(...line.map((b) => b.x1));
+      const y1 = Math.min(...line.map((b) => b.y1));
+      const x2 = Math.max(...line.map((b) => b.x2));
+      const y2 = Math.max(...line.map((b) => b.y2));
+      const text = line.map((b) => b.text).filter(Boolean).join(' ').trim();
+      return { x1, y1, x2, y2, text };
+    })
+    .filter((line) => line.text)
+    .sort((a, b) => a.y1 - b.y1);
+
+  const paragraphs = [];
+  let para = null;
+  let prevBottom = null;
+  lineRecords.forEach((line) => {
+    const lineH = Math.max(line.y2 - line.y1, 12);
+    if (prevBottom !== null) {
+      const gap = line.y1 - prevBottom;
+      if (gap > Math.max(28, lineH * 1.6)) {
+        if (para) paragraphs.push(para);
+        para = { ...line };
+        prevBottom = line.y2;
+        return;
+      }
+    }
+    if (!para) {
+      para = { ...line };
+    } else {
+      para.x1 = Math.min(para.x1, line.x1);
+      para.y1 = Math.min(para.y1, line.y1);
+      para.x2 = Math.max(para.x2, line.x2);
+      para.y2 = Math.max(para.y2, line.y2);
+      para.text = `${para.text} ${line.text}`.trim();
+    }
+    prevBottom = line.y2;
+  });
+  if (para) paragraphs.push(para);
+  return paragraphs;
 }
 
 function parseCoord(value) {

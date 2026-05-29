@@ -15,6 +15,15 @@
 {% block title %}{{ _('Edit') }}: {{ project.display_title }}/{{ cur.slug }} | Kalanjiyam{% endblock %}
 
 
+{# Full site nav; book toolbar handles page navigation below. #}
+{% block header %}
+<div class="shrink-0 border-b border-slate-200 bg-white book-editor-site-header">
+  {% include "include/header.html" with context %}
+</div>
+{% endblock %}
+
+{% block body_class %}flex flex-col h-screen overflow-hidden{% endblock %}
+
 {% block extra_css %}
 {{ super() }}
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -47,12 +56,17 @@
     {{ form.csrf_token }}
     {{ form.version }}
     <input type="hidden" name="document" id="document" value="">
+    <textarea id="content" name="content" class="hidden">{{ page_plain_text }}</textarea>
 
     {{ editor.book_toolbar(page_context, page_number, image_number, num_images, ocr_status=ocr_status, engine_choices=engine_choices) }}
 
-    {% if not has_edits %}
+    {% if not has_edits and not has_ocr_content %}
     <p class="book-editor-hint px-4 py-2 text-sm text-slate-500 border-b border-slate-200 bg-amber-50">
       {% trans %}This page has not been edited yet. Use <strong>OCR</strong> in the toolbar to get started.{% endtrans %}
+    </p>
+    {% elif not has_edits and has_ocr_content %}
+    <p class="book-editor-hint px-4 py-2 text-sm text-slate-600 border-b border-slate-200 bg-emerald-50">
+      {% trans %}OCR is ready — review in <strong>Replica</strong>, then publish when satisfied.{% endtrans %}
     </p>
     {% endif %}
 
@@ -60,14 +74,11 @@
       {{ editor.image_box(translation_content, translation_metadata, available_translations) }}
 
       <section class="book-editor-content-pane">
-        <div x-show="editorMode === 'split'" class="h-full">
-          {{ editor.block_editor_pane() }}
-        </div>
-        <div x-show="editorMode === 'replica'" x-cloak class="h-full">
+        <div x-show="editorMode === 'replica'" class="h-full">
           {{ editor.replica_pane() }}
         </div>
         <div x-show="editorMode === 'flow'" x-cloak class="h-full">
-          {{ editor.text_box(form.content.data or "") }}
+          {{ editor.text_box() }}
         </div>
       </section>
     </div>

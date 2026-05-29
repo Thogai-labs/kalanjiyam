@@ -146,8 +146,21 @@ class PageDocument:
         self.blocks.sort(key=lambda b: b.reading_order)
 
     @classmethod
-    def from_ocr_response(cls, ocr: OcrResponse) -> PageDocument:
-        blocks_data = ocr.blocks
+    def from_ocr_response(
+        cls,
+        ocr: OcrResponse,
+        *,
+        image_width: int | None = None,
+        image_height: int | None = None,
+    ) -> PageDocument:
+        boxes, blocks_data, pw, ph = normalize_geometry(
+            ocr.bounding_boxes,
+            ocr.blocks,
+            ocr_width=ocr.page_width,
+            ocr_height=ocr.page_height,
+            image_width=image_width,
+            image_height=image_height,
+        )
         if blocks_data:
             blocks = [Block.from_dict(b) for b in blocks_data]
             for i, block in enumerate(blocks):
@@ -155,18 +168,20 @@ class PageDocument:
                 if not block.reading_order:
                     block.reading_order = i + 1
             blocks.sort(key=lambda b: b.reading_order)
+            if boxes and _blocks_look_like_lines(blocks, ph):
+                rebuilt = _blocks_from_bounding_boxes(boxes)
+                if rebuilt:
+                    blocks = rebuilt
             return cls(
-                page_width=ocr.page_width,
-                page_height=ocr.page_height,
+                page_width=pw,
+                page_height=ph,
                 content_format=ocr.content_format or "blocks",
                 pipeline=ocr.pipeline or "standard",
                 layout_html=ocr.layout_html,
                 blocks=blocks,
             )
 
-        blocks = _blocks_from_bounding_boxes(
-            _scale_boxes_to_image(ocr.bounding_boxes, ocr.page_width, ocr.page_height)
-        )
+        blocks = _blocks_from_bounding_boxes(boxes)
         if not blocks and ocr.text_content.strip():
             blocks = [
                 Block(
@@ -178,8 +193,8 @@ class PageDocument:
                 )
             ]
         return cls(
-            page_width=ocr.page_width,
-            page_height=ocr.page_height,
+            page_width=pw,
+            page_height=ph,
             content_format="blocks" if blocks else "plain",
             pipeline=ocr.pipeline or "standard",
             layout_html=ocr.layout_html,
@@ -243,42 +258,196 @@ def _scale_boxes_to_image(
     return boxes
 
 
+def _scale_bbox(
+    bbox: list[int] | list[float],
+    sx: float,
+    sy: float,
+) -> list[int]:
+    if len(bbox) != 4:
+        return [0, 0, 0, 0]
+    return [int(bbox[0] * sx), int(bbox[1] * sy), int(bbox[2] * sx), int(bbox[3] * sy)]
+
+
+def normalize_geometry(
+    boxes: list[tuple[float, float, float, float, str]],
+    blocks: list[dict[str, Any]] | None,
+    *,
+    ocr_width: int | None,
+    ocr_height: int | None,
+    image_width: int | None,
+    image_height: int | None,
+) -> tuple[
+    list[tuple[float, float, float, float, str]],
+    list[dict[str, Any]] | None,
+    int | None,
+    int | None,
+]:
+    """Scale OCR boxes/blocks to match the actual page image pixel grid."""
+    ref_w = ocr_width or image_width
+    ref_h = ocr_height or image_height
+    out_w = image_width or ocr_width
+    out_h = image_height or ocr_height
+
+    scaled = _scale_boxes_to_image(list(boxes), ref_w, ref_h)
+    if scaled and ref_w and ref_h:
+        max_coord = max(max(b[0], b[1], b[2], b[3]) for b in scaled)
+        if max_coord > 0 and max_coord <= 1.5:
+            scaled = _scale_boxes_to_image(scaled, ref_w, ref_h)
+
+    sx = sy = 1.0
+    if ref_w and out_w and ref_w > 0:
+        sx = out_w / ref_w
+    if ref_h and out_h and ref_h > 0:
+        sy = out_h / ref_h
+
+    if scaled and out_w and out_h:
+        max_x = max(b[2] for b in scaled)
+        max_y = max(b[3] for b in scaled)
+        if max_x > out_w * 1.02:
+            sx *= out_w / max_x
+        if max_y > out_h * 1.02:
+            sy *= out_h / max_y
+
+    if sx != 1.0 or sy != 1.0:
+        scaled = [
+            (b[0] * sx, b[1] * sy, b[2] * sx, b[3] * sy, b[4]) for b in scaled
+        ]
+
+    normalized_blocks = blocks
+    if blocks and (sx != 1.0 or sy != 1.0):
+        normalized_blocks = []
+        for block in blocks:
+            item = dict(block)
+            bbox = item.get("bbox")
+            if bbox and len(bbox) == 4:
+                item["bbox"] = _scale_bbox(bbox, sx, sy)
+            normalized_blocks.append(item)
+
+    return scaled, normalized_blocks, out_w, out_h
+
+
+def _blocks_look_like_lines(blocks: list[Block], page_height: int | None) -> bool:
+    if len(blocks) < 4:
+        return False
+    spatial = [b for b in blocks if b.bbox and b.bbox != [0, 0, 0, 0]]
+    if len(spatial) < 4:
+        return False
+    heights = [b.bbox[3] - b.bbox[1] for b in spatial]
+    avg_h = sum(heights) / len(heights)
+    if page_height and avg_h < page_height * 0.045:
+        return True
+    short_lines = sum(
+        1 for b in blocks if "\n" not in b.content and len(b.content.strip()) < 120
+    )
+    return short_lines >= max(6, int(len(blocks) * 0.75))
+
+
+def _group_boxes_into_lines(
+    boxes: list[tuple[float, float, float, float, str]],
+) -> list[list[tuple[float, float, float, float, str]]]:
+    if not boxes:
+        return []
+    sorted_boxes = sorted(boxes, key=lambda b: (b[1], b[0]))
+    lines: list[list[tuple[float, float, float, float, str]]] = []
+    for box in sorted_boxes:
+        x1, y1, x2, y2, text = box
+        if not text.strip():
+            continue
+        center_y = (y1 + y2) / 2
+        placed = False
+        for line in lines:
+            ref = line[0]
+            ref_center = (ref[1] + ref[3]) / 2
+            line_h = max(ref[3] - ref[1], y2 - y1, 8)
+            if abs(center_y - ref_center) <= line_h * 0.6:
+                line.append(box)
+                placed = True
+                break
+        if not placed:
+            lines.append([box])
+    for line in lines:
+        line.sort(key=lambda b: b[0])
+    lines.sort(key=lambda line: min(b[1] for b in line))
+    return lines
+
+
+def _merge_line_boxes(
+    row_boxes: list[tuple[float, float, float, float, str]],
+) -> tuple[int, int, int, int, str]:
+    x1 = min(b[0] for b in row_boxes)
+    y1 = min(b[1] for b in row_boxes)
+    x2 = max(b[2] for b in row_boxes)
+    y2 = max(b[3] for b in row_boxes)
+    texts = [post_process(normalize_unicode_text(b[4])) for b in row_boxes]
+    content = " ".join(t for t in texts if t.strip()).strip()
+    return int(x1), int(y1), int(x2), int(y2), content
+
+
 def _blocks_from_bounding_boxes(
     boxes: list[tuple[float, float, float, float, str]],
 ) -> list[Block]:
     if not boxes:
         return []
 
-    lines: dict[tuple[int, int], list[tuple[int, int, int, int, str]]] = {}
-    for x1, y1, x2, y2, text in boxes:
-        if not text.strip():
-            continue
-        key = (int(y1) // 20, int(x1))
-        lines.setdefault(key, []).append((x1, y1, x2, y2, text))
+    lines = _group_boxes_into_lines(boxes)
+    line_records: list[tuple[int, int, int, int, str]] = []
+    for line in lines:
+        merged = _merge_line_boxes(line)
+        if merged[4]:
+            line_records.append(merged)
+
+    if not line_records:
+        return []
 
     blocks: list[Block] = []
     order = 1
-    for key in sorted(lines.keys()):
-        row_boxes = sorted(lines[key], key=lambda b: b[0])
-        texts = [post_process(normalize_unicode_text(b[4])) for b in row_boxes]
-        content = " ".join(texts).strip()
+    para_x1 = para_y1 = para_x2 = para_y2 = 0
+    para_texts: list[str] = []
+
+    def flush_paragraph() -> None:
+        nonlocal order, para_texts, para_x1, para_y1, para_x2, para_y2
+        if not para_texts:
+            return
+        content = " ".join(para_texts).strip()
         if not content:
-            continue
-        x1 = min(b[0] for b in row_boxes)
-        y1 = min(b[1] for b in row_boxes)
-        x2 = max(b[2] for b in row_boxes)
-        y2 = max(b[3] for b in row_boxes)
+            para_texts = []
+            return
         block_type = "verse" if content.endswith("॥") else "paragraph"
         blocks.append(
             Block(
                 id=_new_block_id(),
                 type=block_type,
-                bbox=[int(x1), int(y1), int(x2), int(y2)],
+                bbox=[para_x1, para_y1, para_x2, para_y2],
                 content=content,
                 reading_order=order,
             )
         )
         order += 1
+        para_texts = []
+
+    prev_bottom: int | None = None
+    for x1, y1, x2, y2, content in line_records:
+        line_h = max(y2 - y1, 12)
+        if prev_bottom is not None:
+            gap = y1 - prev_bottom
+            if gap > max(28, int(line_h * 1.6)):
+                flush_paragraph()
+                para_x1, para_y1, para_x2, para_y2 = x1, y1, x2, y2
+                para_texts = [content]
+                prev_bottom = y2
+                continue
+        if not para_texts:
+            para_x1, para_y1, para_x2, para_y2 = x1, y1, x2, y2
+            para_texts = [content]
+        else:
+            para_x1 = min(para_x1, x1)
+            para_y1 = min(para_y1, y1)
+            para_x2 = max(para_x2, x2)
+            para_y2 = max(para_y2, y2)
+            para_texts.append(content)
+        prev_bottom = y2
+
+    flush_paragraph()
     return blocks
 
 
@@ -349,18 +518,45 @@ def enrich_document_from_page_ocr(
     boxes = _parse_bounding_boxes(raw_boxes, engine)
     if not boxes:
         return doc
-    page_width = doc.page_width or getattr(page, "page_width", None)
-    page_height = doc.page_height or getattr(page, "page_height", None)
-    if page_width:
-        doc.page_width = int(page_width)
-    if page_height:
-        doc.page_height = int(page_height)
-    if _blocks_lack_spatial_bboxes(doc.blocks):
-        scaled = _scale_boxes_to_image(boxes, doc.page_width, doc.page_height)
+
+    image_w = image_h = None
+    project = getattr(page, "project", None)
+    if project is not None:
+        try:
+            from kalanjiyam.utils.assets import get_page_image_filepath
+            from kalanjiyam.utils.ocr_persist import image_size
+
+            size = image_size(get_page_image_filepath(project.slug, page.slug))
+            if size:
+                image_w, image_h = size
+        except Exception:
+            pass
+
+    ocr_w = doc.page_width or getattr(page, "page_width", None)
+    ocr_h = doc.page_height or getattr(page, "page_height", None)
+    scaled, norm_block_dicts, pw, ph = normalize_geometry(
+        boxes,
+        [b.to_dict() for b in doc.blocks] if doc.blocks else None,
+        ocr_width=ocr_w,
+        ocr_height=ocr_h,
+        image_width=image_w,
+        image_height=image_h,
+    )
+    if pw:
+        doc.page_width = int(pw)
+    if ph:
+        doc.page_height = int(ph)
+
+    need_rebuild = _blocks_lack_spatial_bboxes(doc.blocks) or _blocks_look_like_lines(
+        doc.blocks, doc.page_height
+    )
+    if need_rebuild:
         built = _blocks_from_bounding_boxes(scaled)
         if built:
             doc.blocks = built
             doc.content_format = "blocks"
+    elif norm_block_dicts and norm_block_dicts != [b.to_dict() for b in doc.blocks]:
+        doc.blocks = [Block.from_dict(b) for b in norm_block_dicts]
     return doc
 
 

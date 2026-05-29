@@ -1,24 +1,22 @@
 OCR replica editing
 =====================
 
-The proofing page editor supports three view modes:
+The proofing page editor supports two view modes:
 
-Split (default)
-  Image with OCR box overlay on the left; block list editor on the right.
-
-Replica
-  Image with overlay on the left; bbox-scaled page replica on the right.
+Replica (default)
+  Image with OCR box overlay on the left; bbox-scaled page replica on the right.
   Click blocks to edit text in place.
 
 Flow
   Classic TipTap rich-text editor with image pane (legacy workflow).
+  OCR run in Replica mode syncs text here automatically.
 
 Workflow
 --------
 
 1. Open a proofing page.
 2. Choose **Tools → OCR** and run OCR on the current page.
-3. Review blocks in Split or Replica mode; edit text and block types.
+3. Review and edit in Replica mode (or switch to Flow for continuous text).
 4. **Publish changes** to save a revision with structured ``document`` JSON.
 
 Exports

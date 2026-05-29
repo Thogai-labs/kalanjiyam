@@ -195,6 +195,9 @@ def _editor_template_kwargs(
         cur
     )
     page_document = _page_document_dict(cur)
+    doc_obj = PageDocument.from_dict(page_document)
+    page_plain_text = doc_obj.to_plain_text()
+    has_ocr_content = bool(cur.ocr_bounding_boxes) or bool(page_document.get("blocks"))
     return {
         "conflict": conflict,
         "cur": cur,
@@ -211,6 +214,8 @@ def _editor_template_kwargs(
         "ocr_status": ocr_status,
         "engine_choices": engine_choices,
         "page_document": page_document,
+        "page_plain_text": page_plain_text,
+        "has_ocr_content": has_ocr_content,
         "ocr_bounding_boxes": cur.ocr_bounding_boxes or "",
         "page_width": cur.page_width or page_document.get("page_width"),
         "page_height": cur.page_height or page_document.get("page_height"),
@@ -434,7 +439,12 @@ def ocr(project_slug, page_slug):
         session = q.get_session()
         session.add(page_)
         session.commit()
-        payload = ocr_response_to_api_dict(ocr_response, engine)
+        payload = ocr_response_to_api_dict(
+            ocr_response,
+            engine,
+            image_width=page_.page_width,
+            image_height=page_.page_height,
+        )
         logging.info(
             "OCR completed successfully, returning %s characters, %s blocks",
             len(payload.get("text", "")),

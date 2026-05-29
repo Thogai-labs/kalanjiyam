@@ -19,9 +19,9 @@ import {
   parseBoundingBoxes,
   overlayBoxesFromPayload,
   boxesFromDocumentBlocks,
+  reclusterDocumentBlocks,
 } from './page-document.js';
 import { OsdBboxOverlay, scaleBoxesToImage } from './osd-overlay.js';
-import { BlockEditor } from './block-editor.js';
 import { ReplicaView } from './replica-view.js';
 
 const CONFIG_KEY = 'proofing-editor';
@@ -77,12 +77,12 @@ export default () => ({
   // Content
   content: '',
 
-  // Editor mode: split | replica | flow
-  editorMode: 'split',
+  // Editor mode: replica | flow
+  editorMode: 'replica',
   showMetaPanel: false,
   pageDocument: null,
+  _flowPlainCache: '',
   _bboxOverlay: null,
-  _blockEditor: null,
   _replicaView: null,
 
   // OCR settings
@@ -429,6 +429,7 @@ export default () => ({
     const textarea = document.getElementById('content');
     if (textarea && textarea.value) {
       this.content = textarea.value;
+      this._flowPlainCache = textarea.value;
     }
 
     // Set `imageZoom` only after the viewer is fully initialized.
@@ -451,10 +452,79 @@ export default () => ({
     // Initialize translation selector
     this.initTranslationSelector();
     
-    // Initialize rich text editor
-    this.initRichEditor();
+    // Flow editor is lazy-init when the pane becomes visible (TipTap breaks in display:none).
     this.initPageDocumentEditor();
+    if (this.editorMode === 'flow') {
+      setTimeout(() => this.ensureFlowEditor(), 0);
+    }
     this.setupZoomButtons();
+  },
+
+  ensureFlowEditor() {
+    if (window.richEditorInstance) return window.richEditorInstance;
+
+    const editorElement = document.getElementById('rich-editor');
+    if (!editorElement) return null;
+
+    const textarea = document.getElementById('content');
+    const initialContent = this._flowPlainCache
+      || (textarea ? textarea.value : '')
+      || this.content
+      || documentToPlainText(this.pageDocument || { blocks: [] });
+
+    const editor = createRichEditor('rich-editor', {
+      content: '',
+      onUpdate: (html) => {
+        this.content = html;
+        const contentTextarea = document.getElementById('content');
+        if (contentTextarea) {
+          contentTextarea.value = html;
+        }
+        this.hasUnsavedChanges = true;
+      },
+      onSelectionUpdate: () => {},
+    });
+
+    window.richEditorInstance = editor;
+    this._richEditor = editor;
+    this.richEditor = true;
+
+    if (editor) {
+      initializeToolbar(editor);
+      if (initialContent) {
+        setEditorText(editor, initialContent);
+      }
+    }
+
+    this.syncEditorFromTextarea = () => {
+      const contentTextarea = document.getElementById('content');
+      if (contentTextarea && window.richEditorInstance && contentTextarea.value) {
+        try {
+          setEditorText(window.richEditorInstance, contentTextarea.value);
+        } catch (e) {
+          console.error('Manual sync failed:', e);
+        }
+      }
+    };
+
+    window.uploadImageFiles = this.uploadImageFiles.bind(this);
+    return editor;
+  },
+
+  _applyFlowEditorContent() {
+    const plain = this._flowPlainCache
+      || (this.pageDocument ? documentToPlainText(this.pageDocument) : '');
+    const textarea = document.getElementById('content');
+    if (textarea) {
+      textarea.value = plain;
+    }
+    this.content = plain;
+    const editor = this.ensureFlowEditor();
+    if (editor && plain) {
+      setEditorText(editor, plain);
+    } else if (editor && !plain) {
+      setEditorContent(editor, '');
+    }
   },
 
   setEditorMode(mode) {
@@ -471,8 +541,12 @@ export default () => ({
       if (this._replicaView && this.pageDocument) {
         this._replicaView.setDocument(this.pageDocument);
       }
-      if (mode === 'flow' && window.richEditorInstance && this.pageDocument) {
-        this._syncDocumentToForm();
+      if (mode === 'flow') {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            this._applyFlowEditorContent();
+          });
+        });
       }
     });
   },
@@ -491,9 +565,7 @@ export default () => ({
       if (this._replicaView) {
         this._replicaView.setDocument(this.pageDocument);
       }
-      this._setOverlayBoxes(
-        typeof OCR_BOUNDING_BOXES !== 'undefined' ? OCR_BOUNDING_BOXES : '',
-      );
+      this._setOverlayBoxes(this.pageDocument);
       this._syncDocumentToForm();
     };
     img.src = IMAGE_URL;
@@ -501,16 +573,13 @@ export default () => ({
 
   _setOverlayBoxes(source) {
     if (!this._bboxOverlay) return;
-    let boxes = [];
-    if (source && (source.bounding_boxes || source.blocks)) {
-      boxes = overlayBoxesFromPayload(source, this.pageDocument);
-    } else if (typeof source === 'string') {
-      boxes = parseBoundingBoxes(source);
-      if (!boxes.length) {
-        boxes = boxesFromDocumentBlocks(this.pageDocument?.blocks);
+    let boxes = boxesFromDocumentBlocks(this.pageDocument?.blocks);
+    if (!boxes.length) {
+      if (source && (source.bounding_boxes || source.blocks)) {
+        boxes = overlayBoxesFromPayload(source, this.pageDocument);
+      } else if (typeof source === 'string') {
+        boxes = parseBoundingBoxes(source);
       }
-    } else {
-      boxes = boxesFromDocumentBlocks(this.pageDocument?.blocks);
     }
     this._bboxOverlay.setBoxes(boxes);
     this._bboxOverlay.setBlocksForMatching(this.pageDocument?.blocks || []);
@@ -519,7 +588,7 @@ export default () => ({
   initPageDocumentEditor() {
     setTimeout(() => {
       const raw = typeof PAGE_DOCUMENT_JSON !== 'undefined' ? PAGE_DOCUMENT_JSON : null;
-      this.pageDocument = parseDocument(raw);
+      this.pageDocument = reclusterDocumentBlocks(parseDocument(raw));
       if (typeof PAGE_WIDTH !== 'undefined' && PAGE_WIDTH && !this.pageDocument.page_width) {
         this.pageDocument.page_width = PAGE_WIDTH;
       }
@@ -527,60 +596,40 @@ export default () => ({
         this.pageDocument.page_height = PAGE_HEIGHT;
       }
       this._applyPageDimensionsFromImage();
-      const blockList = document.getElementById('ocr-block-list');
       const replicaRoot = document.getElementById('ocr-replica-root');
-      if (blockList) {
-        this._blockEditor = new BlockEditor(blockList, {
-          onChange: (doc) => {
-            this.pageDocument = doc;
-            this._syncDocumentToForm();
-            this.hasUnsavedChanges = true;
-            if (this._replicaView) this._replicaView.setDocument(doc);
-            if (this._bboxOverlay) this._bboxOverlay.setBlocksForMatching(doc.blocks || []);
-          },
-          onSelect: (block) => {
-            if (this._bboxOverlay) this._bboxOverlay.highlightBlockId(block.id);
-            if (this._replicaView) this._replicaView.highlightBlock(block.id);
-          },
-        });
-        this._blockEditor.setDocument(this.pageDocument);
-      }
       if (replicaRoot) {
         this._replicaView = new ReplicaView(replicaRoot, {
           onChange: (doc) => {
             this.pageDocument = doc;
             this._syncDocumentToForm();
             this.hasUnsavedChanges = true;
-            if (this._blockEditor) this._blockEditor.setDocument(doc);
           },
           onSelect: (block) => {
             if (this._bboxOverlay) this._bboxOverlay.highlightBlockId(block.id);
-            if (this._blockEditor) this._blockEditor.highlightBlock(block.id);
           },
         });
         this._replicaView.setDocument(this.pageDocument);
       }
       if (this.imageViewer) {
         this._bboxOverlay = new OsdBboxOverlay(this.imageViewer, {
-          onBoxClick: ({ block, bbox }) => {
-            if (block && this._blockEditor) {
-              this._blockEditor.highlightBlock(block.id);
-            }
+          onBoxClick: ({ block }) => {
             if (block && this._replicaView) {
               this._replicaView.highlightBlock(block.id);
             }
           },
         });
-        this._setOverlayBoxes(
-          typeof OCR_BOUNDING_BOXES !== 'undefined' ? OCR_BOUNDING_BOXES : '',
-        );
+        this._setOverlayBoxes(this.pageDocument);
       }
       this._syncDocumentToForm();
     }, 200);
   },
 
   _syncDocumentToForm() {
+    if (!this.pageDocument) return;
+
     const plain = documentToPlainText(this.pageDocument);
+    this._flowPlainCache = plain;
+
     const docField = document.getElementById('document');
     const textarea = document.getElementById('content');
     if (docField) {
@@ -590,20 +639,16 @@ export default () => ({
       textarea.value = plain;
       this.content = plain;
     }
-    if (this.editorMode === 'flow' && window.richEditorInstance) {
-      const html = plain
-        .split('\n\n')
-        .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
-        .join('');
-      setEditorContent(window.richEditorInstance, html);
+    if (this.editorMode === 'flow') {
+      this._applyFlowEditorContent();
     }
   },
 
   applyOcrPayload(payload) {
-    this.pageDocument = fromOcrPayload(payload);
+    this.pageDocument = reclusterDocumentBlocks(fromOcrPayload(payload));
     if (payload.page_width) this.pageDocument.page_width = payload.page_width;
     if (payload.page_height) this.pageDocument.page_height = payload.page_height;
-    if (this._blockEditor) this._blockEditor.setDocument(this.pageDocument);
+    this._flowPlainCache = documentToPlainText(this.pageDocument);
     if (this._replicaView) this._replicaView.setDocument(this.pageDocument);
     if (this._bboxOverlay) {
       this._setOverlayBoxes(payload);
@@ -622,72 +667,6 @@ export default () => ({
     if (zoomIn) zoomIn.addEventListener('click', (e) => { e.preventDefault(); this.increaseImageZoom(); });
     if (zoomOut) zoomOut.addEventListener('click', (e) => { e.preventDefault(); this.decreaseImageZoom(); });
     if (zoomReset) zoomReset.addEventListener('click', (e) => { e.preventDefault(); this.resetImageZoom(); });
-  },
-  
-  // Initialize TipTap rich text editor
-  initRichEditor() {
-    // Wait for DOM to be ready using setTimeout
-    setTimeout(() => {
-      const editorElement = document.getElementById('rich-editor');
-      // Check window.richEditorInstance instead of this.richEditor to avoid Alpine Proxy
-      if (editorElement && !window.richEditorInstance) {
-        // Get initial content from textarea if it exists, or from Alpine.js content
-        const textarea = document.getElementById('content');
-        const initialContent = textarea ? textarea.value : this.content;
-        
-        // Store editor instance on window to avoid Alpine.js Proxy wrapping
-        // This is CRITICAL - Alpine's Proxy causes transaction state conflicts
-        const editor = createRichEditor('rich-editor', {
-          content: initialContent || '',
-          onUpdate: (html) => {
-            // Simple: just sync the content
-            this.content = html;
-            const contentTextarea = document.getElementById('content');
-            if (contentTextarea) {
-              contentTextarea.value = html;
-            }
-            this.hasUnsavedChanges = true;
-          },
-          onSelectionUpdate: () => {
-            // No-op - toolbar handles its own state now
-          },
-        });
-        
-        // Store globally to avoid Alpine Proxy
-        window.richEditorInstance = editor;
-        
-        // Also store as non-reactive property (Alpine ignores properties starting with _)
-        // This allows Alpine methods to access it if needed
-        this._richEditor = editor;
-        
-        // Set simple boolean flag for Alpine (for showing/hiding toolbar)
-        this.richEditor = true;
-        
-        // Initialize toolbar with vanilla JS (NO Alpine.js)
-        if (editor) {
-          initializeToolbar(editor);
-          console.log('Editor and toolbar initialized with vanilla JS (stored outside Alpine)');
-        }
-        
-        // Store reference for manual sync
-        this.syncEditorFromTextarea = () => {
-          const textarea = document.getElementById('content');
-          if (textarea && window.richEditorInstance) {
-            const content = textarea.value;
-            if (content) {
-              try {
-                window.richEditorInstance.commands.setContent(content);
-              } catch (e) {
-                console.error('Manual sync failed:', e);
-              }
-            }
-          }
-        };
-        
-        // Make uploadImageFiles available globally for drag-and-drop
-        window.uploadImageFiles = this.uploadImageFiles.bind(this);
-      }
-    }, 100);
   },
 
   // Drag and drop handlers for image upload
@@ -840,7 +819,9 @@ export default () => ({
         // initialized. See `init` for details.
         this.imageZoom = settings.imageZoom;
         this.layout = settings.layout || this.layout;
-        this.editorMode = settings.editorMode || this.editorMode;
+        let mode = settings.editorMode || this.editorMode;
+        if (mode === 'split') mode = 'replica';
+        this.editorMode = mode;
 
         this.fromScript = settings.fromScript || this.fromScript;
         this.toScript = settings.toScript || this.toScript;
@@ -1398,6 +1379,11 @@ export default () => ({
       }
     } else if (this.pageDocument) {
       this._syncDocumentToForm();
+      const textarea = document.getElementById('content');
+      if (textarea) {
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        textarea.dispatchEvent(new Event('change', { bubbles: true }));
+      }
       const docField = document.getElementById('document');
       if (docField) {
         docField.dispatchEvent(new Event('input', { bubbles: true }));

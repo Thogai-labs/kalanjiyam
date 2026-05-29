@@ -68,9 +68,6 @@ these components in our help text and documentation.
   <div class="book-editor-toolbar-center">
     <div class="book-editor-mode-toggle">
       <button type="button"
-              :class="editorMode === 'split' ? 'active' : ''"
-              @click.prevent="setEditorMode('split')">{{ _('Split') }}</button>
-      <button type="button"
               :class="editorMode === 'replica' ? 'active' : ''"
               @click.prevent="setEditorMode('replica')">{{ _('Replica') }}</button>
       <button type="button"
@@ -267,9 +264,6 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
 <nav class="bg-white border border-teal-200 rounded-lg mb-4 peacock-shadow">
   <div class="flex items-center p-2 gap-1 flex-wrap">
     <div class="flex items-center gap-1 mr-2 border-r border-teal-100 pr-2">
-      <button type="button" class="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
-              :class="editorMode === 'split' ? 'bg-peacock-primary text-white' : 'text-peacock-secondary hover:bg-peacock-light'"
-              @click.prevent="setEditorMode('split')">{{ _('Split') }}</button>
       <button type="button" class="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
               :class="editorMode === 'replica' ? 'bg-peacock-primary text-white' : 'text-peacock-secondary hover:bg-peacock-light'"
               @click.prevent="setEditorMode('replica')">{{ _('Replica') }}</button>
@@ -577,7 +571,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
 
 
 {# Text editing area with rich text editor. #}
-{% macro text_box(content) %}
+{% macro text_box() %}
 <div class="book-editor-text-pane h-full flex flex-col"
      @dragover.prevent="handleDragOver"
      @dragleave="handleDragLeave"
@@ -802,7 +796,6 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
     </div>
   </div>
 
-  <textarea id="content" name="content" class="hidden">{{ content }}</textarea>
   <div id="rich-editor" class="book-editor-text flex-1 w-full overflow-y-auto px-4 py-3 focus-within:outline-none" style="background:#faf8f5"></div>
 </div>
 {% endmacro %}
@@ -827,7 +820,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
 <div class="book-editor-image-pane" x-data="{ 
   showTranslation: false, 
   dynamicTranslation: null, 
-  translation_content: {{ 'true' if translation_content else 'false' }},
+  translation_content: {{ (translation_content is not none and translation_content != '') | tojson }},
   getTranslationContent() { return this.dynamicTranslation && this.dynamicTranslation.content ? this.dynamicTranslation.content : ''; },
   switchTranslation(event) {
     const selectedOption = event.target.options[event.target.selectedIndex];
@@ -874,8 +867,10 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
       </button>
     </div>
     <div x-show="dynamicTranslation && dynamicTranslation.content" class="book-editor-text text-base leading-relaxed whitespace-pre-wrap" x-text="getTranslationContent()"></div>
-    <div x-show="!dynamicTranslation && translation_content" class="book-editor-text text-base leading-relaxed whitespace-pre-wrap">{{ translation_content }}</div>
-    <div x-show="!dynamicTranslation && !translation_content" class="text-sm text-slate-400 text-center py-12">
+    {% if translation_content %}
+    <div x-show="!dynamicTranslation && translation_content" x-cloak class="book-editor-text text-base leading-relaxed whitespace-pre-wrap">{{ translation_content }}</div>
+    {% endif %}
+    <div x-show="!dynamicTranslation && !translation_content" x-cloak class="text-sm text-slate-400 text-center py-12">
       {{ _('No translation for this page yet.') }}
     </div>
   </div>

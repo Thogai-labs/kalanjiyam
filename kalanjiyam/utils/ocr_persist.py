@@ -7,10 +7,10 @@ from typing import Any
 
 from kalanjiyam import database as db
 from kalanjiyam.utils.ocr_types import OcrResponse, serialize_bounding_boxes
-from kalanjiyam.utils.page_document import PageDocument
+from kalanjiyam.utils.page_document import PageDocument, normalize_geometry
 
 
-def _image_size(path: Path) -> tuple[int, int] | None:
+def image_size(path: Path) -> tuple[int, int] | None:
     try:
         from PIL import Image
 
@@ -28,25 +28,81 @@ def apply_ocr_to_page(
     image_path: Path | None = None,
 ) -> PageDocument:
     """Update page geometry/boxes from OCR response."""
-    page.ocr_bounding_boxes = serialize_bounding_boxes(engine, ocr.bounding_boxes)
-    if ocr.page_width:
-        page.page_width = int(ocr.page_width)
-    if ocr.page_height:
-        page.page_height = int(ocr.page_height)
-    if image_path and (not page.page_width or not page.page_height):
-        size = _image_size(image_path)
+    image_w = image_h = None
+    if image_path:
+        size = image_size(image_path)
         if size:
-            page.page_width = page.page_width or size[0]
-            page.page_height = page.page_height or size[1]
-    return PageDocument.from_ocr_response(ocr)
+            image_w, image_h = size
+
+    boxes, blocks_data, pw, ph = normalize_geometry(
+        ocr.bounding_boxes,
+        ocr.blocks,
+        ocr_width=ocr.page_width,
+        ocr_height=ocr.page_height,
+        image_width=image_w or page.page_width,
+        image_height=image_h or page.page_height,
+    )
+    page.ocr_bounding_boxes = serialize_bounding_boxes(engine, boxes)
+    if pw:
+        page.page_width = int(pw)
+    elif image_w:
+        page.page_width = image_w
+    if ph:
+        page.page_height = int(ph)
+    elif image_h:
+        page.page_height = image_h
+
+    normalized = OcrResponse(
+        text_content=ocr.text_content,
+        bounding_boxes=boxes,
+        layout_html=ocr.layout_html,
+        blocks=blocks_data if blocks_data is not None else ocr.blocks,
+        content_format=ocr.content_format,
+        page_width=pw or ocr.page_width or image_w,
+        page_height=ph or ocr.page_height or image_h,
+        pipeline=ocr.pipeline,
+    )
+    return PageDocument.from_ocr_response(
+        normalized,
+        image_width=pw or image_w,
+        image_height=ph or image_h,
+    )
 
 
-def ocr_response_to_api_dict(ocr: OcrResponse, engine: str) -> dict[str, Any]:
+def ocr_response_to_api_dict(
+    ocr: OcrResponse,
+    engine: str,
+    *,
+    image_width: int | None = None,
+    image_height: int | None = None,
+) -> dict[str, Any]:
     """JSON-serializable OCR result for the editor API."""
-    doc = PageDocument.from_ocr_response(ocr)
+    boxes, blocks_data, pw, ph = normalize_geometry(
+        ocr.bounding_boxes,
+        ocr.blocks,
+        ocr_width=ocr.page_width,
+        ocr_height=ocr.page_height,
+        image_width=image_width,
+        image_height=image_height,
+    )
+    normalized = OcrResponse(
+        text_content=ocr.text_content,
+        bounding_boxes=boxes,
+        layout_html=ocr.layout_html,
+        blocks=blocks_data if blocks_data is not None else ocr.blocks,
+        content_format=ocr.content_format,
+        page_width=pw or ocr.page_width,
+        page_height=ph or ocr.page_height,
+        pipeline=ocr.pipeline,
+    )
+    doc = PageDocument.from_ocr_response(
+        normalized,
+        image_width=pw or image_width,
+        image_height=ph or image_height,
+    )
     return {
         "text": doc.to_plain_text() or ocr.text_content,
-        "bounding_boxes": serialize_bounding_boxes(engine, ocr.bounding_boxes),
+        "bounding_boxes": serialize_bounding_boxes(engine, boxes),
         "layout_html": ocr.layout_html,
         "content_format": doc.content_format,
         "page_width": doc.page_width,
