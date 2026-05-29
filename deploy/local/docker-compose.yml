@@ -11,7 +11,7 @@ services:
     volumes:
       - ${PWD}/kalanjiyam/static/:/app/kalanjiyam/static/
     env_file:
-      - ${PWD}/.env
+      - ../../.env
     environment:
       - FLASK_ENV=${FLASK_ENV:-development}
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
@@ -45,7 +45,7 @@ services:
       --concurrency=2
       --prefetch-multiplier=1
     env_file:
-      - ${PWD}/.env
+      - ../../.env
     environment:
       - FLASK_ENV=${FLASK_ENV:-development}
       - REDIS_URL=redis://kalanjiyam-redis:6379/0

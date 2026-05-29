@@ -139,25 +139,25 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
 
 
 {# Toolbar with various options and dropdowns. #}
-{% macro menu_bar() %}
+{% macro menu_bar(ocr_status="unavailable", engine_choices=[]) %}
 {% set button_css = "flex items-center gap-2 p-3 hover:bg-peacock-light rounded transition-colors" %}
 <nav class="bg-white border border-teal-200 rounded-lg mb-4 peacock-shadow">
   <div class="flex items-center p-2 gap-1">
     
     <!-- OCR Dropdown -->
-    <div x-data="{open: false, selectedEngine: '1', selectedLanguage: 'sa', showEngineInfo: false}" class="relative">
+    <div class="relative">
       <button class="{{ button_css }}"
-         @click.prevent="open=!open"
-         @click.outside="open=false">
+         @click.prevent="ocrDropdownOpen=!ocrDropdownOpen"
+         @click.outside="ocrDropdownOpen=false">
         <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
         </svg>
         {{ _('OCR') }}
       </button>
-      <div x-show="open" x-cloak class="dropdown-pane w-80">
-        <ul class="text-sm" @click.prevent="open=false">
-          
+      <div x-show="ocrDropdownOpen" x-cloak class="dropdown-pane w-80">
+        <ul class="text-sm" @click.prevent="ocrDropdownOpen=false">
+
           <!-- OCR Section Header -->
           <li class="border-b border-teal-100 pb-2 mb-2">
             <div class="dropdown-item">
@@ -166,7 +166,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
                 <span class="font-semibold text-peacock-primary">{{ _('OCR Engine') }}</span>
-                <button @click.prevent.stop="showEngineInfo = !showEngineInfo" 
+                <button @click.prevent.stop="showOcrEngineInfo = !showOcrEngineInfo"
                         class="ml-auto p-1 hover:bg-peacock-light rounded transition-colors"
                         title="{{ _('Engine Information') }}">
                   <svg class="w-4 h-4 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -174,9 +174,9 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                   </svg>
                 </button>
               </div>
-              
+
               <!-- Engine Information Panel -->
-              <div x-show="showEngineInfo" x-transition class="engine-info-panel mb-3">
+              <div x-show="showOcrEngineInfo" x-transition class="engine-info-panel mb-3">
                 <div class="space-y-2">
                   <div class="engine-item">
                     <span class="engine-name">Google:</span>
@@ -215,43 +215,23 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
           <li class="mb-3">
             <div class="dropdown-item-no-hover">
               <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Select Engine:') }}</label>
-              <div class="grid grid-cols-2 gap-2">
-                <button @click.prevent.stop="selectedEngine = '1'; updateLanguageOptions()" 
+              {% if ocr_status == "unavailable" %}
+              <p class="text-xs text-red-600 font-medium">{{ _('OCR service unavailable') }}</p>
+              {% elif ocr_status == "no_engines" %}
+              <p class="text-xs text-yellow-600 font-medium">{{ _('No OCR engines available') }}</p>
+              {% elif engine_choices %}
+              <div class="grid grid-cols-2 gap-2" x-init="selectOcrEngine('{{ engine_choices[0].value }}')">
+                {% for e in engine_choices %}
+                <button @click.prevent.stop="selectOcrEngine('{{ e.value }}')"
                         class="ocr-engine-btn"
-                        :class="selectedEngine === '1' ? 'active' : ''">
-                  Google
+                        :class="selectedEngine === '{{ e.value }}' ? 'active' : ''">
+                  {{ e.label }}
                 </button>
-                <button @click.prevent.stop="selectedEngine = '2'; updateLanguageOptions()" 
-                        class="ocr-engine-btn"
-                        :class="selectedEngine === '2' ? 'active' : ''">
-                  Tesseract
-                </button>
-                <button @click.prevent.stop="selectedEngine = '3'; updateLanguageOptions()" 
-                        class="ocr-engine-btn"
-                        :class="selectedEngine === '3' ? 'active' : ''">
-                  Surya
-                </button>
-         <button @click.prevent.stop="selectedEngine = '4'; updateLanguageOptions()"
-                 class="ocr-engine-btn"
-                 :class="selectedEngine === '4' ? 'active' : ''">
-           Nanonets
-         </button>
-         <button @click.prevent.stop="selectedEngine = '5'; updateLanguageOptions()"
-                 class="ocr-engine-btn"
-                 :class="selectedEngine === '5' ? 'active' : ''">
-           DeepSeek
-         </button>
-         <button @click.prevent.stop="selectedEngine = '6'; updateLanguageOptions()"
-                 class="ocr-engine-btn"
-                 :class="selectedEngine === '6' ? 'active' : ''">
-           Chandra
-         </button>
-         <button @click.prevent.stop="selectedEngine = '7'; updateLanguageOptions()"
-                 class="ocr-engine-btn"
-                 :class="selectedEngine === '7' ? 'active' : ''">
-           Qwen 2VL
-         </button>
+                {% endfor %}
               </div>
+              {% else %}
+              <p class="text-xs text-yellow-600 font-medium">{{ _('No OCR engines available') }}</p>
+              {% endif %}
             </div>
           </li>
           
@@ -287,9 +267,9 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
           
           <!-- Run OCR Button -->
           <li class="border-t border-teal-100 pt-2">
-            <button type="button" 
+            <button type="button"
                     class="dropdown-item flex items-center gap-2 w-full justify-center bg-peacock-primary text-white rounded-lg py-2 hover:bg-peacock-secondary transition-colors"
-                    @click.prevent.stop="runOCR(selectedEngine, selectedLanguage)"
+                    @click.prevent.stop="runOCR(); ocrDropdownOpen=false"
                     :disabled="isRunningOCR"
                     x-text="isRunningOCR ? '{{ _("Running OCR ...") }}' : '{{ _("Run OCR") }}'">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -297,7 +277,6 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
               </svg>
             </button>
           </li>
-          
 
         </ul>
       </div>

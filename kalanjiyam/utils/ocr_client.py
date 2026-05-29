@@ -38,6 +38,32 @@ def _parse_bounding_boxes(blob: str | None, engine: str) -> list[tuple[int, int,
     return boxes
 
 
+def get_available_engines() -> dict:
+    """Ping the OCR service and return which engines are ready.
+
+    Returns a dict with:
+      status: "ok" | "unavailable" | "no_engines"
+      engines: list of engine name strings
+    """
+    base_url = current_app.config.get("OCR_SERVICE_URL", "").rstrip("/")
+    if not base_url:
+        return {"status": "unavailable", "engines": []}
+
+    api_key = current_app.config.get("OCR_SERVICE_API_KEY") or ""
+    headers = {"X-API-Key": api_key} if api_key else {}
+
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get(f"{base_url}/v1/engines", headers=headers)
+        if response.status_code == 200:
+            engines = response.json().get("engines", [])
+            status = "ok" if engines else "no_engines"
+            return {"status": status, "engines": engines}
+        return {"status": "unavailable", "engines": []}
+    except Exception:
+        return {"status": "unavailable", "engines": []}
+
+
 def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrResponse:
     base_url = current_app.config.get("OCR_SERVICE_URL", "").rstrip("/")
     if not base_url:

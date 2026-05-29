@@ -8,7 +8,7 @@ from flask_login import current_user
 def p2_required(func: Callable):
     @wraps(func)
     def decorated_view(*args, **kwargs):
-        if not current_user.is_p2:
+        if not (current_user.is_p2 or current_user.is_moderator or current_user.is_org_admin or current_user.is_super_admin):
             flash("Sorry, you aren't authorized to use this feature.")
             return redirect(url_for("proofing.index"))
         return current_app.ensure_sync(func)(*args, **kwargs)
@@ -19,7 +19,7 @@ def p2_required(func: Callable):
 def moderator_required(func: Callable):
     @wraps(func)
     def decorated_view(*args, **kwargs):
-        if not current_user.is_moderator:
+        if not (current_user.is_moderator or current_user.is_org_admin or current_user.is_super_admin):
             flash("Sorry, you aren't authorized to use this feature.")
             return redirect(url_for("proofing.index"))
         return current_app.ensure_sync(func)(*args, **kwargs)

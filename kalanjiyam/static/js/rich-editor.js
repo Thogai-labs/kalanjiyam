@@ -123,7 +123,7 @@ export function getEditorContent(editor) {
  */
 export function setEditorContent(editor, html) {
   if (!editor) return;
-  editor.commands.setContent(html || '');
+  editor.commands.setContent(html || '', true);
 }
 
 /**
@@ -145,7 +145,7 @@ export function setEditorText(editor, text) {
   if (!editor) return;
 
   if (!text) {
-    editor.commands.setContent('');
+    editor.commands.setContent('', true);
     return;
   }
 
@@ -164,7 +164,7 @@ export function setEditorText(editor, text) {
     }
 
     const htmlContent = marked.parse(processedText);
-    editor.commands.setContent(htmlContent);
+    editor.commands.setContent(htmlContent, true);
   } catch (error) {
     console.error('Error parsing Markdown content:', error);
 
@@ -180,7 +180,7 @@ export function setEditorText(editor, text) {
       .map((line) => `<p>${line || '<br>'}</p>`)
       .join('');
 
-    editor.commands.setContent(fallbackContent);
+    editor.commands.setContent(fallbackContent, true);
   }
 }
 

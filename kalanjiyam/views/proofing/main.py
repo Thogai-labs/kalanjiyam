@@ -120,10 +120,10 @@ def index():
     for project in projects:
         page_statuses = [p.status.name for p in project.pages]
 
-        # FIXME(arun): catch this properly, prevent prod issues
         if not page_statuses:
             statuses_per_project[project.id] = {}
             pages_per_project[project.id] = 0
+            progress_per_project[project.id] = 0
             continue
 
         num_pages = len(page_statuses)

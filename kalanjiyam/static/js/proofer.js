@@ -75,6 +75,10 @@ export default () => ({
   sourceLanguage: 'hi',
   targetLanguage: 'en',
 
+  // OCR dropdown state
+  ocrDropdownOpen: false,
+  showOcrEngineInfo: false,
+
   // Internal-only
   layoutClasses: CLASSES_SIDE_BY_SIDE,
   isRunningOCR: false,
@@ -702,6 +706,12 @@ export default () => ({
 
   // OCR controls
 
+  selectOcrEngine(engineValue) {
+    this.selectedEngine = engineValue;
+    window._ocrSelectedEngine = engineValue;
+    this.updateLanguageOptions();
+  },
+
   updateLanguageOptions() {
     // Small delay to ensure DOM is updated
     setTimeout(() => {
@@ -789,10 +799,11 @@ export default () => ({
     return primaryLanguage;
   },
 
-  async runOCR(engine = '1', language = 'sa') {
+  async runOCR() {
     this.isRunningOCR = true;
 
-    const decodedEngine = this.decodeEngine(engine);
+    const engineKey = window._ocrSelectedEngine || this.selectedEngine;
+    const decodedEngine = this.decodeEngine(engineKey);
     const combinedLanguage = this.getCombinedLanguage();
     const { pathname } = window.location;
     const url = pathname.replace('/proofing/', '/api/ocr/') + `?engine=${decodedEngine}&language=${combinedLanguage}`;

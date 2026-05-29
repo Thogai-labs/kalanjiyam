@@ -33,6 +33,7 @@
 
 <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 max-w-2xl mb-8">
   <form method="POST" action="" class="space-y-1">
+    {{ form.csrf_token }}
     {% for field in form %}
       {% if field.name != 'csrf_token' %}
       <div class="my-4">

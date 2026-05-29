@@ -190,6 +190,14 @@ def edit(project_slug, page_slug):
     image_number = cur.slug
     page_number = _get_page_number(ctx.project, cur)
 
+    from kalanjiyam.utils.ocr_client import get_available_engines
+    from kalanjiyam.utils.ocr_types import build_engine_choices
+    ocr_status = get_available_engines()
+    engine_choices = build_engine_choices(
+        ocr_status["engines"],
+        is_super_admin=current_user.is_super_admin,
+    )
+
     return render_template(
         "proofing/pages/edit.html",
         conflict=None,
@@ -204,6 +212,8 @@ def edit(project_slug, page_slug):
         translation_content=translation_content,
         translation_metadata=translation_metadata,
         available_translations=available_translations,
+        ocr_status=ocr_status["status"],
+        engine_choices=engine_choices,
     )
 
 

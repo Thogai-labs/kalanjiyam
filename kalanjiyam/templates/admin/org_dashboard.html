@@ -73,22 +73,58 @@
   {% if users %}
   <ul class="divide-y divide-slate-100">
     {% for u in users %}
-    <li class="py-3 flex justify-between items-center gap-4">
-      <div class="flex items-center gap-3">
-        <span class="w-8 h-8 rounded-full bg-royalblue/10 text-royalblue flex items-center justify-center text-sm font-bold">{{ u.username[0]|upper }}</span>
-        <div>
-          <p class="font-semibold text-slate-900">{{ u.username }}</p>
-          <p class="text-sm text-slate-400">{{ u.email }}</p>
+    <li class="py-3" x-data="{ editing: false }">
+      <div class="flex justify-between items-center gap-4">
+        <div class="flex items-center gap-3">
+          <span class="w-8 h-8 rounded-full bg-royalblue/10 text-royalblue flex items-center justify-center text-sm font-bold">{{ u.username[0]|upper }}</span>
+          <div>
+            <p class="font-semibold text-slate-900">{{ u.username }}</p>
+            <p class="text-sm text-slate-400">{{ u.email }}
+              {% for r in u.roles %}
+              <span class="ml-1 text-xs font-bold uppercase tracking-wide text-royalblue bg-royalblue/10 px-1.5 py-0.5 rounded">{{ r.name }}</span>
+              {% endfor %}
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button @click="editing = !editing" type="button"
+                  class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+            {{ _('Edit') }}
+          </button>
+          {% if u.id != org.admin_user_id %}
+          <form method="post" action="{{ url_for('org_admin_view.index') }}">
+            {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+            <input type="hidden" name="action" value="remove_user">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+            {{ admin.btn_danger(_('Remove')) }}
+          </form>
+          {% endif %}
         </div>
       </div>
-      {% if u.id != org.admin_user_id %}
-      <form method="post" action="{{ url_for('org_admin_view.index') }}" class="shrink-0">
-        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
-        <input type="hidden" name="action" value="remove_user">
-        <input type="hidden" name="user_id" value="{{ u.id }}">
-        {{ admin.btn_danger(_('Remove')) }}
-      </form>
-      {% endif %}
+
+      <div x-show="editing" x-cloak class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 rounded-xl p-4">
+        <form method="post" action="{{ url_for('org_admin_view.index') }}" class="space-y-2">
+          {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+          <input type="hidden" name="action" value="change_password">
+          <input type="hidden" name="user_id" value="{{ u.id }}">
+          <label class="{{ admin.label_class() }}">{{ _('New password') }}</label>
+          <input type="password" name="new_password" class="{{ admin.input_class() }}" required placeholder="{{ _('Enter new password') }}">
+          {{ admin.btn_primary(_('Change password'), type='submit') }}
+        </form>
+
+        <form method="post" action="{{ url_for('org_admin_view.index') }}" class="space-y-2">
+          {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+          <input type="hidden" name="action" value="change_role">
+          <input type="hidden" name="user_id" value="{{ u.id }}">
+          <label class="{{ admin.label_class() }}">{{ _('Role') }}</label>
+          <select name="role_name" class="{{ admin.select_class() }}">
+            <option value="p1">P1 — Basic proofer</option>
+            <option value="p2">P2 — Advanced proofer</option>
+            <option value="moderator">Moderator</option>
+          </select>
+          {{ admin.btn_primary(_('Change role'), type='submit') }}
+        </form>
+      </div>
     </li>
     {% endfor %}
   </ul>

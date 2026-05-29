@@ -794,68 +794,54 @@ def batch_ocr(slug):
             # Task not found or error, remove from Redis
             redis_client.delete(task_key)
 
+    from kalanjiyam.utils.ocr_client import get_available_engines
+    from kalanjiyam.utils.ocr_types import ENGINE_MAP, build_engine_choices
+
     if request.method == "POST":
-        # Get OCR parameters from form
-        engine = request.form.get('engine', 'google')
+        engine_num = request.form.get('engine', '')
         language = request.form.get('language', 'sa')
-        
-    # Decode numeric engine values to actual engine names
-    engine_map = {
-        '1': 'google',
-        '2': 'tesseract',
-        '3': 'surya',
-        '4': 'nanonets',
-        '5': 'deepseek',
-        '6': 'chandra',
-        '7': 'qwen3'
-    }
-    if engine in engine_map:
-        engine = engine_map[engine]
-        
-        if engine not in SUPPORTED_ENGINES:
+        engine = ENGINE_MAP.get(engine_num)
+
+        if not engine or engine not in SUPPORTED_ENGINES:
             flash(_l("Unsupported OCR engine selected."))
-            return render_template(
-                "proofing/projects/batch-ocr.html",
+        else:
+            task = ocr_tasks.run_ocr_for_project(
+                app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
                 project=project_,
-            )
-        
-        task = ocr_tasks.run_ocr_for_project(
-            app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
-            project=project_,
-            engine=engine,
-            language=language,
-        )
-        if task:
-            # Store task info in Redis with expiration (24 hours)
-            task_info = {
-                'task_id': task.id,
-                'engine': engine,
-                'language': language,
-                'started_at': datetime.utcnow().isoformat(),
-                'project_slug': slug
-            }
-            redis_client.setex(task_key, 86400, json.dumps(task_info))
-            
-            return render_template(
-                "proofing/projects/batch-ocr-post.html",
-                project=project_,
-                status="PENDING",
-                current=0,
-                total=0,
-                percent=0,
-                task_id=task.id,
-                active_tasks=0,
-                pending_tasks=0,
-                failed_tasks=0,
                 engine=engine,
                 language=language,
             )
-        else:
-            flash(_l("All pages in this project have at least one edit already."))
+            if task:
+                task_info = {
+                    'task_id': task.id,
+                    'engine': engine,
+                    'language': language,
+                    'started_at': datetime.utcnow().isoformat(),
+                    'project_slug': slug,
+                }
+                redis_client.setex(task_key, 86400, json.dumps(task_info))
+                return render_template(
+                    "proofing/projects/batch-ocr-post.html",
+                    project=project_,
+                    status="PENDING",
+                    current=0, total=0, percent=0,
+                    task_id=task.id,
+                    active_tasks=0, pending_tasks=0, failed_tasks=0,
+                    engine=engine, language=language,
+                )
+            else:
+                flash(_l("All pages in this project have at least one edit already."))
 
+    ocr_status = get_available_engines()
+    engine_choices = build_engine_choices(
+        ocr_status["engines"],
+        is_super_admin=current_user.is_super_admin,
+    )
     return render_template(
         "proofing/projects/batch-ocr.html",
         project=project_,
+        ocr_status=ocr_status["status"],
+        engine_choices=engine_choices,
     )
 
 

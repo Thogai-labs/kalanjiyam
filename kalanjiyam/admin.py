@@ -1001,6 +1001,40 @@ class OrgAdminView(AdminBaseView):
                 if user_id and user_id != org.admin_user_id:
                     q.remove_user_from_group(user_id=user_id, group_id=org.id)
                     flash("User removed from organization.", "success")
+            elif action == "change_password":
+                user_id = request.form.get("user_id", type=int)
+                new_password = (request.form.get("new_password") or "").strip()
+                if not user_id or not new_password:
+                    flash("User and password are required.", "error")
+                else:
+                    user = session.query(db.User).filter_by(id=user_id).first()
+                    in_org = session.query(db.UserGroups).filter_by(user_id=user_id, group_id=org.id).first()
+                    if user and in_org:
+                        user.set_password(new_password)
+                        session.add(user)
+                        session.commit()
+                        flash(f'Password updated for "{user.username}".', "success")
+                    else:
+                        flash("User not found in this organization.", "error")
+            elif action == "change_role":
+                user_id = request.form.get("user_id", type=int)
+                role_name = (request.form.get("role_name") or "").strip()
+                allowed_roles = {db.SiteRole.P1.value, db.SiteRole.P2.value, db.SiteRole.MODERATOR.value}
+                if not user_id or role_name not in allowed_roles:
+                    flash("Invalid role.", "error")
+                else:
+                    user = session.query(db.User).filter_by(id=user_id).first()
+                    in_org = session.query(db.UserGroups).filter_by(user_id=user_id, group_id=org.id).first()
+                    if user and in_org:
+                        new_role = session.query(db.Role).filter_by(name=role_name).first()
+                        if new_role:
+                            user.roles = [r for r in user.roles if r.name not in allowed_roles]
+                            user.roles.append(new_role)
+                            session.add(user)
+                            session.commit()
+                            flash(f'Role updated for "{user.username}".', "success")
+                    else:
+                        flash("User not found in this organization.", "error")
             elif action == "add_project":
                 project_id = request.form.get("project_id", type=int)
                 if project_id:

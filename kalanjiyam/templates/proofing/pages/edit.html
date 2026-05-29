@@ -53,7 +53,7 @@
       {% endtrans %}{% endcall %}
     {% endif %}
 
-    {{ editor.menu_bar() }}
+    {{ editor.menu_bar(ocr_status=ocr_status, engine_choices=engine_choices) }}
     
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 min-h-[700px]">
       {{ editor.text_box(form.content.data or "") }}
@@ -100,7 +100,7 @@
             <div class="flex flex-col items-end">
                 <button class="btn-premium px-12 py-4 text-xl rounded-2xl"
                         type="submit"
-                        @click="hasUnsavedChanges = false">
+                        @click="syncContentBeforeSubmit()">
                   {{ _('Publish changes') }}
                 </button>
                 <span class="text-xs font-black text-amber-500 uppercase tracking-widest mt-2 animate-pulse" x-show="hasUnsavedChanges">
