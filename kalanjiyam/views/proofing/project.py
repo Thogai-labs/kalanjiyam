@@ -324,13 +324,54 @@ def download_as_xml(slug):
         "editor": project_.editor,
     }
     project_meta = {k: v or "TODO" for k, v in project_meta.items()}
-    content_blobs = [
-        p.revisions[-1].content if p.revisions else "" for p in project_.pages
-    ]
-    xml_blob = proofing_utils.to_tei_xml(project_meta, content_blobs)
+    has_blocks = any(
+        p.revisions
+        and getattr(p.revisions[-1], "content_format", "plain") == "blocks"
+        and getattr(p.revisions[-1], "document", None)
+        for p in project_.pages
+    )
+    if has_blocks:
+        xml_blob = proofing_utils.documents_to_tei_xml(project_meta, project_.pages)
+    else:
+        content_blobs = [
+            p.revisions[-1].content if p.revisions else "" for p in project_.pages
+        ]
+        xml_blob = proofing_utils.to_tei_xml(project_meta, content_blobs)
 
     response = make_response(xml_blob, 200)
     response.mimetype = "text/xml"
+    return response
+
+
+@bp.route("/<slug>/download/json")
+def download_as_json(slug):
+    """Download the project as a PageDocument JSON bundle."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    blob = proofing_utils.documents_to_json_bundle(project_, project_.pages)
+    response = make_response(blob, 200)
+    response.mimetype = "application/json"
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="{slug}-documents.json"'
+    )
+    return response
+
+
+@bp.route("/<slug>/download/html")
+def download_as_html(slug):
+    """Download layout-faithful HTML export."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    blob = proofing_utils.documents_to_html(project_.pages, replica=True)
+    response = make_response(blob, 200)
+    response.mimetype = "text/html"
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="{slug}-replica.html"'
+    )
     return response
 
 

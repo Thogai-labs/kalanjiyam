@@ -9,7 +9,7 @@ from kalanjiyam import database as db
 from kalanjiyam import queries as q
 from kalanjiyam.enums import SitePageStatus
 from kalanjiyam.tasks import app
-from kalanjiyam.utils.ocr_types import serialize_bounding_boxes
+from kalanjiyam.utils.ocr_persist import apply_ocr_to_page
 from kalanjiyam.utils.assets import get_page_image_filepath
 from kalanjiyam.utils.quotas import consume_ocr_credit_for_project, ensure_ocr_quota_for_project
 from kalanjiyam.utils.revisions import add_revision
@@ -52,10 +52,7 @@ def _run_ocr_for_page_inner(
         if page is None:
             raise ValueError(f'Page "{page_slug}" not found in project "{project_slug}".')
 
-        page.ocr_bounding_boxes = serialize_bounding_boxes(
-            engine, ocr_response.bounding_boxes
-        )
-        
+        doc = apply_ocr_to_page(page, ocr_response, engine)
         session.add(page)
         session.commit()
 
@@ -64,10 +61,12 @@ def _run_ocr_for_page_inner(
             revision_id = add_revision(
                 page=page,
                 summary=summary,
-                content=ocr_response.text_content,
+                content=doc.to_plain_text() or ocr_response.text_content,
                 status=SitePageStatus.R0,
-                version=0,
+                version=page.version,
                 author_id=bot_user.id,
+                document=doc.to_dict(),
+                content_format=doc.content_format,
             )
             consume_ocr_credit_for_project(project)
             return revision_id

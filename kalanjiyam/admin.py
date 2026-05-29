@@ -416,7 +416,7 @@ class KalanjiyamIndexView(AdminIndexView):
         
         # Export project metadata
         project_data = {
-            'format_version': '2.0',
+            'format_version': '3.0',
             'organization_slug': project.groups[0].slug if project.groups else None,
             'metadata': {
                 'slug': project.slug,
@@ -452,6 +452,8 @@ class KalanjiyamIndexView(AdminIndexView):
                 'order': page.order,
                 'version': page.version,
                 'ocr_bounding_boxes': page.ocr_bounding_boxes,
+                'page_width': page.page_width,
+                'page_height': page.page_height,
                 'status_name': page.status.name if page.status else None
             }
             project_data['pages'].append(page_data)
@@ -465,7 +467,9 @@ class KalanjiyamIndexView(AdminIndexView):
                     'status_name': revision.status.name if revision.status else None,
                     'created': revision.created.isoformat(),
                     'summary': revision.summary,
-                    'content': revision.content
+                    'content': revision.content,
+                    'content_format': getattr(revision, 'content_format', 'plain'),
+                    'document': getattr(revision, 'document', None),
                 }
                 project_data['revisions'].append(revision_data)
                 
@@ -639,7 +643,9 @@ class KalanjiyamIndexView(AdminIndexView):
                 slug=page_data['slug'],
                 order=page_data['order'],
                 version=page_data['version'],
-                ocr_bounding_boxes=page_data['ocr_bounding_boxes'],
+                ocr_bounding_boxes=page_data.get('ocr_bounding_boxes'),
+                page_width=page_data.get('page_width'),
+                page_height=page_data.get('page_height'),
                 status_id=status.id
             )
             session.add(page)
@@ -663,7 +669,9 @@ class KalanjiyamIndexView(AdminIndexView):
                 status_id=status.id,
                 created=datetime.fromisoformat(revision_data['created']),
                 summary=revision_data['summary'],
-                content=revision_data['content']
+                content=revision_data['content'],
+                content_format=revision_data.get('content_format', 'plain'),
+                document=revision_data.get('document'),
             )
             session.add(revision)
             session.flush()

@@ -30,7 +30,9 @@ from kalanjiyam.utils.quotas import (
     ensure_ocr_quota_for_project,
     ensure_storage_quota_for_user,
 )
-from kalanjiyam.utils.revisions import EditError, add_revision
+from kalanjiyam.utils.page_document import PageDocument, document_for_revision
+from kalanjiyam.utils.ocr_persist import apply_ocr_to_page, ocr_response_to_api_dict
+from kalanjiyam.utils.revisions import EditError, add_revision, parse_document_field
 from kalanjiyam.views.api import bp as api
 
 bp = Blueprint("page", __name__)
@@ -69,10 +71,12 @@ class EditPageForm(FlaskForm):
     #: The page version. Versions are monotonically increasing: if A < B, then
     #: A is older than B.
     version = HiddenField(_l("Page version"))
-    #: The page content.
+    #: The page content (derived plain text).
     content = StringField(
         _l("Page content"), widget=TextArea(), validators=[DataRequired()]
     )
+    #: Canonical PageDocument JSON from the block editor.
+    document = HiddenField(_l("Page document"))
     #: The page status.
     status = RadioField(
         _l("Status"),
@@ -113,6 +117,90 @@ def _get_page_context(project_slug: str, page_slug: str) -> PageContext | None:
     return PageContext(project=project_, cur=cur, prev=prev, next=next)
 
 
+def _translation_context(cur: db.Page) -> tuple:
+    translation_content = None
+    translation_metadata = None
+    available_translations = []
+    if not cur.revisions:
+        return translation_content, translation_metadata, available_translations
+    latest_revision = cur.revisions[-1]
+    session = q.get_session()
+    translations = session.query(db.Translation).filter_by(
+        page_id=cur.id,
+        revision_id=latest_revision.id,
+    ).all()
+    available_translations = [
+        {
+            "id": t.id,
+            "content": t.content,
+            "source_language": t.source_language,
+            "target_language": t.target_language,
+            "engine": t.translation_engine,
+            "created_at": t.created_at,
+        }
+        for t in translations
+    ]
+    if available_translations:
+        first = available_translations[0]
+        translation_content = first["content"]
+        translation_metadata = {
+            "source_language": first["source_language"],
+            "target_language": first["target_language"],
+            "engine": first["engine"],
+        }
+    return translation_content, translation_metadata, available_translations
+
+
+def _page_document_dict(cur: db.Page) -> dict:
+    if cur.revisions:
+        doc = document_for_revision(cur.revisions[-1], cur)
+    else:
+        doc = PageDocument.empty()
+        if cur.page_width:
+            doc.page_width = cur.page_width
+        if cur.page_height:
+            doc.page_height = cur.page_height
+    return doc.to_dict()
+
+
+def _editor_template_kwargs(
+    ctx: PageContext,
+    form: EditPageForm,
+    *,
+    conflict=None,
+    has_edits: bool,
+    ocr_status: str,
+    engine_choices: list,
+) -> dict:
+    cur = ctx.cur
+    is_r0 = cur.status.name == SitePageStatus.R0
+    image_number = cur.slug
+    page_number = _get_page_number(ctx.project, cur)
+    translation_content, translation_metadata, available_translations = _translation_context(
+        cur
+    )
+    return {
+        "conflict": conflict,
+        "cur": cur,
+        "form": form,
+        "has_edits": has_edits,
+        "image_number": image_number,
+        "is_r0": is_r0,
+        "page_context": ctx,
+        "page_number": page_number,
+        "project": ctx.project,
+        "translation_content": translation_content,
+        "translation_metadata": translation_metadata,
+        "available_translations": available_translations,
+        "ocr_status": ocr_status,
+        "engine_choices": engine_choices,
+        "page_document": _page_document_dict(cur),
+        "ocr_bounding_boxes": cur.ocr_bounding_boxes or "",
+        "page_width": cur.page_width,
+        "page_height": cur.page_height,
+    }
+
+
 def _get_page_number(project_: db.Project, page_: db.Page) -> str:
     """Get the page number for the given page.
 
@@ -148,72 +236,28 @@ def edit(project_slug, page_slug):
     form.status.data = status_names[cur.status_id]
 
     has_edits = bool(cur.revisions)
-    translation_content = None
-    translation_metadata = None
-    available_translations = []
     if has_edits:
         latest_revision = cur.revisions[-1]
         form.content.data = latest_revision.content
-        
-        # Get all available translations for the latest revision
-        session = q.get_session()
-        translations = session.query(db.Translation).filter_by(
-            page_id=cur.id,
-            revision_id=latest_revision.id
-        ).all()
-        
-        available_translations = [
-            {
-                'id': t.id,
-                'content': t.content,
-                'source_language': t.source_language,
-                'target_language': t.target_language,
-                'engine': t.translation_engine,
-                'created_at': t.created_at
-            }
-            for t in translations
-        ]
-        
-        # Use the first translation as default (if any exist)
-        if available_translations:
-            first_translation = available_translations[0]
-            translation_content = first_translation['content']
-            translation_metadata = {
-                'source_language': first_translation['source_language'],
-                'target_language': first_translation['target_language'],
-                'engine': first_translation['engine']
-            }
-        else:
-            translation_metadata = None
-
-    is_r0 = cur.status.name == SitePageStatus.R0
-    image_number = cur.slug
-    page_number = _get_page_number(ctx.project, cur)
 
     from kalanjiyam.utils.ocr_client import get_available_engines
     from kalanjiyam.utils.ocr_types import build_engine_choices
-    ocr_status = get_available_engines()
+
+    ocr_ping = get_available_engines()
     engine_choices = build_engine_choices(
-        ocr_status["engines"],
+        ocr_ping["engines"],
         is_super_admin=current_user.is_super_admin,
     )
 
     return render_template(
         "proofing/pages/edit.html",
-        conflict=None,
-        cur=ctx.cur,
-        form=form,
-        has_edits=has_edits,
-        image_number=image_number,
-        is_r0=is_r0,
-        page_context=ctx,
-        page_number=page_number,
-        project=ctx.project,
-        translation_content=translation_content,
-        translation_metadata=translation_metadata,
-        available_translations=available_translations,
-        ocr_status=ocr_status["status"],
-        engine_choices=engine_choices,
+        **_editor_template_kwargs(
+            ctx,
+            form,
+            has_edits=has_edits,
+            ocr_status=ocr_ping["status"],
+            engine_choices=engine_choices,
+        ),
     )
 
 
@@ -234,6 +278,8 @@ def edit_post(project_slug, page_slug):
     conflict = None
 
     if form.validate_on_submit():
+        doc = parse_document_field(form.document.data)
+        content_format = "blocks" if doc else "plain"
         try:
             new_version = add_revision(
                 cur,
@@ -242,72 +288,35 @@ def edit_post(project_slug, page_slug):
                 status=form.status.data,
                 version=int(form.version.data),
                 author_id=current_user.id,
+                document=doc,
+                content_format=content_format,
             )
             form.version.data = new_version
             flash("Saved changes.", "success")
         except EditError:
-            # FIXME: in the future, use a proper edit conflict view.
             flash("Edit conflict. Please incorporate the changes below:")
             conflict = cur.revisions[-1]
             form.version.data = cur.version
 
-    is_r0 = cur.status.name == SitePageStatus.R0
-    image_number = cur.slug
-    page_number = _get_page_number(ctx.project, cur)
+    from kalanjiyam.utils.ocr_client import get_available_engines
+    from kalanjiyam.utils.ocr_types import build_engine_choices
 
-    # Get all available translations for the latest revision
-    translation_content = None
-    translation_metadata = None
-    available_translations = []
-    if cur.revisions:
-        latest_revision = cur.revisions[-1]
-        session = q.get_session()
-        translations = session.query(db.Translation).filter_by(
-            page_id=cur.id,
-            revision_id=latest_revision.id
-        ).all()
-        
-        available_translations = [
-            {
-                'id': t.id,
-                'content': t.content,
-                'source_language': t.source_language,
-                'target_language': t.target_language,
-                'engine': t.translation_engine,
-                'created_at': t.created_at
-            }
-            for t in translations
-        ]
-        
-        # Use the first translation as default (if any exist)
-        if available_translations:
-            first_translation = available_translations[0]
-            translation_content = first_translation['content']
-            translation_metadata = {
-                'source_language': first_translation['source_language'],
-                'target_language': first_translation['target_language'],
-                'engine': first_translation['engine']
-            }
-        else:
-            translation_metadata = None
+    ocr_ping = get_available_engines()
+    engine_choices = build_engine_choices(
+        ocr_ping["engines"],
+        is_super_admin=current_user.is_super_admin,
+    )
 
-    # Keep args in sync with `edit`. (We can't unify these functions easily
-    # because one function requires login but the other doesn't. Helper
-    # functions don't have any obvious cutting points.
     return render_template(
         "proofing/pages/edit.html",
-        conflict=conflict,
-        cur=ctx.cur,
-        form=form,
-        has_edits=True,
-        image_number=image_number,
-        is_r0=is_r0,
-        page_context=ctx,
-        page_number=page_number,
-        project=ctx.project,
-        translation_content=translation_content,
-        translation_metadata=translation_metadata,
-        available_translations=available_translations,
+        **_editor_template_kwargs(
+            ctx,
+            form,
+            conflict=conflict,
+            has_edits=True,
+            ocr_status=ocr_ping["status"],
+            engine_choices=engine_choices,
+        ),
     )
 
 
@@ -405,8 +414,17 @@ def ocr(project_slug, page_slug):
         ensure_ocr_quota_for_project(project_)
         ocr_response = run_ocr(image_path, engine_name=engine, language=language)
         consume_ocr_credit_for_project(project_)
-        logging.info("OCR completed successfully, returning %s characters", len(ocr_response.text_content))
-        return ocr_response.text_content
+        apply_ocr_to_page(page_, ocr_response, engine)
+        session = q.get_session()
+        session.add(page_)
+        session.commit()
+        payload = ocr_response_to_api_dict(ocr_response, engine)
+        logging.info(
+            "OCR completed successfully, returning %s characters, %s blocks",
+            len(payload.get("text", "")),
+            len(payload.get("blocks") or []),
+        )
+        return jsonify(payload)
     except Exception as e:
         logging.error(
             "OCR failed for %s/%s with engine %s and language %s: %s",

@@ -6,7 +6,6 @@
 
 {# Render a radiobutton as a clickable button. #}
 {% macro _status(field, peer_classes) %}
-{# Use wrapping div so that we can use the Tailwind "peer" class. #}
 <div>
   {{ field(class_="hidden peer") }}
   {{ field.label(class_="block border border-slate-200 rounded-xl p-4 mr-2 text-slate-500 hover:bg-slate-50 transition-all font-bold text-sm " + peer_classes + " peer-checked:shadow-inner cursor-pointer text-center") }}
@@ -44,9 +43,9 @@
   <form x-data="proofer" method="POST">
     {{ form.csrf_token }}
     {{ form.version }}
+    <input type="hidden" name="document" id="document" value="">
 
     {% if not has_edits %}
-      {# i18n: This should match the "Tools" and "Run OCR" translations in the proofing tool. #}
       {% set command = _("Tools &rarr; Run OCR") %}
       {% call mc.p_note() %}{% trans %}
       This page has not been edited yet. Run <i>{{ command }}</i> to get started.
@@ -54,10 +53,22 @@
     {% endif %}
 
     {{ editor.menu_bar(ocr_status=ocr_status, engine_choices=engine_choices) }}
-    
+
+    {# Single image pane; swap editor column by mode #}
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 min-h-[700px]">
-      {{ editor.text_box(form.content.data or "") }}
       {{ editor.image_box(translation_content, translation_metadata, available_translations) }}
+
+      <div class="min-h-[600px]">
+        <div x-show="editorMode === 'split'">
+          {{ editor.block_editor_pane() }}
+        </div>
+        <div x-show="editorMode === 'replica'" x-cloak>
+          {{ editor.replica_pane() }}
+        </div>
+        <div x-show="editorMode === 'flow'" x-cloak>
+          {{ editor.text_box(form.content.data or "") }}
+        </div>
+      </div>
     </div>
 
     <div class="mt-10 bg-white border border-slate-100 rounded-3xl p-8 shadow-sm">
@@ -128,6 +139,10 @@
 <script src="https://cdn.jsdelivr.net/npm/openseadragon@3.1/build/openseadragon/openseadragon.min.js"></script>
 {% set image_url = url_for("site.page_image", project_slug=project.slug, page_slug=cur.slug) %}
 <script type="text/javascript">
-const IMAGE_URL = "{{ image_url }}";
+const IMAGE_URL = {{ image_url|tojson }};
+const PAGE_DOCUMENT_JSON = {{ page_document|tojson }};
+const OCR_BOUNDING_BOXES = {{ ocr_bounding_boxes|tojson }};
+const PAGE_WIDTH = {{ page_width|tojson }};
+const PAGE_HEIGHT = {{ page_height|tojson }};
 </script>
 {% endblock %}

@@ -10,6 +10,12 @@ from dataclasses import dataclass
 class OcrResponse:
     text_content: str
     bounding_boxes: list[tuple[int, int, int, int, str]]
+    layout_html: str | None = None
+    blocks: list[dict] | None = None
+    content_format: str = "plain"
+    page_width: int | None = None
+    page_height: int | None = None
+    pipeline: str = "standard"
 
 
 SUPPORTED_ENGINES = [

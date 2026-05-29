@@ -92,7 +92,18 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
         raise RuntimeError(f"OCR service error ({response.status_code}): {detail}")
 
     payload = response.json()
+    text = payload.get("text", "") or ""
+    boxes = _parse_bounding_boxes(payload.get("bounding_boxes"), engine_name)
+    blocks = payload.get("blocks")
+    if blocks is not None and not isinstance(blocks, list):
+        blocks = None
     return OcrResponse(
-        text_content=payload.get("text", ""),
-        bounding_boxes=_parse_bounding_boxes(payload.get("bounding_boxes"), engine_name),
+        text_content=text,
+        bounding_boxes=boxes,
+        layout_html=payload.get("layout_html"),
+        blocks=blocks,
+        content_format=payload.get("content_format") or ("blocks" if blocks else "plain"),
+        page_width=payload.get("page_width"),
+        page_height=payload.get("page_height"),
+        pipeline=payload.get("pipeline") or "standard",
     )

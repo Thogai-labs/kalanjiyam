@@ -541,4 +541,24 @@
     @apply flex items-center gap-0;
   }
 
+  .ocr-block-row textarea {
+    @apply font-sans;
+  }
+
+  .ocr-replica-page {
+    @apply relative w-full bg-white;
+  }
+
+  .ocr-replica-block {
+    @apply border border-transparent text-sm leading-snug;
+  }
+
+  .ocr-osd-overlay {
+    z-index: 10;
+  }
+
+  .ocr-export-page {
+    @apply mb-12 break-after-page;
+  }
+
 }

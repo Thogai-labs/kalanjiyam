@@ -39,11 +39,51 @@ def test_run_ocr_remote(flask_app):
 
         assert result.text_content == "namaste"
         assert result.bounding_boxes == [(0, 0, 10, 10, "hi")]
+        assert result.pipeline == "standard"
+
+
+def test_run_ocr_remote_v2_blocks(flask_app):
+    with flask_app.app_context():
+        flask_app.config.update(OCR_SERVICE_URL="http://ocr.test", OCR_SERVICE_API_KEY="")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "text": "hi",
+            "bounding_boxes": "",
+            "blocks": [
+                {
+                    "id": "b1",
+                    "type": "paragraph",
+                    "bbox": [0, 0, 10, 10],
+                    "content": "hi",
+                    "reading_order": 1,
+                }
+            ],
+            "content_format": "blocks",
+            "page_width": 100,
+            "page_height": 200,
+            "pipeline": "vlm",
+        }
+
+        with patch("kalanjiyam.utils.ocr_client.httpx.Client") as client_cls:
+            client = client_cls.return_value.__enter__.return_value
+            client.post.return_value = mock_response
+
+            from kalanjiyam.utils.ocr_client import run_ocr_remote
+
+            result = run_ocr_remote(Path("/tmp/page.jpg"), "nanonets", "sa")
+
+        assert result.blocks is not None
+        assert len(result.blocks) == 1
+        assert result.page_width == 100
 
 
 def test_ocr_runner_delegates_to_remote(flask_app):
     with flask_app.app_context():
         flask_app.config.update(OCR_SERVICE_URL="http://ocr.test", OCR_SERVICE_API_KEY="x")
+
+        from kalanjiyam.utils.ocr_types import OcrResponse
 
         with patch("kalanjiyam.utils.ocr_client.run_ocr_remote") as remote:
             remote.return_value = OcrResponse(text_content="remote", bounding_boxes=[])

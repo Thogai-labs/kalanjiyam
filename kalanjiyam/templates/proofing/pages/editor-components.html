@@ -142,7 +142,18 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
 {% macro menu_bar(ocr_status="unavailable", engine_choices=[]) %}
 {% set button_css = "flex items-center gap-2 p-3 hover:bg-peacock-light rounded transition-colors" %}
 <nav class="bg-white border border-teal-200 rounded-lg mb-4 peacock-shadow">
-  <div class="flex items-center p-2 gap-1">
+  <div class="flex items-center p-2 gap-1 flex-wrap">
+    <div class="flex items-center gap-1 mr-2 border-r border-teal-100 pr-2">
+      <button type="button" class="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+              :class="editorMode === 'split' ? 'bg-peacock-primary text-white' : 'text-peacock-secondary hover:bg-peacock-light'"
+              @click.prevent="setEditorMode('split')">{{ _('Split') }}</button>
+      <button type="button" class="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+              :class="editorMode === 'replica' ? 'bg-peacock-primary text-white' : 'text-peacock-secondary hover:bg-peacock-light'"
+              @click.prevent="setEditorMode('replica')">{{ _('Replica') }}</button>
+      <button type="button" class="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+              :class="editorMode === 'flow' ? 'bg-peacock-primary text-white' : 'text-peacock-secondary hover:bg-peacock-light'"
+              @click.prevent="setEditorMode('flow')">{{ _('Flow') }}</button>
+    </div>
     
     <!-- OCR Dropdown -->
     <div class="relative">
@@ -688,6 +699,22 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
       class="hidden">{{ content }}</textarea>
   {# Rich text editor container - TipTap Simple UI style #}
   <div id="rich-editor" class="w-full h-[600px] overflow-y-auto bg-white border-t border-gray-200 focus-within:outline-none prose prose-lg max-w-none"></div>
+</div>
+{% endmacro %}
+
+
+{% macro block_editor_pane() %}
+<div class="bg-white border border-teal-200 rounded-lg p-4 peacock-shadow flex flex-col h-[600px]">
+  <h3 class="text-lg font-semibold text-peacock-primary mb-3">{{ _('Blocks') }}</h3>
+  <div id="ocr-block-list" class="flex-1 overflow-y-auto"></div>
+</div>
+{% endmacro %}
+
+
+{% macro replica_pane() %}
+<div class="bg-white border border-teal-200 rounded-lg p-4 peacock-shadow h-[600px] overflow-auto">
+  <h3 class="text-lg font-semibold text-peacock-primary mb-3">{{ _('Page replica') }}</h3>
+  <div id="ocr-replica-root"></div>
 </div>
 {% endmacro %}
 

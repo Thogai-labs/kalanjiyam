@@ -19,6 +19,8 @@ Kalanjiyam locally or contribute to Kalanjiyam's technical work.
    multi-tenant
    background-tasks-with-celery
    batch-ocr-task-tracking
+   ocr-api
+   ocr-editing
    production-deploy
    i18n-and-l10n
    tei-xml

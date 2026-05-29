@@ -72,17 +72,14 @@ install-python:
 	. env/bin/activate; pip install --upgrade pip
 	. env/bin/activate; pip install -r requirements.txt
 
-# Fetch and build all i18n files.
+# Fetch and build all i18n files (optional; English-only if clone is unavailable).
 install-i18n: py-venv-check
 	python -m kalanjiyam.scripts.fetch_i18n_files
-	# Force a build with `-f`. Transifex files have a `fuzzy` annotation, so if
-	# we build without this flag, then all of the files will be skipped with:
-	#
-	#     "catalog <file>.po" is marked as fuzzy, skipping"
-	#
-	# There's probably a nicer workaround for this, but `-f` works and unblocks
-	# this command for now.
-	pybabel compile -d kalanjiyam/translations -f
+	@if find kalanjiyam/translations -name '*.po' -print -quit 2>/dev/null | grep -q .; then \
+		pybabel compile -d kalanjiyam/translations -f; \
+	else \
+		echo "Skipping pybabel compile (no .po files; running in English)."; \
+	fi
 
 # Upgrade an existing setup.
 upgrade:
