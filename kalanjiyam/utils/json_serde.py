@@ -1,6 +1,5 @@
 import dataclasses
-
-from flask import json
+import json
 
 
 class KalanjiyamJSONEncoder(json.JSONEncoder):

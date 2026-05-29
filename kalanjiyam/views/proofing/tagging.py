@@ -1,5 +1,5 @@
 from flask import Blueprint, abort, render_template
-from flask_login import login_required
+from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from wtforms import HiddenField, StringField
 from wtforms.validators import DataRequired
@@ -7,7 +7,8 @@ from wtforms.widgets import TextArea
 
 import kalanjiyam.queries as q
 from kalanjiyam import database as db
-from kalanjiyam.utils import word_parses, xml
+from kalanjiyam.utils import word_parses, xml_utils
+from kalanjiyam.utils.org_access import filter_texts_for_user, require_text_access
 
 bp = Blueprint("tagging", __name__)
 
@@ -19,7 +20,7 @@ class EditBlockForm(FlaskForm):
 
 @bp.route("/")
 def index():
-    texts = q.texts()
+    texts = filter_texts_for_user(current_user, q.texts())
     return render_template("proofing/tagging/index.html", texts=texts)
 
 
@@ -28,6 +29,7 @@ def text(slug):
     text_ = q.text(slug)
     if text_ is None:
         abort(404)
+    require_text_access(current_user, text_)
 
     session = q.get_session()
     num_blocks = session.query(db.TextBlock).filter_by(text_id=text_.id).count()
@@ -45,6 +47,7 @@ def section(text_slug, section_slug):
     text_ = q.text(text_slug)
     if text_ is None:
         abort(404)
+    require_text_access(current_user, text_)
 
     # Find the current section.
     cur = None
@@ -66,6 +69,7 @@ def edit_block(text_slug, block_slug):
     text_ = q.text(text_slug)
     if text_ is None:
         abort(404)
+    require_text_access(current_user, text_)
 
     block = q.block(text_.id, block_slug)
     if block is None:
@@ -96,6 +100,7 @@ def edit_block_post(text_slug, block_slug):
     text_ = q.text(text_slug)
     if text_ is None:
         abort(404)
+    require_text_access(current_user, text_)
 
     form = EditBlockForm()
     return render_template("proofing/tagging/edit-block.html", text=text_, form=form)

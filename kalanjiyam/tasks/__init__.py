@@ -34,9 +34,10 @@ app = Celery(
     backend=redis_url,
     broker=redis_url,
     include=[
-            "kalanjiyam.tasks.projects",
-    "kalanjiyam.tasks.ocr",
-    "kalanjiyam.tasks.translation",
+        "kalanjiyam.tasks.projects",
+        "kalanjiyam.tasks.ocr",
+        "kalanjiyam.tasks.translation",
+        "kalanjiyam.tasks.comparison",
     ],
 )
 app.conf.update(
@@ -53,6 +54,7 @@ app.conf.update(
     # Task routing for OCR tasks to prevent overwhelming the system
     task_routes={
         'kalanjiyam.tasks.ocr.*': {'queue': 'ocr', 'routing_key': 'ocr'},
+        'kalanjiyam.tasks.comparison.*': {'queue': 'ocr', 'routing_key': 'ocr'},
     },
     # Queue configuration
     task_default_queue='default',

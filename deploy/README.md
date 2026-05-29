@@ -1,3 +1,17 @@
+## Deployment environments
+
+| Directory | Use |
+|-----------|-----|
+| `deploy/local/` | Local Docker dev |
+| `deploy/staging/` | Staging |
+| `deploy/prod/` | Production Docker |
+
+Set `KALANJIYAM_DEPLOYMENT_ENV=prod` and configure `.env` (see `.env.example`).
+Celery listens on `default` and `ocr` queues. OCR runs in a separate service;
+set `OCR_SERVICE_URL` to reach it from containers.
+
+Full guide: `docs/production-deploy.rst`.
+
 ## How it works?
 
 ```mermaid
@@ -22,7 +36,7 @@ graph LR
     end
     style Environment fill:#edf7f6
 
-    kalanjiyam --> browser(https://www.siddhasagaram.in)
+    kalanjiyam --> browser(https://your-domain.com)
 ```
 
 ## What is the PR process?

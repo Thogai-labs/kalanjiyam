@@ -19,19 +19,28 @@
 <div class="prose">
   <p>Click the button below to run OCR on every unedited page.</p>
 
+  {% if ocr_status == "unavailable" %}
+  <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 text-red-700 font-medium">
+    {{ _('OCR service is currently unavailable. Please try again later.') }}
+  </div>
+  {% elif ocr_status == "no_engines" %}
+  <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 text-yellow-700 font-medium">
+    {{ _('OCR service is running but no engines are available.') }}
+  </div>
+  {% else %}
   <form method="POST">
     <div class="bg-white shadow rounded-lg p-6">
       <h3 class="text-lg font-medium text-gray-900 mb-4">OCR Settings</h3>
-      
+
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label for="engine" class="block text-sm font-medium text-gray-700 mb-2">
             {{ _('OCR Engine:') }}
           </label>
           <select name="engine" id="engine" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="1">{{ _('Google OCR') }}</option>
-            <option value="2">{{ _('Tesseract OCR') }}</option>
-            <option value="3">{{ _('Surya OCR') }}</option>
+            {% for e in engine_choices %}
+            <option value="{{ e.value }}">{{ e.label }}</option>
+            {% endfor %}
           </select>
         </div>
         
@@ -62,6 +71,7 @@
       </div>
     </div>
   </form>
+  {% endif %}
 </div>
 
 <script>

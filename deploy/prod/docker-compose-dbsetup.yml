@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  kalanjiyam-dbsetup:
+    image: ${KALANJIYAM_IMAGE}
+    container_name: kalanjiyam-dbsetup
+    command: python -m kalanjiyam.seed.lookup && python -m kalanjiyam.seed.texts.gretil && python -m kalanjiyam.seed.dcs
+    env_file:
+      - ${PWD}/.env
+    environment:
+      - FLASK_ENV=production
+      - REDIS_URL=redis://kalanjiyam-redis:6379/0
+      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
+    depends_on:
+      - kalanjiyam-db
+
+  kalanjiyam-db:
+    image: postgres:15
+    container_name: kalanjiyam-db
+    environment:
+      - POSTGRES_DB=kalanjiyam
+      - POSTGRES_USER=kalanjiyam
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kalanjiyam}
+    volumes:
+      - kalanjiyam-data:/var/lib/postgresql/data
+
+volumes:
+  kalanjiyam-data:

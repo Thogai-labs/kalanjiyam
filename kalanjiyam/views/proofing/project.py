@@ -7,6 +7,7 @@ from datetime import datetime
 from celery.result import GroupResult
 from flask import (
     Blueprint,
+    abort as flask_abort,
     current_app,
     flash,
     make_response,
@@ -37,9 +38,12 @@ import redis
 
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
+from kalanjiyam.models.proofing import OCRComparison
 from kalanjiyam.tasks import app as celery_app
 from kalanjiyam.tasks import ocr as ocr_tasks
+from kalanjiyam.tasks.comparison import run_ocr_comparison_task
 from kalanjiyam.tasks import translation as translation_tasks
+from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
 from kalanjiyam.utils import project_utils, proofing_utils
 from kalanjiyam.utils.revisions import add_revision
 from kalanjiyam.views.proofing.decorators import moderator_required, p2_required
@@ -50,6 +54,19 @@ LOG = logging.getLogger(__name__)
 
 # Initialize Redis client
 redis_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+
+
+@bp.before_request
+def _enforce_project_access():
+    slug = request.view_args.get("slug") if request.view_args else None
+    if not slug:
+        return None
+    project_ = q.project(slug)
+    if project_ is None:
+        return None
+    if not q.user_can_view_project(current_user, project_):
+        flask_abort(403)
+    return None
 
 
 def _is_valid_page_number_spec(_, field):
@@ -330,8 +347,69 @@ def stats(slug):
         abort(404)
 
     stats_ = calculate_stats(project_)
+    comparisons = (
+        q.get_session()
+        .query(OCRComparison)
+        .filter_by(project_id=project_.id)
+        .order_by(OCRComparison.created_at.desc())
+        .all()
+    )
     return render_template(
-        "proofing/projects/stats.html", project=project_, stats=stats_
+        "proofing/projects/stats.html",
+        project=project_,
+        stats=stats_,
+        comparisons=comparisons,
+        supported_engines=SUPPORTED_ENGINES,
+    )
+
+
+@bp.route("/<slug>/stats/compare", methods=["POST"])
+@moderator_required
+def run_comparison(slug):
+    """Run an OCR comparison against ground truth."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    engine = request.form.get("engine")
+    if not engine:
+        flash("Please select an engine.", "danger")
+        return redirect(url_for("proofing.project.stats", slug=slug))
+
+    if engine not in SUPPORTED_ENGINES:
+        flash(f"Unsupported OCR engine: {engine}", "danger")
+        return redirect(url_for("proofing.project.stats", slug=slug))
+
+    session = q.get_session()
+    comparison = OCRComparison(project_id=project_.id, engine=engine, status="pending")
+    session.add(comparison)
+    session.commit()
+
+    run_ocr_comparison_task.delay(
+        comparison.id, current_app.config["KALANJIYAM_ENVIRONMENT"]
+    )
+
+    flash(f"Comparison started with {engine}.", "success")
+    return redirect(url_for("proofing.project.stats", slug=slug))
+
+
+@bp.route("/<slug>/stats/compare/<int:comparison_id>")
+@moderator_required
+def comparison_details(slug, comparison_id):
+    """Show detailed results for a comparison."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    session = q.get_session()
+    comparison = session.query(OCRComparison).get(comparison_id)
+    if not comparison or comparison.project_id != project_.id:
+        abort(404)
+
+    return render_template(
+        "proofing/projects/comparison_details.html",
+        project=project_,
+        comparison=comparison,
     )
 
 
@@ -716,66 +794,54 @@ def batch_ocr(slug):
             # Task not found or error, remove from Redis
             redis_client.delete(task_key)
 
+    from kalanjiyam.utils.ocr_client import get_available_engines
+    from kalanjiyam.utils.ocr_types import ENGINE_MAP, build_engine_choices
+
     if request.method == "POST":
-        # Get OCR parameters from form
-        engine = request.form.get('engine', 'google')
+        engine_num = request.form.get('engine', '')
         language = request.form.get('language', 'sa')
-        
-        # Decode numeric engine values to actual engine names
-        engine_map = {
-            '1': 'google',
-            '2': 'tesseract',
-            '3': 'surya'
-        }
-        if engine in engine_map:
-            engine = engine_map[engine]
-        
-        # Validate engine
-        from kalanjiyam.utils.ocr_engine import OcrEngineFactory
-        if engine not in OcrEngineFactory.get_supported_engines():
+        engine = ENGINE_MAP.get(engine_num)
+
+        if not engine or engine not in SUPPORTED_ENGINES:
             flash(_l("Unsupported OCR engine selected."))
-            return render_template(
-                "proofing/projects/batch-ocr.html",
+        else:
+            task = ocr_tasks.run_ocr_for_project(
+                app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
                 project=project_,
-            )
-        
-        task = ocr_tasks.run_ocr_for_project(
-            app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
-            project=project_,
-            engine=engine,
-            language=language,
-        )
-        if task:
-            # Store task info in Redis with expiration (24 hours)
-            task_info = {
-                'task_id': task.id,
-                'engine': engine,
-                'language': language,
-                'started_at': datetime.utcnow().isoformat(),
-                'project_slug': slug
-            }
-            redis_client.setex(task_key, 86400, json.dumps(task_info))
-            
-            return render_template(
-                "proofing/projects/batch-ocr-post.html",
-                project=project_,
-                status="PENDING",
-                current=0,
-                total=0,
-                percent=0,
-                task_id=task.id,
-                active_tasks=0,
-                pending_tasks=0,
-                failed_tasks=0,
                 engine=engine,
                 language=language,
             )
-        else:
-            flash(_l("All pages in this project have at least one edit already."))
+            if task:
+                task_info = {
+                    'task_id': task.id,
+                    'engine': engine,
+                    'language': language,
+                    'started_at': datetime.utcnow().isoformat(),
+                    'project_slug': slug,
+                }
+                redis_client.setex(task_key, 86400, json.dumps(task_info))
+                return render_template(
+                    "proofing/projects/batch-ocr-post.html",
+                    project=project_,
+                    status="PENDING",
+                    current=0, total=0, percent=0,
+                    task_id=task.id,
+                    active_tasks=0, pending_tasks=0, failed_tasks=0,
+                    engine=engine, language=language,
+                )
+            else:
+                flash(_l("All pages in this project have at least one edit already."))
 
+    ocr_status = get_available_engines()
+    engine_choices = build_engine_choices(
+        ocr_status["engines"],
+        is_super_admin=current_user.is_super_admin,
+    )
     return render_template(
         "proofing/projects/batch-ocr.html",
         project=project_,
+        ocr_status=ocr_status["status"],
+        engine_choices=engine_choices,
     )
 
 

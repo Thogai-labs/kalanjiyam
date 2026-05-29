@@ -1,6 +1,12 @@
 {% import "macros/forms.html" as mf %}
 
 
+{# CSRF token for raw POST forms (e.g. Flask-Admin delete). #}
+{% macro csrf_field() %}
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+{% endmacro %}
+
+
 {# Show models in the menu bar. #}
 {% macro nav_menu(admin_view) %}
   <ul class="flex items-center a-hover-underline">

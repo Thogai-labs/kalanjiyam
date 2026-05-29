@@ -13,6 +13,7 @@ from kalanjiyam import database as db
 from kalanjiyam import queries as q
 from kalanjiyam.tasks import app
 from kalanjiyam.tasks.utils import CeleryTaskStatus, TaskStatus
+from kalanjiyam.utils.quotas import add_storage_usage_for_project
 from config import create_config_only_app
 
 
@@ -37,7 +38,11 @@ def _split_pdf_into_pages(
 
 
 def _add_project_to_database(
-    display_title: str, slug: str, num_pages: int, creator_id: int
+    display_title: str,
+    slug: str,
+    num_pages: int,
+    creator_id: int,
+    require_org: bool,
 ):
     """Create a project on the database.
 
@@ -69,6 +74,12 @@ def _add_project_to_database(
                 status_id=unreviewed.id,
             )
         )
+    creator = session.query(db.User).filter_by(id=creator_id).first()
+    # Auto-assign projects to the creator's organization for tenant isolation.
+    if creator and creator.organization_id:
+        session.add(db.ProjectGroups(group_id=creator.organization_id, project_id=project.id))
+    elif creator and require_org:
+        raise ValueError("Project creator must belong to an organization.")
     session.commit()
 
 
@@ -112,12 +123,15 @@ def create_project_inner(
 
     num_pages = _split_pdf_into_pages(Path(pdf_path), Path(pages_dir), task_status)
     with app.app_context():
+        require_org = bool(app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True))
         _add_project_to_database(
             display_title=display_title,
             slug=slug,
             num_pages=num_pages,
             creator_id=creator_id,
+            require_org=require_org,
         )
+        add_storage_usage_for_project(slug)
 
     task_status.success(num_pages, slug)
 

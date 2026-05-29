@@ -1,8 +1,9 @@
-"""The production endpoint for Kalanjiyam.
+"""WSGI entry point for Gunicorn and other production servers."""
 
-Setup: https://www.digitalocean.com/community/tutorials/how-to-serve-flask-applications-with-gunicorn-and-nginx-on-ubuntu-18-04
-"""
+import os
 
 from kalanjiyam import create_app
 
-app = create_app("development")
+# FLASK_ENV must match a config name: development, staging, production, testing, build
+_config = os.getenv("FLASK_ENV", "production")
+app = create_app(_config)

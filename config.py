@@ -83,6 +83,35 @@ class BaseConfig:
     #: Where to store user uploads (PDFs, images, etc.).
     UPLOAD_FOLDER = _env("FLASK_UPLOAD_FOLDER")
 
+    #: If True, library texts (books) are restricted by group: only users in a
+    #: group that contains the text (or admins) can view it. Texts not in any
+    #: group remain visible to everyone. Set ENFORCE_GROUP_ACCESS_FOR_TEXTS=true
+    #: in .env to enable.
+    ENFORCE_GROUP_ACCESS_FOR_TEXTS = (
+        _env("ENFORCE_GROUP_ACCESS_FOR_TEXTS", "false").lower() in ("true", "1", "yes")
+    )
+
+    #: If True, proofing projects (public books under /books/...) are restricted
+    #: by group: only users in a group that contains the project (or admins) can
+    #: view it. Projects not in any group remain visible to everyone.
+    ENFORCE_GROUP_ACCESS_FOR_PROJECTS = (
+        _env("ENFORCE_GROUP_ACCESS_FOR_PROJECTS", "false").lower()
+        in ("true", "1", "yes")
+    )
+    #: Master switch for strict organization-based tenancy rules.
+    MULTI_TENANT_MODE = (
+        _env("MULTI_TENANT_MODE", "false").lower() in ("true", "1", "yes")
+    )
+    #: If True, enforce org-level access checks across projects/texts when
+    #: MULTI_TENANT_MODE is enabled.
+    ENFORCE_ORG_ACCESS = (
+        _env("ENFORCE_ORG_ACCESS", "true").lower() in ("true", "1", "yes")
+    )
+    #: If True, newly created projects must be attached to an organization.
+    DEFAULT_PROJECT_REQUIRES_ORG = (
+        _env("DEFAULT_PROJECT_REQUIRES_ORG", "true").lower() in ("true", "1", "yes")
+    )
+
     #: Logger setup
     LOG_LEVEL = logging.ERROR
 
@@ -131,6 +160,18 @@ class BaseConfig:
     #: Sentry data source name (DSN).
     #: We use Sentry to get notifications about server errors.
     SENTRY_DSN = _env("SENTRY_DSN")
+
+    #: OCR backend: ``local`` (in-process) or ``remote`` (OCR service API).
+    OCR_BACKEND = _env("OCR_BACKEND", "remote")
+
+    #: Base URL of the standalone OCR service.
+    OCR_SERVICE_URL = _env("OCR_SERVICE_URL", "http://localhost:8000")
+
+    #: API key for service-to-service OCR requests.
+    OCR_SERVICE_API_KEY = _env("OCR_SERVICE_API_KEY", "")
+
+    #: Timeout in seconds for OCR service HTTP requests.
+    OCR_SERVICE_TIMEOUT = int(_env("OCR_SERVICE_TIMEOUT", "300") or "300")
 
     # Test-only
     # ---------
@@ -258,7 +299,7 @@ def _validate_config(config: BaseConfig):
 
     if config.KALANJIYAM_ENVIRONMENT == PRODUCTION:
         if not config.SENTRY_DSN:
-            raise ValueError("Production config must define SENTRY_DSN.")
+            logging.warning("SENTRY_DSN is not set — production errors will not be reported to Sentry.")
 
 
 def load_config_object(name: str):

@@ -1,29 +1,31 @@
-"""Public views for viewing books."""
+"""Public views for viewing books (project-based)."""
 
-from flask import Blueprint, abort, render_template, request
+from flask import Blueprint, abort, current_app, render_template, request
+from flask_login import current_user
 from sqlalchemy import and_, or_
 
 import kalanjiyam.database as db
 import kalanjiyam.queries as q
 from kalanjiyam.utils.assets import get_page_image_filepath
+from kalanjiyam.utils.org_access import is_multi_tenant_enabled
 
 bp = Blueprint("books", __name__)
 
 
 def get_public_projects():
-    """Get all projects that have OCR'd content available for public viewing."""
+    """Get all projects marked as publicly viewable."""
     session = q.get_session()
-    
-    # Get projects that have at least one page with a revision (OCR'd content)
-    projects_with_content = (
+
+    projects = (
         session.query(db.Project)
+        .filter(db.Project.is_publicly_viewable.is_(True))
         .join(db.Page)
-        .join(db.Revision)
         .distinct()
         .all()
     )
-    
-    return projects_with_content
+    if current_app.config.get("ENFORCE_GROUP_ACCESS_FOR_PROJECTS") or is_multi_tenant_enabled():
+        projects = [p for p in projects if q.user_can_view_project(current_user, p)]
+    return projects
 
 
 def get_project_stats(project):
@@ -88,19 +90,15 @@ def book(project_slug):
     project = q.project(project_slug)
     if project is None:
         abort(404)
+    if (current_app.config.get("ENFORCE_GROUP_ACCESS_FOR_PROJECTS") or is_multi_tenant_enabled()) and not q.user_can_view_project(
+        current_user, project
+    ):
+        abort(403)
     
-    # Check if project has any OCR'd content
-    session = q.get_session()
-    has_content = (
-        session.query(db.Page)
-        .filter(db.Page.project_id == project.id)
-        .join(db.Revision)
-        .first()
-    ) is not None
-    
-    if not has_content:
+    if not project.is_publicly_viewable:
         abort(404)
-    
+
+    session = q.get_session()
     stats = get_project_stats(project)
     
     # Get pages with their latest revision and translation info
@@ -135,27 +133,30 @@ def page(project_slug, page_slug):
     project = q.project(project_slug)
     if project is None:
         abort(404)
-    
+    if not project.is_publicly_viewable:
+        abort(404)
+    if (current_app.config.get("ENFORCE_GROUP_ACCESS_FOR_PROJECTS") or is_multi_tenant_enabled()) and not q.user_can_view_project(
+        current_user, project
+    ):
+        abort(403)
+
     page_obj = q.page(project.id, page_slug)
     if page_obj is None:
         abort(404)
-    
-    # Check if page has any revisions (OCR'd content)
-    if not page_obj.revisions:
-        abort(404)
-    
-    # Get latest revision
-    latest_revision = page_obj.revisions[-1]
-    
-    # Get available translations
+
+    latest_revision = page_obj.revisions[-1] if page_obj.revisions else None
+
+    # Get available translations (only if there is a revision)
     session = q.get_session()
-    translations = (
-        session.query(db.Translation)
-        .filter(db.Translation.page_id == page_obj.id)
-        .filter(db.Translation.revision_id == latest_revision.id)
-        .all()
-    )
-    
+    translations = []
+    if latest_revision:
+        translations = (
+            session.query(db.Translation)
+            .filter(db.Translation.page_id == page_obj.id)
+            .filter(db.Translation.revision_id == latest_revision.id)
+            .all()
+        )
+
     # Get navigation context
     pages = project.pages
     current_index = None
@@ -163,23 +164,23 @@ def page(project_slug, page_slug):
         if p.slug == page_slug:
             current_index = i
             break
-    
+
     prev_page = pages[current_index - 1] if current_index > 0 else None
     next_page = pages[current_index + 1] if current_index < len(pages) - 1 else None
-    
+
     # Get requested translation language
     translation_lang = request.args.get('translation', 'en')
     selected_translation = None
-    
+
     for translation in translations:
         if translation.target_language == translation_lang:
             selected_translation = translation
             break
-    
+
     # If requested language not found, use first available translation
     if not selected_translation and translations:
         selected_translation = translations[0]
-    
+
     return render_template(
         "public/books/page.html",
         project=project,

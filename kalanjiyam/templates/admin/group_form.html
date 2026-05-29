@@ -1,0 +1,65 @@
+{% extends 'admin/master.html' %}
+{% import 'macros/admin.html' as admin %}
+
+{% block title %}{% if group %}{{ _('Edit organization') }}{% else %}{{ _('Create organization') }}{% endif %} | {{ _('Admin') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('organizations', current_user) }}
+{% endblock %}
+
+{% block content %}
+{{ admin.page_header(group and _('Edit organization') or _('Create organization')) }}
+
+<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 max-w-xl">
+  <form method="post"
+        action="{% if group %}{{ url_for('groups_view.edit', id=group.id) }}{% else %}{{ url_for('groups_view.create') }}{% endif %}"
+        class="space-y-5">
+    {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+
+    <div>
+      <label for="name" class="{{ admin.label_class() }}">{{ _('Name') }}</label>
+      <input type="text" id="name" name="name" value="{{ group.name if group else '' }}" required class="{{ admin.input_class() }}">
+    </div>
+
+    <div>
+      <label for="description" class="{{ admin.label_class() }}">{{ _('Description') }} <span class="font-normal text-slate-400">({{ _('optional') }})</span></label>
+      <textarea id="description" name="description" rows="3" class="{{ admin.input_class() }}">{{ group.description if group else '' }}</textarea>
+    </div>
+
+    <div>
+      <label for="slug" class="{{ admin.label_class() }}">{{ _('Slug') }}</label>
+      <input type="text" id="slug" name="slug" value="{{ group.slug if group else '' }}" class="{{ admin.input_class() }} font-mono text-sm">
+    </div>
+
+    <div>
+      <label for="admin_user_id" class="{{ admin.label_class() }}">{{ _('Organization admin') }}</label>
+      <select id="admin_user_id" name="admin_user_id" class="{{ admin.select_class() }}">
+        <option value="">{{ _('(none)') }}</option>
+        {% for u in all_users %}
+        <option value="{{ u.id }}" {% if group and group.admin_user_id == u.id %}selected{% endif %}>{{ u.username }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label for="storage_quota_mb" class="{{ admin.label_class() }}">{{ _('Storage quota (MB)') }}</label>
+        <input type="number" id="storage_quota_mb" name="storage_quota_mb"
+               value="{{ (group.storage_quota_bytes // (1024 * 1024)) if group and group.storage_quota_bytes is not none else '' }}"
+               class="{{ admin.input_class() }}">
+      </div>
+      <div>
+        <label for="ocr_credit_limit" class="{{ admin.label_class() }}">{{ _('OCR credit limit') }}</label>
+        <input type="number" id="ocr_credit_limit" name="ocr_credit_limit"
+               value="{{ group.ocr_credit_limit if group and group.ocr_credit_limit is not none else '' }}"
+               class="{{ admin.input_class() }}">
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-3 pt-2">
+      {{ admin.btn_primary(group and _('Save') or _('Create'), type='submit') }}
+      {{ admin.btn_secondary(_('Cancel'), href=group and url_for('groups_view.manage', id=group.id) or url_for('groups_view.index')) }}
+    </div>
+  </form>
+</div>
+{% endblock %}

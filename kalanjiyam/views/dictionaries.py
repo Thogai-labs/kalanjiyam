@@ -18,7 +18,7 @@ from flask import Blueprint, abort, redirect, render_template, request, url_for
 from indic_transliteration import detect, sanscript
 
 import kalanjiyam.queries as q
-from kalanjiyam.utils import xml
+from kalanjiyam.utils import xml_utils
 from kalanjiyam.utils.dict_utils import expand_apte_keys, expand_skd_keys, standardize_key
 from kalanjiyam.views.api import bp as api
 

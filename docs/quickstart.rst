@@ -12,12 +12,18 @@ following command::
 
     make install
 
-Next, run the following commands to create a new admin user::
+Next, create an admin user. For multi-tenant development, prefer a super admin::
+
+    ./cli.py create-super-admin
+
+Legacy single-tenant setup::
 
     ./cli.py create-user
     ./cli.py add-role --username <username> --role admin
 
-After that, you can bring up the development server::
+See :doc:`multi-tenant` for organizations, quotas, and the ``/admin/platform/`` UI.
+
+Then bring up the development server::
 
     make devserver
 

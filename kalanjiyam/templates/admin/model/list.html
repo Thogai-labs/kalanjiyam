@@ -10,41 +10,41 @@
   {{ lib.form_css() }}
 {% endblock %}
 
-{% block body %}
-  <nav class="rounded border my-4 a-hover-underline">
-    <ul class="flex items-center">
-      <li class="p-2">{{ count }} row(s)</li>
-      {% if admin_view.can_create %}
-      <li><a class="block p-2 ml-2 border-l border-slate-300"
-              href="{{ get_url('.create_view') }}">Create</a></li>
-      {% endif %}
-    </ul>
-  </nav>
+{% block content %}
+<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
+  <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+    <p class="text-sm font-semibold text-slate-500">{{ count }} {{ _('rows') }}</p>
+    {% if admin_view.can_create %}
+    <a href="{{ get_url('.create_view') }}" class="btn-premium text-sm">{{ _('Create') }}</a>
+    {% endif %}
+  </div>
 
-  <table class="min-w-full border">
-    <thead class="cf border-b bg-slate-100 text-slate-700 text-sm uppercase">
+  <div class="overflow-x-auto rounded-xl border border-slate-100">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
       <tr>
-        <th></th>
+        <th class="px-4 py-3 w-10"></th>
         {% for c, name in list_columns %}
-          <th class="p-2 text-left">{{ name }}</th>
+          <th class="px-4 py-3">{{ name }}</th>
         {% endfor %}
       </tr>
     </thead>
-    <tbody>
+    <tbody class="divide-y divide-slate-100">
       {% for row in data %}
-        <tr>
+        <tr class="hover:bg-slate-50/80 transition-colors">
           {% set row_id = get_pk_value(row) %}
           {% set edit_url = get_url(".edit_view", id=row_id) %}
-          <td class="text-center text-lg text-slate-400">
-            <a href="{{ edit_url }}" class="block py-1 hover:bg-slate-100">&#x270E;</a>
+          <td class="px-4 py-3 text-center">
+            <a href="{{ edit_url }}" class="text-royalblue hover:text-royalblue/80 font-bold" title="{{ _('Edit') }}">&#x270E;</a>
           </td>
         {% for c, name in list_columns %}
-          <td class="p-2">{{ row[c] }}</td>
+          <td class="px-4 py-3 text-slate-800">{{ row[c] }}</td>
         {% endfor %}
         </tr>
       {% endfor %}
     </tbody>
   </table>
+  </div>
 
   {% block list_pager %}
     {% if num_pages is not none %}
@@ -57,4 +57,5 @@
   {% block actions %}
     {{ actionlib.form(actions, get_url('.action_view')) }}
   {% endblock %}
+</div>
 {% endblock %}

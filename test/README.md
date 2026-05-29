@@ -1,4 +1,4 @@
 test
 ====
 
-Tests for Ambuda code.
+Tests for Kalanjiyam.

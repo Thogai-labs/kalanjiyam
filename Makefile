@@ -1,4 +1,4 @@
-# Environment. Valid values are: local, staging, and prod
+# Environment. Valid values are: local, staging, prod
 KALANJIYAM_DEPLOYMENT_ENV=local
 KALANJIYAM_HOST_IP=0.0.0.0
 KALANJIYAM_HOST_PORT=5000
@@ -131,7 +131,7 @@ db-seed-all: py-venv-check
 
 # For Docker try `make mode=dev docker-start`
 devserver: py-venv-check
-	./node_modules/.bin/concurrently "flask run -h 0.0.0.0 -p 5000" "npx tailwindcss -i kalanjiyam/static/css/style.css -o kalanjiyam/static/gen/style.css --watch" "npx esbuild kalanjiyam/static/js/main.js --outfile=kalanjiyam/static/gen/main.js --bundle --watch"
+	./node_modules/.bin/concurrently "flask run -h 0.0.0.0 -p 5000" "npx tailwindcss -i kalanjiyam/static/css/style.css -o kalanjiyam/static/gen/style.css --watch" "npx esbuild kalanjiyam/static/js/main.js --outfile=kalanjiyam/static/gen/main.js --bundle --watch --loader:.woff2=file --loader:.woff=file --loader:.ttf=file --asset-names=[name]-[hash]"
 	
 # Run a local Celery instance for background tasks.
 celery: 
@@ -144,23 +144,6 @@ redis:
 # Stop Redis server.
 redis-stop:
 	redis-cli shutdown
-
-# Monitor memory usage of Celery workers and Surya OCR processes
-memory-monitor:
-	python scripts/monitor_memory.py
-
-# Stop all Celery workers (useful for memory issues)
-celery-stop:
-	python scripts/monitor_memory.py --kill-workers
-
-# Test Surya OCR GPU configuration
-test-surya-gpu:
-	python scripts/test_surya_gpu.py
-
-# List available GPUs
-list-gpus:
-	python scripts/test_surya_gpu.py --list-gpus
-
 
 # Docker commands
 # ===============================================
@@ -255,11 +238,11 @@ css-prod:
 # Run esbuild to build our JavaScript, and rebuild our JavaScript every time a
 # relevant file changes.
 js-dev:
-	npx esbuild kalanjiyam/static/js/main.js --outfile=kalanjiyam/static/gen/main.js --bundle --watch
+	npx esbuild kalanjiyam/static/js/main.js --outfile=kalanjiyam/static/gen/main.js --bundle --watch --loader:.woff2=file --loader:.woff=file --loader:.ttf=file --asset-names=[name]-[hash]
 
 # Build JS for production.
 js-prod:
-	npx esbuild kalanjiyam/static/js/main.js --outfile=kalanjiyam/static/gen/main.js --bundle --minify
+	npx esbuild kalanjiyam/static/js/main.js --outfile=kalanjiyam/static/gen/main.js --bundle --minify --loader:.woff2=file --loader:.woff=file --loader:.ttf=file --asset-names=[name]-[hash]
 
 js-test:
 	npx jest

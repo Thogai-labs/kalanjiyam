@@ -1,10 +1,12 @@
 """Views for basic site pages."""
 
-from flask import Blueprint, current_app, redirect, render_template, send_file, session, url_for
+from flask import Blueprint, abort, current_app, redirect, render_template, send_file, session, url_for
+from pathlib import Path
 
 from kalanjiyam import queries as q
 from kalanjiyam.consts import LOCALES
 from kalanjiyam.utils.assets import get_page_image_filepath
+from flask_login import current_user
 
 bp = Blueprint("site", __name__)
 
@@ -48,12 +50,46 @@ def sentry_500():
 
 @bp.route("/static/uploads/<project_slug>/pages/<page_slug>.jpg")
 def page_image(project_slug, page_slug):
-    """(Debug only) Serve an image from the filesystem.
-
-    In production, we serve images directly from nginx.
+    """Serve an image from the filesystem.
+    
+    In production, this is typically handled by nginx, but we allow
+    Flask to serve it if the file exists.
     """
-    assert current_app.debug
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+    if not q.user_can_view_project(current_user, project_):
+        abort(403)
+
     image_path = get_page_image_filepath(project_slug, page_slug)
+    
+    # Check if the image file exists
+    if not image_path.exists():
+        abort(404)
+    
+    return send_file(image_path)
+
+
+@bp.route("/static/uploads/<project_slug>/images/<filename>")
+def editor_image(project_slug, filename):
+    """Serve an image uploaded to the rich text editor.
+    
+    In production, this is typically handled by nginx, but we allow
+    Flask to serve it if the file exists.
+    """
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+    if not q.user_can_view_project(current_user, project_):
+        abort(403)
+
+    upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
+    image_path = upload_folder / "projects" / project_slug / "images" / filename
+    
+    # Check if the image file exists
+    if not image_path.exists():
+        abort(404)
+    
     return send_file(image_path)
 
 

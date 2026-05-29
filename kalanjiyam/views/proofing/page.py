@@ -5,26 +5,48 @@ The main route here is `edit`, which defines the page editor and the edit flow.
 
 from dataclasses import dataclass
 
-from flask import Blueprint, current_app, flash, render_template, send_file, request
+from flask import Blueprint, current_app, flash, render_template, send_file, request, jsonify, url_for
 from flask_babel import lazy_gettext as _l
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from werkzeug.exceptions import abort
+from werkzeug.utils import secure_filename
 from wtforms import HiddenField, RadioField, StringField
 from wtforms.validators import DataRequired
 from wtforms.widgets import TextArea
 import logging
+import uuid
+from pathlib import Path
 
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
 from kalanjiyam.enums import SitePageStatus
-from kalanjiyam.utils import google_ocr, project_utils
+from kalanjiyam.utils import project_utils
 from kalanjiyam.utils.assets import get_page_image_filepath
 from kalanjiyam.utils.diff import revision_diff
+from kalanjiyam.utils.quotas import (
+    add_storage_usage_for_project,
+    consume_ocr_credit_for_project,
+    ensure_ocr_quota_for_project,
+    ensure_storage_quota_for_user,
+)
 from kalanjiyam.utils.revisions import EditError, add_revision
 from kalanjiyam.views.api import bp as api
 
 bp = Blueprint("page", __name__)
+
+
+@bp.before_request
+def _enforce_project_access():
+    project_slug = request.view_args.get("project_slug") if request.view_args else None
+    if not project_slug:
+        return None
+    project_ = q.project(project_slug)
+    if project_ is None:
+        return None
+    if not q.user_can_view_project(current_user, project_):
+        abort(403)
+    return None
 
 
 @dataclass
@@ -168,6 +190,14 @@ def edit(project_slug, page_slug):
     image_number = cur.slug
     page_number = _get_page_number(ctx.project, cur)
 
+    from kalanjiyam.utils.ocr_client import get_available_engines
+    from kalanjiyam.utils.ocr_types import build_engine_choices
+    ocr_status = get_available_engines()
+    engine_choices = build_engine_choices(
+        ocr_status["engines"],
+        is_super_admin=current_user.is_super_admin,
+    )
+
     return render_template(
         "proofing/pages/edit.html",
         conflict=None,
@@ -182,6 +212,8 @@ def edit(project_slug, page_slug):
         translation_content=translation_content,
         translation_metadata=translation_metadata,
         available_translations=available_translations,
+        ocr_status=ocr_status["status"],
+        engine_choices=engine_choices,
     )
 
 
@@ -340,37 +372,51 @@ def ocr(project_slug, page_slug):
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
+    if not q.user_can_view_project(current_user, project_):
+        abort(403)
 
     page_ = q.page(project_.id, page_slug)
     if not page_:
         abort(404)
 
-    # Get OCR parameters from query parameters
     engine = request.args.get('engine', 'google')
     language = request.args.get('language', 'sa')
-    
-    # Decode numeric engine values to actual engine names
-    engine_map = {
-        '1': 'google',
-        '2': 'tesseract',
-        '3': 'surya'
-    }
-    if engine in engine_map:
-        engine = engine_map[engine]
-    
-    # Validate engine
-    from kalanjiyam.utils.ocr_engine import OcrEngineFactory
-    if engine not in OcrEngineFactory.get_supported_engines():
+
+    from kalanjiyam.utils.ocr_runner import normalize_engine, run_ocr
+    from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
+
+    original_engine = engine
+    engine = normalize_engine(engine)
+
+    logging.info(
+        "OCR API called with engine='%s' -> mapped to '%s', language='%s', backend='%s'",
+        original_engine,
+        engine,
+        language,
+        'remote',
+    )
+
+    if engine not in SUPPORTED_ENGINES:
         abort(400, description=f"Unsupported OCR engine: {engine}")
 
     image_path = get_page_image_filepath(project_slug, page_slug)
-    
+
     try:
-        from kalanjiyam.utils.ocr_engine import run_ocr
+        ensure_ocr_quota_for_project(project_)
         ocr_response = run_ocr(image_path, engine_name=engine, language=language)
+        consume_ocr_credit_for_project(project_)
+        logging.info("OCR completed successfully, returning %s characters", len(ocr_response.text_content))
         return ocr_response.text_content
     except Exception as e:
-        logging.error(f"OCR failed for {project_slug}/{page_slug} with engine {engine} and language {language}: {e}")
+        logging.error(
+            "OCR failed for %s/%s with engine %s and language %s: %s",
+            project_slug,
+            page_slug,
+            engine,
+            language,
+            e,
+            exc_info=True,
+        )
         abort(500, description=f"OCR failed: {str(e)}")
 
 
@@ -381,6 +427,8 @@ def translate(project_slug, page_slug):
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
+    if not q.user_can_view_project(current_user, project_):
+        abort(403)
 
     page_ = q.page(project_.id, page_slug)
     if not page_:
@@ -456,3 +504,75 @@ def translate(project_slug, page_slug):
     except Exception as e:
         logging.error(f"Translation failed for {project_slug}/{page_slug} with engine {engine}: {e}")
         abort(500, description=f"Translation failed: {str(e)}")
+
+
+@api.route("/upload-image/<project_slug>/<page_slug>/", methods=["POST"])
+@login_required
+def upload_image(project_slug, page_slug):
+    """Upload an image for the rich text editor."""
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+    if not q.user_can_view_project(current_user, project_):
+        abort(403)
+
+    page_ = q.page(project_.id, page_slug)
+    if not page_:
+        abort(404)
+
+    # Check if file was uploaded
+    if 'image' not in request.files:
+        abort(400, description="No image file provided")
+    
+    file = request.files['image']
+    if file.filename == '':
+        abort(400, description="No image file selected")
+    
+    # Validate file type
+    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
+    filename = secure_filename(file.filename)
+    if '.' not in filename:
+        abort(400, description="File must have an extension")
+    
+    file_ext = filename.rsplit('.', 1)[1].lower()
+    if file_ext not in allowed_extensions:
+        abort(400, description=f"File type '{file_ext}' not allowed. Allowed types: {', '.join(allowed_extensions)}")
+    
+    # Validate file size (max 10MB)
+    file.seek(0, 2)  # Seek to end
+    file_size = file.tell()
+    file.seek(0)  # Reset to beginning
+    max_size = 10 * 1024 * 1024  # 10MB
+    if file_size > max_size:
+        abort(400, description=f"File size ({file_size / 1024 / 1024:.2f}MB) exceeds maximum allowed size (10MB)")
+    ensure_storage_quota_for_user(current_user, file_size)
+    
+    try:
+        # Create images directory for this project
+        upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
+        images_dir = upload_folder / "projects" / project_slug / "images"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename to avoid conflicts
+        unique_id = uuid.uuid4().hex[:8]
+        safe_filename = secure_filename(filename)
+        name_without_ext = safe_filename.rsplit('.', 1)[0] if '.' in safe_filename else safe_filename
+        unique_filename = f"{name_without_ext}_{unique_id}.{file_ext}"
+        file_path = images_dir / unique_filename
+        
+        # Save file
+        file.save(str(file_path))
+        add_storage_usage_for_project(project_slug)
+        
+        # Generate URL for the image
+        # Use the site blueprint to serve images
+        image_url = url_for("site.editor_image", project_slug=project_slug, filename=unique_filename)
+        
+        return jsonify({
+            'success': True,
+            'url': image_url,
+            'filename': unique_filename
+        })
+    except Exception as e:
+        logging.error(f"Image upload failed for {project_slug}/{page_slug}: {e}")
+        abort(500, description=f"Image upload failed: {str(e)}")

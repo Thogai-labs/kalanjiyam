@@ -1,6 +1,7 @@
 """Logic for displaying a parsed TextBlock."""
 
 from flask import Blueprint, abort, render_template
+from flask_login import current_user
 
 import kalanjiyam.queries as q
 from kalanjiyam.utils import word_parses as parse_utils
@@ -16,6 +17,8 @@ def block(text_slug, block_slug):
     text = q.text_meta(text_slug)
     if text is None:
         abort(404)
+    if not q.user_can_view_text(current_user, text):
+        abort(403)
 
     block = q.block(text.id, block_slug)
     if block is None:
@@ -35,6 +38,8 @@ def block_parse_htmx(text_slug, block_slug):
     text = q.text_meta(text_slug)
     if text is None:
         abort(404)
+    if not q.user_can_view_text(current_user, text):
+        abort(403)
 
     block = q.block(text.id, block_slug)
     if block is None:

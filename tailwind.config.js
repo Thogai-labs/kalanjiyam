@@ -21,6 +21,17 @@ module.exports = {
       "w-60",
       "w-80",
   ],
+  theme: {
+    extend: {
+      colors: {
+        'peacock-primary': '#0f766e',
+        'peacock-secondary': '#0891b2',
+        'peacock-accent': '#7c3aed',
+        'peacock-emerald': '#059669',
+        'peacock-gold': '#fbbf24',
+      },
+    },
+  },
   plugins: [
     require('@tailwindcss/typography')({
       className: 'tw-prose',

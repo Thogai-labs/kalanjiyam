@@ -9,18 +9,18 @@
 {# Use wrapping div so that we can use the Tailwind "peer" class. #}
 <div>
   {{ field(class_="hidden peer") }}
-  {{ field.label(class_="block border border-teal-200 rounded-lg p-3 mr-4 text-peacock-primary hover:bg-peacock-light transition-colors " + peer_classes + " peer-checked:font-bold cursor-pointer") }}
+  {{ field.label(class_="block border border-slate-200 rounded-xl p-4 mr-2 text-slate-500 hover:bg-slate-50 transition-all font-bold text-sm " + peer_classes + " peer-checked:shadow-inner cursor-pointer text-center") }}
 </div>
 {% endmacro %}
 
 
-{% block title %}Edit: {{ project.display_title }}/{{ cur.slug }} | Kalanjiyam{% endblock %}
+{% block title %}{{ _('Edit') }}: {{ project.display_title }}/{{ cur.slug }} | Kalanjiyam{% endblock %}
 
 
 {% block main %}
-<article class="p-4">
+<article class="p-6 max-w-[1600px] mx-auto">
   {% if not current_user.is_authenticated -%}
-  {% call mc.p_warning() %}{% trans %}
+  {% call mc.div_warning() %}{% trans %}
   Since you are not logged in, some functions (such as the OCR button) have
   been disabled. To use all website features, please contact the site administrator
   to create an account.
@@ -32,9 +32,12 @@
   {{ mc.flash_messages() }}
 
   {% if conflict %}
-  <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-    <h3 class="text-red-800 font-semibold mb-2">{{ _('Conflict detected') }}</h3>
-    <pre class="text-red-700 text-sm">{{ conflict.content }}</pre>
+  <div class="bg-red-50 border border-red-200 rounded-2xl p-6 mb-8 shadow-sm">
+    <h3 class="text-red-800 font-black mb-3 flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        {{ _('Conflict detected') }}
+    </h3>
+    <pre class="text-red-700 text-sm bg-white/50 p-4 rounded-xl border border-red-100 overflow-x-auto">{{ conflict.content }}</pre>
   </div>
   {% endif %}
 
@@ -50,70 +53,75 @@
       {% endtrans %}{% endcall %}
     {% endif %}
 
-    {{ editor.menu_bar() }}
+    {{ editor.menu_bar(ocr_status=ocr_status, engine_choices=engine_choices) }}
     
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 min-h-[600px]">
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 min-h-[700px]">
       {{ editor.text_box(form.content.data or "") }}
       {{ editor.image_box(translation_content, translation_metadata, available_translations) }}
     </div>
 
-    <div class="mt-8 bg-white border border-teal-200 rounded-lg p-6 peacock-shadow">
-      <div class="mb-6">
-        <label class="block text-sm font-medium text-peacock-primary mb-2">{{ form.summary.label.text }}</label>
-        {{ form.summary(class_="block rounded-lg bg-white w-full p-3 border border-teal-200 focus:border-peacock-primary focus:ring-2 focus:ring-peacock-light",
-            placeholder=_("Fixed various OCR errors")) }}
+    <div class="mt-10 bg-white border border-slate-100 rounded-3xl p-8 shadow-sm">
+      <div class="grid md:grid-cols-2 gap-10">
+          <div>
+            <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">{{ form.summary.label.text }}</label>
+            {{ form.summary(class_="block rounded-2xl bg-slate-50 w-full p-4 border border-slate-100 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-medium",
+                placeholder=_("Fixed various OCR errors")) }}
+          </div>
+
+          <div>
+            <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">{{ form.status.label.text }}</label>
+            {% set radios = form.status|list %}
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {{ _status(radios[0],
+              "peer-checked:bg-red-400 peer-checked:text-white peer-checked:border-red-500") }}
+              {{ _status(radios[1],
+              "peer-checked:bg-yellow-400 peer-checked:text-white peer-checked:border-yellow-500") }}
+              {% if not is_r0 %}
+              {{ _status(radios[2],
+              "peer-checked:bg-emerald-400 peer-checked:text-white peer-checked:border-emerald-500") }}
+              {% endif %}
+              {{ _status(radios[3],
+              "peer-checked:bg-slate-400 peer-checked:text-white peer-checked:border-slate-500") }}
+            </div>
+          </div>
       </div>
 
-      <div class="mb-6">
-        <label class="block text-sm font-medium text-peacock-primary mb-3">{{ form.status.label.text }}</label>
-        {% set radios = form.status|list %}
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {{ _status(radios[0],
-          "peer-checked:bg-red-100 peer-checked:text-red-800 peer-checked:border-red-300") }}
-          {{ _status(radios[1],
-          "peer-checked:bg-yellow-100 peer-checked:text-yellow-800 peer-checked:border-yellow-300") }}
-          {% if not is_r0 %}
-          {{ _status(radios[2],
-          "peer-checked:bg-emerald-100 peer-checked:text-emerald-800 peer-checked:border-emerald-300") }}
+      <div class="mt-10 pt-10 border-t border-slate-50 flex flex-col md:flex-row items-center justify-between gap-6">
+          {% if current_user.is_authenticated %}
+          {% set cc0 = "https://creativecommons.org/publicdomain/zero/1.0/" %}
+          <div class="max-w-md">
+            <p class="text-sm text-slate-400 font-medium">{% trans %}
+            By saving your changes, you agree to release your contribution under the
+            <a class="text-royalblue font-bold hover:underline" href="{{ cc0 }}">CC0 (public domain) license</a>.
+            {% endtrans %}</p>
+          </div>
+
+          <div class="flex items-center gap-6">
+            <div class="flex flex-col items-end">
+                <button class="btn-premium px-12 py-4 text-xl rounded-2xl"
+                        type="submit"
+                        @click="syncContentBeforeSubmit()">
+                  {{ _('Publish changes') }}
+                </button>
+                <span class="text-xs font-black text-amber-500 uppercase tracking-widest mt-2 animate-pulse" x-show="hasUnsavedChanges">
+                  {{ _('Unsaved changes') }}
+                </span>
+            </div>
+          </div>
           {% endif %}
-          {{ _status(radios[3],
-          "peer-checked:bg-slate-100 peer-checked:text-slate-800 peer-checked:border-slate-300") }}
-        </div>
       </div>
-
-      {% if current_user.is_authenticated %}
-      {% set cc0 = "https://creativecommons.org/publicdomain/zero/1.0/" %}
-      <div class="mb-6 p-4 bg-peacock-subtle rounded-lg">
-        <p class="text-sm text-peacock-secondary">{% trans %}
-        By saving your changes, you agree to release your contribution under the
-        <a class="underline" href="{{ cc0 }}">CC0 (public domain) license</a>.
-        {% endtrans %}</p>
-      </div>
-
-      <div class="flex items-center gap-4">
-        <button class="btn btn-submit flex items-center gap-2"
-                type="submit"
-                @click="hasUnsavedChanges = false">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-          </svg>
-          {{ _('Publish changes') }}
-        </button>
-        <span class="text-sm text-peacock-secondary" x-show="hasUnsavedChanges">
-          {{ _('You have unsaved changes') }}
-        </span>
-      </div>
-      {% endif %}
     </div>
   </form>
 
   {% if not current_user.is_authenticated %}
   {% set log_in = url_for("auth.sign_in") %}
-  {% call mc.p_warning() %}
-  Only registered users can save changes. Contact the site administrator to create an
-      account or <a href="{{ log_in }}">sign in</a> to save your
-  changes.
-  {% endcall %}
+  <div class="mt-8">
+      {% call mc.div_warning() %}
+      Only registered users can save changes. Contact the site administrator to create an
+          account or <a href="{{ log_in }}" class="font-bold underline">sign in</a> to save your
+      changes.
+      {% endcall %}
+  </div>
   {% endif %}
 </article>
 

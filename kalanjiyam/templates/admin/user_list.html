@@ -1,0 +1,13 @@
+{% extends 'admin/model/list.html' %}
+{% import 'macros/admin.html' as admin %}
+
+{% block title %}{{ _('Users') }} | {{ _('Admin') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('users', current_user) }}
+{% endblock %}
+
+{% block content %}
+{{ admin.page_header(_('Users'), _('Manage platform accounts, organizations, and roles.')) }}
+{{ super() }}
+{% endblock %}

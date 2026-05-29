@@ -1,132 +1,75 @@
-ARG BUILD_TYPE=release
-
-## 1. Build the base image. This build is a rare event.
-FROM python:3.10.10-slim-buster as base
+## 1. Base image
+FROM python:3.11-slim-bookworm AS base
 ENV PYTHONFAULTHANDLER=1 \
     PYTHONHASHSEED=random \
     PYTHONUNBUFFERED=1
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends curl && curl -sL https://deb.nodesource.com/setup_16.x | bash -
-RUN apt-get install -y --no-install-recommends nodejs && apt-get remove -y curl && rm -rf /var/lib/apt/lists/* && echo "************* Base image build succeeded! *****************"
 
-# ####################################
-## 2.1 bring build tools for dev #####
-# ####################################
+# Install Node.js (for frontend build) and uv
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
+    curl -sL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    apt-get remove -y curl && rm -rf /var/lib/apt/lists/*
+ENV PATH="/root/.local/bin:$PATH"
 
-FROM base as build-py-dev
+## 2. Python dependencies
+FROM base AS build-py
 
-# Setup build environment
-ENV PYTHONFAULTHANDLER=1 \
-  PYTHONUNBUFFERED=1 \
-  PYTHONHASHSEED=random \
-  PIP_NO_CACHE_DIR=1 \
-  PIP_DISABLE_PIP_VERSION_CHECK=1 \
-  PIP_DEFAULT_TIMEOUT=100 \
-  POETRY_VERSION=1.4.1
+RUN apt-get update && apt-get install -y --no-install-recommends gcc python3-dev build-essential && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install all dependencies. Python venv 
-RUN pip install "poetry==$POETRY_VERSION"
-RUN apt-get update && apt-get install -y --no-install-recommends make gcc python3-dev && apt-get install -y --reinstall build-essential && python -m venv /venv
-COPY pyproject.toml poetry.lock ./
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 
-RUN poetry export --without-hashes --dev -f requirements.txt | /venv/bin/pip install -r /dev/stdin && echo "************* Python dev dependencies build succeeded! *****************"
+## 3. Frontend assets
+FROM base AS build-js
 
-# ####################################
-## 2.2 bring build tools for release
-# ####################################
-
-FROM base as build-py-release
-
-# Setup build environment
-ENV PYTHONFAULTHANDLER=1 \
-  PYTHONUNBUFFERED=1 \
-  PYTHONHASHSEED=random \
-  PIP_NO_CACHE_DIR=1 \
-  PIP_DISABLE_PIP_VERSION_CHECK=1 \
-  PIP_DEFAULT_TIMEOUT=100 \
-  POETRY_VERSION=1.4.1
-
-# Install all dependencies. Python venv 
-RUN pip install "poetry==$POETRY_VERSION"
-RUN apt-get update && apt-get install -y --no-install-recommends make gcc python3-dev && apt-get install -y --reinstall build-essential && python -m venv /venv
-
-# setup python config and install
-COPY pyproject.toml poetry.lock ./
-RUN poetry export --without-hashes -f requirements.txt | /venv/bin/pip install -r /dev/stdin 
-
-# ####################################
-## 3.1 bring js dependencies and code
-# ####################################
-
-FROM base as build-js-release
-
-WORKDIR /app
-
-# Install Node dependencies to /app/node_modules/
 COPY package.json package-lock.json tailwind.config.js /app/
 RUN npm ci
 
-# Copy source to temporary directory. This stage is a disposal layer. Removing /tmp/kalanjiyam is non-issue
 COPY ./kalanjiyam/ /app/kalanjiyam/
 
-# Copy css
-RUN npx tailwindcss -i /app/kalanjiyam/static/css/style.css -o /app/kalanjiyam/static/gen/style.css --minify
+RUN npx tailwindcss -i /app/kalanjiyam/static/css/style.css \
+      -o /app/kalanjiyam/static/gen/style.css --minify
 
-# Copy js
-RUN npx esbuild /app/kalanjiyam/static/js/main.js --outfile=/app/kalanjiyam/static/gen/main.js --bundle --minify
+RUN npx esbuild /app/kalanjiyam/static/js/main.js \
+      --outfile=/app/kalanjiyam/static/gen/main.js \
+      --bundle --minify \
+      --loader:.woff2=file --loader:.woff=file --loader:.ttf=file \
+      --asset-names=[name]-[hash]
 
-RUN echo "************* JS code build succeeded! *****************"
+## 4. App assembly
+FROM base AS build-app
 
-# ####################################
-## 4. Copy Kalanjiyam codes
-# ####################################
+RUN apt-get update && apt-get install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/*
 
-FROM base as build-kalanjiyam 
+COPY --from=build-py /app/.venv /app/.venv
+COPY --from=build-js /app /app
 
-ARG BUILD_TYPE=release
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH="/app"
 
-RUN echo "************* Building FINAL ${BUILD_TYPE} *****************"
-COPY --from=build-py-release /venv /venv
-COPY --from=build-js-release /app /app
+# i18n (non-fatal: runs in English if repo unavailable)
+RUN python /app/kalanjiyam/scripts/fetch_i18n_files.py && \
+    pybabel compile -d /app/kalanjiyam/translations -f || \
+    echo "WARNING: i18n fetch failed, running in English only"
 
-# Setup build environment
-ENV PYTHONFAULTHANDLER=1 \
-  PYTHONUNBUFFERED=1 \
-  PYTHONHASHSEED=random \
-  PIP_NO_CACHE_DIR=1 \
-  PIP_DISABLE_PIP_VERSION_CHECK=1 \
-  PIP_DEFAULT_TIMEOUT=100 \
-  POETRY_VERSION=1.4.1 \
-  PYTHONPATH=${PYTHONPATH}:/app/
+COPY config.py wsgi.py alembic.ini ./
+COPY migrations/ ./migrations/
+COPY scripts/ ./scripts/
+COPY cli.py ./scripts/
 
+## 5. Final image
+FROM python:3.11-slim-bookworm AS final
 
-# Install all dependencies. Python venv 
-RUN apt-get update && apt-get install -y --no-install-recommends git
-
-### TODO: Move Translations to the bottom image
-# Install all i18n files
-RUN . /venv/bin/activate && python /app/kalanjiyam/scripts/fetch_i18n_files.py && pybabel compile -d /app/kalanjiyam/translations -f
-
-# specific files
-COPY config.py /app/
-COPY wsgi.py /app/
-COPY alembic.ini /app/
-COPY migrations/ /app/migrations/
-COPY scripts/ /app/scripts/
-COPY cli.py /app/scripts/
-RUN echo "************* Kalanjiyam application build succeeded! ****************"
-
-# ####################################
-## 5. Finalize the image
-# ####################################
-
-FROM base as final
-
-ARG BUILD_TYPE=release
 WORKDIR /app
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
+    PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH="/app"
 
-RUN echo "************* Building FINAL ${BUILD_TYPE}*****************"
-COPY --from=build-kalanjiyam /venv /venv
-COPY --from=build-kalanjiyam /app /app
-CMD ["/app/scripts/start_server.sh"]
-RUN echo "************* Kalanjiyam deploy succeeded! *****************"
+COPY --from=build-app /app /app
+RUN chmod +x /app/scripts/start_server_prod.sh
+CMD ["/app/scripts/start_server_prod.sh"]

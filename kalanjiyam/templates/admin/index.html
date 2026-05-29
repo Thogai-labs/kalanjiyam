@@ -1,5 +1,12 @@
 {% extends "admin/master.html" %}
+{% import 'macros/admin.html' as admin %}
 
-{% block body %}
-<p>Choose a model from the navigation bar above.</p>
+{% block admin_sidebar %}
+{{ admin.nav('platform', current_user) }}
+{% endblock %}
+
+{% block content %}
+<div class="premium-card p-8 text-center">
+  <p class="text-slate-600 font-medium">{{ _('Choose a section from the sidebar, or open the legacy model editor below.') }}</p>
+</div>
 {% endblock %}

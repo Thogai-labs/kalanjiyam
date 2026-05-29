@@ -9,8 +9,9 @@ from kalanjiyam import database as db
 from kalanjiyam import queries as q
 from kalanjiyam.enums import SitePageStatus
 from kalanjiyam.tasks import app
-from kalanjiyam.utils import google_ocr
+from kalanjiyam.utils.ocr_types import serialize_bounding_boxes
 from kalanjiyam.utils.assets import get_page_image_filepath
+from kalanjiyam.utils.quotas import consume_ocr_credit_for_project, ensure_ocr_quota_for_project
 from kalanjiyam.utils.revisions import add_revision
 from config import create_config_only_app
 from typing import Optional, List
@@ -25,14 +26,6 @@ def _run_ocr_for_page_inner(
     engine: str = 'google',
     language: str = 'sa',
 ) -> int:
-    # Decode numeric engine values to actual engine names
-    engine_map = {
-        '1': 'google',
-        '2': 'tesseract',
-        '3': 'surya'
-    }
-    if engine in engine_map:
-        engine = engine_map[engine]
     """Must run in the application context."""
 
     flask_app = create_config_only_app(app_env)
@@ -44,47 +37,31 @@ def _run_ocr_for_page_inner(
         # The actual API call.
         image_path = get_page_image_filepath(project_slug, page_slug)
         
-        from kalanjiyam.utils.ocr_engine import run_ocr
-        
-        # Get GPU configuration for Surya OCR
-        gpu_config = None
-        if engine == 'surya':
-            from kalanjiyam.utils.surya_gpu_config import get_gpu_config_from_env
-            gpu_config = get_gpu_config_from_env()
-        
-        ocr_response = run_ocr(image_path, engine_name=engine, language=language, gpu_config=gpu_config)
+        from kalanjiyam.utils.ocr_runner import normalize_engine, run_ocr
+
+        engine = normalize_engine(engine)
+        ocr_response = run_ocr(image_path, engine_name=engine, language=language)
 
         session = q.get_session()
         project = q.project(project_slug)
         if project is None:
             raise ValueError(f'Project "{project_slug}" not found.')
+        ensure_ocr_quota_for_project(project)
         
         page = q.page(project.id, page_slug)
         if page is None:
             raise ValueError(f'Page "{page_slug}" not found in project "{project_slug}".')
 
-        # Use the appropriate serialize function based on engine
-        if engine == 'google':
-            page.ocr_bounding_boxes = google_ocr.serialize_bounding_boxes(
-                ocr_response.bounding_boxes
-            )
-        elif engine == 'surya':
-            from kalanjiyam.utils.surya_ocr import serialize_bounding_boxes
-            page.ocr_bounding_boxes = serialize_bounding_boxes(
-                ocr_response.bounding_boxes
-            )
-        else:
-            from kalanjiyam.utils.tesseract_ocr import serialize_bounding_boxes
-            page.ocr_bounding_boxes = serialize_bounding_boxes(
-                ocr_response.bounding_boxes
-            )
+        page.ocr_bounding_boxes = serialize_bounding_boxes(
+            engine, ocr_response.bounding_boxes
+        )
         
         session.add(page)
         session.commit()
 
         summary = f"Run OCR ({engine}, {language})"
         try:
-            return add_revision(
+            revision_id = add_revision(
                 page=page,
                 summary=summary,
                 content=ocr_response.text_content,
@@ -92,6 +69,8 @@ def _run_ocr_for_page_inner(
                 version=0,
                 author_id=bot_user.id,
             )
+            consume_ocr_credit_for_project(project)
+            return revision_id
         except Exception as e:
             raise ValueError(
                 f'OCR failed for page "{project.slug}/{page.slug}" with engine {engine} and language {language}.'

@@ -1,0 +1,84 @@
+{% extends 'admin/master.html' %}
+{% import 'macros/admin.html' as admin %}
+
+{% block title %}{{ _('Organizations') }} | {{ _('Admin') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('organizations', current_user) }}
+{% endblock %}
+
+{% block content %}
+{{ admin.page_header(_('Organizations'), _('Create organizations, set quotas, and assign users and books.')) }}
+
+<div class="mb-6">
+  {{ admin.btn_primary(_('Create organization'), href=url_for('groups_view.create')) }}
+</div>
+
+{% if groups %}
+<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
+  <div class="overflow-x-auto rounded-xl border border-slate-100">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+        <tr>
+          <th class="px-4 py-3">{{ _('Name') }}</th>
+          <th class="px-4 py-3">{{ _('Description') }}</th>
+          <th class="px-4 py-3">{{ _('Users') }}</th>
+          <th class="px-4 py-3">{{ _('Books') }}</th>
+          <th class="px-4 py-3">{{ _('Storage') }}</th>
+          <th class="px-4 py-3">{{ _('OCR') }}</th>
+          <th class="px-4 py-3">{{ _('Actions') }}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for g in groups %}
+        <tr class="hover:bg-slate-50/80 transition-colors">
+          <td class="px-4 py-3 font-semibold text-slate-900">{{ g.name }}</td>
+          <td class="px-4 py-3 text-slate-500 max-w-xs truncate">{{ g.description[:80] }}{% if g.description|length > 80 %}…{% endif %}</td>
+          <td class="px-4 py-3 text-slate-600">{{ g.users|length }}</td>
+          <td class="px-4 py-3 text-slate-600">{{ g.texts|length }}</td>
+          <td class="px-4 py-3 text-slate-600 text-xs whitespace-nowrap">
+            {{ ((g.storage_used_bytes or 0) // (1024 * 1024)) }}MB /
+            {{ (g.storage_quota_bytes // (1024 * 1024)) if g.storage_quota_bytes is not none else "∞" }}
+          </td>
+          <td class="px-4 py-3 text-slate-600 text-xs whitespace-nowrap">
+            {{ g.ocr_credits_used or 0 }} /
+            {{ g.ocr_credit_limit if g.ocr_credit_limit is not none else "∞" }}
+          </td>
+          <td class="px-4 py-3 whitespace-nowrap">
+            <span class="inline-flex items-center gap-3">
+              {{ admin.link_action(_('Manage'), url_for('groups_view.manage', id=g.id)) }}
+              {{ admin.link_action(_('Edit'), url_for('groups_view.edit', id=g.id)) }}
+              <form method="post" action="{{ url_for('groups_view.delete', id=g.id) }}" class="inline"
+                    onsubmit="return confirm('{{ _('Delete this organization?') }}');">
+                {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+                {{ admin.btn_danger(_('Delete')) }}
+              </form>
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if num_pages > 1 %}
+  <div class="mt-6 flex items-center justify-between text-sm">
+    <span class="text-slate-500 font-medium">{{ _('Page') }} {{ page }} {{ _('of') }} {{ num_pages }} ({{ total }} {{ _('organizations') }})</span>
+    <div class="flex gap-2">
+      {% if page > 1 %}
+      <a href="{{ url_for('groups_view.index', page=page - 1) }}" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 transition-colors">{{ _('Previous') }}</a>
+      {% endif %}
+      {% if page < num_pages %}
+      <a href="{{ url_for('groups_view.index', page=page + 1) }}" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 transition-colors">{{ _('Next') }}</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% else %}
+<div class="premium-card p-10 text-center">
+  <p class="text-slate-500 font-medium mb-4">{{ _('No organizations yet.') }}</p>
+  {{ admin.btn_primary(_('Create your first organization'), href=url_for('groups_view.create')) }}
+</div>
+{% endif %}
+{% endblock %}

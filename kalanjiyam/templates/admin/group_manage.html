@@ -1,0 +1,142 @@
+{% extends 'admin/master.html' %}
+{% import 'macros/admin.html' as admin %}
+
+{% block title %}{{ group.name }} | {{ _('Admin') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('organizations', current_user) }}
+{% endblock %}
+
+{% block content %}
+<header class="mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+  <div>
+    <h1 class="text-3xl font-extrabold text-slate-900 flex items-center">
+      <span class="pulse-indicator"></span>
+      {{ group.name }}
+    </h1>
+    {% if group.description %}
+    <p class="text-slate-500 mt-2 font-medium ml-6">{{ group.description }}</p>
+    {% endif %}
+    <p class="text-xs font-mono text-slate-400 mt-1 ml-6">{{ group.slug }}</p>
+  </div>
+  <div class="flex flex-wrap gap-2 shrink-0">
+    {{ admin.btn_secondary(_('Edit'), href=url_for('groups_view.edit', id=group.id)) }}
+    {{ admin.btn_secondary(_('All organizations'), href=url_for('groups_view.index')) }}
+  </div>
+</header>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
+    <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Users') }}</h2>
+    <form method="post" action="{{ url_for('groups_view.manage', id=group.id) }}" class="mb-5 flex flex-col sm:flex-row gap-2">
+      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+      <input type="hidden" name="action" value="add_user">
+      <select name="user_id" class="{{ admin.select_class() }} flex-1" required>
+        <option value="">{{ _('Select a user…') }}</option>
+        {% for u in all_users %}
+        {% if u.id not in users_in_group_ids %}
+        <option value="{{ u.id }}">{{ u.username }} ({{ u.email }})</option>
+        {% endif %}
+        {% endfor %}
+      </select>
+      {{ admin.btn_primary(_('Add user'), type='submit') }}
+    </form>
+    {% if users %}
+    <ul class="divide-y divide-slate-100">
+      {% for u in users %}
+      <li class="py-3 flex justify-between items-center gap-4">
+        <span class="font-medium text-slate-900">{{ u.username }}
+          <span class="text-sm text-slate-400 font-normal">({{ u.email }})</span>
+        </span>
+        <form method="post" action="{{ url_for('groups_view.manage', id=group.id) }}" class="shrink-0">
+          {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+          <input type="hidden" name="action" value="remove_user">
+          <input type="hidden" name="user_id" value="{{ u.id }}">
+          {{ admin.btn_danger(_('Remove')) }}
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-slate-400 font-medium text-sm">{{ _('No users in this organization yet.') }}</p>
+    {% endif %}
+  </div>
+
+  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
+    <h2 class="text-lg font-bold text-slate-900 mb-2">{{ _('Books') }}</h2>
+    <p class="text-sm text-slate-500 mb-4">{{ _('Org admins can publish books to') }} <span class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">/books/</span>{{ _('. Super admins can toggle visibility here too.') }}</p>
+    <form method="post" action="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page, texts_page=texts_page) }}"
+          class="mb-5 flex flex-col sm:flex-row gap-2">
+      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+      <input type="hidden" name="action" value="add_project">
+      <input type="hidden" name="projects_page" value="{{ projects_page }}">
+      <input type="hidden" name="texts_page" value="{{ texts_page }}">
+      <select name="project_id" class="{{ admin.select_class() }} flex-1" required>
+        <option value="">{{ _('Select a project…') }}</option>
+        {% for p in all_projects %}
+        {% if p.id not in projects_in_group_ids %}
+        <option value="{{ p.id }}">{{ p.slug }} — {{ p.display_title[:60] }}{% if p.display_title|length > 60 %}…{% endif %}</option>
+        {% endif %}
+        {% endfor %}
+      </select>
+      {{ admin.btn_primary(_('Add book'), type='submit') }}
+    </form>
+
+    {% if projects %}
+    <ul class="divide-y divide-slate-100">
+      {% for p in projects %}
+      <li class="py-3 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+        <div class="text-sm text-slate-800">
+          <span class="font-mono text-xs text-royalblue">{{ p.slug }}</span>
+          <span class="text-slate-400 mx-1">—</span>
+          {{ p.display_title[:70] }}{% if p.display_title|length > 70 %}…{% endif %}
+          {% if p.is_publicly_viewable %}
+          <span class="ml-2 text-xs font-bold uppercase text-emerald-700">{{ _('Public') }}</span>
+          {% endif %}
+        </div>
+        <div class="flex flex-wrap gap-2 shrink-0">
+          <form method="post" action="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page, texts_page=texts_page) }}">
+            {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+            <input type="hidden" name="action" value="set_project_public">
+            <input type="hidden" name="project_id" value="{{ p.id }}">
+            <input type="hidden" name="is_public" value="{{ '0' if p.is_publicly_viewable else '1' }}">
+            <input type="hidden" name="projects_page" value="{{ projects_page }}">
+            {% if p.is_publicly_viewable %}
+            {{ admin.btn_secondary(_('Make private'), type='submit') }}
+            {% else %}
+            {{ admin.btn_primary(_('Make public'), type='submit') }}
+            {% endif %}
+          </form>
+          <form method="post" action="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page, texts_page=texts_page) }}">
+            {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+            <input type="hidden" name="action" value="remove_project">
+            <input type="hidden" name="project_id" value="{{ p.id }}">
+            <input type="hidden" name="projects_page" value="{{ projects_page }}">
+            <input type="hidden" name="texts_page" value="{{ texts_page }}">
+            {{ admin.btn_danger(_('Remove')) }}
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% if projects_num_pages > 1 %}
+    <div class="mt-4 flex items-center justify-between text-sm">
+      <span class="text-slate-500">{{ _('Page') }} {{ projects_page }} / {{ projects_num_pages }}</span>
+      <div class="flex gap-2">
+        {% if projects_page > 1 %}
+        <a href="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page - 1, texts_page=texts_page) }}"
+           class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 text-xs">{{ _('Previous') }}</a>
+        {% endif %}
+        {% if projects_page < projects_num_pages %}
+        <a href="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page + 1, texts_page=texts_page) }}"
+           class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 text-xs">{{ _('Next') }}</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+    {% else %}
+    <p class="text-slate-400 font-medium text-sm">{{ _('No books assigned yet.') }}</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

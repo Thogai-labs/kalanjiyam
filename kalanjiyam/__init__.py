@@ -11,7 +11,9 @@ import sys
 import sentry_sdk
 from dotenv import load_dotenv
 from flask import Flask, session
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_babel import Babel, pgettext
+from flask_wtf.csrf import generate_csrf
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sqlalchemy import exc
 
@@ -32,7 +34,6 @@ from kalanjiyam.views.dictionaries import bp as dictionaries
 from kalanjiyam.views.proofing import bp as proofing
 from kalanjiyam.views.public import bp as public
 from kalanjiyam.views.reader.parses import bp as parses
-from kalanjiyam.views.reader.texts import bp as texts
 from kalanjiyam.views.site import bp as site
 
 
@@ -95,7 +96,11 @@ def create_app(config_env: str):
     if config_env == config.PRODUCTION:
         _initialize_sentry(config_spec.SENTRY_DSN)
 
-    app = Flask(__name__)
+    url_prefix = config_spec.APPLICATION_URL_PREFIX
+    app = Flask(__name__, static_url_path=f"{url_prefix}/static")
+
+    # Trust one proxy hop (Nginx) for HTTPS scheme and real client IP.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     # Config
     app.config.from_object(config_spec)
@@ -119,6 +124,10 @@ def create_app(config_env: str):
     # Extensions
     Babel(app, locale_selector=get_locale)
 
+    @app.context_processor
+    def inject_csrf_token():
+        return dict(csrf_token=generate_csrf())
+
     login_manager = auth_manager.create_login_manager()
     login_manager.init_app(app)
 
@@ -131,7 +140,6 @@ def create_app(config_env: str):
     app.url_map.converters["list"] = ListConverter
 
     # Blueprints
-    url_prefix = config_spec.APPLICATION_URL_PREFIX
     app.register_blueprint(about, url_prefix=f"{url_prefix}/about")
     app.register_blueprint(api, url_prefix=f"{url_prefix}/api")
     app.register_blueprint(auth, url_prefix=url_prefix)
@@ -141,7 +149,6 @@ def create_app(config_env: str):
     app.register_blueprint(proofing, url_prefix=f"{url_prefix}/proofing")
     app.register_blueprint(public, url_prefix=f"{url_prefix}/books")
     app.register_blueprint(site, url_prefix=url_prefix)
-    app.register_blueprint(texts, url_prefix=f"{url_prefix}/texts")
     
     # Admin functionality is now integrated into the main Flask-Admin interface
 

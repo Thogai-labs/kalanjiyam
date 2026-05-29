@@ -1,67 +1,84 @@
 {% import 'macros/components.html' as components %}
 
 {% macro progress_bar(percent) %}
-<div class="my-4 rounded w-full bg-slate-100 h-4">
-  <div class="rounded bg-green-300 h-4" style="width: {{ percent }}%">&nbsp;</div>
+<div class="my-6 rounded-full w-full bg-slate-100 h-3 overflow-hidden border border-slate-50">
+  <div class="rounded-full bg-emerald-400 h-full transition-all duration-700 shadow-sm shadow-emerald-200" style="width: {{ percent }}%"></div>
 </div>
 {% endmacro %}
 
 {# kwargs: current, total, percent, active_tasks, pending_tasks, failed_tasks, engine, language #}
 {% if status == 'FAILURE' %}
-  {% call components.div_warning() %}
-  <p class="!mb-0">We weren't able to complete OCR on this project using {{ engine }} engine with {{ language }} language. If you
-  believe this is an error, please <a href="{{ url_for('about.contact') }}">let
-  us know</a> and we'll fix the error as soon as we can.
-  {% endcall %}
+  <div class="premium-card p-6 border-l-4 border-l-red-500 bg-red-50/30">
+      <h3 class="text-red-800 font-black mb-2 flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          {{ _('OCR Failed') }}
+      </h3>
+      <p class="text-sm text-red-700 font-medium leading-relaxed">We weren't able to complete OCR on this project using {{ engine }} engine with {{ language }} language. If you
+      believe this is an error, please <a href="{{ url_for('about.contact') }}" class="underline font-bold">let
+      us know</a> and we'll fix the error as soon as we can.
+  </div>
 
 {% elif status == 'PROGRESS' %}
-  <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
-    <p class="text-sm text-blue-800">
-      <strong>Engine:</strong> {{ engine|title }} OCR | 
-      <strong>Language:</strong> {{ language|upper }}
-    </p>
+  <div class="premium-card p-6">
+      <div class="flex justify-between items-center mb-6">
+          <div>
+              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Current Engine</span>
+              <span class="px-3 py-1 bg-royalblue/10 text-royalblue rounded-lg font-bold text-xs">{{ engine|title }} OCR</span>
+          </div>
+          <div class="text-right">
+              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Language</span>
+              <span class="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-bold text-xs">{{ language|upper }}</span>
+          </div>
+      </div>
+
+      {{ progress_bar(percent) }}
+      
+      <div class="flex justify-between items-end">
+          <p class="text-slate-500 font-medium">Processed <span class="text-slate-900 font-black">{{ current }}</span> of <span class="text-slate-900 font-black">{{ total }}</span> pages.</p>
+          <span class="text-2xl font-black text-royalblue">{{ percent|round|int }}%</span>
+      </div>
+
+      {% if active_tasks > 0 or pending_tasks > 0 %}
+      <div class="mt-6 pt-6 border-t border-slate-50 flex gap-6">
+          {% if active_tasks > 0 %}
+          <div class="flex items-center gap-2">
+              <div class="w-2 h-2 rounded-full bg-royalblue animate-pulse"></div>
+              <span class="text-xs font-bold text-slate-600">{{ active_tasks }} processing</span>
+          </div>
+          {% endif %}
+          {% if pending_tasks > 0 %}
+          <div class="flex items-center gap-2">
+              <div class="w-2 h-2 rounded-full bg-amber-400"></div>
+              <span class="text-xs font-bold text-slate-600">{{ pending_tasks }} queued</span>
+          </div>
+          {% endif %}
+      </div>
+      {% endif %}
   </div>
-  {{ progress_bar(percent) }}
-  <p>Processed {{ current }} of {{ total }} unedited pages.</p>
-  
-  {% if active_tasks > 0 %}
-    <p class="text-sm text-gray-600">
-      <strong>{{ active_tasks }}</strong> pages currently being processed
-      {% if pending_tasks > 0 %}
-        • <strong>{{ pending_tasks }}</strong> pages waiting in queue
-      {% endif %}
-    </p>
-  {% elif current == 0 %}
-    <p class="text-sm text-gray-600">
-      OCR is starting up... This may take a few minutes for the first pages to complete.
-      {% if pending_tasks > 0 %}
-        <strong>{{ pending_tasks }}</strong> pages in queue.
-      {% endif %}
-    </p>
-  {% endif %}
 
 {% elif status == 'SUCCESS' %}
-  <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded">
-    <p class="text-sm text-green-800">
-      <strong>Engine:</strong> {{ engine|title }} OCR | 
-      <strong>Language:</strong> {{ language|upper }}
-    </p>
+  <div class="premium-card p-6 border-l-4 border-l-emerald-500">
+      <div class="flex items-center gap-4 mb-4">
+          <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+          </div>
+          <div>
+              <h3 class="text-lg font-black text-slate-900">{{ _('OCR Complete') }}</h3>
+              <p class="text-xs text-slate-500 font-medium">{{ engine|title }} OCR • {{ language|upper }}</p>
+          </div>
+      </div>
+      {{ progress_bar(100) }}
+      <p class="text-slate-500 font-medium text-sm">Successfully processed {{ current }} unedited pages.</p>
   </div>
-  {{ progress_bar(100) }}
-  <p>Done. (Processed {{ current }} of {{ total }} unedited pages.)</p>
 
 {% else %}
-  <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
-    <p class="text-sm text-blue-800">
-      <strong>Engine:</strong> {{ engine|title }} OCR | 
-      <strong>Language:</strong> {{ language|upper }}
-    </p>
+  <div class="premium-card p-8 text-center">
+      <div class="pulse-indicator mb-4 mx-auto"></div>
+      <h3 class="text-xl font-black text-slate-900 mb-2">{{ _('Initializing OCR') }}</h3>
+      <p class="text-slate-500 font-medium mb-6">Setting up the pipeline for {{ engine|title }} OCR...</p>
+      {{ progress_bar(0) }}
+      {% if pending_tasks > 0 %}
+      <p class="text-xs font-black text-amber-500 uppercase tracking-widest mt-4">{{ pending_tasks }} pages waiting in queue</p>
+      {% endif %}
   </div>
-  {{ progress_bar(0) }}
-  <p>Beginning OCR &hellip;</p>
-  {% if pending_tasks > 0 %}
-    <p class="text-sm text-gray-600">
-      <strong>{{ pending_tasks }}</strong> pages queued for processing.
-    </p>
-  {% endif %}
 {% endif %}

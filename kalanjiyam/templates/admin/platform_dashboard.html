@@ -1,0 +1,67 @@
+{% extends 'admin/master.html' %}
+{% import 'macros/admin.html' as admin %}
+
+{% block title %}{{ _('Platform') }} | {{ _('Admin') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('platform', current_user) }}
+{% endblock %}
+
+{% block content %}
+{{ admin.page_header(_('Platform overview'), _('Organizations, quotas, and global export/import.')) }}
+
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+  {{ admin.stat_card(_('Organizations'), org_count) }}
+  {{ admin.stat_card(_('Storage used (all orgs)'), (total_storage_used // (1024 * 1024)) ~ ' MB') }}
+  {{ admin.stat_card(_('OCR credits used'), total_ocr_used) }}
+</div>
+
+<div class="flex flex-wrap gap-3 mb-8">
+  {{ admin.btn_primary(_('Manage organizations'), href=url_for('groups_view.index')) }}
+  {{ admin.btn_secondary(_('Export / import'), href=url_for('admin.export_import_dashboard')) }}
+</div>
+
+<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
+  <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Organizations') }}</h2>
+  <div class="overflow-x-auto rounded-xl border border-slate-100">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+        <tr>
+          <th class="px-4 py-3">{{ _('Name') }}</th>
+          <th class="px-4 py-3">{{ _('Slug') }}</th>
+          <th class="px-4 py-3">{{ _('Storage') }}</th>
+          <th class="px-4 py-3">{{ _('OCR credits') }}</th>
+          <th class="px-4 py-3">{{ _('Active') }}</th>
+          <th class="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for org in orgs %}
+        <tr class="hover:bg-slate-50/80 transition-colors">
+          <td class="px-4 py-3 font-semibold text-slate-900">{{ org.name }}</td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-500">{{ org.slug }}</td>
+          <td class="px-4 py-3 text-slate-600">
+            {{ ((org.storage_used_bytes or 0) // (1024 * 1024)) }}MB /
+            {{ (org.storage_quota_bytes // (1024 * 1024)) if org.storage_quota_bytes is not none else "∞" }}
+          </td>
+          <td class="px-4 py-3 text-slate-600">
+            {{ org.ocr_credits_used or 0 }} /
+            {{ org.ocr_credit_limit if org.ocr_credit_limit is not none else "∞" }}
+          </td>
+          <td class="px-4 py-3">
+            {% if org.is_active %}
+            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">{{ _('Active') }}</span>
+            {% else %}
+            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-500">{{ _('Inactive') }}</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-right">
+            {{ admin.link_action(_('Manage'), url_for('groups_view.manage', id=org.id)) }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
