@@ -1,5 +1,8 @@
 from collections.abc import Iterator
 from datetime import date
+import json
+
+from kalanjiyam.utils.page_document import PageDocument, document_for_revision
 
 DOUBLE_DANDA = "\u0965"
 
@@ -158,3 +161,90 @@ def to_tei_xml(project_meta: dict[str, str], blobs: list[PageContent]) -> str:
 
     buf.append("</body></text></TEI>")
     return "\n\n".join(buf)
+
+
+def revision_plain_content(revision) -> str:
+    """Plain text for a revision, preferring structured document when present."""
+    if revision is None:
+        return ""
+    if getattr(revision, "document", None):
+        return PageDocument.from_dict(revision.document).to_plain_text()
+    return revision.content or ""
+
+
+def document_to_tei(doc: PageDocument) -> str:
+    return doc.to_tei_fragment()
+
+
+def documents_to_tei_xml(project_meta: dict[str, str], pages) -> str:
+    """TEI XML from pages with structured revisions when available."""
+    project_meta.update(
+        {
+            "xml_id": "TODO",
+            "current_year": date.today().year,
+            "publisher_location": "TODO",
+            "text_language": "sa-Deva",
+            "availability_status": "TODO",
+        }
+    )
+    buf = [create_tei_header_boilerplate(**project_meta)]
+    for i, page in enumerate(pages):
+        page_number = i + 1
+        buf.append(f'<pb n="{page_number}" />')
+        if page.revisions:
+            rev = page.revisions[-1]
+            if getattr(rev, "document", None) and rev.content_format == "blocks":
+                doc = PageDocument.from_dict(rev.document)
+                buf.append(doc.to_tei_fragment())
+            else:
+                blocks = iter_blocks([rev.content or ""])
+                buf.append("\n\n".join(create_xml_block(b) for b in blocks))
+    buf.append("</body></text></TEI>")
+    return "\n\n".join(buf)
+
+
+def documents_to_html(pages, *, replica: bool = False) -> str:
+    parts = [
+        '<!DOCTYPE html><html><head><meta charset="utf-8">',
+        "<title>Export</title>",
+        '<link rel="stylesheet" href="/static/css/style.css">',
+        "</head><body class='p-8'>",
+    ]
+    for page in pages:
+        parts.append(f'<section class="ocr-export-page" data-page="{page.slug}">')
+        if page.revisions:
+            rev = page.revisions[-1]
+            if getattr(rev, "document", None):
+                doc = document_for_revision(rev, page)
+                parts.append(doc.to_html(replica=replica))
+            else:
+                parts.append(f"<pre>{rev.content}</pre>")
+        parts.append("</section>")
+    parts.append("</body></html>")
+    return "\n".join(parts)
+
+
+def documents_to_json_bundle(project, pages) -> str:
+    payload = {
+        "format_version": "3.0",
+        "project_slug": project.slug,
+        "display_title": project.display_title,
+        "pages": [],
+    }
+    for page in pages:
+        entry = {
+            "slug": page.slug,
+            "order": page.order,
+            "page_width": page.page_width,
+            "page_height": page.page_height,
+            "ocr_bounding_boxes": page.ocr_bounding_boxes,
+        }
+        if page.revisions:
+            rev = page.revisions[-1]
+            entry["revision"] = {
+                "content": rev.content,
+                "content_format": getattr(rev, "content_format", "plain"),
+                "document": getattr(rev, "document", None),
+            }
+        payload["pages"].append(entry)
+    return json.dumps(payload, ensure_ascii=False, indent=2)

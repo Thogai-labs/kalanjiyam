@@ -26,6 +26,12 @@
   <li><a href="{{ url_for("proofing.project.download_as_xml", slug=project.slug) }}">
     {{ _('Download as TEI XML') }}
   </a></li>
+  <li><a href="{{ url_for("proofing.project.download_as_json", slug=project.slug) }}">
+    {{ _('Download as PageDocument JSON') }}
+  </a></li>
+  <li><a href="{{ url_for("proofing.project.download_as_html", slug=project.slug) }}">
+    {{ _('Download as layout HTML (replica)') }}
+  </a></li>
 </ul>
 
 </div>

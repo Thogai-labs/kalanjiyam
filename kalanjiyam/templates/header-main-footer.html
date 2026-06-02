@@ -2,18 +2,15 @@
 
 
 {% block body %}
-<body class="flex flex-col">
 {% block header %}
 <div class="text-peacock-primary bg-white border-b border-teal-200 mb-4 peacock-shadow">
 {% include "include/header.html" %}
 </div>
 {% endblock %}
 
-<div class="flex-1">
+<div class="flex-1 min-h-0 flex flex-col">
 {% block main %}{% endblock %}
 </div>
-
-
 
 {% block scripts %}
     <script async defer data-domain="siddhasagaram.in" src="https://plausible.io/js/plausible.js"></script>
@@ -22,5 +19,4 @@
     <script defer src="{{ asset('gen/main.js') }}"></script>
     <script src="https://unpkg.com/alpinejs@3.10.3/dist/cdn.min.js" defer></script>
 {% endblock %}
-</body>
 {% endblock %}

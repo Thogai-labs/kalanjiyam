@@ -12,6 +12,19 @@ import {
   insertTable,
   initializeToolbar,
 } from './rich-editor.js';
+import {
+  parseDocument,
+  documentToPlainText,
+  documentToFlowHtml,
+  hasStructuredBlocks,
+  fromOcrPayload,
+  parseBoundingBoxes,
+  overlayBoxesFromPayload,
+  boxesFromDocumentBlocks,
+  reclusterDocumentBlocks,
+} from './page-document.js';
+import { OsdBboxOverlay, scaleBoxesToImage } from './osd-overlay.js';
+import { ReplicaView } from './replica-view.js';
 
 const CONFIG_KEY = 'proofing-editor';
 
@@ -66,8 +79,16 @@ export default () => ({
   // Content
   content: '',
 
+  // Editor mode: replica | flow
+  editorMode: 'replica',
+  showMetaPanel: false,
+  pageDocument: null,
+  _flowPlainCache: '',
+  _bboxOverlay: null,
+  _replicaView: null,
+
   // OCR settings
-  selectedEngine: 'google',
+  selectedEngine: '1', // Default to Google OCR (1)
   selectedLanguage: 'sa',
 
   // Translation settings
@@ -90,10 +111,10 @@ export default () => ({
   toolbarUpdateTrigger: 0, // Used to trigger Alpine reactivity for toolbar updates
   _commandInProgress: false, // Flag to prevent callback interference during commands
 
-  // OCR Engine configurations (keyed by engine name)
+  // OCR Engine configurations
   ocrEngines: {
-    'google': {
-      name: 'Google',
+    '1': {
+      name: 'Google OCR',
       languages: [
         { value: 'sa', text: 'Sanskrit (sa)' },
         { value: 'en', text: 'English (en)' },
@@ -111,8 +132,8 @@ export default () => ({
       ],
       supportsBilingual: false
     },
-    'tesseract': {
-      name: 'Tesseract',
+    '2': {
+      name: 'Tesseract OCR',
       languages: [
         { value: 'san', text: 'Sanskrit (san)' },
         { value: 'eng', text: 'English (eng)' },
@@ -131,8 +152,8 @@ export default () => ({
       supportsBilingual: true,
       bilingualSeparator: '+'
     },
-    'surya': {
-      name: 'Surya',
+    '3': {
+      name: 'Surya OCR',
       languages: [
         { value: 'sa', text: 'Sanskrit (sa)' },
         { value: 'hi', text: 'Hindi (hi)' },
@@ -170,47 +191,8 @@ export default () => ({
       bilingualSeparator: ',',
       autoDetect: true
     },
-    'surya_table': {
-      name: 'Surya Table',
-      languages: [
-        { value: 'sa', text: 'Sanskrit (sa)' },
-        { value: 'hi', text: 'Hindi (hi)' },
-        { value: 'te', text: 'Telugu (te)' },
-        { value: 'mr', text: 'Marathi (mr)' },
-        { value: 'bn', text: 'Bengali (bn)' },
-        { value: 'gu', text: 'Gujarati (gu)' },
-        { value: 'kn', text: 'Kannada (kn)' },
-        { value: 'ml', text: 'Malayalam (ml)' },
-        { value: 'ta', text: 'Tamil (ta)' },
-        { value: 'pa', text: 'Punjabi (pa)' },
-        { value: 'or', text: 'Odia (or)' },
-        { value: 'ur', text: 'Urdu (ur)' },
-        { value: 'en', text: 'English (en)' },
-        { value: 'ar', text: 'Arabic (ar)' },
-        { value: 'fa', text: 'Persian (fa)' },
-        { value: 'th', text: 'Thai (th)' },
-        { value: 'ko', text: 'Korean (ko)' },
-        { value: 'ja', text: 'Japanese (ja)' },
-        { value: 'zh', text: 'Chinese (zh)' },
-        { value: 'ru', text: 'Russian (ru)' },
-        { value: 'es', text: 'Spanish (es)' },
-        { value: 'fr', text: 'French (fr)' },
-        { value: 'de', text: 'German (de)' },
-        { value: 'it', text: 'Italian (it)' },
-        { value: 'pt', text: 'Portuguese (pt)' },
-        { value: 'nl', text: 'Dutch (nl)' },
-        { value: 'pl', text: 'Polish (pl)' },
-        { value: 'tr', text: 'Turkish (tr)' },
-        { value: 'vi', text: 'Vietnamese (vi)' },
-        { value: 'id', text: 'Indonesian (id)' },
-        { value: 'ms', text: 'Malay (ms)' }
-      ],
-      supportsBilingual: true,
-      bilingualSeparator: ',',
-      autoDetect: true
-    },
-    'nanonets': {
-      name: 'Nanonets',
+        '4': {
+          name: 'Nanonets OCR',
           languages: [
             { value: 'sa', text: 'Sanskrit (sa)' },
             { value: 'en', text: 'English (en)' },
@@ -244,10 +226,10 @@ export default () => ({
             { value: 'id', text: 'Indonesian (id)' },
             { value: 'ms', text: 'Malay (ms)' }
           ],
-      supportsBilingual: false
-    },
-    'deepseek': {
-      name: 'DeepSeek',
+          supportsBilingual: false
+        },
+        '5': {
+          name: 'DeepSeek OCR',
           languages: [
             { value: 'sa', text: 'Sanskrit (sa)' },
             { value: 'en', text: 'English (en)' },
@@ -281,10 +263,10 @@ export default () => ({
             { value: 'id', text: 'Indonesian (id)' },
             { value: 'ms', text: 'Malay (ms)' }
           ],
-      supportsBilingual: false
-    },
-    'chandra': {
-      name: 'Chandra',
+          supportsBilingual: false
+        },
+         '6': {
+           name: 'Chandra OCR',
            languages: [
              { value: 'sa', text: 'Sanskrit (sa)' },
              { value: 'en', text: 'English (en)' },
@@ -321,10 +303,10 @@ export default () => ({
              { value: 'zh-tw', text: 'Chinese Traditional (zh-tw)' },
              { value: 'tl', text: 'Filipino (tl)' }
            ],
-      supportsBilingual: false
-    },
-    'qwen3': {
-      name: 'Qwen 2VL',
+           supportsBilingual: false
+         },
+         '7': {
+           name: 'Qwen 2VL OCR',
            languages: [
              { value: 'sa', text: 'Sanskrit (sa)' },
              { value: 'en', text: 'English (en)' },
@@ -424,8 +406,8 @@ export default () => ({
              { value: 'wo', text: 'Wolof (wo)' },
              { value: 'yo', text: 'Yoruba (yo)' }
            ],
-      supportsBilingual: false
-    },
+           supportsBilingual: false
+         }
   },
 
 
@@ -449,6 +431,7 @@ export default () => ({
     const textarea = document.getElementById('content');
     if (textarea && textarea.value) {
       this.content = textarea.value;
+      this._flowPlainCache = textarea.value;
     }
 
     // Set `imageZoom` only after the viewer is fully initialized.
@@ -471,84 +454,235 @@ export default () => ({
     // Initialize translation selector
     this.initTranslationSelector();
     
-    // Initialize rich text editor
-    this.initRichEditor();
+    // Flow editor is lazy-init when the pane becomes visible (TipTap breaks in display:none).
+    this.initPageDocumentEditor();
+    if (this.editorMode === 'flow') {
+      setTimeout(() => this.ensureFlowEditor(), 0);
+    }
+    this.setupZoomButtons();
   },
-  
-  // Initialize TipTap rich text editor
-  initRichEditor() {
-    // Wait for DOM to be ready using setTimeout
+
+  ensureFlowEditor() {
+    if (window.richEditorInstance) return window.richEditorInstance;
+
+    const editorElement = document.getElementById('rich-editor');
+    if (!editorElement) return null;
+
+    const textarea = document.getElementById('content');
+    const initialContent = this._flowPlainCache
+      || (textarea ? textarea.value : '')
+      || this.content
+      || documentToPlainText(this.pageDocument || { blocks: [] });
+
+    const editor = createRichEditor('rich-editor', {
+      content: '',
+      onUpdate: (html) => {
+        this.content = html;
+        const contentTextarea = document.getElementById('content');
+        if (contentTextarea) {
+          contentTextarea.value = html;
+        }
+        this.hasUnsavedChanges = true;
+      },
+      onSelectionUpdate: () => {},
+    });
+
+    window.richEditorInstance = editor;
+    this._richEditor = editor;
+    this.richEditor = true;
+
+    if (editor) {
+      initializeToolbar(editor);
+      if (initialContent) {
+        setEditorText(editor, initialContent);
+      }
+    }
+
+    this.syncEditorFromTextarea = () => {
+      const contentTextarea = document.getElementById('content');
+      if (contentTextarea && window.richEditorInstance && contentTextarea.value) {
+        try {
+          setEditorText(window.richEditorInstance, contentTextarea.value);
+        } catch (e) {
+          console.error('Manual sync failed:', e);
+        }
+      }
+    };
+
+    window.uploadImageFiles = this.uploadImageFiles.bind(this);
+    return editor;
+  },
+
+  _applyFlowEditorContent() {
+    const plain = this._flowPlainCache
+      || (this.pageDocument ? documentToPlainText(this.pageDocument) : '');
+    const textarea = document.getElementById('content');
+    if (textarea) {
+      textarea.value = plain;
+    }
+    this.content = plain;
+    const editor = this.ensureFlowEditor();
+    if (!editor) return;
+    const html = this._flowHtmlFromDocument();
+    if (html) {
+      setEditorContent(editor, html);
+    } else {
+      setEditorContent(editor, '');
+    }
+  },
+
+  setEditorMode(mode) {
+    this.editorMode = mode;
+    this.saveSettings();
+    requestAnimationFrame(() => {
+      if (this.imageViewer) {
+        this.imageViewer.viewport.resize();
+        this.imageViewer.forceRedraw();
+        if (this._bboxOverlay) {
+          this._bboxOverlay.setBoxes(this._bboxOverlay.boxes || []);
+        }
+      }
+      if (this._replicaView && this.pageDocument) {
+        this._replicaView.setDocument(this.pageDocument);
+      }
+      if (mode === 'flow') {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            this._applyFlowEditorContent();
+          });
+        });
+      }
+    });
+  },
+
+  _applyPageDimensionsFromImage() {
+    if (typeof IMAGE_URL === 'undefined' || !IMAGE_URL) return;
+    if (this.pageDocument.page_width && this.pageDocument.page_height) return;
+    const img = new Image();
+    img.onload = () => {
+      if (!this.pageDocument.page_width && img.naturalWidth) {
+        this.pageDocument.page_width = img.naturalWidth;
+      }
+      if (!this.pageDocument.page_height && img.naturalHeight) {
+        this.pageDocument.page_height = img.naturalHeight;
+      }
+      if (this._replicaView) {
+        this._replicaView.setDocument(this.pageDocument);
+      }
+      this._setOverlayBoxes(this.pageDocument);
+      this._syncDocumentToForm();
+    };
+    img.src = IMAGE_URL;
+  },
+
+  _setOverlayBoxes(source) {
+    if (!this._bboxOverlay) return;
+    let boxes = boxesFromDocumentBlocks(this.pageDocument?.blocks);
+    if (!boxes.length) {
+      if (source && (source.bounding_boxes || source.blocks)) {
+        boxes = overlayBoxesFromPayload(source, this.pageDocument);
+      } else if (typeof source === 'string') {
+        boxes = parseBoundingBoxes(source);
+      }
+    }
+    this._bboxOverlay.setBoxes(boxes);
+    this._bboxOverlay.setBlocksForMatching(this.pageDocument?.blocks || []);
+  },
+
+  initPageDocumentEditor() {
     setTimeout(() => {
-      const editorElement = document.getElementById('rich-editor');
-      // Check window.richEditorInstance instead of this.richEditor to avoid Alpine Proxy
-      if (editorElement && !window.richEditorInstance) {
-        // Get initial content from textarea if it exists, or from Alpine.js content
-        const textarea = document.getElementById('content');
-        const initialContent = textarea ? textarea.value : this.content;
-        
-        // Store editor instance on window to avoid Alpine.js Proxy wrapping
-        // This is CRITICAL - Alpine's Proxy causes transaction state conflicts
-        const editor = createRichEditor('rich-editor', {
-          content: '',
-          onUpdate: (html) => {
-            // Simple: just sync the content
-            this.content = html;
-            const contentTextarea = document.getElementById('content');
-            if (contentTextarea) {
-              contentTextarea.value = html;
-            }
+      const raw = typeof PAGE_DOCUMENT_JSON !== 'undefined' ? PAGE_DOCUMENT_JSON : null;
+      this.pageDocument = reclusterDocumentBlocks(parseDocument(raw));
+      if (typeof PAGE_WIDTH !== 'undefined' && PAGE_WIDTH && !this.pageDocument.page_width) {
+        this.pageDocument.page_width = PAGE_WIDTH;
+      }
+      if (typeof PAGE_HEIGHT !== 'undefined' && PAGE_HEIGHT && !this.pageDocument.page_height) {
+        this.pageDocument.page_height = PAGE_HEIGHT;
+      }
+      this._applyPageDimensionsFromImage();
+      const replicaRoot = document.getElementById('ocr-replica-root');
+      if (replicaRoot) {
+        this._replicaView = new ReplicaView(replicaRoot, {
+          onChange: (doc) => {
+            this.pageDocument = doc;
+            this._syncDocumentToForm();
             this.hasUnsavedChanges = true;
           },
-          onSelectionUpdate: () => {
-            // No-op - toolbar handles its own state now
+          onSelect: (block) => {
+            if (this._bboxOverlay) this._bboxOverlay.highlightBlockId(block.id);
           },
         });
-        
-        // Store globally to avoid Alpine Proxy
-        window.richEditorInstance = editor;
-
-        // Also store as non-reactive property (Alpine ignores properties starting with _)
-        // This allows Alpine methods to access it if needed
-        this._richEditor = editor;
-
-        // Set simple boolean flag for Alpine (for showing/hiding toolbar)
-        this.richEditor = true;
-
-        // Load initial content: HTML passes straight through; anything else
-        // (Markdown, plain text) is converted via marked.parse so that pipe
-        // tables and other Markdown formatting render correctly.
-        if (initialContent) {
-          if (initialContent.trim().startsWith('<')) {
-            setEditorContent(editor, initialContent);
-          } else {
-            setEditorText(editor, initialContent);
-          }
-        }
-
-        // Initialize toolbar with vanilla JS (NO Alpine.js)
-        if (editor) {
-          initializeToolbar(editor);
-        }
-        
-        // Store reference for manual sync
-        this.syncEditorFromTextarea = () => {
-          const textarea = document.getElementById('content');
-          if (textarea && window.richEditorInstance) {
-            const content = textarea.value;
-            if (content) {
-              try {
-                window.richEditorInstance.commands.setContent(content);
-              } catch (e) {
-                console.error('Manual sync failed:', e);
-              }
-            }
-          }
-        };
-        
-        // Make uploadImageFiles available globally for drag-and-drop
-        window.uploadImageFiles = this.uploadImageFiles.bind(this);
+        this._replicaView.setDocument(this.pageDocument);
       }
-    }, 100);
+      if (this.imageViewer) {
+        this._bboxOverlay = new OsdBboxOverlay(this.imageViewer, {
+          onBoxClick: ({ block }) => {
+            if (block && this._replicaView) {
+              this._replicaView.highlightBlock(block.id);
+            }
+          },
+        });
+        this._setOverlayBoxes(this.pageDocument);
+      }
+      this._syncDocumentToForm();
+    }, 200);
+  },
+
+  _syncDocumentToForm() {
+    if (!this.pageDocument) return;
+
+    const plain = documentToPlainText(this.pageDocument);
+    this._flowPlainCache = plain;
+
+    const docField = document.getElementById('document');
+    const textarea = document.getElementById('content');
+    if (docField) {
+      docField.value = JSON.stringify(this.pageDocument);
+    }
+    if (textarea) {
+      textarea.value = plain;
+      this.content = plain;
+    }
+    if (this.editorMode === 'flow') {
+      this._applyFlowEditorContent();
+    }
+  },
+
+  _flowHtmlFromDocument() {
+    if (!this.pageDocument) return '';
+    if (hasStructuredBlocks(this.pageDocument.blocks)) {
+      return documentToFlowHtml(this.pageDocument);
+    }
+    const plain = documentToPlainText(this.pageDocument);
+    return plain
+      .split('\n\n')
+      .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+      .join('');
+  },
+
+  applyOcrPayload(payload) {
+    this.pageDocument = reclusterDocumentBlocks(fromOcrPayload(payload));
+    if (payload.page_width) this.pageDocument.page_width = payload.page_width;
+    if (payload.page_height) this.pageDocument.page_height = payload.page_height;
+    this._flowPlainCache = documentToPlainText(this.pageDocument);
+    if (this._replicaView) this._replicaView.setDocument(this.pageDocument);
+    if (this._bboxOverlay) {
+      this._setOverlayBoxes(payload);
+      requestAnimationFrame(() => {
+        if (this._bboxOverlay) this._setOverlayBoxes(payload);
+      });
+    }
+    this._syncDocumentToForm();
+    this.hasUnsavedChanges = true;
+  },
+
+  setupZoomButtons() {
+    const zoomIn = document.getElementById('osd-zoom-in');
+    const zoomOut = document.getElementById('osd-zoom-out');
+    const zoomReset = document.getElementById('osd-home');
+    if (zoomIn) zoomIn.addEventListener('click', (e) => { e.preventDefault(); this.increaseImageZoom(); });
+    if (zoomOut) zoomOut.addEventListener('click', (e) => { e.preventDefault(); this.decreaseImageZoom(); });
+    if (zoomReset) zoomReset.addEventListener('click', (e) => { e.preventDefault(); this.resetImageZoom(); });
   },
 
   // Drag and drop handlers for image upload
@@ -701,17 +835,15 @@ export default () => ({
         // initialized. See `init` for details.
         this.imageZoom = settings.imageZoom;
         this.layout = settings.layout || this.layout;
+        let mode = settings.editorMode || this.editorMode;
+        if (mode === 'split') mode = 'replica';
+        this.editorMode = mode;
 
         this.fromScript = settings.fromScript || this.fromScript;
         this.toScript = settings.toScript || this.toScript;
         
-        // Load OCR settings (migrate from old numeric keys if needed)
-        const legacyEngineMap = {'1': 'google', '2': 'tesseract', '3': 'surya', '4': 'nanonets', '5': 'deepseek', '6': 'chandra', '7': 'qwen3'};
-        const savedEngine = settings.selectedEngine;
-        if (savedEngine) {
-          const resolved = legacyEngineMap[savedEngine] || savedEngine;
-          this.selectedEngine = this.ocrEngines[resolved] ? resolved : this.selectedEngine;
-        }
+        // Load OCR settings
+        this.selectedEngine = settings.selectedEngine || this.selectedEngine;
         this.selectedLanguage = settings.selectedLanguage || this.selectedLanguage;
         
         // Load Translation settings
@@ -729,6 +861,7 @@ export default () => ({
       textZoom: this.textZoom,
       imageZoom: this.imageZoom,
       layout: this.layout,
+      editorMode: this.editorMode,
       fromScript: this.fromScript,
       toScript: this.toScript,
       selectedEngine: this.selectedEngine,
@@ -811,7 +944,7 @@ export default () => ({
     }
     
     // Update additional language options for bilingual support
-    if (additionalLanguageSelect && (engine === 'tesseract' || engine === 'surya' || engine === 'surya_table')) {
+    if (additionalLanguageSelect && (engine === '2' || engine === '3')) {
       additionalLanguageSelect.innerHTML = '<option value="">{{ _("None") }}</option>';
       
       engineConfig.languages.forEach(lang => {
@@ -824,6 +957,19 @@ export default () => ({
     }, 10); // Small delay to ensure DOM is ready
   },
 
+  // Decode numeric engine values to actual engine names
+  decodeEngine(engineValue) {
+    const engineMap = {
+      '1': 'google',
+      '2': 'tesseract', 
+      '3': 'surya',
+      '4': 'nanonets',
+      '5': 'deepseek',
+      '6': 'chandra',
+      '7': 'qwen3'
+    };
+    return engineMap[engineValue] || 'google';
+  },
 
   // Get combined language parameter for bilingual support
   getCombinedLanguage() {
@@ -832,7 +978,7 @@ export default () => ({
     const additionalLanguageSelect = document.getElementById('additional-language-select');
     const additionalLanguage = additionalLanguageSelect ? additionalLanguageSelect.value : '';
     
-    if (engine === 'tesseract' && additionalLanguage) {
+    if (engine === '2' && additionalLanguage) {
       // Tesseract uses + separator
       return `${primaryLanguage}+${additionalLanguage}`;
     }
@@ -843,36 +989,23 @@ export default () => ({
   async runOCR() {
     this.isRunningOCR = true;
 
-    const engine = window._ocrSelectedEngine || this.selectedEngine;
+    const engineKey = window._ocrSelectedEngine || this.selectedEngine;
+    const decodedEngine = this.decodeEngine(engineKey);
     const combinedLanguage = this.getCombinedLanguage();
     const { pathname } = window.location;
-    const url = pathname.replace('/proofing/', '/api/ocr/') + `?engine=${engine}&language=${combinedLanguage}`;
+    const url = pathname.replace('/proofing/', '/api/ocr/') + `?engine=${decodedEngine}&language=${combinedLanguage}`;
 
     try {
       const response = await fetch(url);
       if (response.ok) {
-        const content = await response.text();
-
-        // Update the rich editor if available
-        const editor = window.richEditorInstance;
-        if (editor) {
-          // HTML-producing engines return content starting with '<'
-          if (content.trim().startsWith('<')) {
-            setEditorContent(editor, content);
-          } else {
-            setEditorText(editor, content);
-          }
-          this.content = getEditorContent(editor);
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const payload = await response.json();
+          this.applyOcrPayload(payload);
         } else {
-          // Fallback to textarea if editor not initialized
-          this.content = content;
-          const textarea = document.getElementById('content');
-          if (textarea) {
-            textarea.value = content;
-          }
+          const content = await response.text();
+          this.applyOcrPayload({ text: content });
         }
-        
-        // Show success feedback
         this.showNotification('OCR completed successfully!', 'success');
       } else {
         const errorText = await response.text();
@@ -1248,25 +1381,29 @@ export default () => ({
   
   // Sync editor content to textarea before form submission
   syncContentBeforeSubmit() {
-    // Ensure textarea has the latest content from editor
-    const editor = window.richEditorInstance;
-    if (editor) {
-      const htmlContent = editor.getHTML();
-      
-      // Update Alpine.js content first (this drives the textarea via x-model)
-      this.content = htmlContent;
-      
-      // Also update textarea directly as backup
+    if (this.editorMode === 'flow') {
+      const editor = window.richEditorInstance;
+      if (editor) {
+        const htmlContent = editor.getHTML();
+        this.content = htmlContent;
+        const textarea = document.getElementById('content');
+        if (textarea) {
+          textarea.value = htmlContent;
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          textarea.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }
+    } else if (this.pageDocument) {
+      this._syncDocumentToForm();
       const textarea = document.getElementById('content');
       if (textarea) {
-        textarea.value = htmlContent;
-        // Trigger events to ensure form recognizes the change
         textarea.dispatchEvent(new Event('input', { bubbles: true }));
         textarea.dispatchEvent(new Event('change', { bubbles: true }));
       }
-      
-      console.log('Synced editor content before submit. Length:', htmlContent.length);
-      console.log('Content preview:', htmlContent.substring(0, 200));
+      const docField = document.getElementById('document');
+      if (docField) {
+        docField.dispatchEvent(new Event('input', { bubbles: true }));
+      }
     }
     this.hasUnsavedChanges = false;
   },

@@ -155,6 +155,11 @@ class Page(Base):
     #: the page is blank.
     ocr_bounding_boxes = Column(Text_, nullable=True)
 
+    #: Native image width in pixels (for replica scaling).
+    page_width = Column(Integer, nullable=True)
+    #: Native image height in pixels (for replica scaling).
+    page_height = Column(Integer, nullable=True)
+
     #: Page status
     status_id = Column(
         Integer, ForeignKey("proof_page_statuses.id"), index=True, nullable=False
@@ -214,8 +219,12 @@ class Revision(Base):
     created = Column(DateTime, default=datetime.utcnow, nullable=False)
     #: An optional editor summary for this revision.
     summary = Column(Text_, nullable=False, default="")
-    #: The actual content of this revision.
+    #: The actual content of this revision (derived plain text for legacy consumers).
     content = Column(Text_, nullable=False)
+    #: Canonical structured page document (blocks, layout metadata).
+    document = Column(JSON, nullable=True)
+    #: ``plain``, ``html``, or ``blocks``.
+    content_format = Column(String, nullable=False, default="plain")
 
     #: An ordered list of revisions for this page (newest first).
     author = relationship("User", backref="revisions")
