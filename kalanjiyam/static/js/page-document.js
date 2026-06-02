@@ -66,12 +66,24 @@ export function documentToPlainText(doc) {
     .join('\n\n');
 }
 
+const SKIP_BLOCK_TYPES = new Set(['running-header', 'page-number', 'figure']);
+const BLOCK_TYPE_TO_TAG = {
+  heading: 'h2',
+  subheading: 'h3',
+  footnote: 'p',
+  caption: 'p',
+  'column-header': 'p',
+  equation: 'p',
+  paragraph: 'p',
+};
+
 export function documentToFlowHtml(doc) {
   const blocks = [...(doc.blocks || [])].sort(
     (a, b) => (a.reading_order || 0) - (b.reading_order || 0),
   );
   const parts = [];
   blocks.forEach((block) => {
+    if (SKIP_BLOCK_TYPES.has(block.type)) return;
     const content = String(block.content || '').trim();
     if (!content && block.type !== 'table') return;
     if (block.type === 'table' || /<table[\s>]/i.test(content)) {
@@ -80,14 +92,53 @@ export function documentToFlowHtml(doc) {
       );
       return;
     }
+    const tag = BLOCK_TYPE_TO_TAG[block.type] ?? 'p';
     const text = content
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/\n/g, '<br>');
-    parts.push(`<p data-block-id="${block.id}">${text}</p>`);
+    parts.push(`<${tag} data-block-id="${block.id}">${text}</${tag}>`);
   });
   return parts.join('');
+}
+
+export function blocksFromFlowHtml(html) {
+  if (!html) return [];
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  const blocks = [];
+  let order = 1;
+  Array.from(container.children).forEach((el) => {
+    const tag = el.tagName.toLowerCase();
+    // Unwrap table-wrap divs
+    const tableEl = tag === 'table' ? el : el.querySelector('table');
+    if (tableEl) {
+      blocks.push({
+        id: newBlockId(),
+        type: 'table',
+        bbox: [0, 0, 0, 0],
+        reading_order: order++,
+        content: tableEl.outerHTML,
+        manually_edited: true,
+        children: [],
+      });
+      return;
+    }
+    const text = el.textContent.trim();
+    if (!text) return;
+    const type = (tag === 'h1' || tag === 'h2') ? 'heading' : tag === 'h3' ? 'subheading' : 'paragraph';
+    blocks.push({
+      id: newBlockId(),
+      type,
+      bbox: [0, 0, 0, 0],
+      reading_order: order++,
+      content: text,
+      manually_edited: true,
+      children: [],
+    });
+  });
+  return blocks;
 }
 
 export function fromOcrPayload(payload) {
@@ -106,6 +157,9 @@ export function fromOcrPayload(payload) {
         id: b.id || newBlockId(),
         reading_order: b.reading_order || i + 1,
         content: normalizeUnicodeText(b.content || ''),
+        confidence: b.confidence ?? null,
+        language: b.language ?? null,
+        manually_edited: false,
       })),
     };
   }

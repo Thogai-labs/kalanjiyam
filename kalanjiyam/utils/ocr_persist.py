@@ -61,6 +61,7 @@ def apply_ocr_to_page(
         page_width=pw or ocr.page_width or image_w,
         page_height=ph or ocr.page_height or image_h,
         pipeline=ocr.pipeline,
+        source_type=ocr.source_type,
     )
     return PageDocument.from_ocr_response(
         normalized,
@@ -101,13 +102,8 @@ def ocr_response_to_api_dict(
         image_height=ph or image_height,
     )
     return {
-        "text": doc.to_plain_text() or ocr.text_content,
-        "bounding_boxes": serialize_bounding_boxes(engine, boxes),
-        "layout_html": ocr.layout_html,
-        "content_format": doc.content_format,
+        "source_type": ocr.source_type,
         "page_width": doc.page_width,
         "page_height": doc.page_height,
-        "pipeline": doc.pipeline,
         "blocks": [b.to_dict() for b in doc.blocks],
-        "document": doc.to_dict(),
     }

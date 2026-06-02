@@ -6,6 +6,16 @@ import json
 from dataclasses import dataclass
 
 
+BLOCK_TYPES = {
+    "paragraph", "heading", "subheading", "table", "figure",
+    "caption", "footnote", "running-header", "page-number",
+    "column-header", "equation",
+}
+
+# Block types the UI skips in flow mode (layout chrome, not content)
+DECORATIVE_BLOCK_TYPES = {"running-header", "page-number", "figure"}
+
+
 @dataclass
 class OcrResponse:
     text_content: str
@@ -16,6 +26,7 @@ class OcrResponse:
     page_width: int | None = None
     page_height: int | None = None
     pipeline: str = "standard"
+    source_type: str = "scan"  # "scan" | "pdf" | "digital"
 
 
 SUPPORTED_ENGINES = [
@@ -37,6 +48,7 @@ ENGINE_MAP = {
     "5": "deepseek",
     "6": "chandra",
     "7": "qwen3",
+    "8": "surya_table",
 }
 
 
@@ -69,18 +81,21 @@ MARKDOWN_ENGINES = {"deepseek", "qwen3"}
 def build_engine_choices(available_engines: list[str], is_super_admin: bool) -> list[dict]:
     """Build the list of engine choices for the OCR form.
 
-    Value is always the engine name (for correct backend calls).
+    Value is the stable numeric key (matches JS ocrEngines / decodeEngine).
     Label is "OCR N" for regular users, real name for super admins.
     Only engines returned by the OCR service ping are included.
     """
     choices = []
-    for i, raw_name in enumerate(available_engines, start=1):
+    seq = 1
+    for raw_name in available_engines:
         engine_name = raw_name.lower().strip()
         if engine_name not in SUPPORTED_ENGINES:
             continue
+        numeric_value = REVERSE_ENGINE_MAP.get(engine_name, str(seq))
         real_name = ENGINE_LABELS.get(engine_name, engine_name.capitalize())
-        label = real_name if is_super_admin else f"OCR {i}"
-        choices.append({"value": engine_name, "label": label})
+        label = real_name if is_super_admin else f"OCR {seq}"
+        choices.append({"value": numeric_value, "label": label})
+        seq += 1
     return choices
 
 

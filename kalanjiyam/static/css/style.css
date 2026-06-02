@@ -132,6 +132,9 @@
   .notification.info {
     @apply bg-blue-100 border border-blue-300 text-blue-800;
   }
+  .notification.warning {
+    @apply bg-amber-100 border border-amber-300 text-amber-800;
+  }
   @keyframes slideInRight {
     from {
       transform: translateX(100%);
@@ -667,6 +670,22 @@
 
   .ocr-replica-block--table {
     @apply border-emerald-400/60 bg-emerald-50/30;
+  }
+
+  .ocr-conf-low {
+    @apply border-red-400/70 bg-red-50/40;
+  }
+
+  .ocr-conf-mid {
+    @apply border-amber-400/70 bg-amber-50/30;
+  }
+
+  .ocr-block-edited {
+    @apply border-l-2 border-l-sky-400;
+  }
+
+  .ocr-table-flow-hint {
+    @apply block mt-1 text-xs text-emerald-700 font-medium px-2 py-0.5 rounded border border-emerald-300 bg-white hover:bg-emerald-50 cursor-pointer transition-colors;
   }
 
   .ocr-detected-table {

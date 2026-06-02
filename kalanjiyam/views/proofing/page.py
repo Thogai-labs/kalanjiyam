@@ -446,8 +446,7 @@ def ocr(project_slug, page_slug):
             image_height=page_.page_height,
         )
         logging.info(
-            "OCR completed successfully, returning %s characters, %s blocks",
-            len(payload.get("text", "")),
+            "OCR completed successfully, returning %s blocks",
             len(payload.get("blocks") or []),
         )
         return jsonify(payload)

@@ -22,6 +22,7 @@ import {
   overlayBoxesFromPayload,
   boxesFromDocumentBlocks,
   reclusterDocumentBlocks,
+  blocksFromFlowHtml,
 } from './page-document.js';
 import { OsdBboxOverlay, scaleBoxesToImage } from './osd-overlay.js';
 import { ReplicaView } from './replica-view.js';
@@ -479,8 +480,13 @@ export default () => ({
       onUpdate: (html) => {
         this.content = html;
         const contentTextarea = document.getElementById('content');
-        if (contentTextarea) {
-          contentTextarea.value = html;
+        if (contentTextarea) contentTextarea.value = html;
+        // Rebuild pageDocument blocks from flow HTML so replica stays in sync
+        const newBlocks = blocksFromFlowHtml(html);
+        if (newBlocks.length && this.pageDocument) {
+          this.pageDocument = { ...this.pageDocument, blocks: newBlocks };
+          const docField = document.getElementById('document');
+          if (docField) docField.value = JSON.stringify(this.pageDocument);
         }
         this.hasUnsavedChanges = true;
       },
@@ -611,6 +617,13 @@ export default () => ({
           onSelect: (block) => {
             if (this._bboxOverlay) this._bboxOverlay.highlightBlockId(block.id);
           },
+          onTableFocus: (block) => {
+            this.setEditorMode('flow');
+            setTimeout(() => {
+              const el = document.querySelector(`[data-block-id="${block.id}"]`);
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 150);
+          },
         });
         this._replicaView.setDocument(this.pageDocument);
       }
@@ -661,6 +674,13 @@ export default () => ({
   },
 
   applyOcrPayload(payload) {
+    const editedCount = (this.pageDocument?.blocks || []).filter((b) => b.manually_edited).length;
+    if (editedCount > 0) {
+      this.showNotification(
+        `${editedCount} manually-edited block${editedCount > 1 ? 's' : ''} replaced by new OCR run.`,
+        'warning',
+      );
+    }
     this.pageDocument = reclusterDocumentBlocks(fromOcrPayload(payload));
     if (payload.page_width) this.pageDocument.page_width = payload.page_width;
     if (payload.page_height) this.pageDocument.page_height = payload.page_height;
@@ -961,12 +981,13 @@ export default () => ({
   decodeEngine(engineValue) {
     const engineMap = {
       '1': 'google',
-      '2': 'tesseract', 
+      '2': 'tesseract',
       '3': 'surya',
       '4': 'nanonets',
       '5': 'deepseek',
       '6': 'chandra',
-      '7': 'qwen3'
+      '7': 'qwen3',
+      '8': 'surya_table',
     };
     return engineMap[engineValue] || 'google';
   },

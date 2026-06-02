@@ -8,6 +8,7 @@ export class ReplicaView {
     this.container = container;
     this.onChange = options.onChange || (() => {});
     this.onSelect = options.onSelect || (() => {});
+    this.onTableFocus = options.onTableFocus || (() => {});
     this.document = { blocks: [], page_width: null, page_height: null };
     this.selectedId = null;
   }
@@ -53,13 +54,18 @@ export class ReplicaView {
       const [x1, y1, x2, y2] = block.bbox || [0, 0, 0, 0];
       const isTable =
         block.type === 'table' || /<table[\s>]/i.test(String(block.content || ''));
+
+      const conf = block.confidence;
+      const confClass = conf == null ? '' : conf < 0.5 ? 'ocr-conf-low' : conf < 0.75 ? 'ocr-conf-mid' : '';
+      const editedClass = block.manually_edited ? 'ocr-block-edited' : '';
+
       const el = document.createElement('div');
-      el.className = `ocr-replica-block book-editor-text absolute overflow-auto text-base leading-relaxed p-1 ocr-replica-block--${block.type || 'paragraph'} ${
+      el.className = `ocr-replica-block book-editor-text absolute overflow-auto text-base leading-relaxed p-1 ocr-replica-block--${block.type || 'paragraph'} ${confClass} ${editedClass} ${
         this.selectedId === block.id
           ? 'ring-2 ring-amber-600 z-10 bg-amber-50'
           : 'bg-white hover:bg-amber-50'
       }`;
-      el.setAttribute('lang', 'und');
+      el.setAttribute('lang', block.language || 'und');
       el.dataset.blockId = block.id;
       el.dataset.blockType = block.type || 'paragraph';
       if (x2 > x1 && y2 > y1) {
@@ -74,11 +80,22 @@ export class ReplicaView {
       }
       if (isTable) {
         el.innerHTML = blockReplicaInnerHtml(block);
+        // Tables can't be meaningfully edited in-place — offer flow mode instead
+        const hint = document.createElement('button');
+        hint.type = 'button';
+        hint.className = 'ocr-table-flow-hint';
+        hint.textContent = 'Edit in Flow ↗';
+        hint.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.onTableFocus(block);
+        });
+        el.appendChild(hint);
       } else {
         el.contentEditable = 'true';
         el.innerText = normalizeUnicodeText(block.content || '');
         el.addEventListener('input', () => {
           block.content = normalizeUnicodeText(el.innerText);
+          block.manually_edited = true;
           this.onChange(this.document);
         });
       }

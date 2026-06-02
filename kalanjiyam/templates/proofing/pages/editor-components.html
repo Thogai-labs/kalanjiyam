@@ -119,17 +119,16 @@ these components in our help text and documentation.
 
 
 {% macro _book_ocr_controls(ocr_status, engine_choices, button_css) %}
-<div class="relative">
+<div class="relative" @click.outside="ocrDropdownOpen=false">
   <button class="{{ button_css }}"
      @click.prevent="ocrDropdownOpen=!ocrDropdownOpen"
-     @click.outside="ocrDropdownOpen=false"
      title="{{ _('OCR') }}">
     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
     </svg>
   </button>
   <div x-show="ocrDropdownOpen" x-cloak class="dropdown-pane w-80 right-0 left-auto">
-    <ul class="text-sm" @click.prevent="ocrDropdownOpen=false">
+    <ul class="text-sm">
       <li class="mb-3 px-3 pt-2">
         <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('OCR engine') }}</label>
         {% if ocr_status == "unavailable" %}

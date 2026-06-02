@@ -10,9 +10,22 @@ from typing import Any
 from kalanjiyam.utils.ocr_types import OcrResponse, post_process
 from kalanjiyam.utils.text_utils import normalize_unicode_text
 
-BLOCK_TYPES = frozenset(
-    {"paragraph", "heading", "verse", "table", "figure", "list_item"}
-)
+BLOCK_TYPES = frozenset({
+    "paragraph", "heading", "subheading", "verse",
+    "table", "figure", "caption", "footnote",
+    "running-header", "page-number", "column-header",
+    "equation", "list_item",
+})
+
+# Types the UI skips in flow mode
+DECORATIVE_BLOCK_TYPES = frozenset({"running-header", "page-number", "figure"})
+
+# Legacy type aliases: normalize on ingest
+_BLOCK_TYPE_ALIASES: dict[str, str] = {
+    "h3": "subheading",
+    "list_item": "paragraph",
+    "verse": "paragraph",
+}
 
 
 @dataclass
@@ -23,9 +36,11 @@ class Block:
     content: str
     reading_order: int
     children: list[dict[str, Any]] = field(default_factory=list)
+    confidence: float | None = None
+    language: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "id": self.id,
             "type": self.type,
             "bbox": self.bbox,
@@ -33,15 +48,22 @@ class Block:
             "reading_order": self.reading_order,
             "children": self.children,
         }
+        if self.confidence is not None:
+            d["confidence"] = self.confidence
+        if self.language is not None:
+            d["language"] = self.language
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Block:
-        block_type = data.get("type", "paragraph")
+        raw_type = str(data.get("type") or "paragraph")
+        block_type = _BLOCK_TYPE_ALIASES.get(raw_type, raw_type)
         if block_type not in BLOCK_TYPES:
             block_type = "paragraph"
         bbox = data.get("bbox") or [0, 0, 0, 0]
         if len(bbox) != 4:
             bbox = [0, 0, 0, 0]
+        conf = data.get("confidence")
         return cls(
             id=str(data.get("id") or _new_block_id()),
             type=block_type,
@@ -49,6 +71,8 @@ class Block:
             content=str(normalize_unicode_text(data.get("content") or "")),
             reading_order=int(data.get("reading_order") or 0),
             children=list(data.get("children") or []),
+            confidence=float(conf) if conf is not None else None,
+            language=str(data["language"]) if data.get("language") else None,
         )
 
 
@@ -508,12 +532,25 @@ def _plain_text_to_html_table(text: str) -> str:
     return "".join(parts)
 
 
+_BLOCK_TYPE_TO_HTML_TAG: dict[str, str] = {
+    "heading": "h2",
+    "subheading": "h3",
+    "footnote": "p",
+    "caption": "p",
+    "column-header": "p",
+    "equation": "p",
+    "paragraph": "p",
+}
+
+
 def _blocks_to_flow_html(blocks: list[Block]) -> str:
     parts = []
     for block in sorted(blocks, key=lambda b: b.reading_order):
+        if block.type in DECORATIVE_BLOCK_TYPES:
+            continue
         if not block.content.strip() and block.type != "table":
             continue
-        if block.type == "table":
+        if block.type == "table" or "<table" in block.content.lower():
             inner = _block_replica_inner_html(block)
             parts.append(
                 f'<div class="ocr-detected-table-wrap" data-block-id="{block.id}">'
@@ -521,13 +558,8 @@ def _blocks_to_flow_html(blocks: list[Block]) -> str:
             )
             continue
         text = html.escape(block.content).replace("\n", "<br>")
-        tag = {
-            "heading": "h2",
-            "verse": "div",
-            "figure": "div",
-        }.get(block.type, "p")
-        cls = ' class="ocr-verse"' if block.type == "verse" else ""
-        parts.append(f"<{tag}{cls} data-block-id=\"{block.id}\">{text}</{tag}>")
+        tag = _BLOCK_TYPE_TO_HTML_TAG.get(block.type, "p")
+        parts.append(f'<{tag} data-block-id="{block.id}">{text}</{tag}>')
     return "\n".join(parts)
 
 
