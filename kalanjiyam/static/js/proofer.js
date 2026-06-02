@@ -408,6 +408,35 @@ export default () => ({
              { value: 'yo', text: 'Yoruba (yo)' }
            ],
            supportsBilingual: false
+         },
+         '9': {
+           name: 'Paddle Table OCR',
+           languages: [
+             { value: 'sa', text: 'Sanskrit (sa)' },
+             { value: 'en', text: 'English (en)' },
+             { value: 'hi', text: 'Hindi (hi)' },
+             { value: 'te', text: 'Telugu (te)' },
+             { value: 'mr', text: 'Marathi (mr)' },
+             { value: 'bn', text: 'Bengali (bn)' },
+             { value: 'gu', text: 'Gujarati (gu)' },
+             { value: 'kn', text: 'Kannada (kn)' },
+             { value: 'ml', text: 'Malayalam (ml)' },
+             { value: 'ta', text: 'Tamil (ta)' },
+             { value: 'pa', text: 'Punjabi (pa)' },
+             { value: 'or', text: 'Odia (or)' },
+             { value: 'ur', text: 'Urdu (ur)' },
+             { value: 'zh', text: 'Chinese (zh)' },
+             { value: 'ja', text: 'Japanese (ja)' },
+             { value: 'ko', text: 'Korean (ko)' },
+             { value: 'ar', text: 'Arabic (ar)' },
+             { value: 'fr', text: 'French (fr)' },
+             { value: 'de', text: 'German (de)' },
+             { value: 'es', text: 'Spanish (es)' },
+             { value: 'pt', text: 'Portuguese (pt)' },
+             { value: 'ru', text: 'Russian (ru)' },
+             { value: 'it', text: 'Italian (it)' }
+           ],
+           supportsBilingual: false
          }
   },
 
@@ -988,6 +1017,7 @@ export default () => ({
       '6': 'chandra',
       '7': 'qwen3',
       '8': 'surya_table',
+      '9': 'paddle_table',
     };
     return engineMap[engineValue] || 'google';
   },

@@ -363,6 +363,9 @@ def _has_structured_blocks(blocks: list[Block]) -> bool:
         content = (block.content or "").strip()
         if block.type == "table" or "<table" in content.lower():
             return True
+        # Tab characters indicate TSV table rows — treat as structured.
+        if "\t" in content:
+            return True
     return False
 
 
@@ -602,6 +605,7 @@ def enrich_document_from_page_ocr(
     page: Any | None,
     *,
     engine: str = "surya",
+    rebuild_blocks: bool = True,
 ) -> PageDocument:
     """Fill dimensions and spatial blocks from stored page OCR boxes (Surya JSON)."""
     if page is None:
@@ -643,8 +647,10 @@ def enrich_document_from_page_ocr(
     if ph:
         doc.page_height = int(ph)
 
-    need_rebuild = _blocks_lack_spatial_bboxes(doc.blocks) or _blocks_look_like_lines(
-        doc.blocks, doc.page_height
+    need_rebuild = rebuild_blocks and (
+        _blocks_lack_spatial_bboxes(doc.blocks) or _blocks_look_like_lines(
+            doc.blocks, doc.page_height
+        )
     )
     if need_rebuild:
         built = _blocks_from_bounding_boxes(scaled)
@@ -667,6 +673,10 @@ def document_for_revision(
     doc_data = getattr(revision, "document", None)
     if doc_data:
         doc = PageDocument.from_dict(doc_data)
+        if doc.blocks:
+            # Blocks were explicitly saved — only update page dimensions, never
+            # rebuild from raw OCR bboxes (which carry pre-edit content).
+            return enrich_document_from_page_ocr(doc, page, rebuild_blocks=False)
     else:
         page_width = getattr(page, "page_width", None) if page else None
         page_height = getattr(page, "page_height", None) if page else None

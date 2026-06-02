@@ -38,6 +38,7 @@ SUPPORTED_ENGINES = [
     "deepseek",
     "chandra",
     "qwen3",
+    "paddle_table",
 ]
 
 ENGINE_MAP = {
@@ -49,6 +50,7 @@ ENGINE_MAP = {
     "6": "chandra",
     "7": "qwen3",
     "8": "surya_table",
+    "9": "paddle_table",
 }
 
 
@@ -69,6 +71,7 @@ ENGINE_LABELS = {
     "deepseek": "DeepSeek",
     "chandra": "Chandra",
     "qwen3": "Qwen 2VL",
+    "paddle_table": "Paddle Table OCR",
 }
 
 # Engines that return HTML (not plain text or Markdown)

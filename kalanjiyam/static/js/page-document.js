@@ -284,7 +284,9 @@ export function hasStructuredBlocks(blocks) {
     if (STRUCTURED_BLOCK_TYPES.has(b.type)) return true;
     if (b.children?.length) return true;
     const content = String(b.content || '');
-    return b.type === 'table' || /<table[\s>]/i.test(content);
+    if (b.type === 'table' || /<table[\s>]/i.test(content)) return true;
+    // Tab characters indicate TSV table rows — treat as structured.
+    return content.includes('\t');
   });
 }
 
@@ -321,6 +323,8 @@ export function reclusterDocumentBlocks(doc) {
       text: b.content || '',
     }))
     .filter((b) => b.x2 > b.x1 && b.y2 > b.y1);
+  // If some blocks have no spatial bbox, reclustering would silently drop their content.
+  if (boxes.length < doc.blocks.length) return doc;
   const paras = clusterBoxesToParagraphs(boxes);
   if (!paras.length || paras.length >= doc.blocks.length) return doc;
   return {
