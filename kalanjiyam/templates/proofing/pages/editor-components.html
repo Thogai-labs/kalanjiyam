@@ -249,18 +249,18 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
           </li>
           
           <!-- Additional Language for Bilingual Support -->
-          <li class="mb-3" x-show="selectedEngine === '2' || selectedEngine === '3'">
+          <li class="mb-3" x-show="selectedEngine === 'tesseract' || selectedEngine === 'surya' || selectedEngine === 'surya_table'">
             <div class="dropdown-item-no-hover">
               <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Additional Language (Optional):') }}</label>
-              <select class="form-select-enhanced" 
+              <select class="form-select-enhanced"
                       id="additional-language-select"
                       @click.stop>
                 <option value="">{{ _('None') }}</option>
                 <!-- Options will be populated by JavaScript -->
               </select>
               <p class="text-xs text-peacock-secondary mt-1">
-                <span x-show="selectedEngine === '2'">{{ _('For bilingual documents (e.g., Sanskrit + English)') }}</span>
-                <span x-show="selectedEngine === '3'">{{ _('Engine auto-detects languages, but you can specify additional ones') }}</span>
+                <span x-show="selectedEngine === 'tesseract'">{{ _('For bilingual documents (e.g., Sanskrit + English)') }}</span>
+                <span x-show="selectedEngine === 'surya' || selectedEngine === 'surya_table'">{{ _('Engine auto-detects languages, but you can specify additional ones') }}</span>
               </p>
             </div>
           </li>
@@ -798,7 +798,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
         Translation (<span x-text="getTranslationSourceLang()"></span> → <span x-text="getTranslationTargetLang()"></span>)
         <span class="text-sm font-normal text-peacock-secondary">via <span x-text="getTranslationEngine()"></span></span>
       </h4>
-      <div class="text-sm leading-relaxed whitespace-pre-wrap" x-text="getTranslationContent()"></div>
+      <div class="text-sm leading-relaxed" x-html="getTranslationContent()"></div>
     </div>
     
     <!-- Server-side translation content -->
@@ -811,7 +811,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
           {{ _('Translation') }}
         {% endif %}
       </h4>
-      <div class="text-sm leading-relaxed whitespace-pre-wrap">{{ translation_content }}</div>
+      <div class="text-sm leading-relaxed">{{ translation_content | safe }}</div>
     </div>
     
     <!-- No translation available -->

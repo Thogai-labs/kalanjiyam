@@ -15,10 +15,28 @@
   .text-content {
     font-family: 'Noto Sans Devanagari', 'Arial', sans-serif;
     line-height: 1.8;
-    white-space: pre-wrap;
     word-wrap: break-word;
     max-height: 100%;
     overflow-y: auto;
+  }
+
+  .text-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.75rem 0;
+  }
+
+  .text-content th,
+  .text-content td {
+    border: 1px solid #d1d5db;
+    padding: 0.4rem 0.75rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .text-content th {
+    background-color: #f3f4f6;
+    font-weight: 600;
   }
   
   .content-container {
@@ -215,13 +233,13 @@
             {% if revision %}
               <!-- Original Text -->
               <div id="original-text" class="text-content">
-                {{ revision.content }}
+                {{ revision.content | safe }}
               </div>
 
               <!-- Translation Text (hidden by default) -->
               {% if selected_translation %}
                 <div id="translation-text" class="text-content hidden">
-                  {{ selected_translation.content }}
+                  {{ selected_translation.content | safe }}
                 </div>
               {% endif %}
             {% else %}

@@ -26,14 +26,14 @@ def user_can_access_project(user, project: db.Project) -> bool:
     if getattr(user, "is_admin", False) and not is_multi_tenant_enabled():
         return True
 
-    if is_multi_tenant_enabled() and is_project_publicly_viewable(project):
-        return True
-
     if not is_multi_tenant_enabled():
         from kalanjiyam import queries as q
 
         return q.user_can_view_project_legacy(user, project)
 
+    # Multi-tenant mode: org membership is always required regardless of
+    # is_publicly_viewable. That flag only controls visibility within the
+    # /books/ listing — it does not grant cross-org access.
     if not getattr(user, "is_authenticated", False):
         return False
 

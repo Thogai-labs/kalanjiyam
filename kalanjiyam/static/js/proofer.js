@@ -67,7 +67,7 @@ export default () => ({
   content: '',
 
   // OCR settings
-  selectedEngine: '1', // Default to Google OCR (1)
+  selectedEngine: 'google',
   selectedLanguage: 'sa',
 
   // Translation settings
@@ -90,10 +90,10 @@ export default () => ({
   toolbarUpdateTrigger: 0, // Used to trigger Alpine reactivity for toolbar updates
   _commandInProgress: false, // Flag to prevent callback interference during commands
 
-  // OCR Engine configurations
+  // OCR Engine configurations (keyed by engine name)
   ocrEngines: {
-    '1': {
-      name: 'Google OCR',
+    'google': {
+      name: 'Google',
       languages: [
         { value: 'sa', text: 'Sanskrit (sa)' },
         { value: 'en', text: 'English (en)' },
@@ -111,8 +111,8 @@ export default () => ({
       ],
       supportsBilingual: false
     },
-    '2': {
-      name: 'Tesseract OCR',
+    'tesseract': {
+      name: 'Tesseract',
       languages: [
         { value: 'san', text: 'Sanskrit (san)' },
         { value: 'eng', text: 'English (eng)' },
@@ -131,8 +131,8 @@ export default () => ({
       supportsBilingual: true,
       bilingualSeparator: '+'
     },
-    '3': {
-      name: 'Surya OCR',
+    'surya': {
+      name: 'Surya',
       languages: [
         { value: 'sa', text: 'Sanskrit (sa)' },
         { value: 'hi', text: 'Hindi (hi)' },
@@ -170,8 +170,47 @@ export default () => ({
       bilingualSeparator: ',',
       autoDetect: true
     },
-        '4': {
-          name: 'Nanonets OCR',
+    'surya_table': {
+      name: 'Surya Table',
+      languages: [
+        { value: 'sa', text: 'Sanskrit (sa)' },
+        { value: 'hi', text: 'Hindi (hi)' },
+        { value: 'te', text: 'Telugu (te)' },
+        { value: 'mr', text: 'Marathi (mr)' },
+        { value: 'bn', text: 'Bengali (bn)' },
+        { value: 'gu', text: 'Gujarati (gu)' },
+        { value: 'kn', text: 'Kannada (kn)' },
+        { value: 'ml', text: 'Malayalam (ml)' },
+        { value: 'ta', text: 'Tamil (ta)' },
+        { value: 'pa', text: 'Punjabi (pa)' },
+        { value: 'or', text: 'Odia (or)' },
+        { value: 'ur', text: 'Urdu (ur)' },
+        { value: 'en', text: 'English (en)' },
+        { value: 'ar', text: 'Arabic (ar)' },
+        { value: 'fa', text: 'Persian (fa)' },
+        { value: 'th', text: 'Thai (th)' },
+        { value: 'ko', text: 'Korean (ko)' },
+        { value: 'ja', text: 'Japanese (ja)' },
+        { value: 'zh', text: 'Chinese (zh)' },
+        { value: 'ru', text: 'Russian (ru)' },
+        { value: 'es', text: 'Spanish (es)' },
+        { value: 'fr', text: 'French (fr)' },
+        { value: 'de', text: 'German (de)' },
+        { value: 'it', text: 'Italian (it)' },
+        { value: 'pt', text: 'Portuguese (pt)' },
+        { value: 'nl', text: 'Dutch (nl)' },
+        { value: 'pl', text: 'Polish (pl)' },
+        { value: 'tr', text: 'Turkish (tr)' },
+        { value: 'vi', text: 'Vietnamese (vi)' },
+        { value: 'id', text: 'Indonesian (id)' },
+        { value: 'ms', text: 'Malay (ms)' }
+      ],
+      supportsBilingual: true,
+      bilingualSeparator: ',',
+      autoDetect: true
+    },
+    'nanonets': {
+      name: 'Nanonets',
           languages: [
             { value: 'sa', text: 'Sanskrit (sa)' },
             { value: 'en', text: 'English (en)' },
@@ -205,10 +244,10 @@ export default () => ({
             { value: 'id', text: 'Indonesian (id)' },
             { value: 'ms', text: 'Malay (ms)' }
           ],
-          supportsBilingual: false
-        },
-        '5': {
-          name: 'DeepSeek OCR',
+      supportsBilingual: false
+    },
+    'deepseek': {
+      name: 'DeepSeek',
           languages: [
             { value: 'sa', text: 'Sanskrit (sa)' },
             { value: 'en', text: 'English (en)' },
@@ -242,10 +281,10 @@ export default () => ({
             { value: 'id', text: 'Indonesian (id)' },
             { value: 'ms', text: 'Malay (ms)' }
           ],
-          supportsBilingual: false
-        },
-         '6': {
-           name: 'Chandra OCR',
+      supportsBilingual: false
+    },
+    'chandra': {
+      name: 'Chandra',
            languages: [
              { value: 'sa', text: 'Sanskrit (sa)' },
              { value: 'en', text: 'English (en)' },
@@ -282,10 +321,10 @@ export default () => ({
              { value: 'zh-tw', text: 'Chinese Traditional (zh-tw)' },
              { value: 'tl', text: 'Filipino (tl)' }
            ],
-           supportsBilingual: false
-         },
-         '7': {
-           name: 'Qwen 2VL OCR',
+      supportsBilingual: false
+    },
+    'qwen3': {
+      name: 'Qwen 2VL',
            languages: [
              { value: 'sa', text: 'Sanskrit (sa)' },
              { value: 'en', text: 'English (en)' },
@@ -385,8 +424,8 @@ export default () => ({
              { value: 'wo', text: 'Wolof (wo)' },
              { value: 'yo', text: 'Yoruba (yo)' }
            ],
-           supportsBilingual: false
-         }
+      supportsBilingual: false
+    },
   },
 
 
@@ -450,7 +489,7 @@ export default () => ({
         // Store editor instance on window to avoid Alpine.js Proxy wrapping
         // This is CRITICAL - Alpine's Proxy causes transaction state conflicts
         const editor = createRichEditor('rich-editor', {
-          content: initialContent || '',
+          content: '',
           onUpdate: (html) => {
             // Simple: just sync the content
             this.content = html;
@@ -467,18 +506,28 @@ export default () => ({
         
         // Store globally to avoid Alpine Proxy
         window.richEditorInstance = editor;
-        
+
         // Also store as non-reactive property (Alpine ignores properties starting with _)
         // This allows Alpine methods to access it if needed
         this._richEditor = editor;
-        
+
         // Set simple boolean flag for Alpine (for showing/hiding toolbar)
         this.richEditor = true;
-        
+
+        // Load initial content: HTML passes straight through; anything else
+        // (Markdown, plain text) is converted via marked.parse so that pipe
+        // tables and other Markdown formatting render correctly.
+        if (initialContent) {
+          if (initialContent.trim().startsWith('<')) {
+            setEditorContent(editor, initialContent);
+          } else {
+            setEditorText(editor, initialContent);
+          }
+        }
+
         // Initialize toolbar with vanilla JS (NO Alpine.js)
         if (editor) {
           initializeToolbar(editor);
-          console.log('Editor and toolbar initialized with vanilla JS (stored outside Alpine)');
         }
         
         // Store reference for manual sync
@@ -656,8 +705,13 @@ export default () => ({
         this.fromScript = settings.fromScript || this.fromScript;
         this.toScript = settings.toScript || this.toScript;
         
-        // Load OCR settings
-        this.selectedEngine = settings.selectedEngine || this.selectedEngine;
+        // Load OCR settings (migrate from old numeric keys if needed)
+        const legacyEngineMap = {'1': 'google', '2': 'tesseract', '3': 'surya', '4': 'nanonets', '5': 'deepseek', '6': 'chandra', '7': 'qwen3'};
+        const savedEngine = settings.selectedEngine;
+        if (savedEngine) {
+          const resolved = legacyEngineMap[savedEngine] || savedEngine;
+          this.selectedEngine = this.ocrEngines[resolved] ? resolved : this.selectedEngine;
+        }
         this.selectedLanguage = settings.selectedLanguage || this.selectedLanguage;
         
         // Load Translation settings
@@ -757,7 +811,7 @@ export default () => ({
     }
     
     // Update additional language options for bilingual support
-    if (additionalLanguageSelect && (engine === '2' || engine === '3')) {
+    if (additionalLanguageSelect && (engine === 'tesseract' || engine === 'surya' || engine === 'surya_table')) {
       additionalLanguageSelect.innerHTML = '<option value="">{{ _("None") }}</option>';
       
       engineConfig.languages.forEach(lang => {
@@ -770,19 +824,6 @@ export default () => ({
     }, 10); // Small delay to ensure DOM is ready
   },
 
-  // Decode numeric engine values to actual engine names
-  decodeEngine(engineValue) {
-    const engineMap = {
-      '1': 'google',
-      '2': 'tesseract', 
-      '3': 'surya',
-      '4': 'nanonets',
-      '5': 'deepseek',
-      '6': 'chandra',
-      '7': 'qwen3'
-    };
-    return engineMap[engineValue] || 'google';
-  },
 
   // Get combined language parameter for bilingual support
   getCombinedLanguage() {
@@ -791,7 +832,7 @@ export default () => ({
     const additionalLanguageSelect = document.getElementById('additional-language-select');
     const additionalLanguage = additionalLanguageSelect ? additionalLanguageSelect.value : '';
     
-    if (engine === '2' && additionalLanguage) {
+    if (engine === 'tesseract' && additionalLanguage) {
       // Tesseract uses + separator
       return `${primaryLanguage}+${additionalLanguage}`;
     }
@@ -802,23 +843,25 @@ export default () => ({
   async runOCR() {
     this.isRunningOCR = true;
 
-    const engineKey = window._ocrSelectedEngine || this.selectedEngine;
-    const decodedEngine = this.decodeEngine(engineKey);
+    const engine = window._ocrSelectedEngine || this.selectedEngine;
     const combinedLanguage = this.getCombinedLanguage();
     const { pathname } = window.location;
-    const url = pathname.replace('/proofing/', '/api/ocr/') + `?engine=${decodedEngine}&language=${combinedLanguage}`;
+    const url = pathname.replace('/proofing/', '/api/ocr/') + `?engine=${engine}&language=${combinedLanguage}`;
 
     try {
       const response = await fetch(url);
       if (response.ok) {
         const content = await response.text();
-        
+
         // Update the rich editor if available
         const editor = window.richEditorInstance;
         if (editor) {
-          // OCR returns plain text, so use setEditorText
-          setEditorText(editor, content);
-          // Get HTML content from editor
+          // HTML-producing engines return content starting with '<'
+          if (content.trim().startsWith('<')) {
+            setEditorContent(editor, content);
+          } else {
+            setEditorText(editor, content);
+          }
           this.content = getEditorContent(editor);
         } else {
           // Fallback to textarea if editor not initialized

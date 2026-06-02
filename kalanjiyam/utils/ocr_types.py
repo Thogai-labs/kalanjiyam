@@ -16,6 +16,7 @@ SUPPORTED_ENGINES = [
     "google",
     "tesseract",
     "surya",
+    "surya_table",
     "nanonets",
     "deepseek",
     "chandra",
@@ -41,21 +42,39 @@ def normalize_engine(engine: str) -> str:
     return ENGINE_MAP.get(engine, engine)
 
 
+ENGINE_LABELS = {
+    "google": "Google",
+    "tesseract": "Tesseract",
+    "surya": "Surya",
+    "surya_table": "Surya Table",
+    "nanonets": "Nanonets",
+    "deepseek": "DeepSeek",
+    "chandra": "Chandra",
+    "qwen3": "Qwen 2VL",
+}
+
+# Engines that return HTML (not plain text or Markdown)
+HTML_ENGINES = {"nanonets", "chandra"}
+
+# Engines that return Markdown
+MARKDOWN_ENGINES = {"deepseek", "qwen3"}
+
+
 def build_engine_choices(available_engines: list[str], is_super_admin: bool) -> list[dict]:
     """Build the list of engine choices for the OCR form.
 
-    Regular users see "OCR 1", "OCR 2" etc. Super-admins see the real name too.
+    Value is always the engine name (for correct backend calls).
+    Label is "OCR N" for regular users, real name for super admins.
     Only engines returned by the OCR service ping are included.
-    Engine names are normalised to lowercase before matching.
     """
     choices = []
-    for raw_name in available_engines:
+    for i, raw_name in enumerate(available_engines, start=1):
         engine_name = raw_name.lower().strip()
-        number = REVERSE_ENGINE_MAP.get(engine_name)
-        if number is None:
+        if engine_name not in SUPPORTED_ENGINES:
             continue
-        label = f"OCR {number}" if not is_super_admin else f"OCR {number} ({engine_name})"
-        choices.append({"value": number, "label": label})
+        real_name = ENGINE_LABELS.get(engine_name, engine_name.capitalize())
+        label = real_name if is_super_admin else f"OCR {i}"
+        choices.append({"value": engine_name, "label": label})
     return choices
 
 
