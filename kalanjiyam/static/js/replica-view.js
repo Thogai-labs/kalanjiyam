@@ -1,7 +1,7 @@
 /* Bbox-scaled replica canvas for page layout editing. */
 
 import { scaleBoxesToImage } from './osd-overlay.js';
-import { normalizeUnicodeText } from './page-document.js';
+import { blockReplicaInnerHtml, normalizeUnicodeText } from './page-document.js';
 
 export class ReplicaView {
   constructor(container, options = {}) {
@@ -51,14 +51,17 @@ export class ReplicaView {
 
     blocks.forEach((block) => {
       const [x1, y1, x2, y2] = block.bbox || [0, 0, 0, 0];
+      const isTable =
+        block.type === 'table' || /<table[\s>]/i.test(String(block.content || ''));
       const el = document.createElement('div');
-      el.className = `ocr-replica-block book-editor-text absolute overflow-hidden text-base leading-relaxed p-1 ${
+      el.className = `ocr-replica-block book-editor-text absolute overflow-auto text-base leading-relaxed p-1 ocr-replica-block--${block.type || 'paragraph'} ${
         this.selectedId === block.id
           ? 'ring-2 ring-amber-600 z-10 bg-amber-50'
           : 'bg-white hover:bg-amber-50'
       }`;
       el.setAttribute('lang', 'und');
       el.dataset.blockId = block.id;
+      el.dataset.blockType = block.type || 'paragraph';
       if (x2 > x1 && y2 > y1) {
         el.style.left = `${(100 * x1) / pw}%`;
         el.style.top = `${(100 * y1) / ph}%`;
@@ -69,12 +72,16 @@ export class ReplicaView {
         el.style.width = '100%';
         el.style.marginBottom = '0.5rem';
       }
-      el.contentEditable = 'true';
-      el.innerText = normalizeUnicodeText(block.content || '');
-      el.addEventListener('input', () => {
-        block.content = normalizeUnicodeText(el.innerText);
-        this.onChange(this.document);
-      });
+      if (isTable) {
+        el.innerHTML = blockReplicaInnerHtml(block);
+      } else {
+        el.contentEditable = 'true';
+        el.innerText = normalizeUnicodeText(block.content || '');
+        el.addEventListener('input', () => {
+          block.content = normalizeUnicodeText(el.innerText);
+          this.onChange(this.document);
+        });
+      }
       el.addEventListener('focus', () => {
         if (this.selectedId !== block.id) {
           this.selectedId = block.id;

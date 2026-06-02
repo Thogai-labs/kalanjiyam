@@ -326,7 +326,25 @@ def normalize_geometry(
     return scaled, normalized_blocks, out_w, out_h
 
 
+STRUCTURED_BLOCK_TYPES = frozenset({"table", "figure"})
+
+
+def _has_structured_blocks(blocks: list[Block]) -> bool:
+    """True when OCR already classified layout blocks we must not line-merge away."""
+    for block in blocks:
+        if block.type in STRUCTURED_BLOCK_TYPES:
+            return True
+        if block.children:
+            return True
+        content = (block.content or "").strip()
+        if block.type == "table" or "<table" in content.lower():
+            return True
+    return False
+
+
 def _blocks_look_like_lines(blocks: list[Block], page_height: int | None) -> bool:
+    if _has_structured_blocks(blocks):
+        return False
     if len(blocks) < 4:
         return False
     spatial = [b for b in blocks if b.bbox and b.bbox != [0, 0, 0, 0]]
@@ -451,16 +469,61 @@ def _blocks_from_bounding_boxes(
     return blocks
 
 
+def _block_replica_inner_html(block: Block) -> str:
+    """HTML inside a replica block (tables as grids, not escaped plain text)."""
+    content = (block.content or "").strip()
+    if block.type == "table" or "<table" in content.lower():
+        if "<table" in content.lower():
+            return content
+        return _plain_text_to_html_table(content)
+    return html.escape(block.content).replace("\n", "<br>")
+
+
+def _plain_text_to_html_table(text: str) -> str:
+    """Turn TSV / pipe-grid plain text into a simple HTML table."""
+    rows: list[list[str]] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if "|" in line:
+            cells = [c.strip() for c in line.strip("|").split("|")]
+        elif "\t" in line:
+            cells = [c.strip() for c in line.split("\t")]
+        else:
+            cells = [line]
+        if cells and not all(c.replace("-", "").strip() == "" for c in cells):
+            rows.append(cells)
+    if not rows:
+        return html.escape(text).replace("\n", "<br>")
+    col_count = max(len(r) for r in rows)
+    parts = ['<table class="ocr-detected-table">']
+    for row in rows:
+        parts.append("<tr>")
+        for i in range(col_count):
+            cell = html.escape(row[i] if i < len(row) else "")
+            parts.append(f"<td>{cell}</td>")
+        parts.append("</tr>")
+    parts.append("</table>")
+    return "".join(parts)
+
+
 def _blocks_to_flow_html(blocks: list[Block]) -> str:
     parts = []
     for block in sorted(blocks, key=lambda b: b.reading_order):
-        text = html.escape(block.content).replace("\n", "<br>")
-        if not text:
+        if not block.content.strip() and block.type != "table":
             continue
+        if block.type == "table":
+            inner = _block_replica_inner_html(block)
+            parts.append(
+                f'<div class="ocr-detected-table-wrap" data-block-id="{block.id}">'
+                f"{inner}</div>"
+            )
+            continue
+        text = html.escape(block.content).replace("\n", "<br>")
         tag = {
             "heading": "h2",
             "verse": "div",
-            "table": "div",
             "figure": "div",
         }.get(block.type, "p")
         cls = ' class="ocr-verse"' if block.type == "verse" else ""
@@ -481,12 +544,13 @@ def _blocks_to_replica_html(
             top = 100 * y1 / page_height
             width = 100 * (x2 - x1) / page_width
             height = 100 * (y2 - y1) / page_height
-        text = html.escape(block.content).replace("\n", "<br>")
+        inner_html = _block_replica_inner_html(block)
         inner.append(
-            f'<div class="ocr-replica-block" data-block-id="{block.id}" '
+            f'<div class="ocr-replica-block ocr-replica-block--{block.type}" '
+            f'data-block-id="{block.id}" '
             f'data-block-type="{block.type}" '
             f'style="left:{left:.2f}%;top:{top:.2f}%;width:{width:.2f}%;'
-            f'min-height:{height:.2f}%;">{text}</div>'
+            f'min-height:{height:.2f}%;">{inner_html}</div>'
         )
     return (
         f'<div class="ocr-replica-page" '

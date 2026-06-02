@@ -15,6 +15,8 @@ import {
 import {
   parseDocument,
   documentToPlainText,
+  documentToFlowHtml,
+  hasStructuredBlocks,
   fromOcrPayload,
   parseBoundingBoxes,
   overlayBoxesFromPayload,
@@ -520,9 +522,11 @@ export default () => ({
     }
     this.content = plain;
     const editor = this.ensureFlowEditor();
-    if (editor && plain) {
-      setEditorText(editor, plain);
-    } else if (editor && !plain) {
+    if (!editor) return;
+    const html = this._flowHtmlFromDocument();
+    if (html) {
+      setEditorContent(editor, html);
+    } else {
       setEditorContent(editor, '');
     }
   },
@@ -642,6 +646,18 @@ export default () => ({
     if (this.editorMode === 'flow') {
       this._applyFlowEditorContent();
     }
+  },
+
+  _flowHtmlFromDocument() {
+    if (!this.pageDocument) return '';
+    if (hasStructuredBlocks(this.pageDocument.blocks)) {
+      return documentToFlowHtml(this.pageDocument);
+    }
+    const plain = documentToPlainText(this.pageDocument);
+    return plain
+      .split('\n\n')
+      .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+      .join('');
   },
 
   applyOcrPayload(payload) {

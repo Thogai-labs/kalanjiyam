@@ -129,8 +129,9 @@ export class OsdBboxOverlay {
       el.setAttribute('y', rect.y);
       el.setAttribute('width', rect.width);
       el.setAttribute('height', rect.height);
-      el.setAttribute('fill', 'rgba(37, 99, 235, 0.15)');
-      el.setAttribute('stroke', '#2563eb');
+      const isTable = box.blockType === 'table';
+      el.setAttribute('fill', isTable ? 'rgba(16, 185, 129, 0.2)' : 'rgba(37, 99, 235, 0.15)');
+      el.setAttribute('stroke', isTable ? '#059669' : '#2563eb');
       el.setAttribute('stroke-width', '2');
       el.setAttribute('vector-effect', 'non-scaling-stroke');
       el.style.pointerEvents = 'all';

@@ -66,6 +66,30 @@ export function documentToPlainText(doc) {
     .join('\n\n');
 }
 
+export function documentToFlowHtml(doc) {
+  const blocks = [...(doc.blocks || [])].sort(
+    (a, b) => (a.reading_order || 0) - (b.reading_order || 0),
+  );
+  const parts = [];
+  blocks.forEach((block) => {
+    const content = String(block.content || '').trim();
+    if (!content && block.type !== 'table') return;
+    if (block.type === 'table' || /<table[\s>]/i.test(content)) {
+      parts.push(
+        `<div class="ocr-detected-table-wrap" data-block-id="${block.id}">${blockReplicaInnerHtml(block)}</div>`,
+      );
+      return;
+    }
+    const text = content
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>');
+    parts.push(`<p data-block-id="${block.id}">${text}</p>`);
+  });
+  return parts.join('');
+}
+
 export function fromOcrPayload(payload) {
   if (payload.document) {
     return parseDocument(payload.document);
@@ -185,6 +209,7 @@ export function boxesFromDocumentBlocks(blocks) {
         y2: bbox[3],
         text: block.content || '',
         blockId: block.id,
+        blockType: block.type || 'paragraph',
       };
     })
     .filter(Boolean);
@@ -197,7 +222,20 @@ export function overlayBoxesFromPayload(payload, pageDocument) {
   return clusterBoxesToParagraphs(lines);
 }
 
+const STRUCTURED_BLOCK_TYPES = new Set(['table', 'figure']);
+
+export function hasStructuredBlocks(blocks) {
+  if (!blocks?.length) return false;
+  return blocks.some((b) => {
+    if (STRUCTURED_BLOCK_TYPES.has(b.type)) return true;
+    if (b.children?.length) return true;
+    const content = String(b.content || '');
+    return b.type === 'table' || /<table[\s>]/i.test(content);
+  });
+}
+
 export function blocksLookLikeLines(blocks, pageHeight) {
+  if (hasStructuredBlocks(blocks)) return false;
   if (!blocks || blocks.length < 4) return false;
   const spatial = blocks.filter(
     (b) => b.bbox && b.bbox.length === 4 && b.bbox[2] > b.bbox[0] && b.bbox[3] > b.bbox[1],
@@ -213,7 +251,11 @@ export function blocksLookLikeLines(blocks, pageHeight) {
 }
 
 export function reclusterDocumentBlocks(doc) {
-  if (!doc?.blocks?.length || !blocksLookLikeLines(doc.blocks, doc.page_height)) {
+  if (
+    !doc?.blocks?.length
+    || hasStructuredBlocks(doc.blocks)
+    || !blocksLookLikeLines(doc.blocks, doc.page_height)
+  ) {
     return doc;
   }
   const boxes = doc.blocks
@@ -340,4 +382,59 @@ export function reorderBlocks(blocks) {
   blocks.forEach((b, i) => {
     b.reading_order = i + 1;
   });
+}
+
+export function blockReplicaInnerHtml(block) {
+  const content = String(block.content || '').trim();
+  if (block.type === 'table' || /<table[\s>]/i.test(content)) {
+    if (/<table[\s>]/i.test(content)) return content;
+    return plainTextToHtmlTable(content);
+  }
+  return content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>');
+}
+
+function plainTextToHtmlTable(text) {
+  const rows = [];
+  text.split('\n').forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    let cells;
+    if (trimmed.includes('|')) {
+      cells = trimmed.replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+    } else if (trimmed.includes('\t')) {
+      cells = trimmed.split('\t').map((c) => c.trim());
+    } else {
+      cells = [trimmed];
+    }
+    if (cells.length && !cells.every((c) => /^-+$/.test(c))) {
+      rows.push(cells);
+    }
+  });
+  if (!rows.length) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>');
+  }
+  const cols = Math.max(...rows.map((r) => r.length));
+  const esc = (s) =>
+    String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  let html = '<table class="ocr-detected-table">';
+  rows.forEach((row) => {
+    html += '<tr>';
+    for (let i = 0; i < cols; i += 1) {
+      html += `<td>${esc(row[i] || '')}</td>`;
+    }
+    html += '</tr>';
+  });
+  html += '</table>';
+  return html;
 }

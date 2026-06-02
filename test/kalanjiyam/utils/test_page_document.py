@@ -81,6 +81,33 @@ def test_enrich_document_from_surya_boxes():
     assert doc.blocks[0].bbox == [0, 0, 200, 20]
 
 
+def test_table_blocks_not_merged_into_paragraphs():
+    """Line-level reclustering must not destroy OCR table blocks."""
+    lines = [
+        {
+            "id": f"b{i}",
+            "type": "table" if i == 0 else "paragraph",
+            "bbox": [10, 10 + i * 30, 500, 35 + i * 30],
+            "content": "A\tB\n1\t2" if i == 0 else f"line {i}",
+            "reading_order": i + 1,
+        }
+        for i in range(8)
+    ]
+    ocr = OcrResponse(
+        text_content="",
+        bounding_boxes=[(10, 10, 500, 40, "A\tB"), (10, 40, 500, 70, "1\t2")],
+        blocks=lines,
+        page_width=600,
+        page_height=800,
+        content_format="blocks",
+    )
+    doc = PageDocument.from_ocr_response(ocr)
+    table_blocks = [b for b in doc.blocks if b.type == "table"]
+    assert table_blocks, "expected at least one table block preserved"
+    html = doc.to_html(replica=True)
+    assert "ocr-detected-table" in html or "<table" in html
+
+
 def test_normalize_geometry_scales_to_image():
     from kalanjiyam.utils.page_document import normalize_geometry
 
