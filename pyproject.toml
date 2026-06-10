@@ -7,6 +7,7 @@ dependencies = [
     "alembic>=1.8",
     "Babel>=2.12",
     "bcrypt>=4.0",
+    "boto3>=1.28",
     "celery>=5.2",
     "click>=8.1",
     "conllu>=4.5",
@@ -54,6 +55,7 @@ dev = [
     "pytest-cov>=4.0",
     "black>=22.3",
     "ruff>=0.1",
+    "moto>=5.2.2",
 ]
 
 [tool.coverage.run]

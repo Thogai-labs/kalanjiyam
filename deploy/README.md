@@ -12,6 +12,27 @@ set `OCR_SERVICE_URL` to reach it from containers.
 
 Full guide: `docs/production-deploy.rst`.
 
+## File storage
+
+Uploads (source PDFs, page images, editor images) go through an S3-compatible
+storage layer (`kalanjiyam/utils/storage.py`). The backend is chosen by config:
+
+| `.env` key | Values | Notes |
+|------------|--------|-------|
+| `STORAGE_BACKEND` | `s3` (default in compose) or `local` | `local` writes directly under `FLASK_UPLOAD_FOLDER` |
+| `S3_ENDPOINT_URL` | URL | Set by compose to the bundled gateway; point at MinIO/SeaweedFS/Ceph/AWS to swap backends |
+| `S3_BUCKET` | name | Default `uploads` |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | strings | Required when `STORAGE_BACKEND=s3` |
+| `S3_REGION` | region | Optional; self-hosted gateways ignore it |
+| `S3_PUBLIC_ENDPOINT_URL` | URL | Optional; if set, page images redirect to presigned URLs instead of streaming through Flask |
+
+The bundled gateway is [Versity Gateway](https://github.com/versity/versitygw)
+(Apache 2.0), running in POSIX mode over the existing data directory. Files on
+disk stay plain files: in prod, `~/kalanjiyam-data/uploads/` is exposed as the
+`uploads` bucket, so **pre-existing uploads need no migration**. To move a
+deployment to a different S3 backend later, sync the objects (`rclone sync` /
+`aws s3 sync`) and change the endpoint/credential values — no code changes.
+
 ## How it works?
 
 ```mermaid

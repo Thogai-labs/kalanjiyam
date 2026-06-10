@@ -10,7 +10,7 @@ import functools
 import hashlib
 from pathlib import Path
 
-from flask import current_app, url_for
+from flask import url_for
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
 assert STATIC_DIR.exists(), "Could not find static directory."
@@ -38,9 +38,15 @@ def hashed_static(filename: str) -> str:
 
 
 def get_page_image_filepath(project_slug: str, page_slug: str) -> Path:
-    """Get the location of the given image on disk.
+    """Get a local filesystem path for the given page image.
+
+    With the local storage backend, this is the image's location on disk.
+    With a remote backend (S3), the image is downloaded to a local cache
+    first. Either way, the returned path may not exist if the image is
+    missing; callers should check ``.exists()``.
 
     This function must run within an app context.
     """
-    image_dir = Path(current_app.config["UPLOAD_FOLDER"]) / "projects" / project_slug
-    return image_dir / "pages" / f"{page_slug}.jpg"
+    from kalanjiyam.utils.storage import get_storage, page_image_key
+
+    return get_storage().local_copy(page_image_key(project_slug, page_slug))

@@ -24,6 +24,13 @@
 #   REDIS_URL=redis://kalanjiyam-redis:6379/0
 #   KALANJIYAM_HOST_IP=127.0.0.1
 #   KALANJIYAM_HOST_PORT=5000
+#
+# Storage (S3-compatible, served by the bundled Versity Gateway):
+#   STORAGE_BACKEND=s3
+#   S3_BUCKET=uploads
+#   S3_ACCESS_KEY_ID=<strong random string>
+#   S3_SECRET_ACCESS_KEY=<strong random string>
+# Set STORAGE_BACKEND=local to keep the legacy direct-filesystem mode.
 
 set -euo pipefail
 
@@ -59,6 +66,15 @@ check_env() {
     if [[ "${APPLICATION_URL_PREFIX:-}" != "/kalanjiyam" ]]; then
         echo "ERROR: APPLICATION_URL_PREFIX must be '/kalanjiyam' in .env"
         exit 1
+    fi
+
+    if [[ "${STORAGE_BACKEND:-s3}" == "s3" ]]; then
+        for var in S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
+            if [[ -z "${!var:-}" ]]; then
+                echo "ERROR: ${var} is not set in .env (required when STORAGE_BACKEND=s3)"
+                exit 1
+            fi
+        done
     fi
 
     mkdir -p "${HOME}/kalanjiyam-data/uploads"

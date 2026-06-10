@@ -195,23 +195,19 @@ def create_project():
             form.local_file.data.stream.seek(cur_pos)
         ensure_storage_quota_for_user(current_user, upload_size)
 
-        # Create all directories for this project ahead of time.
-        # FIXME(arun): push this further into the Celery task.
-        project_dir = Path(current_app.config["UPLOAD_FOLDER"]) / "projects" / slug
-        pdf_dir = project_dir / "pdf"
-        page_image_dir = project_dir / "pages"
-        pdf_dir.mkdir(parents=True, exist_ok=True)
-        page_image_dir.mkdir(parents=True, exist_ok=True)
-
         # Save the original PDF so that it can be downloaded later or reused
-        # for future tasks (thumbnails, better image formats, etc.)
-        pdf_path = pdf_dir / "source.pdf"
-        form.local_file.data.save(pdf_path)
+        # for future tasks (thumbnails, better image formats, etc.). The
+        # Celery worker fetches it from storage by key, so web and worker
+        # don't need a shared filesystem.
+        from kalanjiyam.utils.storage import get_storage, pdf_key
+
+        source_pdf_key = pdf_key(slug)
+        form.local_file.data.stream.seek(0)
+        get_storage().save(source_pdf_key, form.local_file.data.stream)
 
         task = project_tasks.create_project.delay(
             display_title=title,
-            pdf_path=str(pdf_path),
-            output_dir=str(page_image_dir),
+            pdf_key=source_pdf_key,
             app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
             creator_id=current_user.id,
         )
