@@ -2,12 +2,31 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from kalanjiyam import database as db
 from kalanjiyam.utils.ocr_types import OcrResponse, serialize_bounding_boxes
 from kalanjiyam.utils.page_document import PageDocument, normalize_geometry
+
+
+def _stamp_provenance(doc: PageDocument, engine: str, model: dict | None) -> None:
+    """Record which engine/model produced each block and when.
+
+    Engines never send `source` themselves (platform-owned, see
+    docs/ocr-service-contract.rst), so a fresh OCR run stamps every block.
+    """
+    source: dict[str, Any] = {
+        "engine": engine,
+        "ocr_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    if model and model.get("name"):
+        version = model.get("version")
+        source["model"] = f"{model['name']}/{version}" if version else str(model["name"])
+    for block in doc.blocks:
+        block.source = dict(source)
+        block.manually_edited = False
 
 
 def image_size(path: Path) -> tuple[int, int] | None:
@@ -62,12 +81,15 @@ def apply_ocr_to_page(
         page_height=ph or ocr.page_height or image_h,
         pipeline=ocr.pipeline,
         source_type=ocr.source_type,
+        model=ocr.model,
     )
-    return PageDocument.from_ocr_response(
+    doc = PageDocument.from_ocr_response(
         normalized,
         image_width=pw or image_w,
         image_height=ph or image_h,
     )
+    _stamp_provenance(doc, engine, ocr.model)
+    return doc
 
 
 def ocr_response_to_api_dict(
@@ -101,9 +123,11 @@ def ocr_response_to_api_dict(
         image_width=pw or image_width,
         image_height=ph or image_height,
     )
+    _stamp_provenance(doc, engine, ocr.model)
     return {
         "source_type": ocr.source_type,
         "page_width": doc.page_width,
         "page_height": doc.page_height,
+        "page_confidence": ocr.page_confidence,
         "blocks": [b.to_dict() for b in doc.blocks],
     }

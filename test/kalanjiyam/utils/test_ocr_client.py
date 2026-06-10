@@ -145,3 +145,73 @@ def test_ocr_runner_delegates_to_remote(flask_app, tmp_path):
 
         remote.assert_called_once()
         assert result.text_content == "remote"
+
+
+def test_sanitize_block_clamps_confidence_and_filters_words():
+    from kalanjiyam.utils.ocr_client import _sanitize_block
+
+    block = _sanitize_block(
+        {
+            "id": "b1",
+            "type": "paragraph",
+            "content": "text here",
+            "confidence": 1.7,
+            "words": [
+                {"text": "text", "bbox": [0, 0, 40, 10], "confidence": 0.42},
+                # Contract: words without confidence are dropped.
+                {"text": "here", "bbox": [50, 0, 90, 10]},
+                # Words without text are dropped.
+                {"bbox": [100, 0, 140, 10], "confidence": 0.9},
+            ],
+        }
+    )
+    assert block["confidence"] == 1.0
+    assert block["words"] == [
+        {"text": "text", "confidence": 0.42, "bbox": [0.0, 0.0, 40.0, 10.0]}
+    ]
+
+
+def test_run_ocr_remote_parses_v2_contract_fields(flask_app, tmp_path):
+    img = tmp_path / "page.jpg"
+    img.write_bytes(b"fake")
+    with flask_app.app_context():
+        flask_app.config.update(OCR_SERVICE_URL="http://ocr.test", OCR_SERVICE_API_KEY="")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "contract_version": "2.0",
+            "engine": "surya",
+            "model": {"name": "surya-rec", "version": "0.6.1"},
+            "source_type": "scan",
+            "page_width": 100,
+            "page_height": 200,
+            "page_confidence": 0.91,
+            "blocks": [
+                {
+                    "id": "b1",
+                    "type": "paragraph",
+                    "bbox": [0, 0, 100, 20],
+                    "reading_order": 1,
+                    "content": "hello world",
+                    "confidence": 0.62,
+                    "language": "sa",
+                    "words": [
+                        {"text": "hello", "bbox": [0, 0, 40, 20], "confidence": 0.98},
+                        {"text": "world", "bbox": [50, 0, 100, 20], "confidence": 0.41},
+                    ],
+                }
+            ],
+        }
+
+        with patch("kalanjiyam.utils.ocr_client.httpx.Client") as client_cls:
+            client = client_cls.return_value.__enter__.return_value
+            client.post.return_value = mock_response
+
+            from kalanjiyam.utils.ocr_client import run_ocr_remote
+
+            result = run_ocr_remote(img, "surya", "sa")
+
+        assert result.model == {"name": "surya-rec", "version": "0.6.1"}
+        assert result.page_confidence == 0.91
+        assert result.blocks[0]["words"][1]["confidence"] == 0.41

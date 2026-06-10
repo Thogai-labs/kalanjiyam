@@ -101,6 +101,10 @@ export default () => ({
   ocrDropdownOpen: false,
   showOcrEngineInfo: false,
 
+  // Confidence review state
+  uncertainCount: 0,
+  _uncertainCursor: -1,
+
   // Internal-only
   layoutClasses: CLASSES_SIDE_BY_SIDE,
   isRunningOCR: false,
@@ -510,12 +514,14 @@ export default () => ({
         this.content = html;
         const contentTextarea = document.getElementById('content');
         if (contentTextarea) contentTextarea.value = html;
-        // Rebuild pageDocument blocks from flow HTML so replica stays in sync
-        const newBlocks = blocksFromFlowHtml(html);
+        // Rebuild pageDocument blocks from flow HTML so replica stays in sync.
+        // Pass the current blocks so ids/geometry/provenance survive the trip.
+        const newBlocks = blocksFromFlowHtml(html, this.pageDocument?.blocks || []);
         if (newBlocks.length && this.pageDocument) {
           this.pageDocument = { ...this.pageDocument, blocks: newBlocks };
           const docField = document.getElementById('document');
           if (docField) docField.value = JSON.stringify(this.pageDocument);
+          this._updateUncertainCount();
         }
         this.hasUnsavedChanges = true;
       },
@@ -670,8 +676,36 @@ export default () => ({
     }, 200);
   },
 
+  /* Blocks the model was unsure about and no human has reviewed yet. */
+  _uncertainBlocks() {
+    return (this.pageDocument?.blocks || [])
+      .filter((b) => b.confidence != null && b.confidence < 0.75 && !b.manually_edited)
+      .sort((a, b) => (a.reading_order || 0) - (b.reading_order || 0));
+  },
+
+  _updateUncertainCount() {
+    this.uncertainCount = this._uncertainBlocks().length;
+  },
+
+  /* Cycle through low-confidence blocks: highlight on the scan and in the
+   * editor pane (replica or flow). */
+  jumpToNextUncertain() {
+    const uncertain = this._uncertainBlocks();
+    if (!uncertain.length) return;
+    this._uncertainCursor = (this._uncertainCursor + 1) % uncertain.length;
+    const block = uncertain[this._uncertainCursor];
+    if (this._bboxOverlay) this._bboxOverlay.highlightBlockId(block.id);
+    if (this.editorMode === 'replica' && this._replicaView) {
+      this._replicaView.focusBlock(block.id);
+    } else {
+      const el = document.querySelector(`#rich-editor [data-block-id="${block.id}"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  },
+
   _syncDocumentToForm() {
     if (!this.pageDocument) return;
+    this._updateUncertainCount();
 
     const plain = documentToPlainText(this.pageDocument);
     this._flowPlainCache = plain;
@@ -692,7 +726,10 @@ export default () => ({
 
   _flowHtmlFromDocument() {
     if (!this.pageDocument) return '';
-    if (hasStructuredBlocks(this.pageDocument.blocks)) {
+    // Always render via documentToFlowHtml: it carries data-block-id, which
+    // lets flow edits round-trip back onto the same blocks (geometry,
+    // confidence, provenance intact).
+    if (this.pageDocument.blocks?.length) {
       return documentToFlowHtml(this.pageDocument);
     }
     const plain = documentToPlainText(this.pageDocument);

@@ -123,3 +123,92 @@ def test_normalize_geometry_scales_to_image():
     assert pw == 1700
     assert ph == 2200
     assert scaled[0][2] == 850
+
+
+def test_block_round_trip_preserves_edit_and_provenance():
+    """manually_edited, source, and words must survive save/reload."""
+    from kalanjiyam.utils.page_document import Block
+
+    original = {
+        "id": "b1",
+        "type": "paragraph",
+        "bbox": [0, 0, 100, 20],
+        "content": "hello",
+        "reading_order": 1,
+        "confidence": 0.62,
+        "language": "sa",
+        "manually_edited": True,
+        "source": {"engine": "surya", "model": "surya-rec/0.6.1", "ocr_at": "2026-06-10T09:00:00+00:00"},
+        "words": [{"text": "hello", "confidence": 0.62, "bbox": [0, 0, 100, 20]}],
+    }
+    block = Block.from_dict(original)
+    assert block.manually_edited is True
+    assert block.source["engine"] == "surya"
+    assert block.words[0]["confidence"] == 0.62
+
+    d = Block.from_dict(block.to_dict()).to_dict()
+    assert d["manually_edited"] is True
+    assert d["source"]["model"] == "surya-rec/0.6.1"
+    assert d["words"] == original["words"]
+
+
+def test_block_from_dict_clamps_confidence():
+    from kalanjiyam.utils.page_document import Block
+
+    assert Block.from_dict({"content": "x", "confidence": 1.4}).confidence == 1.0
+    assert Block.from_dict({"content": "x", "confidence": -0.2}).confidence == 0.0
+    assert Block.from_dict({"content": "x", "confidence": "bad"}).confidence is None
+    assert Block.from_dict({"content": "x"}).confidence is None
+
+
+def test_normalize_geometry_scales_word_bboxes():
+    from kalanjiyam.utils.page_document import normalize_geometry
+
+    _, blocks, _, _ = normalize_geometry(
+        [],
+        [
+            {
+                "id": "b1",
+                "bbox": [0, 0, 100, 20],
+                "content": "x",
+                "words": [{"text": "x", "confidence": 0.9, "bbox": [0, 0, 50, 20]}],
+            }
+        ],
+        ocr_width=100,
+        ocr_height=100,
+        image_width=200,
+        image_height=200,
+    )
+    assert blocks[0]["bbox"] == [0, 0, 200, 40]
+    assert blocks[0]["words"][0]["bbox"] == [0, 0, 100, 40]
+
+
+def test_ocr_response_to_api_dict_stamps_provenance():
+    from kalanjiyam.utils.ocr_persist import ocr_response_to_api_dict
+
+    ocr = OcrResponse(
+        text_content="hello",
+        bounding_boxes=[],
+        blocks=[
+            {
+                "id": "b1",
+                "type": "paragraph",
+                "bbox": [0, 0, 100, 20],
+                "content": "hello",
+                "reading_order": 1,
+                "confidence": 0.9,
+            }
+        ],
+        content_format="blocks",
+        page_width=1000,
+        page_height=1400,
+        model={"name": "surya-rec", "version": "0.6.1"},
+        page_confidence=0.88,
+    )
+    payload = ocr_response_to_api_dict(ocr, "surya", image_width=1000, image_height=1400)
+    assert payload["page_confidence"] == 0.88
+    block = payload["blocks"][0]
+    assert block["source"]["engine"] == "surya"
+    assert block["source"]["model"] == "surya-rec/0.6.1"
+    assert "ocr_at" in block["source"]
+    assert "manually_edited" not in block  # fresh OCR is not edited

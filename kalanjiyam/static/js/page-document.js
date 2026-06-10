@@ -103,40 +103,85 @@ export function documentToFlowHtml(doc) {
   return parts.join('');
 }
 
-export function blocksFromFlowHtml(html) {
+/* Extract block text, keeping <br> as newlines (textContent drops them). */
+function elementText(el) {
+  const clone = el.cloneNode(true);
+  clone.querySelectorAll('br').forEach((br) => {
+    br.replaceWith(document.createTextNode('\n'));
+  });
+  return clone.textContent.trim();
+}
+
+/* Carry identity/geometry/provenance from a previous block onto a flow-edited
+ * one. Word spans are dropped on edit — they no longer align with the text. */
+function inheritBlock(prev, content, type, order) {
+  const edited = prev.manually_edited || normalizeUnicodeText(prev.content || '').trim() !== content;
+  return {
+    ...prev,
+    type: prev.type === 'table' ? 'table' : type,
+    reading_order: order,
+    content,
+    manually_edited: edited,
+    words: edited ? null : (prev.words ?? null),
+    children: prev.children || [],
+  };
+}
+
+export function blocksFromFlowHtml(html, previousBlocks = []) {
   if (!html) return [];
   const container = document.createElement('div');
   container.innerHTML = html;
-  const blocks = [];
-  let order = 1;
+  const prevById = new Map((previousBlocks || []).map((b) => [b.id, b]));
+  const matchedIds = new Set();
+
+  // First pass: parse elements and match blocks by data-block-id.
+  const parsed = [];
   Array.from(container.children).forEach((el) => {
     const tag = el.tagName.toLowerCase();
     // Unwrap table-wrap divs
     const tableEl = tag === 'table' ? el : el.querySelector('table');
+    const blockId = el.getAttribute('data-block-id')
+      || (tableEl && tableEl.getAttribute('data-block-id'));
     if (tableEl) {
+      parsed.push({ kind: 'table', content: tableEl.outerHTML, blockId });
+      return;
+    }
+    const text = elementText(el);
+    if (!text) return;
+    const type = (tag === 'h1' || tag === 'h2') ? 'heading' : tag === 'h3' ? 'subheading' : 'paragraph';
+    parsed.push({ kind: type, content: text, blockId });
+  });
+  parsed.forEach((p) => {
+    if (p.blockId && prevById.has(p.blockId)) matchedIds.add(p.blockId);
+  });
+
+  // Second pass: align unmatched elements to unmatched previous blocks in
+  // order, so geometry survives even when ids were stripped.
+  const unmatchedPrev = (previousBlocks || []).filter((b) => !matchedIds.has(b.id));
+  let cursor = 0;
+  const blocks = [];
+  let order = 1;
+  parsed.forEach((p) => {
+    let prev = p.blockId ? prevById.get(p.blockId) : null;
+    if (!prev && cursor < unmatchedPrev.length) {
+      prev = unmatchedPrev[cursor];
+      cursor += 1;
+    }
+    const type = p.kind === 'table' ? 'table' : p.kind;
+    if (prev) {
+      blocks.push(inheritBlock(prev, p.content, type, order));
+    } else {
       blocks.push({
         id: newBlockId(),
-        type: 'table',
+        type,
         bbox: [0, 0, 0, 0],
-        reading_order: order++,
-        content: tableEl.outerHTML,
+        reading_order: order,
+        content: p.content,
         manually_edited: true,
         children: [],
       });
-      return;
     }
-    const text = el.textContent.trim();
-    if (!text) return;
-    const type = (tag === 'h1' || tag === 'h2') ? 'heading' : tag === 'h3' ? 'subheading' : 'paragraph';
-    blocks.push({
-      id: newBlockId(),
-      type,
-      bbox: [0, 0, 0, 0],
-      reading_order: order++,
-      content: text,
-      manually_edited: true,
-      children: [],
-    });
+    order += 1;
   });
   return blocks;
 }
@@ -264,6 +309,8 @@ export function boxesFromDocumentBlocks(blocks) {
         text: block.content || '',
         blockId: block.id,
         blockType: block.type || 'paragraph',
+        confidence: block.confidence ?? null,
+        manuallyEdited: !!block.manually_edited,
       };
     })
     .filter(Boolean);

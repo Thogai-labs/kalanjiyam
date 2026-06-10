@@ -86,6 +86,44 @@ def _parse_bounding_boxes(
     return boxes
 
 
+def _clamp_confidence(value) -> float | None:
+    """Coerce a contract confidence value to a float in [0, 1], or None."""
+    if value is None:
+        return None
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return None
+    return min(1.0, max(0.0, score))
+
+
+def _sanitize_block(block: dict) -> dict:
+    """Normalize confidence/words on a contract block (see ocr-service-contract)."""
+    item = dict(block)
+    if "confidence" in item:
+        item["confidence"] = _clamp_confidence(item["confidence"])
+    words = item.get("words")
+    if isinstance(words, list):
+        clean_words = []
+        for word in words:
+            if not isinstance(word, dict) or not word.get("text"):
+                continue
+            confidence = _clamp_confidence(word.get("confidence"))
+            # The contract requires per-word confidence; geometry-only
+            # words are useless to the editor.
+            if confidence is None:
+                continue
+            clean: dict = {"text": str(word["text"]), "confidence": confidence}
+            bbox = word.get("bbox")
+            if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+                clean["bbox"] = [float(x) for x in bbox]
+            clean_words.append(clean)
+        item["words"] = clean_words or None
+    elif "words" in item:
+        item["words"] = None
+    return item
+
+
 def get_available_engines() -> dict:
     """Ping the OCR service and return which engines are ready.
 
@@ -143,9 +181,14 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
     blocks = payload.get("blocks")
     if blocks is not None and not isinstance(blocks, list):
         blocks = None
+    if blocks:
+        blocks = [_sanitize_block(b) for b in blocks if isinstance(b, dict)]
     # Legacy fields: may be absent in new contract — default gracefully
     text = payload.get("text", "") or ""
     boxes = _parse_bounding_boxes(payload.get("bounding_boxes"), engine_name)
+    model = payload.get("model")
+    if not isinstance(model, dict):
+        model = None
     return OcrResponse(
         text_content=text,
         bounding_boxes=boxes,
@@ -155,4 +198,6 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
         page_height=payload.get("page_height"),
         pipeline="standard",
         source_type=payload.get("source_type", "scan"),
+        model=model,
+        page_confidence=_clamp_confidence(payload.get("page_confidence")),
     )

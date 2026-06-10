@@ -1,7 +1,7 @@
 /* Rich text editor using TipTap */
 /* global Editor, Image, Table, TableRow, TableCell, TableHeader, StarterKit, Underline, TextAlign */
 
-import { Editor } from '@tiptap/core';
+import { Editor, Extension } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Table from '@tiptap/extension-table';
@@ -15,6 +15,31 @@ import Mathematics from '@tiptap/extension-mathematics';
 import { marked } from 'marked';
 import 'katex/dist/katex.min.css';
 
+
+/* Preserve OCR block identity through the flow editor. Without this, TipTap
+ * strips data-block-id and a flow-mode edit destroys every block's geometry,
+ * confidence, and provenance on round-trip. */
+const BlockId = Extension.create({
+  name: 'blockId',
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['paragraph', 'heading', 'table'],
+        attributes: {
+          'data-block-id': {
+            default: null,
+            parseHTML: (element) => element.getAttribute('data-block-id'),
+            renderHTML: (attributes) => (
+              attributes['data-block-id']
+                ? { 'data-block-id': attributes['data-block-id'] }
+                : {}
+            ),
+          },
+        },
+      },
+    ];
+  },
+});
 
 /**
  * Initialize TipTap editor instance
@@ -87,6 +112,7 @@ export function createRichEditor(elementId, options = {}) {
           throwOnError: false, // Don't throw errors for invalid LaTeX
         },
       }),
+      BlockId,
     ],
     content,
     onUpdate: ({ editor }) => {

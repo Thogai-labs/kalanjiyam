@@ -684,6 +684,16 @@
     @apply border-l-2 border-l-sky-400;
   }
 
+  .ocr-review-chip {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold
+      bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100
+      transition-colors cursor-pointer;
+  }
+
+  .ocr-review-dot {
+    @apply inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse;
+  }
+
   .ocr-table-flow-hint {
     @apply block mt-1 text-xs text-emerald-700 font-medium px-2 py-0.5 rounded border border-emerald-300 bg-white hover:bg-emerald-50 cursor-pointer transition-colors;
   }

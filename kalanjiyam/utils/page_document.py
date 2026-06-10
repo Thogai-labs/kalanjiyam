@@ -38,6 +38,13 @@ class Block:
     children: list[dict[str, Any]] = field(default_factory=list)
     confidence: float | None = None
     language: str | None = None
+    #: Word/line-level spans: [{"text", "confidence", "bbox"?}, ...].
+    #: See docs/ocr-service-contract.rst.
+    words: list[dict[str, Any]] | None = None
+    #: True once a human has changed this block's content.
+    manually_edited: bool = False
+    #: Provenance stamped at ingestion: {"engine", "model"?, "ocr_at"}.
+    source: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -52,6 +59,12 @@ class Block:
             d["confidence"] = self.confidence
         if self.language is not None:
             d["language"] = self.language
+        if self.words:
+            d["words"] = self.words
+        if self.manually_edited:
+            d["manually_edited"] = True
+        if self.source is not None:
+            d["source"] = self.source
         return d
 
     @classmethod
@@ -63,7 +76,13 @@ class Block:
         bbox = data.get("bbox") or [0, 0, 0, 0]
         if len(bbox) != 4:
             bbox = [0, 0, 0, 0]
-        conf = data.get("confidence")
+        conf = _clamp_confidence(data.get("confidence"))
+        words = data.get("words")
+        if not isinstance(words, list) or not words:
+            words = None
+        source = data.get("source")
+        if not isinstance(source, dict):
+            source = None
         return cls(
             id=str(data.get("id") or _new_block_id()),
             type=block_type,
@@ -71,8 +90,11 @@ class Block:
             content=str(normalize_unicode_text(data.get("content") or "")),
             reading_order=int(data.get("reading_order") or 0),
             children=list(data.get("children") or []),
-            confidence=float(conf) if conf is not None else None,
+            confidence=conf,
             language=str(data["language"]) if data.get("language") else None,
+            words=words,
+            manually_edited=bool(data.get("manually_edited")),
+            source=source,
         )
 
 
@@ -266,6 +288,16 @@ def _new_block_id() -> str:
     return f"b{uuid.uuid4().hex[:8]}"
 
 
+def _clamp_confidence(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return None
+    return min(1.0, max(0.0, score))
+
+
 def _scale_boxes_to_image(
     boxes: list[tuple[float, float, float, float, str]],
     width: int | None,
@@ -345,6 +377,14 @@ def normalize_geometry(
             bbox = item.get("bbox")
             if bbox and len(bbox) == 4:
                 item["bbox"] = _scale_bbox(bbox, sx, sy)
+            words = item.get("words")
+            if isinstance(words, list):
+                scaled_words = []
+                for word in words:
+                    if isinstance(word, dict) and word.get("bbox"):
+                        word = {**word, "bbox": _scale_bbox(word["bbox"], sx, sy)}
+                    scaled_words.append(word)
+                item["words"] = scaled_words
             normalized_blocks.append(item)
 
     return scaled, normalized_blocks, out_w, out_h

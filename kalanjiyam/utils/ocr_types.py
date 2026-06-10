@@ -16,6 +16,13 @@ BLOCK_TYPES = {
 DECORATIVE_BLOCK_TYPES = {"running-header", "page-number", "figure"}
 
 
+# Confidence bands shared by the editor UI and the service contract
+# (see docs/ocr-service-contract.rst). Scores below CONFIDENCE_LOW render
+# red ("likely error"); below CONFIDENCE_REVIEW render amber ("review").
+CONFIDENCE_LOW = 0.5
+CONFIDENCE_REVIEW = 0.75
+
+
 @dataclass
 class OcrResponse:
     text_content: str
@@ -27,6 +34,10 @@ class OcrResponse:
     page_height: int | None = None
     pipeline: str = "standard"
     source_type: str = "scan"  # "scan" | "pdf" | "digital"
+    #: Model identity for provenance, e.g. {"name": "surya-rec", "version": "0.6.1"}.
+    model: dict | None = None
+    #: Aggregate page confidence in [0, 1], if the engine provides one.
+    page_confidence: float | None = None
 
 
 SUPPORTED_ENGINES = [
