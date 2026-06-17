@@ -183,6 +183,56 @@ def test_normalize_geometry_scales_word_bboxes():
     assert blocks[0]["words"][0]["bbox"] == [0, 0, 100, 40]
 
 
+def test_from_ocr_response_reclusters_line_blocks_without_bounding_boxes():
+    """v2 contract is blocks-only; server must match client paragraph clustering."""
+    lines = [
+        {
+            "id": f"b{i}",
+            "type": "paragraph",
+            "bbox": [120, 100 + i * 35, 980, 128 + i * 35],
+            "content": f"line {i} text here",
+            "reading_order": i + 1,
+            "confidence": 0.9,
+        }
+        for i in range(10)
+    ]
+    ocr = OcrResponse(
+        text_content="",
+        bounding_boxes=[],
+        blocks=lines,
+        content_format="blocks",
+        page_width=1200,
+        page_height=1700,
+    )
+    doc = PageDocument.from_ocr_response(ocr, image_width=1200, image_height=1700)
+    assert len(doc.blocks) < len(lines)
+    assert "line 0" in doc.blocks[0].content
+    assert "line 9" in doc.blocks[0].content
+
+
+def test_normalize_geometry_honors_normalized_coordinate_space():
+    from kalanjiyam.utils.page_document import normalize_geometry
+
+    _, blocks, pw, ph = normalize_geometry(
+        [],
+        [
+            {
+                "id": "b1",
+                "bbox": [0.1, 0.2, 0.5, 0.3],
+                "content": "hello",
+            }
+        ],
+        ocr_width=1000,
+        ocr_height=2000,
+        image_width=1000,
+        image_height=2000,
+        coordinate_space="normalized",
+    )
+    assert pw == 1000
+    assert ph == 2000
+    assert blocks[0]["bbox"] == [100, 400, 500, 600]
+
+
 def test_ocr_response_to_api_dict_stamps_provenance():
     from kalanjiyam.utils.ocr_persist import ocr_response_to_api_dict
 

@@ -441,6 +441,13 @@ export default () => ({
              { value: 'it', text: 'Italian (it)' }
            ],
            supportsBilingual: false
+         },
+         '11': {
+           name: 'Sanskrit Manuscript OCR',
+           languages: [
+             { value: 'san', text: 'Sanskrit (san)' }
+           ],
+           supportsBilingual: false
          }
   },
 
@@ -1055,6 +1062,8 @@ export default () => ({
       '7': 'qwen3',
       '8': 'surya_table',
       '9': 'paddle_table',
+      '10': 'glm_ocr',
+      '11': 'tesseract_manuscript',
     };
     return engineMap[engineValue] || 'google';
   },

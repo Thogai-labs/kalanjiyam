@@ -84,7 +84,7 @@ check_env() {
 build_image() {
     echo "Building Docker image (this takes 2-5 min on first run)..."
     GITCOMMIT=$(git rev-parse --short HEAD)
-    GITBRANCH=$(git rev-parse --abbrev-ref HEAD)
+    GITBRANCH=$(git rev-parse --abbrev-ref HEAD | sed 's#[^A-Za-z0-9_.-]#-#g')
     IMAGE="kalanjiyam:v0.1-${GITBRANCH}-${GITCOMMIT}"
     IMAGE_LATEST="kalanjiyam-rel:latest"
     docker build -t "${IMAGE}" -t "${IMAGE_LATEST}" -f build/containers/Dockerfile.final .

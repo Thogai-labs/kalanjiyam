@@ -9,7 +9,11 @@ from pathlib import Path
 import httpx
 from flask import current_app
 
-from kalanjiyam.utils.ocr_types import OcrResponse
+from kalanjiyam.utils.ocr_types import (
+    OcrResponse,
+    engine_for_service,
+    normalize_service_engine,
+)
 from kalanjiyam.utils.text_utils import normalize_unicode_text
 
 logger = logging.getLogger(__name__)
@@ -142,7 +146,8 @@ def get_available_engines() -> dict:
         with httpx.Client(timeout=5.0) as client:
             response = client.get(f"{base_url}/v1/engines", headers=headers)
         if response.status_code == 200:
-            engines = response.json().get("engines", [])
+            raw = response.json().get("engines", [])
+            engines = [normalize_service_engine(e) for e in raw]
             status = "ok" if engines else "no_engines"
             return {"status": status, "engines": engines}
         return {"status": "unavailable", "engines": []}
@@ -163,9 +168,11 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
 
     logger.info("Calling OCR service engine=%s language=%s url=%s", engine_name, language, url)
 
+    service_engine = engine_for_service(engine_name)
+
     with file_path.open("rb") as image_file:
         files = {"image": (file_path.name, image_file, "image/jpeg")}
-        data = {"engine": engine_name, "language": language}
+        data = {"engine": service_engine, "language": language}
         with httpx.Client(timeout=timeout) as client:
             response = client.post(url, files=files, data=data, headers=headers)
 
@@ -189,6 +196,9 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
     model = payload.get("model")
     if not isinstance(model, dict):
         model = None
+    coordinate_space = payload.get("coordinate_space") or "pixel"
+    if coordinate_space not in ("pixel", "normalized"):
+        coordinate_space = "pixel"
     return OcrResponse(
         text_content=text,
         bounding_boxes=boxes,
@@ -198,6 +208,7 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
         page_height=payload.get("page_height"),
         pipeline="standard",
         source_type=payload.get("source_type", "scan"),
+        coordinate_space=coordinate_space,
         model=model,
         page_confidence=_clamp_confidence(payload.get("page_confidence")),
     )

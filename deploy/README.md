@@ -1,14 +1,30 @@
 ## Deployment environments
 
-| Directory | Use |
-|-----------|-----|
-| `deploy/local/` | Local Docker dev |
-| `deploy/staging/` | Staging |
-| `deploy/prod/` | Production Docker |
+| Directory | Use | Storage | DB password |
+|-----------|-----|---------|-------------|
+| `deploy/local/` | Local Docker dev | S3 via versitygw (named volume) | hardcoded `kalanjiyam` |
+| `deploy/staging/` | CI / staging | `local` (no S3 gateway) | hardcoded `kalanjiyam` |
+| `deploy/prod/` | Production Docker | S3 via versitygw (`~/kalanjiyam-data/uploads`) | `POSTGRES_PASSWORD` from `.env` |
 
-Set `KALANJIYAM_DEPLOYMENT_ENV=prod` and configure `.env` (see `.env.example`).
-Celery listens on `default` and `ocr` queues. OCR runs in a separate service;
-set `OCR_SERVICE_URL` to reach it from containers.
+All three read `../../.env` via `env_file`. Configure `.env` from `.env.example` before starting.
+
+**Production** — use `deploy/prod/deploy.sh` (validates `.env`, builds image, runs migrations, starts services):
+
+```bash
+cp .env.example .env   # fill in all required values
+./deploy/prod/deploy.sh
+./deploy/prod/deploy.sh logs     # tail logs
+./deploy/prod/deploy.sh restart  # restart without rebuild
+./deploy/prod/deploy.sh stop     # tear down
+```
+
+**Local** — `make docker-start` (or `KALANJIYAM_DEPLOYMENT_ENV=local make docker-start`).
+
+**Staging** — does not include the Versity Gateway, so `STORAGE_BACKEND` defaults to `local`.
+The `kalanjiyam-runner` script in this directory drives CI staging runs.
+
+Celery listens on `default` and `ocr` queues in all environments. OCR runs as a separate
+service; set `OCR_SERVICE_URL` to a host reachable from inside containers.
 
 Full guide: `docs/production-deploy.rst`.
 

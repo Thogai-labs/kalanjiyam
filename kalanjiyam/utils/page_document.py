@@ -206,6 +206,7 @@ class PageDocument:
             ocr_height=ocr.page_height,
             image_width=image_width,
             image_height=image_height,
+            coordinate_space=ocr.coordinate_space,
         )
         if blocks_data:
             blocks = [Block.from_dict(b) for b in blocks_data]
@@ -214,10 +215,12 @@ class PageDocument:
                 if not block.reading_order:
                     block.reading_order = i + 1
             blocks.sort(key=lambda b: b.reading_order)
-            if boxes and _blocks_look_like_lines(blocks, ph):
-                rebuilt = _blocks_from_bounding_boxes(boxes)
-                if rebuilt:
-                    blocks = rebuilt
+            if _blocks_look_like_lines(blocks, ph):
+                line_boxes = boxes or _boxes_from_blocks(blocks)
+                if line_boxes:
+                    rebuilt = _blocks_from_bounding_boxes(line_boxes)
+                    if rebuilt:
+                        blocks = rebuilt
             return cls(
                 page_width=pw,
                 page_height=ph,
@@ -298,20 +301,34 @@ def _clamp_confidence(value: Any) -> float | None:
     return min(1.0, max(0.0, score))
 
 
+def _coords_are_normalized(
+    bbox: list[float] | list[int],
+    *,
+    coordinate_space: str = "pixel",
+) -> bool:
+    if coordinate_space == "normalized":
+        return True
+    if not bbox or len(bbox) != 4:
+        return False
+    max_coord = max(float(x) for x in bbox)
+    return max_coord > 0 and max_coord <= 1.5
+
+
 def _scale_boxes_to_image(
     boxes: list[tuple[float, float, float, float, str]],
     width: int | None,
     height: int | None,
+    *,
+    coordinate_space: str = "pixel",
 ) -> list[tuple[float, float, float, float, str]]:
     if not boxes or not width or not height:
         return boxes
-    max_coord = max(max(b[0], b[1], b[2], b[3]) for b in boxes)
-    if max_coord > 0 and max_coord <= 1.5:
-        return [
-            (b[0] * width, b[1] * height, b[2] * width, b[3] * height, b[4])
-            for b in boxes
-        ]
-    return boxes
+    if not _coords_are_normalized(list(boxes[0][:4]), coordinate_space=coordinate_space):
+        return boxes
+    return [
+        (b[0] * width, b[1] * height, b[2] * width, b[3] * height, b[4])
+        for b in boxes
+    ]
 
 
 def _scale_bbox(
@@ -324,6 +341,21 @@ def _scale_bbox(
     return [int(bbox[0] * sx), int(bbox[1] * sy), int(bbox[2] * sx), int(bbox[3] * sy)]
 
 
+def _boxes_from_blocks(
+    blocks: list[Block],
+) -> list[tuple[float, float, float, float, str]]:
+    """Derive line boxes from block bboxes when the service omits bounding_boxes."""
+    derived: list[tuple[float, float, float, float, str]] = []
+    for block in blocks:
+        if not block.bbox or block.bbox == [0, 0, 0, 0]:
+            continue
+        x1, y1, x2, y2 = block.bbox
+        if x2 <= x1 or y2 <= y1:
+            continue
+        derived.append((float(x1), float(y1), float(x2), float(y2), block.content or ""))
+    return derived
+
+
 def normalize_geometry(
     boxes: list[tuple[float, float, float, float, str]],
     blocks: list[dict[str, Any]] | None,
@@ -332,6 +364,7 @@ def normalize_geometry(
     ocr_height: int | None,
     image_width: int | None,
     image_height: int | None,
+    coordinate_space: str = "pixel",
 ) -> tuple[
     list[tuple[float, float, float, float, str]],
     list[dict[str, Any]] | None,
@@ -344,11 +377,9 @@ def normalize_geometry(
     out_w = image_width or ocr_width
     out_h = image_height or ocr_height
 
-    scaled = _scale_boxes_to_image(list(boxes), ref_w, ref_h)
-    if scaled and ref_w and ref_h:
-        max_coord = max(max(b[0], b[1], b[2], b[3]) for b in scaled)
-        if max_coord > 0 and max_coord <= 1.5:
-            scaled = _scale_boxes_to_image(scaled, ref_w, ref_h)
+    scaled = _scale_boxes_to_image(
+        list(boxes), ref_w, ref_h, coordinate_space=coordinate_space
+    )
 
     sx = sy = 1.0
     if ref_w and out_w and ref_w > 0:
@@ -370,19 +401,40 @@ def normalize_geometry(
         ]
 
     normalized_blocks = blocks
-    if blocks and (sx != 1.0 or sy != 1.0):
+    if blocks:
         normalized_blocks = []
         for block in blocks:
             item = dict(block)
             bbox = item.get("bbox")
             if bbox and len(bbox) == 4:
-                item["bbox"] = _scale_bbox(bbox, sx, sy)
+                if _coords_are_normalized(bbox, coordinate_space=coordinate_space):
+                    if ref_w and ref_h:
+                        bbox = [
+                            bbox[0] * ref_w,
+                            bbox[1] * ref_h,
+                            bbox[2] * ref_w,
+                            bbox[3] * ref_h,
+                        ]
+                if sx != 1.0 or sy != 1.0:
+                    bbox = _scale_bbox(bbox, sx, sy)
+                item["bbox"] = [int(x) for x in bbox]
             words = item.get("words")
             if isinstance(words, list):
                 scaled_words = []
                 for word in words:
                     if isinstance(word, dict) and word.get("bbox"):
-                        word = {**word, "bbox": _scale_bbox(word["bbox"], sx, sy)}
+                        wb = word["bbox"]
+                        if _coords_are_normalized(wb, coordinate_space=coordinate_space):
+                            if ref_w and ref_h:
+                                wb = [
+                                    wb[0] * ref_w,
+                                    wb[1] * ref_h,
+                                    wb[2] * ref_w,
+                                    wb[3] * ref_h,
+                                ]
+                        if sx != 1.0 or sy != 1.0:
+                            wb = _scale_bbox(wb, sx, sy)
+                        word = {**word, "bbox": [int(x) for x in wb]}
                     scaled_words.append(word)
                 item["words"] = scaled_words
             normalized_blocks.append(item)
@@ -681,6 +733,7 @@ def enrich_document_from_page_ocr(
         ocr_height=ocr_h,
         image_width=image_w,
         image_height=image_h,
+        coordinate_space="pixel",
     )
     if pw:
         doc.page_width = int(pw)

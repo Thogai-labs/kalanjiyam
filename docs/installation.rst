@@ -143,20 +143,21 @@ To enable these features, you need to start both Redis and Celery:
     not split into pages or added to the database.
 
 
-Google's Cloud Vision API
-^^^^^^^^^^^^^^^^^^^^^^^^^
+Remote OCR service
+^^^^^^^^^^^^^^^^^^
 
-We use the Google's Cloud Vision API, which we use to perform optical character
-recognition (OCR) on scanned books.
+Kalanjiyam calls a separate OCR microservice over HTTP. Set ``OCR_SERVICE_URL``
+and ``OCR_SERVICE_API_KEY`` in ``.env`` to point at a running
+`kalanjiyam-ocr-service <https://github.com/Thogai-labs/kalanjiyam-ocr-service>`_
+instance.
 
-You should set up the Cloud Vision API if you want to run OCR locally. To do
-so, refer to the documentation here:
+Without the OCR service, OCR features (batch OCR, inline editor OCR) will be
+unavailable but the rest of the app runs normally. For quick local testing you
+can run the OCR service on ``http://localhost:8000`` and set::
 
-- `How to add application credentials for Google Cloud`_
-- `How to enable the Vision API`_
-
-.. _`How to add application credentials for Google Cloud`: https://cloud.google.com/docs/authentication/getting-started#auth-cloud-implicit-python
-.. _`How to enable the Vision API`: https://cloud.google.com/vision/docs/before-you-begin
+    OCR_BACKEND=remote
+    OCR_SERVICE_URL=http://localhost:8000
+    OCR_SERVICE_API_KEY=<key from ocr-service .env>
 
 
 reCAPTCHA

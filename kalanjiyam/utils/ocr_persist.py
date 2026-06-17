@@ -60,6 +60,7 @@ def apply_ocr_to_page(
         ocr_height=ocr.page_height,
         image_width=image_w or page.page_width,
         image_height=image_h or page.page_height,
+        coordinate_space=ocr.coordinate_space,
     )
     page.ocr_bounding_boxes = serialize_bounding_boxes(engine, boxes)
     if pw:
@@ -81,6 +82,7 @@ def apply_ocr_to_page(
         page_height=ph or ocr.page_height or image_h,
         pipeline=ocr.pipeline,
         source_type=ocr.source_type,
+        coordinate_space="pixel",
         model=ocr.model,
     )
     doc = PageDocument.from_ocr_response(
@@ -107,6 +109,7 @@ def ocr_response_to_api_dict(
         ocr_height=ocr.page_height,
         image_width=image_width,
         image_height=image_height,
+        coordinate_space=ocr.coordinate_space,
     )
     normalized = OcrResponse(
         text_content=ocr.text_content,
@@ -117,6 +120,7 @@ def ocr_response_to_api_dict(
         page_width=pw or ocr.page_width,
         page_height=ph or ocr.page_height,
         pipeline=ocr.pipeline,
+        coordinate_space="pixel",
     )
     doc = PageDocument.from_ocr_response(
         normalized,

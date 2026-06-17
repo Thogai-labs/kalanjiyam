@@ -96,6 +96,10 @@ Top-level fields
   Stored on every block as provenance, shown to reviewers, and kept across
   revisions — so a block can always answer "which model produced this text?".
 
+  A new engine id appearing in ``GET /v1/engines`` does not automatically show
+  up in Kalanjiyam's OCR dropdown — see :doc:`ocr-api` ("Adding a new engine
+  to Kalanjiyam") for the registration steps on the Kalanjiyam side.
+
 ``model`` (object, optional but strongly recommended)
   ``{"name": "<model name>", "version": "<model/checkpoint version>"}``.
   Distinguishes outputs when the same engine upgrades its underlying model.
