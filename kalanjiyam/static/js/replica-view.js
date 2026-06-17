@@ -3,6 +3,19 @@
 import { scaleBoxesToImage } from './osd-overlay.js';
 import { blockReplicaInnerHtml, normalizeUnicodeText } from './page-document.js';
 
+/* Hover text: "OCR 87% · surya/0.6.1 · edited" */
+export function blockProvenanceLabel(block) {
+  const parts = [];
+  if (block.confidence != null) {
+    parts.push(`OCR ${Math.round(block.confidence * 100)}%`);
+  }
+  if (block.source) {
+    parts.push(block.source.model || block.source.engine || '');
+  }
+  if (block.manually_edited) parts.push('edited');
+  return parts.filter(Boolean).join(' · ');
+}
+
 export class ReplicaView {
   constructor(container, options = {}) {
     this.container = container;
@@ -21,6 +34,16 @@ export class ReplicaView {
   highlightBlock(blockId) {
     this.selectedId = blockId;
     this._render();
+  }
+
+  /* Select a block, scroll it into view, and focus it for editing. */
+  focusBlock(blockId) {
+    this.highlightBlock(blockId);
+    const el = this.container.querySelector(`[data-block-id="${blockId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (el.isContentEditable) el.focus({ preventScroll: true });
+    }
   }
 
   _render() {
@@ -56,10 +79,14 @@ export class ReplicaView {
         block.type === 'table' || /<table[\s>]/i.test(String(block.content || ''));
 
       const conf = block.confidence;
-      const confClass = conf == null ? '' : conf < 0.5 ? 'ocr-conf-low' : conf < 0.75 ? 'ocr-conf-mid' : '';
+      // Confidence describes the machine's output; once a human has edited
+      // the block it no longer applies, so show only the edited rail.
+      const confClass = (conf == null || block.manually_edited) ? ''
+        : conf < 0.5 ? 'ocr-conf-low' : conf < 0.75 ? 'ocr-conf-mid' : '';
       const editedClass = block.manually_edited ? 'ocr-block-edited' : '';
 
       const el = document.createElement('div');
+      el.title = blockProvenanceLabel(block);
       el.className = `ocr-replica-block book-editor-text absolute overflow-auto text-base leading-relaxed p-1 ocr-replica-block--${block.type || 'paragraph'} ${confClass} ${editedClass} ${
         this.selectedId === block.id
           ? 'ring-2 ring-amber-600 z-10 bg-amber-50'

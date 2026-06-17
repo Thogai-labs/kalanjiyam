@@ -3,9 +3,18 @@
 The main route here is `edit`, which defines the page editor and the edit flow.
 """
 
+import logging
+import uuid
 from dataclasses import dataclass
 
-from flask import Blueprint, current_app, flash, render_template, send_file, request, jsonify, url_for
+from flask import (
+    Blueprint,
+    flash,
+    jsonify,
+    render_template,
+    request,
+    url_for,
+)
 from flask_babel import lazy_gettext as _l
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
@@ -14,9 +23,6 @@ from werkzeug.utils import secure_filename
 from wtforms import HiddenField, RadioField, StringField
 from wtforms.validators import DataRequired
 from wtforms.widgets import TextArea
-import logging
-import uuid
-from pathlib import Path
 
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
@@ -24,14 +30,14 @@ from kalanjiyam.enums import SitePageStatus
 from kalanjiyam.utils import project_utils
 from kalanjiyam.utils.assets import get_page_image_filepath
 from kalanjiyam.utils.diff import revision_diff
+from kalanjiyam.utils.ocr_persist import apply_ocr_to_page, ocr_response_to_api_dict
+from kalanjiyam.utils.page_document import PageDocument, document_for_revision
 from kalanjiyam.utils.quotas import (
     add_storage_usage_for_project,
     consume_ocr_credit_for_project,
     ensure_ocr_quota_for_project,
     ensure_storage_quota_for_user,
 )
-from kalanjiyam.utils.page_document import PageDocument, document_for_revision
-from kalanjiyam.utils.ocr_persist import apply_ocr_to_page, ocr_response_to_api_dict
 from kalanjiyam.utils.revisions import EditError, add_revision, parse_document_field
 from kalanjiyam.views.api import bp as api
 
@@ -591,20 +597,16 @@ def upload_image(project_slug, page_slug):
     ensure_storage_quota_for_user(current_user, file_size)
     
     try:
-        # Create images directory for this project
-        upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
-        images_dir = upload_folder / "projects" / project_slug / "images"
-        images_dir.mkdir(parents=True, exist_ok=True)
-        
         # Generate unique filename to avoid conflicts
         unique_id = uuid.uuid4().hex[:8]
         safe_filename = secure_filename(filename)
         name_without_ext = safe_filename.rsplit('.', 1)[0] if '.' in safe_filename else safe_filename
         unique_filename = f"{name_without_ext}_{unique_id}.{file_ext}"
-        file_path = images_dir / unique_filename
-        
+
         # Save file
-        file.save(str(file_path))
+        from kalanjiyam.utils.storage import editor_image_key, get_storage
+
+        get_storage().save(editor_image_key(project_slug, unique_filename), file.stream)
         add_storage_usage_for_project(project_slug)
         
         # Generate URL for the image

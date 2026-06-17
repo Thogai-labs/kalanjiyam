@@ -1,6 +1,7 @@
 """Background tasks for proofing projects."""
 
 import logging
+import tempfile
 from pathlib import Path
 
 # NOTE: `fitz` is the internal package name for PyMuPDF. PyPI hosts another
@@ -14,26 +15,33 @@ from kalanjiyam import queries as q
 from kalanjiyam.tasks import app
 from kalanjiyam.tasks.utils import CeleryTaskStatus, TaskStatus
 from kalanjiyam.utils.quotas import add_storage_usage_for_project
+from kalanjiyam.utils.storage import Storage, get_storage, page_image_key
 from config import create_config_only_app
 
 
 def _split_pdf_into_pages(
-    pdf_path: Path, output_dir: Path, task_status: TaskStatus
+    pdf_path: Path, slug: str, storage: Storage, task_status: TaskStatus
 ) -> int:
     """Split the given PDF into N .jpg images, one image per page.
 
-    :param pdf_path: filesystem path to the PDF we should process.
-    :param output_dir: the directory to which we'll write these images.
+    Each page image is saved to `storage` as it is rendered.
+
+    :param pdf_path: local filesystem path to the PDF we should process.
+    :param slug: the project slug, which determines the storage keys.
+    :param storage: the storage backend to save page images to.
     :return: the page count, which we use downstream.
     """
     doc = fitz.open(pdf_path)
     task_status.progress(0, doc.page_count)
-    for page in doc:
-        n = page.number + 1
-        pix = page.get_pixmap(dpi=200)
-        output_path = output_dir / f"{n}.jpg"
-        pix.pil_save(output_path, optimize=True)
-        task_status.progress(n, doc.page_count)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        for page in doc:
+            n = page.number + 1
+            pix = page.get_pixmap(dpi=200)
+            tmp_path = Path(tmp_dir) / f"{n}.jpg"
+            pix.pil_save(tmp_path, optimize=True)
+            storage.save(page_image_key(slug, str(n)), tmp_path)
+            tmp_path.unlink()
+            task_status.progress(n, doc.page_count)
     return doc.page_count
 
 
@@ -86,8 +94,7 @@ def _add_project_to_database(
 def create_project_inner(
     *,
     display_title: str,
-    pdf_path: str,
-    output_dir: str,
+    pdf_key: str,
     app_environment: str,
     creator_id: int,
     task_status: TaskStatus,
@@ -98,13 +105,12 @@ def create_project_inner(
     function in a non-Celery context (for example, in `cli.py`).
 
     :param display_title: the project's title.
-    :param pdf_path: local path to the source PDF.
-    :param output_dir: local path where page images will be stored.
+    :param pdf_key: storage key of the source PDF.
     :param app_environment: the app environment, e.g. `"development"`.
     :param creator_id: the user that created this project.
     :param task_status: tracks progress on the task.
     """
-    logging.info(f'Received upload task "{display_title}" for path {pdf_path}.')
+    logging.info(f'Received upload task "{display_title}" for key {pdf_key}.')
 
     # Tasks must be idempotent. Exit if the project already exists.
     app = create_config_only_app(app_environment)
@@ -113,16 +119,19 @@ def create_project_inner(
         slug = slugify(display_title)
         project = session.query(db.Project).filter_by(slug=slug).first()
 
-    if project:
-        raise ValueError(
-            f'Project "{display_title}" already exists. Please choose a different title.'
-        )
+        if project:
+            raise ValueError(
+                f'Project "{display_title}" already exists. Please choose a different title.'
+            )
 
-    pdf_path = Path(pdf_path)
-    pages_dir = Path(output_dir)
+        # The worker fetches the PDF from storage rather than from a shared
+        # filesystem, so web and worker can run on different machines.
+        storage = get_storage()
+        pdf_path = storage.local_copy(pdf_key)
+        if not pdf_path.exists():
+            raise ValueError(f'Source PDF not found in storage: "{pdf_key}".')
 
-    num_pages = _split_pdf_into_pages(Path(pdf_path), Path(pages_dir), task_status)
-    with app.app_context():
+        num_pages = _split_pdf_into_pages(pdf_path, slug, storage, task_status)
         require_org = bool(app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True))
         _add_project_to_database(
             display_title=display_title,
@@ -141,8 +150,7 @@ def create_project(
     self,
     *,
     display_title: str,
-    pdf_path: str,
-    output_dir: str,
+    pdf_key: str,
     app_environment: str,
     creator_id: int,
 ):
@@ -153,8 +161,7 @@ def create_project(
     task_status = CeleryTaskStatus(self)
     create_project_inner(
         display_title=display_title,
-        pdf_path=pdf_path,
-        output_dir=output_dir,
+        pdf_key=pdf_key,
         app_environment=app_environment,
         creator_id=creator_id,
         task_status=task_status,

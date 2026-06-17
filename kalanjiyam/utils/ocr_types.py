@@ -16,6 +16,13 @@ BLOCK_TYPES = {
 DECORATIVE_BLOCK_TYPES = {"running-header", "page-number", "figure"}
 
 
+# Confidence bands shared by the editor UI and the service contract
+# (see docs/ocr-service-contract.rst). Scores below CONFIDENCE_LOW render
+# red ("likely error"); below CONFIDENCE_REVIEW render amber ("review").
+CONFIDENCE_LOW = 0.5
+CONFIDENCE_REVIEW = 0.75
+
+
 @dataclass
 class OcrResponse:
     text_content: str
@@ -27,6 +34,11 @@ class OcrResponse:
     page_height: int | None = None
     pipeline: str = "standard"
     source_type: str = "scan"  # "scan" | "pdf" | "digital"
+    coordinate_space: str = "pixel"  # "pixel" | "normalized"
+    #: Model identity for provenance, e.g. {"name": "surya-rec", "version": "0.6.1"}.
+    model: dict | None = None
+    #: Aggregate page confidence in [0, 1], if the engine provides one.
+    page_confidence: float | None = None
 
 
 SUPPORTED_ENGINES = [
@@ -39,7 +51,15 @@ SUPPORTED_ENGINES = [
     "chandra",
     "qwen3",
     "paddle_table",
+    "glm_ocr",
+    "tesseract_manuscript",
 ]
+
+# OCR service ids (hyphenated) ↔ Kalanjiyam internal ids (underscored).
+SERVICE_ENGINE_ALIASES = {
+    "surya-table": "surya_table",
+    "glm-ocr": "glm_ocr",
+}
 
 ENGINE_MAP = {
     "1": "google",
@@ -51,6 +71,8 @@ ENGINE_MAP = {
     "7": "qwen3",
     "8": "surya_table",
     "9": "paddle_table",
+    "10": "glm_ocr",
+    "11": "tesseract_manuscript",
 }
 
 
@@ -59,7 +81,25 @@ REVERSE_ENGINE_MAP = {v: k for k, v in ENGINE_MAP.items()}
 
 
 def normalize_engine(engine: str) -> str:
-    return ENGINE_MAP.get(engine, engine)
+    return normalize_service_engine(ENGINE_MAP.get(engine, engine))
+
+
+def normalize_service_engine(engine: str) -> str:
+    """Map an OCR service engine id to the Kalanjiyam internal id."""
+    name = (engine or "").lower().strip().replace("-", "_")
+    for service_id, app_id in SERVICE_ENGINE_ALIASES.items():
+        if name == service_id.replace("-", "_"):
+            return app_id
+    return name
+
+
+def engine_for_service(engine: str) -> str:
+    """Map a Kalanjiyam internal engine id to the OCR service id."""
+    name = normalize_service_engine(engine)
+    for service_id, app_id in SERVICE_ENGINE_ALIASES.items():
+        if name == app_id:
+            return service_id
+    return name.replace("_", "-")
 
 
 ENGINE_LABELS = {
@@ -72,6 +112,8 @@ ENGINE_LABELS = {
     "chandra": "Chandra",
     "qwen3": "Qwen 2VL",
     "paddle_table": "Paddle Table OCR",
+    "glm_ocr": "GLM OCR",
+    "tesseract_manuscript": "Sanskrit Manuscript OCR",
 }
 
 # Engines that return HTML (not plain text or Markdown)
@@ -91,7 +133,7 @@ def build_engine_choices(available_engines: list[str], is_super_admin: bool) -> 
     choices = []
     seq = 1
     for raw_name in available_engines:
-        engine_name = raw_name.lower().strip()
+        engine_name = normalize_service_engine(raw_name)
         if engine_name not in SUPPORTED_ENGINES:
             continue
         numeric_value = REVERSE_ENGINE_MAP.get(engine_name, str(seq))

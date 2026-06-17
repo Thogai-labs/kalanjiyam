@@ -29,6 +29,24 @@ export function scaleBoxesToImage(boxes, imageWidth, imageHeight) {
   return boxes;
 }
 
+/* Box colors mirror the replica view: red = likely OCR error, amber = review,
+ * sky = human-edited, emerald = table, blue = clean/unknown. */
+function boxColors(box) {
+  if (box.manuallyEdited) {
+    return { fill: 'rgba(56, 189, 248, 0.15)', stroke: '#0284c7' };
+  }
+  if (box.confidence != null && box.confidence < 0.5) {
+    return { fill: 'rgba(248, 113, 113, 0.25)', stroke: '#dc2626' };
+  }
+  if (box.confidence != null && box.confidence < 0.75) {
+    return { fill: 'rgba(251, 191, 36, 0.25)', stroke: '#d97706' };
+  }
+  if (box.blockType === 'table') {
+    return { fill: 'rgba(16, 185, 129, 0.2)', stroke: '#059669' };
+  }
+  return { fill: 'rgba(37, 99, 235, 0.15)', stroke: '#2563eb' };
+}
+
 export class OsdBboxOverlay {
   constructor(viewer, options = {}) {
     this.viewer = viewer;
@@ -129,9 +147,9 @@ export class OsdBboxOverlay {
       el.setAttribute('y', rect.y);
       el.setAttribute('width', rect.width);
       el.setAttribute('height', rect.height);
-      const isTable = box.blockType === 'table';
-      el.setAttribute('fill', isTable ? 'rgba(16, 185, 129, 0.2)' : 'rgba(37, 99, 235, 0.15)');
-      el.setAttribute('stroke', isTable ? '#059669' : '#2563eb');
+      const { fill, stroke } = boxColors(box);
+      el.setAttribute('fill', fill);
+      el.setAttribute('stroke', stroke);
       el.setAttribute('stroke-width', '2');
       el.setAttribute('vector-effect', 'non-scaling-stroke');
       el.style.pointerEvents = 'all';

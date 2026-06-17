@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import getpass
-from pathlib import Path
 
 import click
 from slugify import slugify
@@ -132,15 +131,14 @@ def create_project(title, pdf_path):
                 "Please create a user first with `create-user`."
             )
 
+        from kalanjiyam.utils.storage import get_storage, pdf_key
+
         slug = slugify(title)
-        page_image_dir = (
-            Path(current_app.config["UPLOAD_FOLDER"]) / "projects" / slug / "pages"
-        )
-        page_image_dir.mkdir(parents=True, exist_ok=True)
+        source_pdf_key = pdf_key(slug)
+        get_storage().save(source_pdf_key, pdf_path)
         create_project_inner(
             display_title=title,
-            pdf_path=pdf_path,
-            output_dir=str(page_image_dir),
+            pdf_key=source_pdf_key,
             app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
             creator_id=arbitrary_user.id,
             task_status=LocalTaskStatus(),

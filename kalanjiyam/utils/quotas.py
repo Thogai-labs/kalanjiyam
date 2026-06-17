@@ -1,10 +1,9 @@
 """Organization quota helpers."""
 
-from pathlib import Path
-
-from flask import abort, current_app
+from flask import abort
 
 from kalanjiyam import queries as q
+from kalanjiyam.utils.storage import get_storage, project_prefix
 
 
 def _org_for_user(user):
@@ -34,12 +33,10 @@ def add_storage_usage_for_project(project_slug: str) -> None:
     org = _org_for_project(project)
     if org is None:
         return
-    upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
+    storage = get_storage()
     used = 0
     for org_project in org.projects:
-        project_dir = upload_folder / "projects" / org_project.slug
-        if project_dir.exists():
-            used += sum(p.stat().st_size for p in project_dir.rglob("*") if p.is_file())
+        used += storage.total_size(project_prefix(org_project.slug))
     org.storage_used_bytes = used
     session = q.get_session()
     session.add(org)

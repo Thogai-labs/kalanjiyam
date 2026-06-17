@@ -83,6 +83,25 @@ class BaseConfig:
     #: Where to store user uploads (PDFs, images, etc.).
     UPLOAD_FOLDER = _env("FLASK_UPLOAD_FOLDER")
 
+    #: File storage backend for user uploads: ``local`` (files under
+    #: UPLOAD_FOLDER) or ``s3`` (any S3-compatible store: versitygw, MinIO,
+    #: SeaweedFS, AWS S3, ...).
+    STORAGE_BACKEND = _env("STORAGE_BACKEND", "local")
+    #: S3 endpoint URL. Leave unset for AWS S3; set for self-hosted gateways,
+    #: e.g. ``http://kalanjiyam-versitygw:7070``.
+    S3_ENDPOINT_URL = _env("S3_ENDPOINT_URL")
+    #: Bucket that holds all uploads.
+    S3_BUCKET = _env("S3_BUCKET")
+    #: Credentials for the S3-compatible store.
+    S3_ACCESS_KEY_ID = _env("S3_ACCESS_KEY_ID")
+    S3_SECRET_ACCESS_KEY = _env("S3_SECRET_ACCESS_KEY")
+    #: Region; self-hosted gateways generally accept the default.
+    S3_REGION = _env("S3_REGION")
+    #: Optional browser-reachable endpoint. If set, page images are served
+    #: as redirects to presigned URLs on this endpoint instead of being
+    #: streamed through the app.
+    S3_PUBLIC_ENDPOINT_URL = _env("S3_PUBLIC_ENDPOINT_URL")
+
     #: If True, library texts (books) are restricted by group: only users in a
     #: group that contains the text (or admins) can view it. Texts not in any
     #: group remain visible to everyone. Set ENFORCE_GROUP_ACCESS_FOR_TEXTS=true
@@ -296,6 +315,14 @@ def _validate_config(config: BaseConfig):
 
     if not config.SECRET_KEY:
         raise ValueError("This config does not define SECRET_KEY.")
+
+    if config.STORAGE_BACKEND not in ("local", "s3"):
+        raise ValueError(f"Unknown STORAGE_BACKEND: {config.STORAGE_BACKEND!r}")
+
+    if config.STORAGE_BACKEND == "s3":
+        for key in ("S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"):
+            if not getattr(config, key):
+                raise ValueError(f"STORAGE_BACKEND=s3 requires {key}.")
 
     if config.KALANJIYAM_ENVIRONMENT == PRODUCTION:
         if not config.SENTRY_DSN:

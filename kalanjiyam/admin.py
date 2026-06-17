@@ -49,6 +49,7 @@ from kalanjiyam.utils.admin_access import (
     require_platform_super_admin,
 )
 from kalanjiyam.utils.assets import get_page_image_filepath
+from kalanjiyam.utils.storage import get_storage, page_image_key, pdf_key
 
 
 
@@ -136,10 +137,11 @@ class KalanjiyamIndexView(AdminIndexView):
             project_files_dir.mkdir(exist_ok=True)
             
             # Copy PDF
-            pdf_source = Path(current_app.config["UPLOAD_FOLDER"]) / "projects" / project_slug / "pdf" / "source.pdf"
-            if pdf_source.exists():
+            storage = get_storage()
+            source_pdf_key = pdf_key(project_slug)
+            if storage.exists(source_pdf_key):
                 pdf_dest = project_files_dir / "source.pdf"
-                pdf_dest.write_bytes(pdf_source.read_bytes())
+                pdf_dest.write_bytes(storage.read_bytes(source_pdf_key))
             
             # Copy page images
             pages_dir = project_files_dir / "pages"
@@ -217,11 +219,10 @@ class KalanjiyamIndexView(AdminIndexView):
                     json.dump(self._export_project_data(project), f, indent=2, ensure_ascii=False)
                 files_dir = project_dir / "files"
                 files_dir.mkdir(exist_ok=True)
-                pdf_source = (
-                    Path(current_app.config["UPLOAD_FOLDER"]) / "projects" / project.slug / "pdf" / "source.pdf"
-                )
-                if pdf_source.exists():
-                    (files_dir / "source.pdf").write_bytes(pdf_source.read_bytes())
+                storage = get_storage()
+                source_pdf_key = pdf_key(project.slug)
+                if storage.exists(source_pdf_key):
+                    (files_dir / "source.pdf").write_bytes(storage.read_bytes(source_pdf_key))
                 pages_dir = files_dir / "pages"
                 pages_dir.mkdir(exist_ok=True)
                 for page in project.pages:
@@ -729,25 +730,20 @@ class KalanjiyamIndexView(AdminIndexView):
             # Copy files if they exist
             files_dir = temp_path / "files"
             if files_dir.exists():
-                project_files_dir = Path(current_app.config["UPLOAD_FOLDER"]) / "projects" / project.slug
-                project_files_dir.mkdir(parents=True, exist_ok=True)
-                
+                storage = get_storage()
+
                 # Copy PDF
                 pdf_source = files_dir / "source.pdf"
                 if pdf_source.exists():
-                    pdf_dest = project_files_dir / "pdf" / "source.pdf"
-                    pdf_dest.parent.mkdir(parents=True, exist_ok=True)
-                    pdf_dest.write_bytes(pdf_source.read_bytes())
-                
+                    storage.save(pdf_key(project.slug), pdf_source)
+
                 # Copy page images
                 pages_source = files_dir / "pages"
                 if pages_source.exists():
-                    pages_dest = project_files_dir / "pages"
-                    pages_dest.mkdir(parents=True, exist_ok=True)
-                    
                     for image_file in pages_source.glob("*.jpg"):
-                        image_dest = pages_dest / image_file.name
-                        image_dest.write_bytes(image_file.read_bytes())
+                        storage.save(
+                            page_image_key(project.slug, image_file.stem), image_file
+                        )
             
             return {
                 'project': project,

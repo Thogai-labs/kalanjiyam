@@ -1160,6 +1160,12 @@ def admin(slug):
             session.delete(project_)
             session.commit()
 
+            # Delete the project's files (PDF, page images, editor images)
+            # so they don't count against the organization's storage quota.
+            from kalanjiyam.utils.storage import get_storage, project_prefix
+
+            get_storage().delete_prefix(project_prefix(slug))
+
             flash(f"Deleted project {slug}")
             return redirect(url_for("proofing.index"))
         else:
