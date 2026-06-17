@@ -151,7 +151,7 @@ docker-setup-db: docker-build
 ifneq ("$(wildcard $(DB_FILE))","")
 	@echo "Kalanjiyam using your existing database!"
 else
-	@docker ${DOCKER_LOG_LEVEL} compose -p kalanjiyam-${KALANJIYAM_DEPLOYMENT_ENV} -f deploy/${KALANJIYAM_DEPLOYMENT_ENV}/docker-compose-dbsetup.yml up ${IO_REDIRECT}
+	@docker ${DOCKER_LOG_LEVEL} compose -p kalanjiyam-${KALANJIYAM_DEPLOYMENT_ENV} -f deploy/${KALANJIYAM_DEPLOYMENT_ENV}/docker-compose-dbsetup.yml up --exit-code-from kalanjiyam-dbsetup ${IO_REDIRECT}
 	@echo "Kalanjiyam Database : ✔ "
 endif
 	
@@ -165,6 +165,10 @@ docker-build:
 
 # Start Docker services.
 docker-start: docker-build docker-setup-db
+	@if [ "$(KALANJIYAM_DEPLOYMENT_ENV)" = "local" ]; then \
+		mkdir -p ${PWD}/kalanjiyam/static/gen; \
+		docker run --rm -v ${PWD}/kalanjiyam/static:/host_static ${KALANJIYAM_IMAGE} cp -r /app/kalanjiyam/static/gen /host_static/; \
+	fi
 	@docker ${DOCKER_LOG_LEVEL} compose -p kalanjiyam-${KALANJIYAM_DEPLOYMENT_ENV} -f deploy/${KALANJIYAM_DEPLOYMENT_ENV}/docker-compose.yml up ${DOCKER_DETACH} ${IO_REDIRECT}
 	@echo "Kalanjiyam WebApp   : ✔ "
 	@echo "Kalanjiyam URL      : http://${KALANJIYAM_HOST_IP}:${KALANJIYAM_HOST_PORT}"
@@ -282,3 +286,4 @@ babel-compile: py-venv-check
 clean:
 	@rm -rf deploy/data/
 	@rm -rf kalanjiyam/translations/*
+	@rm -rf kalanjiyam/static/gen/

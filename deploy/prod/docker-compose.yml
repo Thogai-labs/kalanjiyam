@@ -14,7 +14,7 @@ services:
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
-      - OCR_SERVICE_URL=${OCR_SERVICE_URL}
+      # - OCR_SERVICE_URL=${OCR_SERVICE_URL}
       - FLASK_UPLOAD_FOLDER=/data/uploads
     volumes:
       - ${HOME}/kalanjiyam-data/uploads:/data/uploads

@@ -4,8 +4,12 @@ services:
   kalanjiyam-dbsetup:
     image: ${KALANJIYAM_IMAGE}
     container_name: kalanjiyam-dbsetup
-    command: python -m kalanjiyam.seed.lookup && python -m kalanjiyam.seed.texts.gretil && python -m kalanjiyam.seed.dcs
+    command: alembic stamp head && python -m kalanjiyam.seed.lookup && python -m kalanjiyam.seed.texts.gretil && python -m kalanjiyam.seed.dcs
+    env_file:
+      - ../../.env
     environment:
+      - FLASK_ENV=${FLASK_ENV:-staging}
+      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
       - KALANJIYAM_BOT_PASSWORD=insecure bot password
     depends_on:
       - kalanjiyam-db
