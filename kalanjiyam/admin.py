@@ -817,6 +817,12 @@ class GroupsView(AdminBaseView):
             if not name:
                 flash("Name is required.", "error")
                 return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
+            if storage_quota_mb is not None and storage_quota_mb < 0:
+                flash("Storage quota cannot be negative.", "error")
+                return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
+            if ocr_credit_limit is not None and ocr_credit_limit < 0:
+                flash("OCR credit limit cannot be negative.", "error")
+                return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
             session = q.get_session()
             group = db.Group(
                 name=name,
@@ -851,6 +857,12 @@ class GroupsView(AdminBaseView):
             if not name:
                 flash("Name is required.", "error")
                 return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())
+            if not storage_quota_mb is None and storage_quota_mb < 0:
+                flash("Storage quota cannot be negative.", "error")
+                return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())
+            if not ocr_credit_limit is None and ocr_credit_limit < 0:
+                flash("OCR credit limit cannot be negative.", "error")
+                return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())   
             group.name = name
             group.slug = slug
             group.description = description
