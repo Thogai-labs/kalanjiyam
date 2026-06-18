@@ -853,7 +853,7 @@ export default () => ({
       });
       
       if (!response.ok) {
-        const errorText = await response.text();
+        const errorText = await this.getErrorMessage(response);
         throw new Error(errorText || `Upload failed with status ${response.status}`);
       }
       
@@ -1105,7 +1105,7 @@ export default () => ({
         }
         this.showNotification('OCR completed successfully!', 'success');
       } else {
-        const errorText = await response.text();
+        const errorText = await this.getErrorMessage(response);
         this.showNotification(`OCR failed: ${errorText}`, 'error');
       }
     } catch (error) {
@@ -1174,7 +1174,7 @@ export default () => ({
         // Trigger translation display in the image box
         this.showTranslationInImageBox(translation, sourceLang, targetLang, engine);
       } else {
-        const errorText = await response.text();
+        const errorText = await this.getErrorMessage(response);
         console.error('Translation API error:', errorText);
         this.showNotification(`Translation failed: ${errorText}`, 'error');
       }
@@ -1322,6 +1322,31 @@ export default () => ({
     }
 
     console.log('=== DISPLAY DEBUG END ===');
+  },
+
+  async getErrorMessage(response) {
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      try {
+        const data = await response.json();
+        return data.message || data.error || `Error ${response.status}`;
+      } catch (e) {
+        return `Error ${response.status}`;
+      }
+    }
+    const text = await response.text();
+    if (contentType.includes('text/html') || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+      const match = text.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || text.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+      if (match && match[1]) {
+        const cleanMsg = match[1].replace(/<[^>]*>/g, '').trim();
+        if (cleanMsg.includes(response.status.toString())) {
+          return cleanMsg;
+        }
+        return `${cleanMsg} (${response.status})`;
+      }
+      return `Server error (${response.status})`;
+    }
+    return text || `Error ${response.status}`;
   },
 
   // Simple notification system
