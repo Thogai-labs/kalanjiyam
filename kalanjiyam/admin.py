@@ -906,22 +906,22 @@ class GroupsView(AdminBaseView):
                 user_id = request.form.get("user_id", type=int)
                 if user_id:
                     q.add_user_to_group(user_id=user_id, group_id=id)
-                    flash("User added to group.")
+                    flash("User added to group.", "success")
             elif action == "remove_user":
                 user_id = request.form.get("user_id", type=int)
                 if user_id:
                     q.remove_user_from_group(user_id=user_id, group_id=id)
-                    flash("User removed from group.")
+                    flash("User removed from group.", "success")
             elif action == "add_project":
                 project_id = request.form.get("project_id", type=int)
                 if project_id:
                     q.add_project_to_group(project_id=project_id, group_id=id)
-                    flash("Project added to group.")
+                    flash("Project added to group.", "success")
             elif action == "remove_project":
                 project_id = request.form.get("project_id", type=int)
                 if project_id:
                     q.remove_project_from_group(project_id=project_id, group_id=id)
-                    flash("Project removed from group.")
+                    flash("Project removed from group.", "success")
             elif action == "set_project_public":
                 project_id = request.form.get("project_id", type=int)
                 is_public = request.form.get("is_public") == "1"
