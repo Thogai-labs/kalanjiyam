@@ -254,6 +254,30 @@ docker logs -f kalanjiyam-celery
 
 ---
 
+## Codebase Directory Guide
+
+To help you navigate the codebase, here is a brief overview of the key directories and files in Kalanjiyam:
+
+### 1. Core Application (`/kalanjiyam`)
+This directory contains the main Flask application code:
+* **`/models`**: Database model definitions using SQLAlchemy (e.g., `auth.py` for user credentials, `proofing.py` for OCR page/revision tracking, and `texts.py` for library books).
+* **`/views`**: Flask blueprints containing the routing logic, HTTP request handlers, and HTML page controllers (e.g., `/views/proofing/` for proofreading pages, `/views/auth.py` for user authentication).
+* **`/tasks`**: Celery background tasks and asynchronous job definitions (e.g., `projects.py` for processing uploaded PDFs and executing OCR).
+* **`/seed`**: Database initialization and seed scripts, partitioned into `lookup` data (default roles/statuses), `dictionaries` (lexicons like Monier-Williams/Apte), and `texts` (Sanskrit corpora).
+* **`/templates`**: Jinja2 HTML templates defining the server-rendered web interface.
+* **`/static`**: Frontend assets compiled using Tailwind CSS and esbuild, including CSS stylesheets, JavaScript files, fonts, and images.
+* **`/utils`**: Helper utility modules (e.g., `storage.py` for POSIX/S3-compatible file storage, `auth.py` for session decorations).
+
+### 2. Infrastructure & Tooling (Root)
+* **`/deploy`**: Docker Compose environment configurations (logical groups for `local/` dev, `staging/`, and `prod/` release environments).
+* **`/migrations`**: Database schema migration script version history generated and tracked by Alembic.
+* **`/tests` or `/test`**: Pytest and Jest test suites for backend and frontend validation.
+* **`cli.py`**: Command-line administrative utility script.
+* **`config.py`**: Reads configuration environment variables and sets up application configuration groups.
+* **`Makefile`**: Standard build task automations for compiling assets, running linters, launching Docker environments, and running tests.
+
+---
+
 ## Database Schema Overview
 
 Kalanjiyam's data models are managed dynamically using SQLAlchemy. Below is the complete entity-relationship diagram of all 28 tables defined across `/models/`:
@@ -279,8 +303,8 @@ erDiagram
         datetime created_at
     }
     user_roles {
-        int user_id PK, FK "users.id"
-        int role_id PK, FK "roles.id"
+        int user_id PK "FK users.id"
+        int role_id PK "FK roles.id"
     }
     auth_password_reset_tokens {
         int id PK
@@ -307,8 +331,8 @@ erDiagram
         datetime updated_at
     }
     user_groups {
-        int user_id PK, FK "users.id"
-        int group_id PK, FK "groups.id"
+        int user_id PK "FK users.id"
+        int group_id PK "FK groups.id"
     }
 
     %% Discussion Forums (Talk)
@@ -360,8 +384,8 @@ erDiagram
         boolean is_publicly_viewable
     }
     project_groups {
-        int group_id PK, FK "groups.id"
-        int project_id PK, FK "proof_projects.id"
+        int group_id PK "FK groups.id"
+        int project_id PK "FK proof_projects.id"
     }
     proof_pages {
         int id PK
@@ -422,8 +446,8 @@ erDiagram
         text header
     }
     text_groups {
-        int group_id PK, FK "groups.id"
-        int text_id PK, FK "texts.id"
+        int group_id PK "FK groups.id"
+        int text_id PK "FK texts.id"
     }
     text_sections {
         int id PK
