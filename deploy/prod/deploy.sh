@@ -107,6 +107,18 @@ run_migrations() {
         "${KALANJIYAM_IMAGE:-kalanjiyam-rel:latest}" \
         alembic upgrade head
     echo "✔  Migrations applied"
+    # --- testing 18-6-26 11:00AM
+    echo "Seeding default database lookup tables..."
+    docker run --rm \
+        --network "kalanjiyam-prod_default" \
+        --env-file .env \
+        -e FLASK_ENV=production \
+        -e REDIS_URL=redis://kalanjiyam-redis:6379/0 \
+        -e SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam \
+        "${KALANJIYAM_IMAGE:-kalanjiyam-rel:latest}" \
+        python -m kalanjiyam.seed.lookup
+    echo "✔  Lookups seeded"
+    # ----
 }
 
 # ─── Commands ───────────────────────────────────────────────────────────────
@@ -137,7 +149,8 @@ case "${CMD}" in
     check_env
     KALANJIYAM_IMAGE="kalanjiyam-rel:latest" \
         docker compose -p "${PROJECT}" -f "${COMPOSE_FILE}" stop
-    docker compose -p "${PROJECT}" -f "${COMPOSE_FILE}" rm -f
+    KALANJIYAM_IMAGE="kalanjiyam-rel:latest" \
+        docker compose -p "${PROJECT}" -f "${COMPOSE_FILE}" rm -f
     echo "✔  Services stopped"
     ;;
 

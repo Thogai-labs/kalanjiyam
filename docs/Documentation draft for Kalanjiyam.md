@@ -571,6 +571,71 @@ erDiagram
 
 ---
 
+## Production Deployment (with Docker)
+
+For production deployments (e.g., staging or live production servers like `siddhasagaram.in`), you should use the dedicated deployment script **`./deploy/prod/deploy.sh`** rather than `make docker-start`. 
+
+The script runs automated checks (validating environment keys, ports, and configuration states) and applies database schema migrations prior to launching the server.
+
+### Step 1: Configure `.env` for Production
+Ensure the following variables are defined in your `.env` file at the root of the workspace:
+
+```env
+# General App Configuration
+FLASK_ENV=production
+APPLICATION_URL_PREFIX=/kalanjiyam
+SECRET_KEY=your_very_strong_random_secret_key
+KALANJIYAM_BOT_PASSWORD=your_strong_bot_password
+
+# Database Settings
+POSTGRES_PASSWORD=your_strong_db_password
+SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:your_strong_db_password@kalanjiyam-db/kalanjiyam
+
+# File Storage & Uploads Folder (Mapped inside the container to /data/uploads)
+FLASK_UPLOAD_FOLDER=/srv/kalanjiyam/uploads
+
+# Network Bindings
+KALANJIYAM_HOST_IP=127.0.0.1
+KALANJIYAM_HOST_PORT=5000
+```
+
+### Step 2: Configure S3 Storage (Recommended for Prod)
+To use the S3-compatible backend (facilitated by the bundled `versitygw` Posix adapter):
+```env
+STORAGE_BACKEND=s3
+S3_BUCKET=uploads
+S3_ACCESS_KEY_ID=your_s3_access_key
+S3_SECRET_ACCESS_KEY=your_s3_secret_access_key
+```
+*(If you want to keep the local filesystem backend instead, set `STORAGE_BACKEND=local`).*
+
+### Step 3: Run the Production Deployment Command
+Run the script from the root directory of the workspace:
+```bash
+./deploy/prod/deploy.sh
+```
+*(This will run validation checks, compile the production Docker image, run migrations, and launch all services in detached mode).*
+
+### Useful Production Management Commands
+* **Check Logs:**
+  ```bash
+  ./deploy/prod/deploy.sh logs
+  ```
+* **Stop Services:**
+  ```bash
+  ./deploy/prod/deploy.sh stop
+  ```
+* **Restart Services:**
+  ```bash
+  ./deploy/prod/deploy.sh restart
+  ```
+* **Run Database Migrations Only:**
+  ```bash
+  ./deploy/prod/deploy.sh migrate
+  ```
+
+---
+
 ## Production Deployment Checklist
 
 To transition from local development to a live production environment, follow this checklist to ensure stability, performance, and security:
