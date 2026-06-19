@@ -75,10 +75,12 @@ services:
       - ROOT_SECRET_KEY=${S3_SECRET_ACCESS_KEY:-kalanjiyam-dev-secret}
       - VGW_PORT=:7070
       - VGW_BACKEND=posix
-      - VGW_BACKEND_ARGS=/data
+      - VGW_BACKEND_ARGS=--sidecar /metadata /data
     volumes:
       - kalanjiyam-objects:/data
+      - kalanjiyam-metadata:/metadata
 
 volumes:
   kalanjiyam-data:
   kalanjiyam-objects:
+  kalanjiyam-metadata:

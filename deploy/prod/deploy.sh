@@ -77,7 +77,8 @@ check_env() {
         done
     fi
 
-    mkdir -p "${HOME}/kalanjiyam-data/uploads"
+    DATA_DIR="${KALANJIYAM_DATA_DIR:-${HOME}/kalanjiyam-data}"
+    mkdir -p "${DATA_DIR}/uploads"
     echo "✔  .env OK"
 }
 
