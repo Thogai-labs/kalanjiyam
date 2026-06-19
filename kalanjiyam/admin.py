@@ -1236,6 +1236,7 @@ class UserView(BaseView):
 class ProjectView(BaseView):
     """Super-admin list/edit for proofing projects (books)."""
 
+    can_create = False
     list_template = "admin/project_list.html"
     column_list = ["slug", "display_title", "is_publicly_viewable", "creator"]
     column_labels = {"is_publicly_viewable": "Public on /books/"}
