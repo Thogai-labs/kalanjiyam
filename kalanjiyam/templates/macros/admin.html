@@ -2,7 +2,8 @@
 <li>
   <a href="{{ url_for(route) }}"
      class="block px-4 py-2.5 rounded-xl transition-all duration-200 font-semibold text-sm
-     {{ 'bg-royalblue text-white shadow-md shadow-royalblue/20' if active else 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' }}">
+     {{ 'text-white shadow-md shadow-royalblue/20' if active else 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' }}"
+     {% if active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
     {{ text }}
   </a>
 </li>
