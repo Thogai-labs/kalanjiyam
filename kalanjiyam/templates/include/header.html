@@ -8,19 +8,23 @@
 </svg>
 {% endmacro %}
 
-<nav class="flex justify-between items-center w-full max-w-6xl mx-auto my-6 px-4 py-2 bg-white/90 backdrop-blur-md border border-white/50 rounded-full shadow-sm">
+<nav
+  class="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm mb-6">
+  <div class="w-full max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
   <div class="flex justify-between items-center">
-    <a class="flex items-center gap-2 pl-2 font-black text-lg text-slate-900 hover:opacity-80 transition-opacity" href="{{ url_for('site.index') }}">
-        <span class="w-8 h-8 rounded-full bg-royalblue flex items-center justify-center text-white text-xs shadow-sm">K</span>
-        <span class="tracking-tighter">{{ _('Kalanjiyam') }}</span>
+    <a class="flex items-center gap-2 pl-2 font-black text-lg text-slate-900 hover:opacity-80 transition-opacity"
+      href="{{ url_for('site.index') }}">
+      <span
+        class="w-8 h-8 rounded-full bg-royalblue flex items-center justify-center text-white text-xs shadow-sm">K</span>
+      <span class="tracking-tighter">{{ _('Kalanjiyam') }}</span>
     </a>
     <div class="block p-4 md:hidden">
-      <button id="hamburger" type="button" class="text-inherit opacity-70 hover:opacity-100 transition-opacity">{{ hamburger() }}</button>
+      <button id="hamburger" type="button" class="text-inherit opacity-70 hover:opacity-100 transition-opacity">{{
+        hamburger() }}</button>
     </div>
   </div>
 
-  <ul id="navbar" class="relative flex list-none p-0 m-0"
-      x-data="{ 
+  <ul id="navbar" class="relative flex list-none p-0 m-0" x-data="{ 
           left: 0, 
           width: 0, 
           opacity: 0,
@@ -32,51 +36,77 @@
           hideCursor() {
               this.opacity = 0;
           }
-      }"
-      @mouseleave="hideCursor()">
-    
-    <li class="relative z-10 block cursor-pointer px-4 py-2 font-bold text-xs uppercase tracking-widest text-slate-900 transition-colors" @mouseenter="moveCursor($el)">
-        <a class="block" href="{{ url_for('public.books.index') }}">{{ _('Books') }}</a>
+      }" @mouseleave="hideCursor()">
+
+    {% set is_books_active = request.blueprint and request.blueprint.startswith('public') %}
+    <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+      @mouseenter="moveCursor($el)">
+      <a class="block px-4 py-2 rounded-full {% if is_books_active %}text-white{% else %}text-slate-900{% endif %}" {%
+        if is_books_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+        href="{{ url_for('public.books.index') }}">{{ _('Books') }}</a>
     </li>
 
     {% if current_user.is_authenticated %}
-    <li class="relative z-10 block cursor-pointer px-4 py-2 font-bold text-xs uppercase tracking-widest text-slate-900 transition-colors" @mouseenter="moveCursor($el)">
-        <a class="block" href="{{ url_for('proofing.index') }}">{{ _('Proofing') }}</a>
+    {% set is_proofing_active = request.blueprint and request.blueprint.startswith('proofing') and request.endpoint !=
+    'proofing.user.summary' %}
+    <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+      @mouseenter="moveCursor($el)">
+      <a class="block px-4 py-2 rounded-full {% if is_proofing_active %}text-white{% else %}text-slate-900{% endif %}"
+        {% if is_proofing_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+        href="{{ url_for('proofing.index') }}">{{ _('Proofing') }}</a>
     </li>
     {% endif %}
 
+    {% set is_admin_active = request.endpoint and ('admin' in request.endpoint or 'platform_view' in request.endpoint or
+    'groups_view' in request.endpoint or 'org_admin_view' in request.endpoint) %}
     {% if current_user.is_super_admin %}
-    <li class="relative z-10 block cursor-pointer px-4 py-2 font-bold text-xs uppercase tracking-widest text-slate-900 transition-colors" @mouseenter="moveCursor($el)">
-        <a class="block" href="{{ url_for('platform_view.index') }}">{{ _('Admin') }}</a>
+    <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+      @mouseenter="moveCursor($el)">
+      <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
+        if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+        href="{{ url_for('platform_view.index') }}">{{ _('Admin') }}</a>
     </li>
     {% elif current_user.is_org_admin %}
-    <li class="relative z-10 block cursor-pointer px-4 py-2 font-bold text-xs uppercase tracking-widest text-slate-900 transition-colors" @mouseenter="moveCursor($el)">
-        <a class="block" href="{{ url_for('org_admin_view.index') }}">{{ _('Admin') }}</a>
+    <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+      @mouseenter="moveCursor($el)">
+      <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
+        if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+        href="{{ url_for('org_admin_view.index') }}">{{ _('Admin') }}</a>
     </li>
     {% elif current_user.is_admin %}
-    <li class="relative z-10 block cursor-pointer px-4 py-2 font-bold text-xs uppercase tracking-widest text-slate-900 transition-colors" @mouseenter="moveCursor($el)">
-        <a class="block" href="{{ url_for('admin.index') }}">{{ _('Admin') }}</a>
+    <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+      @mouseenter="moveCursor($el)">
+      <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
+        if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+        href="{{ url_for('admin.index') }}">{{ _('Admin') }}</a>
     </li>
     {% endif %}
 
     {% if current_user.is_authenticated %}
     {% set name = current_user.username %}
-    <li class="relative z-10 block cursor-pointer px-4 py-2 font-bold text-xs uppercase tracking-widest text-slate-900 transition-colors" @mouseenter="moveCursor($el)">
-        <a class="block" href="{{ url_for('proofing.user.summary', username=name) }}">{{ name }}</a>
+    {% set is_user_active = request.endpoint == 'proofing.user.summary' %}
+    <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+      @mouseenter="moveCursor($el)">
+      <a class="block px-4 py-2 rounded-full {% if is_user_active %}text-white{% else %}text-slate-900{% endif %}" {% if
+        is_user_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+        href="{{ url_for('proofing.user.summary', username=name) }}">{{ name }}</a>
     </li>
-    <li class="relative z-10 block cursor-pointer px-4 py-2 font-bold text-xs uppercase tracking-widest text-slate-900 transition-colors" @mouseenter="moveCursor($el)">
-        <a class="block" href="{{ url_for('auth.sign_out') }}">{{ _('Sign out') }}</a>
+    <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+      @mouseenter="moveCursor($el)">
+      <a class="block px-4 py-2 rounded-full text-slate-900" href="{{ url_for('auth.sign_out') }}">{{ _('Sign out')
+        }}</a>
     </li>
     {% else %}
-    <li class="relative z-10 block cursor-pointer px-4 py-2 font-bold text-xs uppercase tracking-widest text-slate-900 transition-colors" @mouseenter="moveCursor($el)">
-        <a class="block" href="{{ url_for('auth.sign_in') }}">{{ _('Sign in') }}</a>
+    <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+      @mouseenter="moveCursor($el)">
+      <a class="block px-4 py-2 rounded-full text-slate-900" href="{{ url_for('auth.sign_in') }}">{{ _('Sign in') }}</a>
     </li>
     {% endif %}
 
-    <div class="absolute z-0 h-[calc(100%-8px)] top-1 rounded-full bg-slate-100 transition-all duration-300 ease-out pointer-events-none" 
-         x-show="opacity > 0"
-         :style="`left: ${left}px; width: ${width}px; opacity: ${opacity};`"
-         x-cloak>
+    <div
+      class="absolute z-0 h-full top-0 rounded-full bg-slate-100 transition-all duration-300 ease-out pointer-events-none"
+      x-show="opacity > 0" :style="`left: ${left}px; width: ${width}px; opacity: ${opacity};`" x-cloak>
     </div>
   </ul>
+  </div>
 </nav>

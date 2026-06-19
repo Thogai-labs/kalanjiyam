@@ -17,9 +17,7 @@
 
 {# Full site nav; book toolbar handles page navigation below. #}
 {% block header %}
-<div class="shrink-0 border-b border-slate-200 bg-white book-editor-site-header">
-  {% include "include/header.html" with context %}
-</div>
+{% include "include/header.html" with context %}
 {% endblock %}
 
 {% block body_class %}flex flex-col h-screen overflow-hidden{% endblock %}
