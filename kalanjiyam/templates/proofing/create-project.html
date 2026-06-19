@@ -8,7 +8,9 @@
 
 {% macro step(n, text) %}
 <h2 class="text-3xl font-bold text-slate-800 mt-12 mb-6 flex items-center">
-  <span class="flex items-center justify-center w-12 h-12 rounded-2xl bg-premium-subtle text-premium text-xl mr-5 shadow-sm border border-royalblue/10">{{ n }}</span>
+  <span
+    class="flex items-center justify-center w-12 h-12 rounded-2xl bg-premium-subtle text-premium text-xl mr-5 shadow-sm border border-royalblue/10">{{
+    n }}</span>
   {{ text }}
 </h2>
 {% endmacro %}
@@ -38,13 +40,12 @@
   </div>
 
   {{ components.flash_messages() }}
-  
+
   <div class="error-box">
     {{ mf.show_errors_if_any(form.errors) }}
   </div>
 
-  <div class="bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-slate-50"
-       x-data="{ 
+  <div class="bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-slate-50" x-data="{ 
          source: '{{ form.pdf_source.data or 'local' }}',
          license: '{{ form.license.data or 'public' }}',
          uploading: false,
@@ -87,18 +88,22 @@
            xhr.send(formData);
          }
        }">
-    
+
     <form x-ref="projectForm" action="" method="POST" enctype="multipart/form-data" @submit.prevent="submitForm()">
       {{ form.csrf_token }}
 
-      <div x-show="!uploading" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0">
+      <div x-show="!uploading" x-transition:enter="transition ease-out duration-300"
+        x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0">
         <div class="space-y-12">
           <!-- Step 1 -->
           <section>
             {{ step(1, _('Search')) }}
             <div class="prose prose-slate max-w-none bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
-              <p class="text-slate-600 leading-relaxed font-medium">At Kalanjiyam, we're interested in any book that has some connection to Sanskrit literature. This includes original texts, commentaries, translations, dictionaries, and grammar books.</p>
-              <p class="text-slate-600 leading-relaxed font-medium">To avoid duplicating effort, we suggest that you first check the Internet carefully to see if your book has been digitized elsewhere already.</p>
+              <p class="text-slate-600 leading-relaxed font-medium">At Kalanjiyam, we're interested in any book that has
+                some connection to Sanskrit literature. This includes original texts, commentaries, translations,
+                dictionaries, and grammar books.</p>
+              <p class="text-slate-600 leading-relaxed font-medium">To avoid duplicating effort, we suggest that you
+                first check the Internet carefully to see if your book has been digitized elsewhere already.</p>
             </div>
           </section>
 
@@ -107,19 +112,22 @@
             {{ step(2, _('Upload')) }}
             <div class="bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
               <p class="mb-6 text-slate-500 font-bold uppercase tracking-wider text-xs">PDF Documents Only</p>
-              
+
               <fieldset x-ref="source" class="space-y-4">
                 <div class="flex flex-col space-y-4">
                   <div class="p-6 rounded-2xl border-2 transition-all cursor-pointer"
-                       :class="source === 'local' ? 'border-royalblue bg-royalblue/5' : 'border-slate-100 hover:border-slate-200 bg-white'"
-                       @click="source = 'local'">
+                    :class="source === 'local' ? 'border-royalblue bg-royalblue/5' : 'border-slate-100 hover:border-slate-200 bg-white'"
+                    @click="source = 'local'">
                     <label class="flex items-center cursor-pointer">
-                      <input type="radio" name="pdf_source" value="local" x-model="source" class="w-6 h-6 text-royalblue border-slate-300 focus:ring-royalblue">
+                      <input type="radio" name="pdf_source" value="local" x-model="source"
+                        class="w-6 h-6 text-royalblue border-slate-300 focus:ring-royalblue">
                       <span class="ml-4 text-xl font-bold text-slate-800">From my computer</span>
                     </label>
                     <div class="ml-10 mt-6" x-show="source === 'local'" x-transition>
                       <div class="p-6 bg-white rounded-xl border border-slate-100 shadow-sm">
-                        {{ form.local_file(class_="block w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-royalblue file:text-white hover:file:bg-royalblue/90 cursor-pointer transition-all") }}
+                        {{ form.local_file(accept=".pdf", class_="block w-full text-sm text-slate-500 file:mr-4
+                        file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold
+                        file:bg-royalblue file:text-white hover:file:bg-royalblue/90 cursor-pointer transition-all") }}
                       </div>
                     </div>
                   </div>
@@ -134,7 +142,9 @@
             <div class="bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
               <p class="mb-6 text-slate-500 font-bold uppercase tracking-wider text-xs">Book Title</p>
               <fieldset>
-                {{ form.local_title(class_="w-full p-5 text-xl border-2 border-slate-100 rounded-2xl focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all bg-white font-medium", placeholder="e.g. Raghuvamsha with Mallinatha's commentary") }}
+                {{ form.local_title(class_="w-full p-5 text-xl border-2 border-slate-100 rounded-2xl
+                focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all bg-white
+                font-medium", placeholder="e.g. Raghuvamsha with Mallinatha's commentary") }}
               </fieldset>
             </div>
           </section>
@@ -144,24 +154,30 @@
             {{ step(4, _('Verify')) }}
             <div class="bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
               <p class="mb-6 text-slate-500 font-bold uppercase tracking-wider text-xs">Licensing Information</p>
-              
+
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {% set radios = form.license|list %}
                 {% for radio in radios %}
-                  <label class="p-5 rounded-2xl border-2 transition-all cursor-pointer flex items-center"
-                         :class="license === '{{ radio.data }}' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 hover:border-slate-200 bg-white'">
-                    <input type="radio" name="license" value="{{ radio.data }}" x-model="license" class="w-6 h-6 text-emerald-500 border-slate-300 focus:ring-emerald-500">
-                    <span class="ml-4 text-base font-bold text-slate-800">{{ radio.label.text }}</span>
-                  </label>
+                <label class="p-5 rounded-2xl border-2 transition-all cursor-pointer flex items-center"
+                  :class="license === '{{ radio.data }}' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 hover:border-slate-200 bg-white'">
+                  <input type="radio" name="license" value="{{ radio.data }}" x-model="license"
+                    class="w-6 h-6 text-emerald-500 border-slate-300 focus:ring-emerald-500">
+                  <span class="ml-4 text-base font-bold text-slate-800">{{ radio.label.text }}</span>
+                </label>
                 {% endfor %}
               </div>
 
-              <div class="mt-8 p-6 bg-amber-50 rounded-2xl border border-amber-100 prose prose-slate prose-sm max-w-none" x-show="license === 'public'">
-                <p class="text-amber-700 font-medium">Public domain books can be used by anyone for any purpose. Books published in India on or before 1957 are typically in the public domain.</p>
+              <div
+                class="mt-8 p-6 bg-amber-50 rounded-2xl border border-amber-100 prose prose-slate prose-sm max-w-none"
+                x-show="license === 'public'">
+                <p class="text-amber-700 font-medium">Public domain books can be used by anyone for any purpose. Books
+                  published in India on or before 1957 are typically in the public domain.</p>
               </div>
 
               <div class="mt-6" x-show="license === 'other'" x-transition>
-                 {{ form.custom_license(class_="w-full p-5 border-2 border-slate-100 rounded-2xl focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all h-40 bg-white font-medium", placeholder="Tell us more about the license...") }}
+                {{ form.custom_license(class_="w-full p-5 border-2 border-slate-100 rounded-2xl focus:border-royalblue
+                focus:ring-4 focus:ring-royalblue/5 outline-none transition-all h-40 bg-white font-medium",
+                placeholder="Tell us more about the license...") }}
               </div>
             </div>
           </section>
@@ -175,26 +191,30 @@
       </div>
 
       <!-- Uploading State -->
-      <div x-show="uploading" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" class="py-24 text-center">
+      <div x-show="uploading" x-transition:enter="transition ease-out duration-500"
+        x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+        class="py-24 text-center">
         <div class="mb-12">
           <div class="inline-block p-8 rounded-full bg-royalblue/5 mb-8">
-             <svg class="w-20 h-20 text-royalblue animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-             </svg>
+            <svg class="w-20 h-20 text-royalblue animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+            </svg>
           </div>
           <h2 class="text-4xl font-black text-slate-900 mb-4" x-text="status"></h2>
-          <p class="text-xl text-slate-500 font-medium max-w-md mx-auto">We are safely transmitting your document to our servers. Please keep this page open.</p>
+          <p class="text-xl text-slate-500 font-medium max-w-md mx-auto">We are safely transmitting your document to our
+            servers. Please keep this page open.</p>
         </div>
-        
-        <div class="max-w-lg mx-auto h-10 bg-slate-100 rounded-full overflow-hidden p-2 shadow-inner border border-slate-200">
-          <div class="h-full bg-royalblue rounded-full transition-all duration-300 ease-out shadow-lg" 
-               :style="`width: ${progress}%`"
-               :class="progress === 0 ? 'animate-pulse' : ''">
+
+        <div
+          class="max-w-lg mx-auto h-10 bg-slate-100 rounded-full overflow-hidden p-2 shadow-inner border border-slate-200">
+          <div class="h-full bg-royalblue rounded-full transition-all duration-300 ease-out shadow-lg"
+            :style="`width: ${progress}%`" :class="progress === 0 ? 'animate-pulse' : ''">
           </div>
         </div>
-        
+
         <div class="mt-8 text-3xl font-black text-royalblue" x-text="`${progress}%`" x-show="progress > 0"></div>
-        
+
         <div class="mt-12 text-sm font-bold text-slate-400 uppercase tracking-widest animate-pulse">
           {{ _('Processing large files may take several minutes...') }}
         </div>
