@@ -36,6 +36,9 @@
      * > [!IMPORTANT]
      * > This **must** be an absolute path (e.g. `/tmp` or `/home/user/uploads`). If a relative path is used, the application validation will fail on startup.
      * In production/staging Docker environments, this is mapped to `/data/uploads` inside the container, which points to a persistent directory on the host.
+   * **`KALANJIYAM_DATA_DIR`**: The host directory where all application uploads/data will be stored.
+     * If empty or not defined, this defaults to `~/kalanjiyam-data`.
+     * **On servers with restricted home directory quotas**, point this to a spacious mount point (e.g., `KALANJIYAM_DATA_DIR=/home1/student/username/kalanjiyam-data`).
 
 4. Make sure in the `Makefile` (located at the root of the project) that `KALANJIYAM_DEPLOYMENT_ENV` is set to `local`.
 5. Start the Docker services by running the following command:
@@ -617,6 +620,11 @@ SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:your_strong_db_password@kalanjiy
 
 # File Storage & Uploads Folder (Mapped inside the container to /data/uploads)
 FLASK_UPLOAD_FOLDER=/srv/kalanjiyam/uploads
+# Host directory where all application uploads/data will be stored.
+# If empty or not defined, defaults to ~/kalanjiyam-data.
+# On servers with restricted home directory quotas, point this to a spacious mount point
+# (e.g., KALANJIYAM_DATA_DIR=/home1/student/username/kalanjiyam-data).
+KALANJIYAM_DATA_DIR=/home1/student/username/kalanjiyam-data
 
 # Network Bindings
 KALANJIYAM_HOST_IP=127.0.0.1
