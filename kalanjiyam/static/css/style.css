@@ -554,6 +554,14 @@
     background: #e8e4dc;
   }
 
+  .flex-1:has(> .book-editor-page.has-conflict),
+  .book-editor-page.has-conflict,
+  .book-editor-shell.has-conflict {
+    min-height: auto;
+    height: auto;
+    flex: none;
+  }
+
   .book-editor-site-header nav {
     @apply my-2;
   }
@@ -601,6 +609,10 @@
 
   .book-editor-workspace {
     @apply grid grid-cols-1 lg:grid-cols-2 flex-1 min-h-0;
+  }
+
+  .book-editor-workspace.has-conflict {
+    height: 85vh;
   }
 
   .book-editor-image-pane {

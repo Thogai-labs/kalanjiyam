@@ -20,7 +20,7 @@
 {% include "include/header.html" with context %}
 {% endblock %}
 
-{% block body_class %}flex flex-col h-screen overflow-hidden{% endblock %}
+{% block body_class %}flex flex-col {% if conflict %}min-h-screen overflow-y-auto{% else %}h-screen overflow-hidden{% endif %}{% endblock %}
 
 {% block extra_css %}
 {{ super() }}
@@ -31,7 +31,7 @@
 
 
 {% block main %}
-<article class="book-editor-page">
+<article class="book-editor-page{% if conflict %} has-conflict{% endif %}">
   {% if not current_user.is_authenticated -%}
   {% call mc.div_warning() %}{% trans %}
   Since you are not logged in, some functions (such as the OCR button) have
@@ -44,13 +44,13 @@
   {{ mc.flash_messages() }}
 
   {% if conflict %}
-  <div class="mx-4 mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
+  <div class="mx-4 mt-4 bg-red-50 border border-red-200 rounded-lg p-4 shrink-0">
     <h3 class="text-red-800 font-semibold mb-2">{{ _('Conflict detected') }}</h3>
-    <pre class="book-editor-text text-red-700 text-sm bg-white/50 p-3 rounded overflow-x-auto">{{ conflict.content }}</pre>
+    <pre class="book-editor-text text-red-700 text-sm bg-white/50 p-3 rounded max-h-48 overflow-y-auto overflow-x-auto">{{ conflict.content }}</pre>
   </div>
   {% endif %}
 
-  <form x-data="proofer" method="POST" class="book-editor-shell">
+  <form x-data="proofer" method="POST" class="book-editor-shell{% if conflict %} has-conflict{% endif %}">
     {{ form.csrf_token }}
     {{ form.version }}
     <input type="hidden" name="document" id="document" value="">
@@ -68,7 +68,7 @@
     </p>
     {% endif %}
 
-    <div class="book-editor-workspace">
+    <div class="book-editor-workspace{% if conflict %} has-conflict{% endif %}">
       {{ editor.image_box(translation_content, translation_metadata, available_translations) }}
 
       <section class="book-editor-content-pane">
