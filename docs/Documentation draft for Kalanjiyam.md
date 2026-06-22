@@ -717,3 +717,180 @@ To log server exceptions in production:
    ```env
    SENTRY_DSN=https://your_key@sentry.io/your_project_id
    ```
+
+---
+
+## OCR Integration & Editing Mechanics
+
+Kalanjiyam delegates optical character recognition to an external OCR service (configured via `OCR_SERVICE_URL` and optional `OCR_SERVICE_API_KEY` in the `.env` file). The platform processes scans and extracts structured document layout data dynamically to present a layout-faithful editing experience.
+
+### 1. Frontend Editing Modes
+
+When proofreaders open a page, the editing interface supports two primary views to compare the recognized texts against the original page scan:
+
+* **Replica Mode (Default):**
+  * **Layout:** Displays the original page scan image with interactive OCR bounding box overlays on the left pane, and a spatial-scaled page replica on the right pane.
+  * **Interactivity:** Proofreaders can click directly on any text block on the page to edit the text in place within the spatial layer.
+  * **Benefits:** Retains columns, headers, tables, and exact page layout structure, making it easy to identify where text is missing or misaligned relative to the scan.
+* **Flow Mode:**
+  * **Layout:** A continuous rich-text editor (using TipTap) on one side, paired with a standard image viewer pane on the other.
+  * **Interactivity:** Standard text-editing workflow for writing and editing text flow.
+  * **Syncing:** Running OCR in Replica mode automatically parses, structure-clusters, and syncs the recognized text layout to Flow mode.
+  * **Workflow:** Revise and proofread layout blocks in Replica, and use Flow mode for formatting adjustments or continuous plain text editing.
+
+---
+
+### 2. OCR Service Response Contract (v2)
+
+To ensure loose coupling, Kalanjiyam communicates with the external OCR service via a strict engine-agnostic API contract. The external OCR service MUST return a JSON payload with a `Content-Type: application/json` header. 
+
+If the service returns a payload matching this shape, it will automatically plug into the frontend editor without code changes.
+
+#### A. JSON Schema Definition
+The JSON payload must include the following top-level and block-level properties:
+
+```json
+{
+  "contract_version": "2.0",
+  "engine": "surya",
+  "model": {
+    "name": "surya-rec",
+    "version": "0.6.1"
+  },
+  "source_type": "scan",
+  "coordinate_space": "pixel",
+  "page_width": 1240,
+  "page_height": 1754,
+  "page_confidence": 0.91,
+  "blocks": [
+    {
+      "id": "b1a2c3d4",
+      "type": "paragraph",
+      "bbox": [120, 100, 980, 280],
+      "reading_order": 1,
+      "content": "Sanskrit text string here.\nSecond line continues here.",
+      "confidence": 0.85,
+      "language": "sa",
+      "words": [
+        {
+          "text": "Sanskrit",
+          "bbox": [120, 100, 190, 130],
+          "confidence": 0.95
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### B. Key Fields Reference
+
+* **`page_width` / `page_height` (Integer, Required):** Dimensions (in pixels) of the source scan. Required so the spatial Replica view can scale and align bounding boxes precisely.
+* **`coordinate_space` (String, Optional):** Can be `"pixel"` (coordinates map directly to image pixels) or `"normalized"` (coordinates scaled between `0.0` and `1.0`). Defaults to `"pixel"`.
+* **`blocks` (Array, Required):** List of recognized layout elements. Each block must have:
+  * **`id` (String, Required):** A stable, page-unique identifier (e.g. 8 hex characters). Ensures manual edits by proofreaders survive a re-OCR run.
+  * **`type` (String, Required):** Layout type. Valid values: `paragraph`, `heading`, `subheading`, `table`, `figure`, `caption`, `footnote`, `running-header`, `page-number`, `equation`.
+  * **`bbox` (Array, Required):** Array of four coordinates `[x1, y1, x2, y2]` denoting the bounding box of the block.
+  * **`reading_order` (Integer, Required):** 1-based order in which the block should be read.
+  * **`content` (String, Required):** Plain text inside the block. For the `table` type, this field contains a complete HTML `<table>` string instead of plain text.
+  * **`confidence` (Float 0.0 - 1.0, Required if available):** Block recognition score. Scores `< 0.5` are highlighted in red (errors) and `0.5 - 0.74` in amber (review recommended).
+  * **`words` (Array, Optional):** Word-level or line-level breakdown containing local text coordinates and confidence scores for in-block word-level highlights.
+
+*If v2 blocks are missing from the response, Kalanjiyam falls back to legacy behaviors by parsing raw text and TSV bounding boxes if possible.*
+
+---
+
+## Troubleshooting & Container Logs
+
+If you encounter issues during local development or production deployment, monitoring container logs and understanding the state of individual services is critical.
+
+All five main containers have explicit `container_name` attributes, meaning you can access their logs directly using standard Docker commands or through the environment's orchestrator (Makefile/deploy script).
+
+### General Logging Commands
+
+* **View logs for all containers:**
+  * **Local Development:**
+    ```bash
+    make docker-logs
+    # or
+    docker compose -p kalanjiyam-local -f deploy/local/docker-compose.yml logs -f
+    ```
+  * **Production Deployment:**
+    ```bash
+    ./deploy/prod/deploy.sh logs
+    # or
+    docker compose -p kalanjiyam-prod -f deploy/prod/docker-compose.yml logs -f
+    ```
+* **View logs for a specific container:**
+  ```bash
+  docker logs -f <container-name>
+  ```
+  *(Example: `docker logs -f kalanjiyam-web`)*
+
+---
+
+### Container Reference & Troubleshooting
+
+#### 1. `kalanjiyam-web`
+* **Role:** Serves the main Flask web application (using Gunicorn in production, and standard Flask development server in local).
+* **Logs Command:**
+  ```bash
+  docker logs -f kalanjiyam-web
+  ```
+* **Common Issues:**
+  * **502 Bad Gateway / Connection Refused:**
+    * *Cause:* The Flask server failed to start or crashed during initialization.
+    * *Troubleshooting:* Check the logs for Python traceback errors. Ensure all required environment variables in `.env` are defined and valid. Check if the database is reachable.
+  * **Configuration validation errors on startup:**
+    * *Cause:* A critical configuration variable like `FLASK_UPLOAD_FOLDER` is missing or is configured as a relative path instead of an absolute path.
+    * *Troubleshooting:* Modify the `.env` file to use absolute paths and restart the service.
+
+#### 2. `kalanjiyam-celery`
+* **Role:** Celery worker that processes asynchronous background tasks (such as PDF book import, page parsing, and OCR transcription).
+* **Logs Command:**
+  ```bash
+  docker logs -f kalanjiyam-celery
+  ```
+* **Common Issues:**
+  * **OCR / PDF processing tasks remain in "Pending" or fail instantly:**
+    * *Cause:* The Celery container is either not running, cannot reach Redis, or cannot communicate with the external OCR service.
+    * *Troubleshooting:* Verify the container is running by typing `docker ps`. Check the logs for connection timeout or host lookup failures (e.g. if the `OCR_SERVICE_URL` is misconfigured).
+  * **Out of Memory (OOM) / Worker Crash on Large PDFs:**
+    * *Cause:* Processing very large PDF documents can exhaust container resource limits.
+    * *Troubleshooting:* Check `docker stats kalanjiyam-celery` to monitor resource usage. You may need to allocate more memory/CPU to your Docker daemon or split massive PDFs into smaller parts before uploading.
+
+#### 3. `kalanjiyam-versitygw`
+* **Role:** Versity Gateway S3 adapter. It exposes the application's local filesystem upload storage through an S3-compatible API, allowing S3 file upload routines without needing a cloud S3 instance.
+* **Logs Command:**
+  ```bash
+  docker logs -f kalanjiyam-versitygw
+  ```
+* **Common Issues:**
+  * **Upload or file storage errors (S3 API Connection Errors):**
+    * *Cause:* The gateway failed to initialize POSIX storage or there is an access key/secret mismatch between `.env` configuration and container variables.
+    * *Troubleshooting:* Inspect the logs of `kalanjiyam-versitygw` to ensure it successfully started on port `7070` and set up the posix backend. Make sure the S3 keys configured in your `.env` match the credentials in `deploy/local/docker-compose.yml` or `deploy/prod/docker-compose.yml`. Ensure the data directories on the host mapped to the volumes are writeable by the container.
+
+#### 4. `kalanjiyam-redis`
+* **Role:** Redis container serving as the broker and backend for the Celery task queue.
+* **Logs Command:**
+  ```bash
+  docker logs -f kalanjiyam-redis
+  ```
+* **Common Issues:**
+  * **Celery or Web containers report connection pool issues or failed to connect to Redis broker:**
+    * *Cause:* Redis container is stopped, crashing, or out of resources.
+    * *Troubleshooting:* Check the Redis logs. Redis may fail to write to its database file or exhaust memory if loaded with too many tasks. If necessary, stop and purge the containers using `make docker-stop` (local) or `./deploy/prod/deploy.sh stop` (prod), and restart them.
+
+#### 5. `kalanjiyam-db`
+* **Role:** PostgreSQL database container storing platform metadata, users, organizations, proofing logs, and books.
+* **Logs Command:**
+  ```bash
+  docker logs -f kalanjiyam-db
+  ```
+* **Common Issues:**
+  * **Fatal Authentication Errors / Database Connection Refused:**
+    * *Cause:* The credentials configured in `SQLALCHEMY_DATABASE_URI` do not match the database username, database name, or `POSTGRES_PASSWORD` defined in the environment.
+    * *Troubleshooting:* Verify that the passwords and usernames match in your `.env` file. Check db container logs for messages like `password authentication failed for user "kalanjiyam"`.
+  * **Database Lock / Unapplied Migrations:**
+    * *Cause:* The database schema is out of sync with the application code or migrations were interrupted.
+    * *Troubleshooting:* Check the migration status by running `docker exec -it kalanjiyam-web alembic current` and apply pending updates with `docker exec -it kalanjiyam-web alembic upgrade head` (or running `./deploy/prod/deploy.sh migrate` in production).
