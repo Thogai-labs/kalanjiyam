@@ -110,6 +110,7 @@ export default () => ({
   isRunningOCR: false,
   isRunningTranslation: false,
   hasUnsavedChanges: false,
+  _isProgrammaticUpdate: false,
   imageViewer: null,
   richEditor: null,
   isDragging: false,
@@ -526,6 +527,7 @@ export default () => ({
       }
     }
 
+    this._isProgrammaticUpdate = true;
     const editor = createRichEditor('rich-editor', {
       content: initialHtml || '',
       onUpdate: (html) => {
@@ -541,10 +543,15 @@ export default () => ({
           if (docField) docField.value = JSON.stringify(this.pageDocument);
           this._updateUncertainCount();
         }
-        this.hasUnsavedChanges = true;
+        if (this._isProgrammaticUpdate) {
+          this._isProgrammaticUpdate = false;
+        } else {
+          this.hasUnsavedChanges = true;
+        }
       },
       onSelectionUpdate: () => {},
     });
+    this._isProgrammaticUpdate = false;
 
     window.richEditorInstance = editor;
     this._richEditor = editor;
@@ -558,7 +565,9 @@ export default () => ({
       const contentTextarea = document.getElementById('content');
       if (contentTextarea && window.richEditorInstance && contentTextarea.value) {
         try {
+          this._isProgrammaticUpdate = true;
           setEditorText(window.richEditorInstance, contentTextarea.value);
+          this._isProgrammaticUpdate = false;
         } catch (e) {
           console.error('Manual sync failed:', e);
         }
@@ -586,11 +595,15 @@ export default () => ({
     const currentContent = getEditorContent(editor);
     if (html) {
       if (currentContent !== html) {
+        this._isProgrammaticUpdate = true;
         setEditorContent(editor, html);
+        this._isProgrammaticUpdate = false;
       }
     } else {
       if (currentContent !== '<p></p>' && currentContent !== '') {
+        this._isProgrammaticUpdate = true;
         setEditorContent(editor, '');
+        this._isProgrammaticUpdate = false;
       }
     }
     // Force focus and layout update when switching to flow mode
