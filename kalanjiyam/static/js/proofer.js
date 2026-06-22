@@ -507,16 +507,27 @@ export default () => ({
     if (window.richEditorInstance) return window.richEditorInstance;
 
     const editorElement = document.getElementById('rich-editor');
-    if (!editorElement) return null;
+    if (!editorElement) {
+      console.warn('ensureFlowEditor: #rich-editor element not found in DOM');
+      return null;
+    }
 
     const textarea = document.getElementById('content');
-    const initialContent = this._flowPlainCache
-      || (textarea ? textarea.value : '')
-      || this.content
-      || documentToPlainText(this.pageDocument || { blocks: [] });
+    let initialHtml = this._flowHtmlFromDocument();
+    if (!initialHtml) {
+      const plain = this._flowPlainCache
+        || (textarea ? textarea.value : '')
+        || this.content;
+      if (plain) {
+        initialHtml = plain
+          .split('\n\n')
+          .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+          .join('');
+      }
+    }
 
     const editor = createRichEditor('rich-editor', {
-      content: '',
+      content: initialHtml || '',
       onUpdate: (html) => {
         this.content = html;
         const contentTextarea = document.getElementById('content');
@@ -541,9 +552,6 @@ export default () => ({
 
     if (editor) {
       initializeToolbar(editor);
-      if (initialContent) {
-        setEditorText(editor, initialContent);
-      }
     }
 
     this.syncEditorFromTextarea = () => {
@@ -570,13 +578,29 @@ export default () => ({
     }
     this.content = plain;
     const editor = this.ensureFlowEditor();
-    if (!editor) return;
-    const html = this._flowHtmlFromDocument();
-    if (html) {
-      setEditorContent(editor, html);
-    } else {
-      setEditorContent(editor, '');
+    if (!editor) {
+      console.warn('_applyFlowEditorContent: ensureFlowEditor returned null');
+      return;
     }
+    const html = this._flowHtmlFromDocument();
+    const currentContent = getEditorContent(editor);
+    if (html) {
+      if (currentContent !== html) {
+        setEditorContent(editor, html);
+      }
+    } else {
+      if (currentContent !== '<p></p>' && currentContent !== '') {
+        setEditorContent(editor, '');
+      }
+    }
+    // Force focus and layout update when switching to flow mode
+    setTimeout(() => {
+      try {
+        editor.commands.focus();
+      } catch (e) {
+        console.warn('Failed to focus editor:', e);
+      }
+    }, 50);
   },
 
   setEditorMode(mode) {
@@ -584,8 +608,14 @@ export default () => ({
     this.saveSettings();
     requestAnimationFrame(() => {
       if (this.imageViewer) {
-        this.imageViewer.viewport.resize();
-        this.imageViewer.forceRedraw();
+        try {
+          if (this.imageViewer.viewport) {
+            this.imageViewer.viewport.resize();
+            this.imageViewer.forceRedraw();
+          }
+        } catch (e) {
+          console.warn('Failed to resize OpenSeadragon viewport:', e);
+        }
         if (this._bboxOverlay) {
           this._bboxOverlay.setBoxes(this._bboxOverlay.boxes || []);
         }
@@ -594,11 +624,9 @@ export default () => ({
         this._replicaView.setDocument(this.pageDocument);
       }
       if (mode === 'flow') {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            this._applyFlowEditorContent();
-          });
-        });
+        setTimeout(() => {
+          this._applyFlowEditorContent();
+        }, 100);
       }
     });
   },
@@ -739,7 +767,9 @@ export default () => ({
     if (this.pageDocument.blocks?.length) {
       return documentToFlowHtml(this.pageDocument);
     }
-    const plain = documentToPlainText(this.pageDocument);
+    const plain = this._flowPlainCache
+      || documentToPlainText(this.pageDocument);
+    if (!plain) return '';
     return plain
       .split('\n\n')
       .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
