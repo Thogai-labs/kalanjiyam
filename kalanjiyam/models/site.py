@@ -5,8 +5,10 @@ these objects. By doing so, they can update the site without waiting for a site
 deploy.
 """
 
-from sqlalchemy import Column, Integer, String
+from datetime import datetime
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy import Text as Text_
+from sqlalchemy.orm import relationship
 
 from kalanjiyam.models.base import Base, pk
 
@@ -47,3 +49,20 @@ class ContributorInfo(Base):
     title = Column(String, nullable=False, default="")
     #: A short description of this proofer.
     description = Column(Text_, nullable=False, default="")
+
+
+class UsageLog(Base):
+    """Logs high-level user actions for analytics and rate-limiting."""
+
+    __tablename__ = "usage_logs"
+
+    id = pk()
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    fingerprint_id = Column(String, nullable=True, index=True)
+    ip_address = Column(String, nullable=False, index=True)
+    action = Column(String, nullable=False, index=True)  # "create_project" or "run_ocr"
+    project_slug = Column(String, nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User")
+

@@ -12,7 +12,15 @@ def is_multi_tenant_enabled() -> bool:
 
 
 def user_organization_id(user) -> int | None:
-    return getattr(user, "organization_id", None)
+    org_id = getattr(user, "organization_id", None)
+    if org_id is None and getattr(user, "is_authenticated", False):
+        from kalanjiyam import queries as q
+        try:
+            open_tenant = q.get_or_create_open_tenant()
+            org_id = open_tenant.id
+        except Exception:
+            pass
+    return org_id
 
 
 def is_project_publicly_viewable(project: db.Project) -> bool:
@@ -40,6 +48,13 @@ def user_can_access_project(user, project: db.Project) -> bool:
     org_id = user_organization_id(user)
     if org_id is None:
         return False
+
+    # For projects in the open-tenant workspace, restrict access ONLY to the creator
+    # of the project (or superadmins, who are already allowed via the check above).
+    is_open_tenant = any(g.slug == "open-tenant" for g in project.groups)
+    if is_open_tenant:
+        return project.creator_id == getattr(user, "id", None)
+
     return any(g.id == org_id for g in project.groups)
 
 

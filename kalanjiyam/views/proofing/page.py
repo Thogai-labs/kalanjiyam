@@ -46,6 +46,8 @@ bp = Blueprint("page", __name__)
 
 @bp.before_request
 def _enforce_project_access():
+    if current_user.is_authenticated and current_user.is_super_admin:
+        abort(403, description="Superadmins are not allowed to view project data.")
     project_slug = request.view_args.get("project_slug") if request.view_args else None
     if not project_slug:
         return None
@@ -405,6 +407,8 @@ def revision(project_slug, page_slug, revision_id):
 @login_required
 def ocr(project_slug, page_slug):
     """Apply OCR to the given page using the specified engine."""
+    if current_user.is_authenticated and current_user.is_super_admin:
+        abort(403, description="Superadmins are not allowed to access project data.")
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
@@ -473,6 +477,8 @@ def ocr(project_slug, page_slug):
 @login_required
 def translate(project_slug, page_slug):
     """Apply translation to the given page using the specified engine."""
+    if current_user.is_authenticated and current_user.is_super_admin:
+        abort(403, description="Superadmins are not allowed to access project data.")
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
@@ -559,6 +565,8 @@ def translate(project_slug, page_slug):
 @login_required
 def upload_image(project_slug, page_slug):
     """Upload an image for the rich text editor."""
+    if current_user.is_authenticated and current_user.is_super_admin:
+        abort(403, description="Superadmins are not allowed to access project data.")
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)

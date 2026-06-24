@@ -49,9 +49,10 @@
     </form>
   </div>
 
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 flex flex-col justify-center">
-    <h2 class="text-lg font-bold text-slate-900 mb-3">{{ _('Quick actions') }}</h2>
-    {{ admin.btn_primary(_('Upload a new book'), href=url_for('proofing.create_project')) }}
+  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 flex flex-col justify-center gap-3">
+    <h2 class="text-lg font-bold text-slate-900 mb-1">{{ _('Quick actions') }}</h2>
+    {{ admin.btn_primary(_('Upload a new book'), href=url_for('proofing.create_project'), icon_name='upload') }}
+    {{ admin.btn_secondary(_('View Analytics'), href=url_for('org_admin_view.user_analytics'), icon_name='bar-chart-3') }}
   </div>
 </div>
 

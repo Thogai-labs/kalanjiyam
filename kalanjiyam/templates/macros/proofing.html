@@ -30,14 +30,38 @@
 </header>
 {% endmacro %}
 
+{% macro icon(name, class='w-4 h-4') %}
+{% if name == 'layout-dashboard' %}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="10" rx="1"/><rect width="7" height="5" x="3" y="14" rx="1"/></svg>
+{% elif name == 'help-circle' %}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+{% elif name == 'file-text' %}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+{% elif name == 'list' %}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+{% elif name == 'plus-circle' %}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+{% elif name == 'clock' %}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+{% elif name == 'tag' %}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l4.58-4.58c.94-.94.94-2.48 0-3.42z"/><path d="M6 6h.01"/></svg>
+{% elif name == 'message-circle' %}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+{% endif %}
+{% endmacro %}
+
+
 {# Sidebar link #}
-{% macro _link(label, route, text, active) -%}
+{% macro _link(label, route, text, active, icon_name=None) -%}
 <li class="sidebar-nav-item">
   <a href="{{ url_for(route) }}"
-    class="block px-4 py-2.5 rounded-xl transition-all duration-200 font-semibold
+    class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 font-semibold
    {{ 'text-white shadow-md shadow-royalblue/20' if active == label else 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' }}" {% if
     active==label %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}>
-    {{ text }}
+    {% if icon_name %}
+      {{ icon(icon_name, class='w-4 h-4 shrink-0') }}
+    {% endif %}
+    <span>{{ text }}</span>
   </a>
 </li>
 {%- endmacro %}
@@ -50,7 +74,7 @@
 <nav class="mb-6">
   <h1 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Moderation') }}</h1>
   <ul class="space-y-1">
-    {{ _link('stats', "proofing.dashboard", _("Dashboard"), active) }}
+    {{ _link('stats', "proofing.dashboard", _("Dashboard"), active, icon_name='layout-dashboard') }}
   </ul>
 </nav>
 {% endif %}
@@ -58,20 +82,20 @@
 <nav class="mb-6">
   <h1 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Help') }}</h1>
   <ul class="space-y-1">
-    {{ _link('beginners', "proofing.beginners_guide", _("Beginner's guide"), active) }}
-    {{ _link('complete', "proofing.complete_guide", _("Complete guide"), active) }}
-    {{ _link('manual', "proofing.editor_guide", _("Editor manual"), active) }}
+    {{ _link('beginners', "proofing.beginners_guide", _("Beginner's guide"), active, icon_name='help-circle') }}
+    {{ _link('complete', "proofing.complete_guide", _("Complete guide"), active, icon_name='file-text') }}
+    {{ _link('manual', "proofing.editor_guide", _("Editor manual"), active, icon_name='help-circle') }}
   </ul>
 </nav>
 
 <nav>
   <h1 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Contribute') }}</h1>
   <ul class="space-y-1">
-    {{ _link('projects', "proofing.index", _("Ongoing projects"), active) }}
-    {{ _link('create', "proofing.create_project", _("Create project"), active) }}
-    {{ _link('changes', "proofing.recent_changes", _("Recent changes"), active) }}
-    {{ _link('tagging', "proofing.tagging.index", _("Tagging"), active) }}
-    {{ _link('talk', "proofing.talk", _("Talk"), active) }}
+    {{ _link('projects', "proofing.index", _("Ongoing projects"), active, icon_name='list') }}
+    {{ _link('create', "proofing.create_project", _("Create project"), active, icon_name='plus-circle') }}
+    {{ _link('changes', "proofing.recent_changes", _("Recent changes"), active, icon_name='clock') }}
+    {{ _link('tagging', "proofing.tagging.index", _("Tagging"), active, icon_name='tag') }}
+    {{ _link('talk', "proofing.talk", _("Talk"), active, icon_name='message-circle') }}
   </ul>
 </nav>
 {% endmacro %}
@@ -84,8 +108,10 @@
 ("activity", _("Activity"), url_for("proofing.project.activity", slug=project.slug)),
 ("talk", _("Talk"), url_for("proofing.talk.board", slug=project.slug)),
 ("edit", _("Edit"), url_for("proofing.project.edit", slug=project.slug)),
-("download", _("Download"), url_for("proofing.project.download", slug=project.slug)),
 ] %}
+{% if not (current_user.is_authenticated and current_user.is_super_admin) %}
+  {% set routes = routes + [("download", _("Download"), url_for("proofing.project.download", slug=project.slug))] %}
+{% endif %}
 {% if is_mod %}{% set routes = routes + [
 ("stats", _("Stats"), url_for("proofing.project.stats", slug=project.slug)),
 ("admin", _("Admin"), url_for("proofing.project.admin", slug=project.slug)),

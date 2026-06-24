@@ -82,7 +82,7 @@ def _schedule_zip_cleanup(zip_path: Path) -> None:
 
 class KalanjiyamIndexView(AdminIndexView):
     def is_accessible(self):
-        return current_user.is_authenticated and current_user.is_moderator
+        return current_user.is_authenticated and (current_user.is_moderator or current_user.is_org_admin)
     
     def inaccessible_callback(self, name, **kwargs):
         abort(404)
@@ -110,7 +110,9 @@ class KalanjiyamIndexView(AdminIndexView):
     @login_required
     def export_project(self, project_slug):
         """Export a single project as a ZIP file."""
-        if not (is_platform_super_admin() or current_user.is_org_admin):
+        if is_platform_super_admin():
+            abort(403, description="Superadmins are not allowed to access or export project data.")
+        if not current_user.is_org_admin:
             abort(404)
         
         project = q.project(project_slug)
@@ -188,7 +190,9 @@ class KalanjiyamIndexView(AdminIndexView):
     @login_required
     def export_all_projects(self):
         """Export all projects as a single ZIP file."""
-        if not (is_platform_super_admin() or current_user.is_org_admin):
+        if is_platform_super_admin():
+            abort(403, description="Superadmins are not allowed to access or export project data.")
+        if not current_user.is_org_admin:
             abort(404)
         
         projects = self._projects_for_current_admin()
@@ -263,10 +267,10 @@ class KalanjiyamIndexView(AdminIndexView):
     @expose('/export-import')
     @login_required
     def export_import_dashboard(self):
-        """Export/import dashboard for super admins."""
-        if not is_platform_super_admin():
-            if current_user.is_org_admin:
-                return redirect(url_for("org_admin_view.index"))
+        """Export/import dashboard."""
+        if is_platform_super_admin():
+            abort(403, description="Superadmins are not allowed to access or export project data.")
+        if not current_user.is_org_admin:
             abort(404)
         projects = self._projects_for_current_admin()
         return render_template("admin/export_import.html", projects=projects)
@@ -275,7 +279,9 @@ class KalanjiyamIndexView(AdminIndexView):
     @login_required
     def import_project(self):
         """Import a project from a ZIP file."""
-        if not is_platform_super_admin():
+        if is_platform_super_admin():
+            abort(403, description="Superadmins are not allowed to access or import project data.")
+        if not current_user.is_org_admin:
             abort(404)
         
         if request.method == "POST":
@@ -323,7 +329,9 @@ class KalanjiyamIndexView(AdminIndexView):
     @login_required
     def import_all_projects(self):
         """Import all projects from a ZIP file."""
-        if not is_platform_super_admin():
+        if is_platform_super_admin():
+            abort(403, description="Superadmins are not allowed to access or import project data.")
+        if not current_user.is_org_admin:
             abort(404)
         
         if request.method == "POST":
@@ -696,11 +704,17 @@ class KalanjiyamIndexView(AdminIndexView):
             )
             session.add(translation)
 
-        org_slug = project_data.get("organization_slug")
-        if org_slug:
-            org = q.organization_by_slug(org_slug)
-            if org:
-                session.add(db.ProjectGroups(group_id=org.id, project_id=project.id))
+        # Enforce Org Admin's organization assignment
+        if not is_platform_super_admin() and current_user.is_org_admin:
+            org_id = current_user.organization_id
+            if org_id:
+                session.add(db.ProjectGroups(group_id=org_id, project_id=project.id))
+        else:
+            org_slug = project_data.get("organization_slug")
+            if org_slug:
+                org = q.organization_by_slug(org_slug)
+                if org:
+                    session.add(db.ProjectGroups(group_id=org.id, project_id=project.id))
         
         return project
     
@@ -772,6 +786,69 @@ class PlatformView(AdminBaseView):
             org_count=len(orgs),
             total_storage_used=total_storage_used,
             total_ocr_used=total_ocr_used,
+        )
+
+    @expose("/user_analytics")
+    def user_analytics(self):
+        require_platform_super_admin()
+        orgs = q.groups()
+        session = q.get_session()
+        
+        # Calculate overall stats for each organization
+        org_stats = []
+        for org in orgs:
+            users_count = len(q.users_in_group(org.id))
+            projects_count, _ = q.projects_in_group(org.id, page=1, per_page=1000)
+            projects_count = len(projects_count)
+            
+            # Count revisions made by users of this org
+            user_ids = [u.id for u in q.users_in_group(org.id)]
+            revisions_count = 0
+            if user_ids:
+                revisions_count = session.query(db.Revision).filter(db.Revision.author_id.in_(user_ids)).count()
+                
+            org_stats.append({
+                "org": org,
+                "users_count": users_count,
+                "projects_count": projects_count,
+                "revisions_count": revisions_count,
+                "ocr_count": org.ocr_credits_used or 0,
+                "storage_used": org.storage_used_bytes or 0,
+            })
+            
+        return render_template(
+            "admin/org_analytics.html",
+            org_stats=org_stats,
+            is_platform=True
+        )
+
+    @expose("/user_analytics/<int:org_id>")
+    def org_user_analytics(self, org_id):
+        require_platform_super_admin()
+        org = q.group(org_id)
+        if not org:
+            abort(404)
+            
+        session = q.get_session()
+        users = q.users_in_group(org.id)
+        
+        user_stats = []
+        for user in users:
+            projects_count = session.query(db.Project).filter_by(creator_id=user.id).count()
+            revisions_count = session.query(db.Revision).filter_by(author_id=user.id).count()
+            ocr_count = session.query(db.UsageLog).filter_by(user_id=user.id, action="run_ocr").count()
+            user_stats.append({
+                "user": user,
+                "projects_count": projects_count,
+                "revisions_count": revisions_count,
+                "ocr_count": ocr_count,
+            })
+            
+        return render_template(
+            "admin/org_user_analytics.html",
+            org=org,
+            user_stats=user_stats,
+            is_platform=True
         )
 
 
@@ -1093,6 +1170,67 @@ class OrgAdminView(AdminBaseView):
             csrf_token=generate_csrf(),
         )
 
+    @expose("/analytics")
+    def user_analytics(self):
+        org_id = require_org_admin()
+        org = q.group(org_id)
+        if org is None:
+            abort(404)
+            
+        session = q.get_session()
+        users = q.users_in_group(org.id)
+        user_ids = [u.id for u in users]
+        
+        revisions_count = 0
+        if user_ids:
+            revisions_count = session.query(db.Revision).filter(db.Revision.author_id.in_(user_ids)).count()
+            
+        projects, _ = q.projects_in_group(org.id, page=1, per_page=1000)
+        
+        org_stat = {
+            "org": org,
+            "users_count": len(users),
+            "projects_count": len(projects),
+            "revisions_count": revisions_count,
+            "ocr_count": org.ocr_credits_used or 0,
+            "storage_used": org.storage_used_bytes or 0,
+        }
+        
+        return render_template(
+            "admin/org_analytics.html",
+            org_stat=org_stat,
+            is_platform=False
+        )
+
+    @expose("/analytics/users")
+    def org_user_analytics(self):
+        org_id = require_org_admin()
+        org = q.group(org_id)
+        if org is None:
+            abort(404)
+            
+        session = q.get_session()
+        users = q.users_in_group(org.id)
+        
+        user_stats = []
+        for user in users:
+            projects_count = session.query(db.Project).filter_by(creator_id=user.id).count()
+            revisions_count = session.query(db.Revision).filter_by(author_id=user.id).count()
+            ocr_count = session.query(db.UsageLog).filter_by(user_id=user.id, action="run_ocr").count()
+            user_stats.append({
+                "user": user,
+                "projects_count": projects_count,
+                "revisions_count": revisions_count,
+                "ocr_count": ocr_count,
+            })
+            
+        return render_template(
+            "admin/org_user_analytics.html",
+            org=org,
+            user_stats=user_stats,
+            is_platform=False
+        )
+
 
 class BaseView(sqla.ModelView):
     """Base view for models.
@@ -1167,7 +1305,7 @@ class UserView(BaseView):
     def _prepare_user_form(self, form, model=None):
         form.role_ids.choices = assignable_role_choices(self.session)
         form.organization_pick.choices = organization_choices()
-        if model is not None:
+        if model is not None and request.method != "POST":
             form.role_ids.data = [
                 r.id for r in model.roles if r.name in WEB_ASSIGNABLE_ROLES
             ]

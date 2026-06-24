@@ -84,8 +84,10 @@ def _add_project_to_database(
         )
     creator = session.query(db.User).filter_by(id=creator_id).first()
     # Auto-assign projects to the creator's organization for tenant isolation.
-    if creator and creator.organization_id:
-        session.add(db.ProjectGroups(group_id=creator.organization_id, project_id=project.id))
+    from kalanjiyam.utils.org_access import user_organization_id
+    creator_org_id = user_organization_id(creator) if creator else None
+    if creator_org_id:
+        session.add(db.ProjectGroups(group_id=creator_org_id, project_id=project.id))
     elif creator and require_org:
         raise ValueError("Project creator must belong to an organization.")
     session.commit()

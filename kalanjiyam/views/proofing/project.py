@@ -58,6 +58,21 @@ redis_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:63
 
 @bp.before_request
 def _enforce_project_access():
+    if current_user.is_authenticated and current_user.is_super_admin:
+        restricted_endpoints = {
+            "proofing.project.download",
+            "proofing.project.download_as_text",
+            "proofing.project.download_as_xml",
+            "proofing.project.download_as_json",
+            "proofing.project.download_as_html",
+            "proofing.project.search",
+            "proofing.project.replace",
+            "proofing.project.submit_changes",
+            "proofing.project.confirm_changes",
+        }
+        if request.endpoint in restricted_endpoints:
+            flask_abort(403, description="Superadmins are not allowed to view project data.")
+
     slug = request.view_args.get("slug") if request.view_args else None
     if not slug:
         return None

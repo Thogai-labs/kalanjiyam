@@ -171,12 +171,14 @@ def create_app(config_env: str):
             "time_ago": filters.time_ago,
         }
     )
+    from flask_login import current_user
     app.jinja_env.globals.update(
         {
             "asset": assets.hashed_static,
             "pgettext": pgettext,
             "kalanjiyam_locales": LOCALES,
             "get_locale": get_locale,
+            "current_user": current_user,
         }
     )
 

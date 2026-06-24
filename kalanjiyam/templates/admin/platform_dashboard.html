@@ -17,8 +17,8 @@
 </div>
 
 <div class="flex flex-wrap gap-3 mb-8">
-  {{ admin.btn_primary(_('Manage organizations'), href=url_for('groups_view.index')) }}
-  {{ admin.btn_secondary(_('Export / import'), href=url_for('admin.export_import_dashboard')) }}
+  {{ admin.btn_primary(_('Manage organizations'), href=url_for('groups_view.index'), icon_name='building-2') }}
+  {{ admin.btn_secondary(_('View Analytics'), href=url_for('platform_view.user_analytics'), icon_name='bar-chart-3') }}
 </div>
 
 <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
@@ -56,7 +56,10 @@
             {% endif %}
           </td>
           <td class="px-4 py-3 text-right">
-            {{ admin.link_action(_('Manage'), url_for('groups_view.manage', id=org.id)) }}
+            <div class="inline-flex items-center gap-3 justify-end w-full">
+              {{ admin.link_action(_('Manage'), url_for('groups_view.manage', id=org.id), icon_name='settings') }}
+              {{ admin.link_action(_('View Details'), url_for('platform_view.org_user_analytics', org_id=org.id), icon_name='eye') }}
+            </div>
           </td>
         </tr>
         {% endfor %}

@@ -154,7 +154,7 @@ class SignupForm(FlaskForm):
     username = StringField(_l("Username"), get_username_validators())
     password = PasswordField(_l("Password"), get_password_validators())
     email = EmailField(_l("Email address"), get_email_validators())
-    recaptcha = RecaptchaField()
+    # recaptcha = RecaptchaField()
 
     def validate_username(self, username):
         # TODO: make username case insensitive
@@ -213,8 +213,8 @@ def register():
     else:
         # Override the default message ("The response parameter is missing.")
         # for better UX.
-        if form.recaptcha.errors:
-            form.recaptcha.errors = [_l("Please click the reCAPTCHA box.")]
+        # if form.recaptcha.errors:
+        #     form.recaptcha.errors = [_l("Please click the reCAPTCHA box.")]
 
         return render_template("auth/register.html", form=form)
 

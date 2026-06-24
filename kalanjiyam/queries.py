@@ -214,10 +214,29 @@ def user(username: str) -> db.User | None:
     )
 
 
+def get_or_create_open_tenant() -> db.Group:
+    session = get_session()
+    tenant = session.query(db.Group).filter_by(slug="open-tenant").first()
+    if not tenant:
+        tenant = db.Group(
+            name="Open Tenant",
+            slug="open-tenant",
+            description="Default tenant for registered users."
+        )
+        session.add(tenant)
+        session.commit()
+    return tenant
+
+
 def create_user(*, username: str, email: str, raw_password: str) -> db.User:
     session = get_session()
     user = db.User(username=username, email=email)
     user.set_password(raw_password)
+    
+    # Assign default tenant
+    open_tenant = get_or_create_open_tenant()
+    user.organization_id = open_tenant.id
+    
     session.add(user)
     session.flush()
 
@@ -227,6 +246,9 @@ def create_user(*, username: str, email: str, raw_password: str) -> db.User:
     )
     user_role = db.UserRoles(user_id=user.id, role_id=proofreader_role.id)
     session.add(user_role)
+    
+    # Also add user to the default tenant group
+    session.add(db.UserGroups(user_id=user.id, group_id=open_tenant.id))
 
     session.commit()
     return user

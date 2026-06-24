@@ -2,7 +2,7 @@
 name = "kalanjiyam"
 version = "0.1.0"
 description = "An open Siddha Knowledge Systems library"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<4.0"
 dependencies = [
     "alembic>=1.8",
     "Babel>=2.12",
@@ -36,6 +36,7 @@ dependencies = [
     "requests>=2.27",
     "sentry-sdk>=1.6",
     "SQLAlchemy>=1.4,<2.0",
+    "greenlet>=3.0.0",
     "Werkzeug>=2.1",
     "WTForms>=3.0",
     "wtforms-sqlalchemy>=0.3",
