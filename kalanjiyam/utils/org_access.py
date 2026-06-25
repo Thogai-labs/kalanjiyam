@@ -29,6 +29,9 @@ def is_project_publicly_viewable(project: db.Project) -> bool:
 
 def user_can_access_project(user, project: db.Project) -> bool:
     """True if user can access a project under current tenancy rules."""
+    if is_project_publicly_viewable(project):
+        return True
+
     if getattr(user, "is_super_admin", False):
         return True
     if getattr(user, "is_admin", False) and not is_multi_tenant_enabled():
