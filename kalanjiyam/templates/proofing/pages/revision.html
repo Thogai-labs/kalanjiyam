@@ -6,7 +6,7 @@
 {% block content %}
 <div class="mb-4">
   {{ m.page_header(project, cur, prev=prev, next=next) }}
-  {{ revision.created.strftime("%Y-%m-%d %H:%M:%S") }} by {{ revision.author.username }}
+  {{ revision.created.strftime("%Y-%m-%d %H:%M:%S") }} by {{ revision.author.username if revision.author else _('Guest') }}
 </div>
 
 {{ m.page_status(revision.status.name) }}

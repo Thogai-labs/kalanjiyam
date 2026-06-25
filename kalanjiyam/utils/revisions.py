@@ -34,7 +34,7 @@ def add_revision(
     content: str,
     status: str,
     version: int,
-    author_id: int,
+    author_id: int | None,
     *,
     document: dict | None = None,
     content_format: str = "plain",

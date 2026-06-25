@@ -107,3 +107,23 @@ def filter_projects_for_user(user, projects: list[db.Project]) -> list[db.Projec
 
 def filter_texts_for_user(user, texts: list[db.Text]) -> list[db.Text]:
     return [t for t in texts if user_can_access_text(user, t)]
+
+
+def is_restricted_ocr_user(user) -> bool:
+    """True if user is unregistered (guest) or is a registered open-tenant user.
+    False for platform super_admins or users belonging to specific organizations.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return True
+    if getattr(user, "is_super_admin", False):
+        return False
+
+    from kalanjiyam import queries as q
+    try:
+        open_tenant = q.get_or_create_open_tenant()
+        if user_organization_id(user) == open_tenant.id:
+            return True
+    except Exception:
+        pass
+
+    return False

@@ -386,9 +386,9 @@ def dashboard():
     num_revisions_7d = len(revisions_7d)
     num_revisions_1d = len(revisions_1d)
 
-    num_contributors_30d = len({x.author_id for x in revisions_30d})
-    num_contributors_7d = len({x.author_id for x in revisions_7d})
-    num_contributors_1d = len({x.author_id for x in revisions_1d})
+    num_contributors_30d = len({x.author_id for x in revisions_30d if x.author_id is not None})
+    num_contributors_7d = len({x.author_id for x in revisions_7d if x.author_id is not None})
+    num_contributors_1d = len({x.author_id for x in revisions_1d if x.author_id is not None})
 
     return render_template(
         "proofing/dashboard.html",

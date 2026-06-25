@@ -9,8 +9,22 @@ def test_get_image_filesystem_path(flask_app):
 
 def test_edit__unauth(client):
     r = client.get("/proofing/test-project/1/")
-    assert "Since you are not logged in" in r.text
+    assert "Only registered users can save changes." in r.text
     assert "Publish changes" not in r.text
+
+
+def test_edit__guest_owner(flask_app, client):
+    from kalanjiyam import queries as q
+    with flask_app.app_context():
+        project = q.project("test-project")
+        project.fingerprint_id = "test-guest-fp"
+        session = q.get_session()
+        session.add(project)
+        session.commit()
+
+    client.set_cookie("device_fingerprint", "test-guest-fp")
+    r = client.get("/proofing/test-project/1/")
+    assert "Publish changes" in r.text
 
 
 def test_edit__auth(rama_client):

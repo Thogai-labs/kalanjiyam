@@ -180,10 +180,14 @@
 project_slug=r.project.slug, page_slug=r.page.slug, revision_id=r.id) %}
 {% set page_url = url_for('proofing.page.edit',
 project_slug=r.project.slug, page_slug=r.page.slug) %}
-{% set author_url = url_for('proofing.user.summary',
-username=r.author.username) %}
+{% if r.author %}
+  {% set author_url = url_for('proofing.user.summary', username=r.author.username) %}
+  {% set author = r.author.username %}
+{% else %}
+  {% set author_url = None %}
+  {% set author = _("Guest") %}
+{% endif %}
 {% set page_title = r.project.display_title + " / " + r.page.slug %}
-{% set author = r.author.username %}
 
 <div class="premium-card p-5 flex items-center justify-between gap-4 mb-3">
   <div class="flex items-center gap-4">
@@ -193,7 +197,11 @@ username=r.author.username) %}
         <a href="{{ page_url }}" class="hover:text-royalblue transition-colors">{{ page_title }}</a>
       </div>
       <div class="text-xs font-medium text-slate-400 mt-1">
+        {% if author_url %}
         <a href="{{ author_url }}" class="font-bold text-slate-600 hover:text-royalblue">{{ author }}</a>
+        {% else %}
+        <span class="font-bold text-slate-600">{{ author }}</span>
+        {% endif %}
         <span class="mx-1">•</span>
         <a href="{{ revision_url }}" class="hover:underline">{{ r.created.strftime("%Y-%m-%d %H:%M") }}</a>
         {% if r.summary %}
@@ -266,16 +274,24 @@ username=r.author.username) %}
   project_slug=r.project.slug, page_slug=r.page.slug, revision_id=r.id) %}
   {% set page_url = url_for('proofing.page.edit',
   project_slug=r.project.slug, page_slug=r.page.slug) %}
-  {% set author_url = url_for('proofing.user.summary',
-  username=r.author.username) %}
+  {% if r.author %}
+    {% set author_url = url_for('proofing.user.summary', username=r.author.username) %}
+    {% set author = r.author.username %}
+  {% else %}
+    {% set author_url = None %}
+    {% set author = _("Guest") %}
+  {% endif %}
   {% set page_title = r.project.display_title + " / " + r.page.slug %}
-  {% set author = r.author.username %}
 
   <div class="flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors group">
     <div class="flex items-center gap-3">
       <span class="{{ revision_colors(r.status.name) }} w-2.5 h-2.5 rounded-full"></span>
       <span class="text-sm font-bold text-slate-600">
+        {% if author_url %}
         <a href="{{ author_url }}" class="hover:text-royalblue">{{ author }}</a>
+        {% else %}
+        <span>{{ author }}</span>
+        {% endif %}
       </span>
       <span class="text-xs font-medium text-slate-400">{{ r.created.strftime("%Y-%m-%d %H:%M") }}</span>
       {% if r.summary %}<span class="text-xs italic text-slate-500 font-normal">({{ r.summary }})</span>{% endif %}

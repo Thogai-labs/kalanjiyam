@@ -17,6 +17,7 @@ from flask import (
 )
 from flask_babel import lazy_gettext as _l
 from flask_login import current_user, login_required
+from kalanjiyam.views.proofing.decorators import p2_required
 from flask_wtf import FlaskForm
 from werkzeug.exceptions import abort
 from werkzeug.utils import secure_filename
@@ -206,6 +207,15 @@ def _editor_template_kwargs(
     doc_obj = PageDocument.from_dict(page_document)
     page_plain_text = doc_obj.to_plain_text()
     has_ocr_content = bool(cur.ocr_bounding_boxes) or bool(page_document.get("blocks"))
+
+    # Fetch default OCR engine configuration for restricted users
+    system_settings = q.get_system_settings()
+    default_ocr_engine = system_settings.default_ocr_engine or "google"
+    from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
+    default_engine_value = REVERSE_ENGINE_MAP.get(default_ocr_engine, "1")
+    from kalanjiyam.utils.org_access import is_restricted_ocr_user
+    is_restricted_ocr = is_restricted_ocr_user(current_user)
+
     return {
         "conflict": conflict,
         "cur": cur,
@@ -227,6 +237,8 @@ def _editor_template_kwargs(
         "ocr_bounding_boxes": cur.ocr_bounding_boxes or "",
         "page_width": cur.page_width or page_document.get("page_width"),
         "page_height": cur.page_height or page_document.get("page_height"),
+        "is_restricted_ocr": is_restricted_ocr,
+        "default_engine_value": default_engine_value,
     }
 
 
@@ -273,9 +285,11 @@ def edit(project_slug, page_slug):
     from kalanjiyam.utils.ocr_types import build_engine_choices
 
     ocr_ping = get_available_engines()
+    system_settings = q.get_system_settings()
     engine_choices = build_engine_choices(
         ocr_ping["engines"],
         is_super_admin=current_user.is_super_admin,
+        recommended_engine=system_settings.recommended_ocr_engine,
     )
 
     return render_template(
@@ -291,7 +305,7 @@ def edit(project_slug, page_slug):
 
 
 @bp.route("/<project_slug>/<page_slug>/", methods=["POST"])
-@login_required
+@p2_required
 def edit_post(project_slug, page_slug):
     """Submit changes through the page editor.
 
@@ -316,7 +330,7 @@ def edit_post(project_slug, page_slug):
                 content=form.content.data,
                 status=form.status.data,
                 version=int(form.version.data),
-                author_id=current_user.id,
+                author_id=current_user.id if current_user.is_authenticated else None,
                 document=doc,
                 content_format=content_format,
             )
@@ -331,9 +345,11 @@ def edit_post(project_slug, page_slug):
     from kalanjiyam.utils.ocr_types import build_engine_choices
 
     ocr_ping = get_available_engines()
+    system_settings = q.get_system_settings()
     engine_choices = build_engine_choices(
         ocr_ping["engines"],
         is_super_admin=current_user.is_super_admin,
+        recommended_engine=system_settings.recommended_ocr_engine,
     )
 
     return render_template(
@@ -404,7 +420,7 @@ def revision(project_slug, page_slug, revision_id):
 # FIXME: added trailing slash as a quick hack to support OCR routes on
 # frontend, which just concatenate the window URL onto "/api/ocr".
 @api.route("/ocr/<project_slug>/<page_slug>/")
-@login_required
+@p2_required
 def ocr(project_slug, page_slug):
     """Apply OCR to the given page using the specified engine."""
     if current_user.is_authenticated and current_user.is_super_admin:
@@ -419,8 +435,24 @@ def ocr(project_slug, page_slug):
     if not page_:
         abort(404)
 
+    # Enforce guest daily OCR limit
+    if not current_user.is_authenticated:
+        from kalanjiyam.utils.rate_limit import is_rate_limited
+        ip_address = request.remote_addr
+        fingerprint_id = request.cookies.get("device_fingerprint")
+        settings = q.get_system_settings()
+        limit = settings.unregistered_user_ocr_limit
+        if is_rate_limited("run_ocr", ip_address, fingerprint_id, limit=limit):
+            abort(429, description=f"Rate limit exceeded. Guests can only run OCR {limit} times per 24 hours.")
+
     engine = request.args.get('engine', 'google')
     language = request.args.get('language', 'sa')
+
+    # Override for restricted users
+    from kalanjiyam.utils.org_access import is_restricted_ocr_user
+    if is_restricted_ocr_user(current_user):
+        settings = q.get_system_settings()
+        engine = settings.default_ocr_engine or "google"
 
     from kalanjiyam.utils.ocr_runner import normalize_engine, run_ocr
     from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
@@ -449,6 +481,17 @@ def ocr(project_slug, page_slug):
         session = q.get_session()
         session.add(page_)
         session.commit()
+
+        # Log usage action for guests
+        if not current_user.is_authenticated:
+            from kalanjiyam.utils.rate_limit import log_usage_action
+            log_usage_action(
+                action="run_ocr",
+                ip_address=request.remote_addr,
+                fingerprint_id=request.cookies.get("device_fingerprint"),
+                project_slug=project_slug
+            )
+
         payload = ocr_response_to_api_dict(
             ocr_response,
             engine,

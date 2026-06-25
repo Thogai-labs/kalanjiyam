@@ -125,8 +125,12 @@ def create_app(config_env: str):
     Babel(app, locale_selector=get_locale)
 
     @app.context_processor
-    def inject_csrf_token():
-        return dict(csrf_token=generate_csrf())
+    def inject_globals():
+        from kalanjiyam.utils.org_access import is_restricted_ocr_user
+        return dict(
+            csrf_token=generate_csrf(),
+            is_restricted_ocr_user=is_restricted_ocr_user,
+        )
 
     login_manager = auth_manager.create_login_manager()
     login_manager.init_app(app)

@@ -210,8 +210,10 @@ class Revision(Base):
     project_id = foreign_key("proof_projects.id")
     #: The page this revision corresponds to.
     page_id = foreign_key("proof_pages.id")
-    #: The author of this revision.
-    author_id = foreign_key("users.id")
+    #: The author of this revision. Nullable for unregistered guest users.
+    author_id = Column(
+        Integer, ForeignKey("users.id"), index=True, nullable=True
+    )
     #: Page status
     status_id = Column(
         Integer, ForeignKey("proof_page_statuses.id"), index=True, nullable=False

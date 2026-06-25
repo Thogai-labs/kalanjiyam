@@ -891,7 +891,13 @@ def batch_ocr(slug):
             redis_client.delete(task_key)
 
     from kalanjiyam.utils.ocr_client import get_available_engines
-    from kalanjiyam.utils.ocr_types import ENGINE_MAP, build_engine_choices
+    from kalanjiyam.utils.ocr_types import ENGINE_MAP, build_engine_choices, REVERSE_ENGINE_MAP
+
+    system_settings = q.get_system_settings()
+    default_ocr_engine = system_settings.default_ocr_engine or "google"
+    default_engine_value = REVERSE_ENGINE_MAP.get(default_ocr_engine, "1")
+    from kalanjiyam.utils.org_access import is_restricted_ocr_user
+    is_restricted_ocr = is_restricted_ocr_user(current_user)
 
     if request.method == "POST":
         # Rate limit check for guest users
@@ -899,15 +905,17 @@ def batch_ocr(slug):
             from kalanjiyam.utils.rate_limit import is_rate_limited
             ip_address = request.remote_addr
             fingerprint_id = request.cookies.get("device_fingerprint")
-            settings = q.get_system_settings()
-            limit = settings.unregistered_user_ocr_limit
+            limit = system_settings.unregistered_user_ocr_limit
             if is_rate_limited("run_ocr", ip_address, fingerprint_id, limit=limit):
                 flash(_l(f"Rate limit exceeded. Guests can only run OCR {limit} times per 24 hours."))
                 return redirect(url_for("proofing.project.batch_ocr", slug=slug))
 
         engine_num = request.form.get('engine', '')
         language = request.form.get('language', 'sa')
-        engine = ENGINE_MAP.get(engine_num)
+        if is_restricted_ocr:
+            engine = default_ocr_engine
+        else:
+            engine = ENGINE_MAP.get(engine_num)
 
         if not engine or engine not in SUPPORTED_ENGINES:
             flash(_l("Unsupported OCR engine selected."))
@@ -946,6 +954,8 @@ def batch_ocr(slug):
                     task_id=task.id,
                     active_tasks=0, pending_tasks=0, failed_tasks=0,
                     engine=engine, language=language,
+                    is_restricted_ocr=is_restricted_ocr,
+                    default_engine_value=default_engine_value,
                 )
             else:
                 flash(_l("All pages in this project have at least one edit already."))
@@ -954,12 +964,15 @@ def batch_ocr(slug):
     engine_choices = build_engine_choices(
         ocr_status["engines"],
         is_super_admin=current_user.is_super_admin,
+        recommended_engine=system_settings.recommended_ocr_engine,
     )
     return render_template(
         "proofing/projects/batch-ocr.html",
         project=project_,
         ocr_status=ocr_status["status"],
         engine_choices=engine_choices,
+        is_restricted_ocr=is_restricted_ocr,
+        default_engine_value=default_engine_value,
     )
 
 

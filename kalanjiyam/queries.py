@@ -232,13 +232,17 @@ def get_system_settings() -> db.SystemSetting:
     session = get_session()
     settings = session.query(db.SystemSetting).first()
     if not settings:
+        from flask import current_app
+        default_eng = "tesseract"
+        try:
+            default_eng = current_app.config.get("DEFAULT_OCR_ENGINE", "tesseract")
+        except RuntimeError:
+            pass
         settings = db.SystemSetting(
-            org_user_ocr_limit=None,
-            org_user_storage_limit=None,
-            registered_user_ocr_limit=None,
-            registered_user_storage_limit=None,
             unregistered_user_ocr_limit=10,
-            unregistered_user_project_limit=5
+            unregistered_user_project_limit=5,
+            default_ocr_engine=default_eng,
+            recommended_ocr_engine=None
         )
         session.add(settings)
         session.commit()

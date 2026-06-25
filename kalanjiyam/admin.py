@@ -859,8 +859,9 @@ class PlatformView(AdminBaseView):
         system_settings = q.get_system_settings()
         
         from flask_wtf import FlaskForm
-        from wtforms import IntegerField
+        from wtforms import IntegerField, SelectField
         from wtforms.validators import Optional as wtform_Optional, NumberRange
+        from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES, ENGINE_LABELS
         
         class PlatformSettingsForm(FlaskForm):
             unregistered_user_ocr_limit = IntegerField(
@@ -873,12 +874,46 @@ class PlatformView(AdminBaseView):
                 validators=[wtform_Optional(), NumberRange(min=0)],
                 description="Daily project creation limit per guest user (IP/fingerprint)."
             )
+            default_ocr_engine = SelectField(
+                "Default OCR Engine",
+                choices=[],
+                default="tesseract",
+                description="The OCR engine that registered (non-super-admin) and unregistered users will use."
+            )
+            recommended_ocr_engine = SelectField(
+                "Recommended OCR Engine",
+                choices=[],
+                default="",
+                description="The recommended OCR engine displayed with a star icon for users."
+            )
             
         form = PlatformSettingsForm()
+        
+        from kalanjiyam.utils.ocr_client import get_available_engines
+        ocr_ping = get_available_engines()
+        active_engines = ocr_ping.get("engines", [])
+        
+        choices_set = {eng for eng in active_engines if eng in SUPPORTED_ENGINES and eng != "google"}
+        choices_set.add("tesseract")
+        if system_settings.default_ocr_engine and system_settings.default_ocr_engine != "google":
+            choices_set.add(system_settings.default_ocr_engine)
+            
+        sorted_engines = [eng for eng in SUPPORTED_ENGINES if eng in choices_set]
+        form.default_ocr_engine.choices = [(eng, ENGINE_LABELS.get(eng, eng.capitalize())) for eng in sorted_engines]
+        
+        # Populate recommended engine choices
+        rec_choices_set = set(choices_set)
+        if system_settings.recommended_ocr_engine and system_settings.recommended_ocr_engine != "google":
+            rec_choices_set.add(system_settings.recommended_ocr_engine)
+        sorted_rec_engines = [eng for eng in SUPPORTED_ENGINES if eng in rec_choices_set]
+        rec_choices = [("", "None (No recommended engine)")] + [(eng, ENGINE_LABELS.get(eng, eng.capitalize())) for eng in sorted_rec_engines]
+        form.recommended_ocr_engine.choices = rec_choices
         
         if form.validate_on_submit():
             system_settings.unregistered_user_ocr_limit = form.unregistered_user_ocr_limit.data if form.unregistered_user_ocr_limit.data is not None else 10
             system_settings.unregistered_user_project_limit = form.unregistered_user_project_limit.data if form.unregistered_user_project_limit.data is not None else 5
+            system_settings.default_ocr_engine = form.default_ocr_engine.data if form.default_ocr_engine.data else "tesseract"
+            system_settings.recommended_ocr_engine = form.recommended_ocr_engine.data if form.recommended_ocr_engine.data else None
             
             session.add(system_settings)
             session.commit()
@@ -888,6 +923,8 @@ class PlatformView(AdminBaseView):
         if request.method == "GET":
             form.unregistered_user_ocr_limit.data = system_settings.unregistered_user_ocr_limit
             form.unregistered_user_project_limit.data = system_settings.unregistered_user_project_limit
+            form.default_ocr_engine.data = system_settings.default_ocr_engine
+            form.recommended_ocr_engine.data = system_settings.recommended_ocr_engine or ""
             
         return render_template("admin/platform_settings.html", form=form)
 

@@ -196,6 +196,9 @@ class BaseConfig:
     #: Timeout in seconds for OCR service HTTP requests.
     OCR_SERVICE_TIMEOUT = int(_env("OCR_SERVICE_TIMEOUT", "300") or "300")
 
+    #: Default OCR engine/model.
+    DEFAULT_OCR_ENGINE = _env("DEFAULT_OCR_ENGINE", "tesseract")
+
     # Test-only
     # ---------
 

@@ -31,14 +31,9 @@
 
 
 {% block main %}
+{% set can_save = current_user.is_authenticated or (project.fingerprint_id and request.cookies.get('device_fingerprint') == project.fingerprint_id) %}
+
 <article class="book-editor-page{% if conflict %} has-conflict{% endif %}">
-  {% if not current_user.is_authenticated -%}
-  {% call mc.div_warning() %}{% trans %}
-  Since you are not logged in, some functions (such as the OCR button) have
-  been disabled. To use all website features, please contact the site administrator
-  to create an account.
-  {% endtrans %}{% endcall %}
-  {%- endif %}
 
   {% set num_images = project.pages|length %}
   {{ mc.flash_messages() }}
@@ -56,7 +51,7 @@
     <input type="hidden" name="document" id="document" value="">
     <textarea id="content" name="content" class="hidden">{{ page_plain_text }}</textarea>
 
-    {{ editor.book_toolbar(page_context, page_number, image_number, num_images, ocr_status=ocr_status, engine_choices=engine_choices) }}
+    {{ editor.book_toolbar(page_context, page_number, image_number, num_images, ocr_status=ocr_status, engine_choices=engine_choices, can_save=can_save) }}
 
     {% if not has_edits and not has_ocr_content %}
     <p class="book-editor-hint px-4 py-2 text-sm text-slate-500 border-b border-slate-200 bg-amber-50">
@@ -103,7 +98,7 @@
           </div>
         </div>
 
-        {% if current_user.is_authenticated %}
+        {% if can_save %}
         {% set cc0 = "https://creativecommons.org/publicdomain/zero/1.0/" %}
         <div class="mt-4 pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <p class="text-xs text-slate-500 max-w-lg">{% trans %}
@@ -121,7 +116,7 @@
     </div>
   </form>
 
-  {% if not current_user.is_authenticated %}
+  {% if not can_save %}
   {% set log_in = url_for("auth.sign_in") %}
   <div class="p-4">
     {% call mc.div_warning() %}
