@@ -131,6 +131,10 @@ class BaseConfig:
         _env("DEFAULT_PROJECT_REQUIRES_ORG", "true").lower() in ("true", "1", "yes")
     )
 
+    #: Guest daily rate limits (creations and OCR runs)
+    GUEST_DAILY_PROJECT_LIMIT = int(_env("GUEST_DAILY_PROJECT_LIMIT", "5") or "5")
+    GUEST_DAILY_OCR_LIMIT = int(_env("GUEST_DAILY_OCR_LIMIT", "10") or "10")
+
     #: Logger setup
     LOG_LEVEL = logging.ERROR
 

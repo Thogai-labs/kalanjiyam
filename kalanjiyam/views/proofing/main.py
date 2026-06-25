@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from flask import Blueprint, current_app, flash, render_template
+from flask import Blueprint, current_app, flash, render_template, request, redirect, url_for
 from flask_login import current_user
 from flask_wtf import FlaskForm
 from slugify import slugify
@@ -167,15 +167,51 @@ def editor_guide():
 
 
 @bp.route("/create-project", methods=["GET", "POST"])
-@p2_required
 def create_project():
+    # Authorization checks
+    is_p2_or_admin = (
+        getattr(current_user, "is_p2", False)
+        or getattr(current_user, "is_moderator", False)
+        or getattr(current_user, "is_org_admin", False)
+        or getattr(current_user, "is_super_admin", False)
+    )
+
+    is_open_tenant = False
+    if current_user.is_authenticated:
+        from kalanjiyam.utils.org_access import user_organization_id
+        try:
+            open_tenant = q.get_or_create_open_tenant()
+            is_open_tenant = (user_organization_id(current_user) == open_tenant.id)
+        except Exception:
+            pass
+
+    allowed = (
+        not current_user.is_authenticated  # Guest
+        or (current_user.is_authenticated and is_open_tenant)  # Registered in open-tenant
+        or is_p2_or_admin  # Enterprise P2 or Admin
+    )
+    if not allowed:
+        flash("Sorry, you aren't authorized to use this feature.")
+        return redirect(url_for("proofing.index"))
+
+    # Rate limiting for guest users
+    if not current_user.is_authenticated:
+        from kalanjiyam.utils.rate_limit import is_rate_limited
+        ip_address = request.remote_addr
+        fingerprint_id = request.cookies.get("device_fingerprint")
+        limit = current_app.config.get("GUEST_DAILY_PROJECT_LIMIT", 5)
+        if is_rate_limited("create_project", ip_address, fingerprint_id, limit=limit):
+            flash(f"Rate limit exceeded. Guests can only create {limit} projects per 24 hours.", "error")
+            return redirect(url_for("proofing.index"))
+
     form = CreateProjectForm()
     if form.validate_on_submit():
-        if current_app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True) and not getattr(
-            current_user, "organization_id", None
-        ):
-            flash("Your account is not assigned to an organization.")
-            return render_template("proofing/create-project.html", form=form)
+        if current_user.is_authenticated:
+            if current_app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True) and not getattr(
+                current_user, "organization_id", None
+            ):
+                flash("Your account is not assigned to an organization.")
+                return render_template("proofing/create-project.html", form=form)
         title = form.local_title.data
 
         # TODO: add timestamp to slug for extra uniqueness?
@@ -193,7 +229,9 @@ def create_project():
             form.local_file.data.stream.seek(0, 2)
             upload_size = form.local_file.data.stream.tell()
             form.local_file.data.stream.seek(cur_pos)
-        ensure_storage_quota_for_user(current_user, upload_size)
+        
+        if current_user.is_authenticated:
+            ensure_storage_quota_for_user(current_user, upload_size)
 
         # Save the original PDF so that it can be downloaded later or reused
         # for future tasks (thumbnails, better image formats, etc.). The
@@ -205,12 +243,35 @@ def create_project():
         form.local_file.data.stream.seek(0)
         get_storage().save(source_pdf_key, form.local_file.data.stream)
 
-        task = project_tasks.create_project.delay(
-            display_title=title,
-            pdf_key=source_pdf_key,
-            app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
-            creator_id=current_user.id,
-        )
+        # Log usage action for guests
+        if not current_user.is_authenticated:
+            from kalanjiyam.utils.rate_limit import log_usage_action
+            log_usage_action(
+                action="create_project",
+                ip_address=request.remote_addr,
+                fingerprint_id=request.cookies.get("device_fingerprint"),
+                project_slug=slug
+            )
+
+        if not current_user.is_authenticated:
+            # Guest split task is routed to low-priority queue
+            task = project_tasks.create_project.apply_async(
+                kwargs={
+                    "display_title": title,
+                    "pdf_key": source_pdf_key,
+                    "app_environment": current_app.config["KALANJIYAM_ENVIRONMENT"],
+                    "creator_id": None,
+                    "fingerprint_id": request.cookies.get("device_fingerprint"),
+                },
+                queue="low_priority"
+            )
+        else:
+            task = project_tasks.create_project.delay(
+                display_title=title,
+                pdf_key=source_pdf_key,
+                app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
+                creator_id=current_user.id,
+            )
         return render_template(
             "proofing/create-project-post.html",
             stauts=task.status,
@@ -263,17 +324,19 @@ def recent_changes():
         .options(orm.defer(db.Revision.content))
         .filter(db.Revision.author_id != bot_user.id)
         .order_by(db.Revision.created.desc())
-        .limit(num_per_page)
+        .limit(num_per_page * 2)  # Fetch more to allow filtering
         .all()
     )
+    recent_revisions = [r for r in recent_revisions if q.user_can_view_project(current_user, r.project)][:num_per_page]
     recent_activity = [("revision", r.created, r) for r in recent_revisions]
 
     recent_projects = (
         session.query(db.Project)
         .order_by(db.Project.created_at.desc())
-        .limit(num_per_page)
+        .limit(num_per_page * 2)
         .all()
     )
+    recent_projects = [p for p in recent_projects if q.user_can_view_project(current_user, p)][:num_per_page]
     recent_activity += [("project", p.created_at, p) for p in recent_projects]
 
     recent_activity.sort(key=lambda x: x[1], reverse=True)
@@ -286,7 +349,7 @@ def recent_changes():
 @bp.route("/talk")
 def talk():
     """Show discussion across all projects."""
-    projects = q.projects()
+    projects = [p for p in q.projects() if q.user_can_view_project(current_user, p)]
 
     # FIXME: optimize this once we have a higher thread volume.
     all_threads = [(p, t) for p in projects for t in p.board.threads]

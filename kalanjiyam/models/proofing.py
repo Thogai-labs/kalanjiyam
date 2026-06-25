@@ -113,6 +113,8 @@ class Project(Base):
     genre_id = Column(Integer, ForeignKey("genres.id"), index=True)
     #: When true, anyone (including guests) can read this book at /books/ in multi-tenant mode.
     is_publicly_viewable = Column(Boolean, nullable=False, default=False)
+    #: Device fingerprint that created this project (for unregistered users).
+    fingerprint_id = Column(String, nullable=True, index=True)
 
     creator = relationship("User")
     board = relationship("Board", cascade="delete")

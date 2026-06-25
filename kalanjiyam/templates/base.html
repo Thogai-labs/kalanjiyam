@@ -26,6 +26,23 @@
     <link rel="stylesheet" href="{{ asset('gen/style.css') }}">
     {% block extra_css %}{% endblock %}
     {% block extra_head %}{% endblock %}
+    <script>
+      (function() {
+        var fp = localStorage.getItem('device_fingerprint');
+        if (!fp) {
+          var match = document.cookie.match(new RegExp('(^| )device_fingerprint=([^;]+)'));
+          if (match) {
+            fp = match[2];
+          } else {
+            fp = 'fp-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+          }
+          localStorage.setItem('device_fingerprint', fp);
+        }
+        var d = new Date();
+        d.setTime(d.getTime() + (365*24*60*60*1000));
+        document.cookie = "device_fingerprint=" + fp + "; expires=" + d.toUTCString() + "; path=/; SameSite=Lax";
+      })();
+    </script>
 </head>
 <body class="{% block body_class %}flex flex-col min-h-full{% endblock %}">
     {% block body %}

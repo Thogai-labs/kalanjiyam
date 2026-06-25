@@ -49,8 +49,9 @@ def _add_project_to_database(
     display_title: str,
     slug: str,
     num_pages: int,
-    creator_id: int,
+    creator_id: int | None,
     require_org: bool,
+    fingerprint_id: str | None = None,
 ):
     """Create a project on the database.
 
@@ -64,7 +65,12 @@ def _add_project_to_database(
     session.add(board)
     session.flush()
 
-    project = db.Project(slug=slug, display_title=display_title, creator_id=creator_id)
+    project = db.Project(
+        slug=slug,
+        display_title=display_title,
+        creator_id=creator_id,
+        fingerprint_id=fingerprint_id,
+    )
     project.board_id = board.id
     session.add(project)
     session.flush()
@@ -82,12 +88,19 @@ def _add_project_to_database(
                 status_id=unreviewed.id,
             )
         )
-    creator = session.query(db.User).filter_by(id=creator_id).first()
+    creator = session.query(db.User).filter_by(id=creator_id).first() if creator_id else None
     # Auto-assign projects to the creator's organization for tenant isolation.
     from kalanjiyam.utils.org_access import user_organization_id
     creator_org_id = user_organization_id(creator) if creator else None
     if creator_org_id:
         session.add(db.ProjectGroups(group_id=creator_org_id, project_id=project.id))
+    elif not creator_org_id and fingerprint_id:
+        # Guests default to the open-tenant workspace
+        try:
+            open_tenant = q.get_or_create_open_tenant()
+            session.add(db.ProjectGroups(group_id=open_tenant.id, project_id=project.id))
+        except Exception:
+            pass
     elif creator and require_org:
         raise ValueError("Project creator must belong to an organization.")
     session.commit()
@@ -98,7 +111,8 @@ def create_project_inner(
     display_title: str,
     pdf_key: str,
     app_environment: str,
-    creator_id: int,
+    creator_id: int | None,
+    fingerprint_id: str | None = None,
     task_status: TaskStatus,
 ):
     """Split the given PDF into pages and register the project on the database.
@@ -141,6 +155,7 @@ def create_project_inner(
             num_pages=num_pages,
             creator_id=creator_id,
             require_org=require_org,
+            fingerprint_id=fingerprint_id,
         )
         add_storage_usage_for_project(slug)
 
@@ -154,7 +169,8 @@ def create_project(
     display_title: str,
     pdf_key: str,
     app_environment: str,
-    creator_id: int,
+    creator_id: int | None,
+    fingerprint_id: str | None = None,
 ):
     """Split the given PDF into pages and register the project on the database.
 
@@ -166,5 +182,6 @@ def create_project(
         pdf_key=pdf_key,
         app_environment=app_environment,
         creator_id=creator_id,
+        fingerprint_id=fingerprint_id,
         task_status=task_status,
     )

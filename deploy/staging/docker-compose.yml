@@ -41,7 +41,7 @@ services:
     container_name: kalanjiyam-celery
     command: >
       celery -A kalanjiyam.tasks worker
-      -Q default,ocr
+      -Q default,ocr,low_priority
       --loglevel=INFO
       --concurrency=2
       --prefetch-multiplier=1

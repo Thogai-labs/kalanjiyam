@@ -46,7 +46,6 @@
         href="{{ url_for('public.books.index') }}">{{ _('Books') }}</a>
     </li>
 
-    {% if current_user.is_authenticated %}
     {% set is_proofing_active = request.blueprint and request.blueprint.startswith('proofing') and request.endpoint !=
     'proofing.user.summary' %}
     <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
@@ -55,7 +54,6 @@
         {% if is_proofing_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
         href="{{ url_for('proofing.index') }}">{{ _('Proofing') }}</a>
     </li>
-    {% endif %}
 
     {% set is_admin_active = request.endpoint and ('admin' in request.endpoint or 'platform_view' in request.endpoint or
     'groups_view' in request.endpoint or 'org_admin_view' in request.endpoint) %}

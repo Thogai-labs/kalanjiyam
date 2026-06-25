@@ -103,6 +103,7 @@ def run_ocr_for_project(
     project: db.Project,
     engine: str = '1',  # Default to Google OCR (1)
     language: str = 'sa',
+    queue: str | None = None,
 ) -> GroupResult | None:
     """Create a `group` task to run OCR on a project.
 
@@ -115,6 +116,7 @@ def run_ocr_for_project(
     :param project: Project to run OCR on
     :param engine: OCR engine to use ('google' or 'tesseract')
     :param language: Language code for OCR (default: 'sa' for Sanskrit)
+    :param queue: The Celery queue name to route tasks to
     :return: the Celery result, or ``None`` if no tasks were run.
     """
     flask_app = create_config_only_app(app_env)
@@ -132,7 +134,10 @@ def run_ocr_for_project(
             )
             for p in unedited_pages
         )
-        ret = tasks.apply_async()
+        if queue:
+            ret = tasks.apply_async(queue=queue)
+        else:
+            ret = tasks.apply_async()
         # Save the result so that we can poll for it later. If we don't do
         # this, the result won't be available at all..
         ret.save()

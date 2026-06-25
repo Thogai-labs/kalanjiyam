@@ -854,6 +854,16 @@ def batch_ocr(slug):
     from kalanjiyam.utils.ocr_types import ENGINE_MAP, build_engine_choices
 
     if request.method == "POST":
+        # Rate limit check for guest users
+        if not current_user.is_authenticated:
+            from kalanjiyam.utils.rate_limit import is_rate_limited
+            ip_address = request.remote_addr
+            fingerprint_id = request.cookies.get("device_fingerprint")
+            limit = current_app.config.get("GUEST_DAILY_OCR_LIMIT", 10)
+            if is_rate_limited("run_ocr", ip_address, fingerprint_id, limit=limit):
+                flash(_l(f"Rate limit exceeded. Guests can only run OCR {limit} times per 24 hours."))
+                return redirect(url_for("proofing.project.batch_ocr", slug=slug))
+
         engine_num = request.form.get('engine', '')
         language = request.form.get('language', 'sa')
         engine = ENGINE_MAP.get(engine_num)
@@ -861,13 +871,24 @@ def batch_ocr(slug):
         if not engine or engine not in SUPPORTED_ENGINES:
             flash(_l("Unsupported OCR engine selected."))
         else:
+            queue_name = "low_priority" if not current_user.is_authenticated else None
             task = ocr_tasks.run_ocr_for_project(
                 app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
                 project=project_,
                 engine=engine,
                 language=language,
+                queue=queue_name,
             )
             if task:
+                # Log usage action for guests
+                if not current_user.is_authenticated:
+                    from kalanjiyam.utils.rate_limit import log_usage_action
+                    log_usage_action(
+                        action="run_ocr",
+                        ip_address=request.remote_addr,
+                        fingerprint_id=request.cookies.get("device_fingerprint"),
+                        project_slug=slug
+                    )
                 task_info = {
                     'task_id': task.id,
                     'engine': engine,

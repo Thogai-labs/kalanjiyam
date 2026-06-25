@@ -1,6 +1,6 @@
 """Organization-aware access helpers."""
 
-from flask import abort, current_app
+from flask import abort, current_app, request
 
 import kalanjiyam.database as db
 
@@ -34,26 +34,35 @@ def user_can_access_project(user, project: db.Project) -> bool:
     if getattr(user, "is_admin", False) and not is_multi_tenant_enabled():
         return True
 
+    # 1. Device fingerprint check for guest-owned projects
+    device_fp = request.cookies.get("device_fingerprint") if request else None
+    if getattr(project, "fingerprint_id", None) and device_fp:
+        if project.fingerprint_id == device_fp:
+            return True
+
     if not is_multi_tenant_enabled():
         from kalanjiyam import queries as q
-
         return q.user_can_view_project_legacy(user, project)
 
-    # Multi-tenant mode: org membership is always required regardless of
-    # is_publicly_viewable. That flag only controls visibility within the
-    # /books/ listing — it does not grant cross-org access.
+    # 2. Check open-tenant isolation
+    is_open_tenant = any(g.slug == "open-tenant" for g in project.groups)
+    if is_open_tenant:
+        # If it is a guest-created project (has fingerprint_id), we ONLY allow if fingerprint matches.
+        if getattr(project, "fingerprint_id", None):
+            return False
+            
+        # Otherwise, it's a registered user project. Guests are not allowed.
+        if not getattr(user, "is_authenticated", False):
+            return False
+        return project.creator_id == getattr(user, "id", None)
+
+    # 3. Multi-tenant mode: org membership is always required for enterprise projects.
     if not getattr(user, "is_authenticated", False):
         return False
 
     org_id = user_organization_id(user)
     if org_id is None:
         return False
-
-    # For projects in the open-tenant workspace, restrict access ONLY to the creator
-    # of the project (or superadmins, who are already allowed via the check above).
-    is_open_tenant = any(g.slug == "open-tenant" for g in project.groups)
-    if is_open_tenant:
-        return project.creator_id == getattr(user, "id", None)
 
     return any(g.id == org_id for g in project.groups)
 
