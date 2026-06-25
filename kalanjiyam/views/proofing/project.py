@@ -899,7 +899,8 @@ def batch_ocr(slug):
             from kalanjiyam.utils.rate_limit import is_rate_limited
             ip_address = request.remote_addr
             fingerprint_id = request.cookies.get("device_fingerprint")
-            limit = current_app.config.get("GUEST_DAILY_OCR_LIMIT", 10)
+            settings = q.get_system_settings()
+            limit = settings.unregistered_user_ocr_limit
             if is_rate_limited("run_ocr", ip_address, fingerprint_id, limit=limit):
                 flash(_l(f"Rate limit exceeded. Guests can only run OCR {limit} times per 24 hours."))
                 return redirect(url_for("proofing.project.batch_ocr", slug=slug))

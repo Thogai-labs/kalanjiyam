@@ -228,6 +228,24 @@ def get_or_create_open_tenant() -> db.Group:
     return tenant
 
 
+def get_system_settings() -> db.SystemSetting:
+    session = get_session()
+    settings = session.query(db.SystemSetting).first()
+    if not settings:
+        settings = db.SystemSetting(
+            org_user_ocr_limit=None,
+            org_user_storage_limit=None,
+            registered_user_ocr_limit=None,
+            registered_user_storage_limit=None,
+            unregistered_user_ocr_limit=10,
+            unregistered_user_project_limit=5
+        )
+        session.add(settings)
+        session.commit()
+    return settings
+
+
+
 def create_user(*, username: str, email: str, raw_password: str) -> db.User:
     session = get_session()
     user = db.User(username=username, email=email)

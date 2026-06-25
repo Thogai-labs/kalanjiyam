@@ -199,7 +199,8 @@ def create_project():
         from kalanjiyam.utils.rate_limit import is_rate_limited
         ip_address = request.remote_addr
         fingerprint_id = request.cookies.get("device_fingerprint")
-        limit = current_app.config.get("GUEST_DAILY_PROJECT_LIMIT", 5)
+        settings = q.get_system_settings()
+        limit = settings.unregistered_user_project_limit
         if is_rate_limited("create_project", ip_address, fingerprint_id, limit=limit):
             flash(f"Rate limit exceeded. Guests can only create {limit} projects per 24 hours.", "error")
             return redirect(url_for("proofing.index"))

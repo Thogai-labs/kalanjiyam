@@ -1,0 +1,56 @@
+{% extends 'admin/master.html' %}
+{% import 'macros/admin.html' as admin %}
+{% import "macros/forms.html" as mf %}
+
+{% block title %}{{ _('Platform Settings') }} | {{ _('Admin') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('platform_settings', current_user) }}
+{% endblock %}
+
+{% block content %}
+{{ admin.page_header(_('Platform Settings'), _('Manage global rate limits and parameters across the platform.')) }}
+
+<div class="max-w-3xl bg-white rounded-2xl p-8 shadow-sm border border-slate-50 mb-8">
+  <form method="POST" action="" class="space-y-8">
+    {{ form.csrf_token }}
+
+    <!-- Section: Unregistered Users -->
+    <div class="pb-4">
+      <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('Unregistered Users (Guests)') }}</h3>
+      <p class="text-sm font-medium text-slate-500 mb-4">{{ _('Define daily action limits for guest users. Set to 0 to disable.') }}</p>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          {{ mf.label(form.unregistered_user_ocr_limit.label) }}
+          {{ form.unregistered_user_ocr_limit(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white", placeholder="e.g. 10") }}
+          {% if form.unregistered_user_ocr_limit.description %}
+          <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.unregistered_user_ocr_limit.description }}</p>
+          {% endif %}
+          {% for error in form.unregistered_user_ocr_limit.errors %}
+          <p class="text-xs text-red-600 mt-1 font-semibold">{{ error }}</p>
+          {% endfor %}
+        </div>
+        
+        <div>
+          {{ mf.label(form.unregistered_user_project_limit.label) }}
+          {{ form.unregistered_user_project_limit(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white", placeholder="e.g. 5") }}
+          {% if form.unregistered_user_project_limit.description %}
+          <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.unregistered_user_project_limit.description }}</p>
+          {% endif %}
+          {% for error in form.unregistered_user_project_limit.errors %}
+          <p class="text-xs text-red-600 mt-1 font-semibold">{{ error }}</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-100">
+      <button type="submit" class="btn-premium">
+        {{ _('Save Settings') }}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

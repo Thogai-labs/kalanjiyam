@@ -851,6 +851,46 @@ class PlatformView(AdminBaseView):
             is_platform=True
         )
 
+    @expose("/settings", methods=["GET", "POST"])
+    def settings(self):
+        require_platform_super_admin()
+        
+        session = q.get_session()
+        system_settings = q.get_system_settings()
+        
+        from flask_wtf import FlaskForm
+        from wtforms import IntegerField
+        from wtforms.validators import Optional as wtform_Optional, NumberRange
+        
+        class PlatformSettingsForm(FlaskForm):
+            unregistered_user_ocr_limit = IntegerField(
+                "Daily OCR Credit Limit (Unregistered Users)",
+                validators=[wtform_Optional(), NumberRange(min=0)],
+                description="Daily limit per guest user (IP/fingerprint)."
+            )
+            unregistered_user_project_limit = IntegerField(
+                "Daily Project Limit (Unregistered Users)",
+                validators=[wtform_Optional(), NumberRange(min=0)],
+                description="Daily project creation limit per guest user (IP/fingerprint)."
+            )
+            
+        form = PlatformSettingsForm()
+        
+        if form.validate_on_submit():
+            system_settings.unregistered_user_ocr_limit = form.unregistered_user_ocr_limit.data if form.unregistered_user_ocr_limit.data is not None else 10
+            system_settings.unregistered_user_project_limit = form.unregistered_user_project_limit.data if form.unregistered_user_project_limit.data is not None else 5
+            
+            session.add(system_settings)
+            session.commit()
+            flash("Platform settings saved successfully.")
+            return redirect(url_for(".settings"))
+            
+        if request.method == "GET":
+            form.unregistered_user_ocr_limit.data = system_settings.unregistered_user_ocr_limit
+            form.unregistered_user_project_limit.data = system_settings.unregistered_user_project_limit
+            
+        return render_template("admin/platform_settings.html", form=form)
+
 
 class GroupsView(AdminBaseView):
     """Super-admin group management: list/create/edit/delete groups, manage users and books."""
@@ -1011,6 +1051,25 @@ class GroupsView(AdminBaseView):
                     else:
                         label = "public on /books/" if is_public else "organization-only"
                         flash(f'"{updated.display_title}" is now {label}.', "success")
+            elif action == "update_user_quotas":
+                default_user_storage_mb = request.form.get("default_user_storage_mb")
+                default_user_ocr_limit = request.form.get("default_user_ocr_limit")
+                
+                # Convert values to correct type/None
+                default_user_storage_mb = int(default_user_storage_mb) if default_user_storage_mb else None
+                default_user_ocr_limit = int(default_user_ocr_limit) if default_user_ocr_limit else None
+                
+                if default_user_storage_mb is not None and default_user_storage_mb < 0:
+                    flash("Default per-user storage quota cannot be negative.", "error")
+                elif default_user_ocr_limit is not None and default_user_ocr_limit < 0:
+                    flash("Default per-user OCR credit limit cannot be negative.", "error")
+                else:
+                    group.default_user_storage_limit = (default_user_storage_mb * 1024 * 1024) if default_user_storage_mb is not None else None
+                    group.default_user_ocr_limit = default_user_ocr_limit
+                    session = q.get_session()
+                    session.add(group)
+                    session.commit()
+                    flash("Per-user quotas updated.", "success")
             return redirect(
                 url_for(
                     "groups_view.manage",
