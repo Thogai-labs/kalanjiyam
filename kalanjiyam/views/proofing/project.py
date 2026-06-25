@@ -108,6 +108,9 @@ class EditMetadataForm(FlaskForm):
             ),
         },
     )
+    is_publicly_viewable = BooleanField(
+        _l("Make public (visible to everyone, including guests)")
+    )
     page_numbers = StringField(
         _l("Page numbers (optional)"),
         widget=TextArea(),
@@ -286,11 +289,48 @@ def edit(slug):
         flash(_l("Saved changes."), "success")
         return redirect(url_for("proofing.project.summary", slug=slug))
 
+    delete_form = DeleteProjectForm()
     return render_template(
         "proofing/projects/edit.html",
         project=project_,
         form=form,
+        delete_form=delete_form,
     )
+
+
+@bp.route("/<slug>/delete", methods=["POST"])
+@login_required
+def delete_project(slug):
+    """Delete a project and its associated files."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    is_creator = project_.creator_id == current_user.id
+    is_org_admin = getattr(current_user, "is_org_admin", False) and any(g.id == current_user.organization_id for g in project_.groups)
+    is_super_admin = getattr(current_user, "is_super_admin", False)
+
+    if not (is_creator or is_org_admin or is_super_admin):
+        abort(403)
+
+    form = DeleteProjectForm()
+    if form.validate_on_submit():
+        if form.slug.data == slug:
+            session = q.get_session()
+            session.delete(project_)
+            session.commit()
+
+            from kalanjiyam.utils.storage import get_storage, project_prefix
+            get_storage().delete_prefix(project_prefix(slug))
+
+            flash(f"Deleted project {slug}", "success")
+            return redirect(url_for("proofing.index"))
+        else:
+            flash("Deletion failed (incorrect slug typed).", "error")
+    else:
+        flash("Deletion failed (validation error).", "error")
+
+    return redirect(url_for("proofing.project.edit", slug=slug))
 
 
 @bp.route("/<slug>/download/")
