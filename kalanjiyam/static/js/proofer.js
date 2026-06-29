@@ -83,6 +83,9 @@ export default () => ({
   // Editor mode: replica | flow
   editorMode: 'replica',
   showMetaPanel: false,
+  activeVersion: (typeof ACTIVE_VERSION !== 'undefined') ? ACTIVE_VERSION : 'role:p1',
+  targetVersion: (typeof TARGET_VERSION !== 'undefined') ? TARGET_VERSION : 'role:p1',
+  availableVersions: (typeof AVAILABLE_VERSIONS !== 'undefined') ? AVAILABLE_VERSIONS : [],
   pageDocument: null,
   _flowPlainCache: '',
   _bboxOverlay: null,
@@ -502,6 +505,55 @@ export default () => ({
       setTimeout(() => this.ensureFlowEditor(), 0);
     }
     this.setupZoomButtons();
+  },
+
+  getVersionDisplayName(versionKey) {
+    if (!versionKey) return '';
+    if (versionKey === 'role:p1') return 'Consolidated P1';
+    if (versionKey === 'role:p2') return 'Consolidated P2';
+    if (versionKey === 'role:moderator') return 'Moderator';
+    if (versionKey.startsWith('ocr:')) {
+      const engine = versionKey.split(':')[1];
+      const engineMap = {
+        "google": "1",
+        "tesseract": "2",
+        "surya": "3",
+        "nanonets": "4",
+        "deepseek": "5",
+        "chandra": "6",
+        "qwen3": "7",
+        "surya_table": "8",
+        "paddle_table": "9",
+        "glm_ocr": "10",
+        "tesseract_manuscript": "11"
+      };
+      const num = engineMap[engine] || engine;
+      if (/^\d+$/.test(num)) {
+        return 'OCR ' + num;
+      }
+      return num.charAt(0).toUpperCase() + num.slice(1) + ' OCR';
+    }
+    return versionKey;
+  },
+
+  switchVersion(versionKey) {
+    if (this.hasUnsavedChanges && !confirm('You have unsaved changes. Are you sure you want to switch versions and discard changes?')) {
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set('version', versionKey);
+    window.location.href = url.toString();
+  },
+
+  deriveFromVersion(versionKey) {
+    const display = this.getVersionDisplayName(versionKey);
+    const targetDisplay = this.getVersionDisplayName(this.targetVersion);
+    if (!confirm(`Are you sure you want to load "${display}" content into your active editing track "${targetDisplay}"? Your current unsaved edits will be replaced.`)) {
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set('version', versionKey);
+    window.location.href = url.toString();
   },
 
   ensureFlowEditor() {

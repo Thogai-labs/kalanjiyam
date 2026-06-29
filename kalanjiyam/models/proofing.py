@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint
 from sqlalchemy import Text as Text_
 from sqlalchemy.orm import relationship
 
@@ -191,6 +191,13 @@ class Page(Base):
         backref="page",
         cascade="delete",
     )
+
+    #: Page versions for this page.
+    versions = relationship(
+        "PageVersion",
+        back_populates="page",
+        cascade="all, delete-orphan",
+    )
     
     #: Translations for this page.
     translations = relationship("Translation", backref="page", cascade="delete")
@@ -211,6 +218,32 @@ class PageStatus(Base):
     name = Column(String, nullable=False, unique=True)
 
 
+class PageVersion(Base):
+    """A specific version/branch track of revisions for a page."""
+
+    __tablename__ = "proof_page_versions"
+    __table_args__ = (UniqueConstraint("page_id", "version_key", name="uq_page_version_key"),)
+
+    #: Primary key.
+    id = pk()
+    #: The page this version corresponds to.
+    page_id = Column(Integer, ForeignKey("proof_pages.id", ondelete="CASCADE"), nullable=False, index=True)
+    #: The unique version/track key (e.g. 'role:p1', 'ocr:chandra').
+    version_key = Column(String, nullable=False)
+    #: Optimistic locking version counter.
+    version = Column(Integer, default=0, nullable=False)
+    #: Timestamp at which this version track was last updated.
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    page = relationship("Page", back_populates="versions")
+    revisions = relationship(
+        "Revision",
+        order_by=lambda: Revision.created,
+        backref="page_version",
+        cascade="delete",
+    )
+
+
 class Revision(Base):
 
     """A specific page revision.
@@ -226,6 +259,10 @@ class Revision(Base):
     project_id = foreign_key("proof_projects.id")
     #: The page this revision corresponds to.
     page_id = foreign_key("proof_pages.id")
+    #: The page version track this revision belongs to.
+    page_version_id = Column(
+        Integer, ForeignKey("proof_page_versions.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     #: The author of this revision. Nullable for unregistered guest users.
     author_id = Column(
         Integer, ForeignKey("users.id"), index=True, nullable=True

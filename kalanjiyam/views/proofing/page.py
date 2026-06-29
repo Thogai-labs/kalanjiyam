@@ -126,13 +126,65 @@ def _get_page_context(project_slug: str, page_slug: str) -> PageContext | None:
     return PageContext(project=project_, cur=cur, prev=prev, next=next)
 
 
-def _translation_context(cur: db.Page) -> tuple:
+def resolve_version_keys(user, page) -> tuple[str, str]:
+    """Resolve the target version key to save to and the actual version key to load.
+
+    :return: a tuple of (target_version_key, active_version_key)
+    """
+    target_key = "role:p1"
+    fallback_order = []
+    
+    if getattr(user, "is_authenticated", False):
+        if user.is_moderator or user.is_org_admin:
+            target_key = "role:moderator"
+            fallback_order = ["role:moderator", "role:p2", "role:p1"]
+        elif user.is_p2:
+            target_key = "role:p2"
+            fallback_order = ["role:p2", "role:p1"]
+        elif user.is_p1:
+            target_key = "role:p1"
+            fallback_order = ["role:p1"]
+    else:
+        target_key = "role:p1"
+        fallback_order = ["role:moderator", "role:p2", "role:p1"]
+
+    existing_keys = {v.version_key for v in page.versions}
+
+    for key in fallback_order:
+        if key in existing_keys:
+            return target_key, key
+
+    ocr_keys = [k for k in existing_keys if k.startswith("ocr:")]
+    if ocr_keys:
+        sorted_ocr = sorted(ocr_keys, key=lambda k: 0 if k == "ocr:chandra" else 1)
+        return target_key, sorted_ocr[0]
+
+    return target_key, target_key
+
+
+def get_version_display_name(version_key: str) -> str:
+    if version_key == "role:p1":
+        return _l("Consolidated P1 Version")
+    elif version_key == "role:p2":
+        return _l("Consolidated P2 Version")
+    elif version_key == "role:moderator":
+        return _l("Consolidated Moderator Version")
+    elif version_key.startswith("ocr:"):
+        engine_name = version_key.split(":", 1)[1]
+        from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
+        num = REVERSE_ENGINE_MAP.get(engine_name, engine_name)
+        if num.isdigit():
+            return _l("OCR %(number)s", number=num)
+        return _l("%(engine)s OCR", engine=num.capitalize())
+    return version_key
+
+
+def _translation_context_for_revision(cur: db.Page, latest_revision: db.Revision | None) -> tuple:
     translation_content = None
     translation_metadata = None
     available_translations = []
-    if not cur.revisions:
+    if not latest_revision:
         return translation_content, translation_metadata, available_translations
-    latest_revision = cur.revisions[-1]
     session = q.get_session()
     translations = session.query(db.Translation).filter_by(
         page_id=cur.id,
@@ -160,9 +212,17 @@ def _translation_context(cur: db.Page) -> tuple:
     return translation_content, translation_metadata, available_translations
 
 
-def _page_document_dict(cur: db.Page) -> dict:
-    if cur.revisions:
-        doc = document_for_revision(cur.revisions[-1], cur)
+def _page_document_dict_for_version(cur: db.Page, version_key: str) -> dict:
+    session = q.get_session()
+    page_version = session.query(db.PageVersion).filter_by(
+        page_id=cur.id,
+        version_key=version_key
+    ).first()
+    
+    latest_revision = page_version.revisions[-1] if page_version and page_version.revisions else None
+
+    if latest_revision:
+        doc = document_for_revision(latest_revision, cur)
     else:
         doc = PageDocument.empty()
         if cur.page_width:
@@ -170,12 +230,11 @@ def _page_document_dict(cur: db.Page) -> dict:
         if cur.page_height:
             doc.page_height = cur.page_height
         from kalanjiyam.utils.page_document import enrich_document_from_page_ocr
-
         doc = enrich_document_from_page_ocr(doc, cur)
+
     if (not doc.page_width or not doc.page_height) and cur.project:
         try:
             from PIL import Image
-
             image_path = get_page_image_filepath(cur.project.slug, cur.slug)
             with Image.open(image_path) as img:
                 if not doc.page_width:
@@ -195,17 +254,30 @@ def _editor_template_kwargs(
     has_edits: bool,
     ocr_status: str,
     engine_choices: list,
+    active_version_key: str,
+    target_version_key: str,
+    available_versions: list,
 ) -> dict:
     cur = ctx.cur
     is_r0 = cur.status.name == SitePageStatus.R0
     image_number = cur.slug
     page_number = _get_page_number(ctx.project, cur)
-    translation_content, translation_metadata, available_translations = _translation_context(
-        cur
+
+    session = q.get_session()
+    active_version_record = session.query(db.PageVersion).filter_by(
+        page_id=cur.id,
+        version_key=active_version_key
+    ).first()
+    latest_revision = active_version_record.revisions[-1] if active_version_record and active_version_record.revisions else None
+
+    translation_content, translation_metadata, available_translations = _translation_context_for_revision(
+        cur, latest_revision
     )
-    page_document = _page_document_dict(cur)
+    page_document = _page_document_dict_for_version(cur, active_version_key)
     doc_obj = PageDocument.from_dict(page_document)
     page_plain_text = doc_obj.to_plain_text()
+    
+    ocr_bounding_boxes = cur.ocr_bounding_boxes or ""
     has_ocr_content = bool(cur.ocr_bounding_boxes) or bool(page_document.get("blocks"))
 
     # Fetch default OCR engine configuration for restricted users
@@ -234,11 +306,14 @@ def _editor_template_kwargs(
         "page_document": page_document,
         "page_plain_text": page_plain_text,
         "has_ocr_content": has_ocr_content,
-        "ocr_bounding_boxes": cur.ocr_bounding_boxes or "",
+        "ocr_bounding_boxes": ocr_bounding_boxes,
         "page_width": cur.page_width or page_document.get("page_width"),
         "page_height": cur.page_height or page_document.get("page_height"),
         "is_restricted_ocr": is_restricted_ocr,
         "default_engine_value": default_engine_value,
+        "active_version_key": active_version_key,
+        "target_version_key": target_version_key,
+        "available_versions": available_versions,
     }
 
 
@@ -269,17 +344,47 @@ def edit(project_slug, page_slug):
         abort(404)
 
     cur = ctx.cur
+
+    # Resolve target and active version keys
+    target_key, active_key = resolve_version_keys(current_user, cur)
+    requested_version = request.args.get("version")
+    if requested_version:
+        active_key = requested_version
+
+    # Get target version counter
+    session = q.get_session()
+    target_version_record = session.query(db.PageVersion).filter_by(
+        page_id=cur.id,
+        version_key=target_key
+    ).first()
+    target_version_val = target_version_record.version if target_version_record else 0
+
     form = EditPageForm()
-    form.version.data = cur.version
+    form.version.data = target_version_val
 
-    # FIXME: less hacky approach?
-    status_names = {s.id: s.name for s in q.page_statuses()}
-    form.status.data = status_names[cur.status_id]
-
-    has_edits = bool(cur.revisions)
+    # Get active version's latest revision
+    active_version_record = session.query(db.PageVersion).filter_by(
+        page_id=cur.id,
+        version_key=active_key
+    ).first()
+    
+    latest_revision = active_version_record.revisions[-1] if active_version_record and active_version_record.revisions else None
+    
+    has_edits = latest_revision is not None
     if has_edits:
-        latest_revision = cur.revisions[-1]
         form.content.data = latest_revision.content
+
+    status_names = {s.id: s.name for s in q.page_statuses()}
+    form.status.data = status_names.get(latest_revision.status_id if latest_revision else cur.status_id)
+
+    # Format available versions list for the selector UI
+    available_versions = []
+    for pv in cur.versions:
+        available_versions.append({
+            "version_key": pv.version_key,
+            "display_name": get_version_display_name(pv.version_key),
+            "updated_at": pv.updated_at.isoformat() + "Z" if pv.updated_at else "",
+        })
 
     from kalanjiyam.utils.ocr_client import get_available_engines
     from kalanjiyam.utils.ocr_types import build_engine_choices
@@ -300,6 +405,9 @@ def edit(project_slug, page_slug):
             has_edits=has_edits,
             ocr_status=ocr_ping["status"],
             engine_choices=engine_choices,
+            active_version_key=active_key,
+            target_version_key=target_key,
+            available_versions=available_versions,
         ),
     )
 
@@ -307,16 +415,19 @@ def edit(project_slug, page_slug):
 @bp.route("/<project_slug>/<page_slug>/", methods=["POST"])
 @p2_required
 def edit_post(project_slug, page_slug):
-    """Submit changes through the page editor.
-
-    Since `edit` is public on GET and needs auth on `POST`, it's cleaner to
-    separate the logic here into two views.
-    """
+    """Submit changes through the page editor."""
     ctx = _get_page_context(project_slug, page_slug)
     if ctx is None:
         abort(404)
 
     cur = ctx.cur
+
+    # Resolve target and active version keys
+    target_key, active_key = resolve_version_keys(current_user, cur)
+    requested_version = request.args.get("version")
+    if requested_version:
+        active_key = requested_version
+
     form = EditPageForm()
     conflict = None
 
@@ -324,6 +435,7 @@ def edit_post(project_slug, page_slug):
         doc = parse_document_field(form.document.data)
         content_format = "blocks" if doc else "plain"
         try:
+            # We save to target_key
             new_version = add_revision(
                 cur,
                 summary=form.summary.data,
@@ -333,13 +445,40 @@ def edit_post(project_slug, page_slug):
                 author_id=current_user.id if current_user.is_authenticated else None,
                 document=doc,
                 content_format=content_format,
+                version_key=target_key,
             )
             form.version.data = new_version
             flash("Saved changes.", "success")
+            # Since changes saved successfully, our active key can now become target_key
+            active_key = target_key
         except EditError:
             flash("Edit conflict. Please incorporate the changes below:")
-            conflict = cur.revisions[-1]
-            form.version.data = cur.version
+            # Get latest revision of target_key to display as conflict
+            session = q.get_session()
+            target_version_record = session.query(db.PageVersion).filter_by(
+                page_id=cur.id,
+                version_key=target_key
+            ).first()
+            conflict = target_version_record.revisions[-1] if target_version_record and target_version_record.revisions else None
+            form.version.data = target_version_record.version if target_version_record else 0
+
+    # Get target version counter
+    session = q.get_session()
+    target_version_record = session.query(db.PageVersion).filter_by(
+        page_id=cur.id,
+        version_key=target_key
+    ).first()
+    target_version_val = target_version_record.version if target_version_record else 0
+    form.version.data = target_version_val
+
+    # Format available versions list for the selector UI
+    available_versions = []
+    for pv in cur.versions:
+        available_versions.append({
+            "version_key": pv.version_key,
+            "display_name": get_version_display_name(pv.version_key),
+            "updated_at": pv.updated_at.isoformat() + "Z" if pv.updated_at else "",
+        })
 
     from kalanjiyam.utils.ocr_client import get_available_engines
     from kalanjiyam.utils.ocr_types import build_engine_choices
@@ -361,6 +500,9 @@ def edit_post(project_slug, page_slug):
             has_edits=True,
             ocr_status=ocr_ping["status"],
             engine_choices=engine_choices,
+            active_version_key=active_key,
+            target_version_key=target_key,
+            available_versions=available_versions,
         ),
     )
 
@@ -477,8 +619,79 @@ def ocr(project_slug, page_slug):
         ensure_ocr_quota_for_project(project_)
         ocr_response = run_ocr(image_path, engine_name=engine, language=language)
         consume_ocr_credit_for_project(project_)
-        apply_ocr_to_page(page_, ocr_response, engine, image_path=image_path)
+
+        # Ensure we have the target PageVersion and current version val
+        version_key = f"ocr:{engine}"
         session = q.get_session()
+        pv = session.query(db.PageVersion).filter_by(
+            page_id=page_.id,
+            version_key=version_key
+        ).first()
+        current_ver = pv.version if pv else 0
+
+        # Build PageDocument from OCR response
+        from kalanjiyam.utils.ocr_persist import image_size, _stamp_provenance
+        from kalanjiyam.utils.page_document import normalize_geometry
+        from kalanjiyam.utils.ocr_types import OcrResponse as OcrResponseObj
+        
+        image_w = image_h = None
+        if image_path:
+            size = image_size(image_path)
+            if size:
+                image_w, image_h = size
+
+        boxes, blocks_data, pw, ph = normalize_geometry(
+            ocr_response.bounding_boxes,
+            ocr_response.blocks,
+            ocr_width=ocr_response.page_width,
+            ocr_height=ocr_response.page_height,
+            image_width=image_w or page_.page_width,
+            image_height=image_h or page_.page_height,
+            coordinate_space=ocr_response.coordinate_space,
+        )
+        
+        if pw:
+            page_.page_width = int(pw)
+        elif image_w:
+            page_.page_width = image_w
+        if ph:
+            page_.page_height = int(ph)
+        elif image_h:
+            page_.page_height = image_h
+            
+        normalized = OcrResponseObj(
+            text_content=ocr_response.text_content,
+            bounding_boxes=boxes,
+            layout_html=ocr_response.layout_html,
+            blocks=blocks_data if blocks_data is not None else ocr_response.blocks,
+            content_format=ocr_response.content_format,
+            page_width=pw or ocr_response.page_width or image_w,
+            page_height=ph or ocr_response.page_height or image_h,
+            pipeline=ocr_response.pipeline,
+            source_type=ocr_response.source_type,
+            coordinate_space="pixel",
+            model=ocr_response.model,
+        )
+        doc = PageDocument.from_ocr_response(
+            normalized,
+            image_width=pw or image_w,
+            image_height=ph or image_h,
+        )
+        _stamp_provenance(doc, engine, ocr_response.model)
+        
+        # Save a new revision to the ocr:{engine} version track
+        add_revision(
+            page_,
+            summary=f"OCR run using {engine}",
+            content=doc.to_plain_text(),
+            status=SitePageStatus.R0.value,
+            version=current_ver,
+            author_id=current_user.id if current_user.is_authenticated else None,
+            document=doc.to_dict(),
+            content_format="blocks",
+            version_key=version_key,
+        )
+
         session.add(page_)
         session.commit()
 

@@ -109,6 +109,55 @@ these components in our help text and documentation.
 
     <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></span>
 
+    {# Version Selector Dropdown #}
+    <div class="relative" x-data="{ open: false }" @click.outside="open=false">
+      <button type="button" class="{{ button_css }} flex items-center gap-1"
+              @click.prevent="open=!open"
+              title="{{ _('Version History') }}">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+        <span class="text-xs font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 hidden lg:inline" x-text="getVersionDisplayName(activeVersion)"></span>
+      </button>
+      <div x-show="open" x-cloak class="dropdown-pane w-80 right-0 left-auto" style="display: none;">
+        <div class="p-2 border-b border-slate-100 font-semibold text-xs text-slate-500 uppercase tracking-wider">
+          {{ _('Page Versions') }}
+        </div>
+        <ul class="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+          <template x-for="ver in availableVersions" :key="ver.version_key">
+            <li class="p-2.5 hover:bg-slate-50 flex items-center justify-between gap-2 text-xs">
+              <div class="flex flex-col min-w-0">
+                <span class="font-medium text-slate-900 truncate" x-text="ver.display_name"></span>
+                <span class="text-[10px] text-slate-400" x-text="'Updated: ' + (ver.updated_at ? new Date(ver.updated_at).toLocaleString() : 'Never')"></span>
+              </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <!-- Active Indicator -->
+                <span x-show="activeVersion === ver.version_key" class="text-emerald-600 mr-1" title="{{ _('Active') }}">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                </span>
+                <!-- Load / View button -->
+                <button type="button" 
+                        class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
+                        @click.prevent="switchVersion(ver.version_key); open=false"
+                        x-show="activeVersion !== ver.version_key">
+                  {{ _('View') }}
+                </button>
+                <!-- Derive button -->
+                <button type="button" 
+                        class="px-2 py-1 rounded bg-teal-50 hover:bg-teal-100 text-teal-700 font-medium"
+                        @click.prevent="deriveFromVersion(ver.version_key); open=false"
+                        x-show="activeVersion !== ver.version_key && ver.version_key !== targetVersion">
+                  {{ _('Derive') }}
+                </button>
+              </div>
+            </li>
+          </template>
+        </ul>
+      </div>
+    </div>
+
+    <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></span>
+
     <button type="button" class="{{ button_css }}"
             @click.prevent="showMetaPanel = !showMetaPanel"
             :class="showMetaPanel ? 'bg-slate-100' : ''"

@@ -14,7 +14,8 @@ def p2_required(func: Callable):
 
         # 1. Allow P2 and admins
         is_p2_or_admin = (
-            getattr(current_user, "is_p2", False)
+            getattr(current_user, "is_p1", False)
+            or getattr(current_user, "is_p2", False)
             or getattr(current_user, "is_moderator", False)
             or getattr(current_user, "is_org_admin", False)
             or getattr(current_user, "is_super_admin", False)

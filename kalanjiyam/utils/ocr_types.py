@@ -142,7 +142,7 @@ def build_engine_choices(
             continue
         numeric_value = REVERSE_ENGINE_MAP.get(engine_name, str(seq))
         real_name = ENGINE_LABELS.get(engine_name, engine_name.capitalize())
-        label = real_name if is_super_admin else f"OCR {seq}"
+        label = real_name if is_super_admin else f"OCR {numeric_value}"
         is_rec = (engine_name == recommended_engine)
         choices.append({"value": numeric_value, "label": label, "is_recommended": is_rec})
         seq += 1
