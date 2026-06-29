@@ -126,49 +126,135 @@ def _get_page_context(project_slug: str, page_slug: str) -> PageContext | None:
     return PageContext(project=project_, cur=cur, prev=prev, next=next)
 
 
-def resolve_version_keys(user, page) -> tuple[str, str]:
+def resolve_version_keys(user, page) -> tuple:
     """Resolve the target version key to save to and the actual version key to load.
 
     :return: a tuple of (target_version_key, active_version_key)
     """
-    target_key = "role:p1"
-    fallback_order = []
-    
     if getattr(user, "is_authenticated", False):
-        if user.is_moderator or user.is_org_admin:
-            target_key = "role:moderator"
-            fallback_order = ["role:moderator", "role:p2", "role:p1"]
-        elif user.is_p2:
-            target_key = "role:p2"
-            fallback_order = ["role:p2", "role:p1"]
-        elif user.is_p1:
-            target_key = "role:p1"
-            fallback_order = ["role:p1"]
+        target_key = f"user:{user.id}"
     else:
         target_key = "role:p1"
-        fallback_order = ["role:moderator", "role:p2", "role:p1"]
+
+    # Fetch users associated with existing user: version tracks
+    user_ids = []
+    for v in page.versions:
+        if v.version_key.startswith("user:"):
+            try:
+                user_ids.append(int(v.version_key.split(":", 1)[1]))
+            except ValueError:
+                pass
+
+    from kalanjiyam.database import User
+    from kalanjiyam.queries import get_session
+    session = get_session()
+    users = session.query(User).filter(User.id.in_(user_ids)).all() if user_ids else []
+    user_map = {u.id: u for u in users}
+
+    # Group existing version tracks
+    moderator_tracks = []
+    p2_tracks = []
+    p1_tracks = []
+    ocr_tracks = []
+
+    for v in page.versions:
+        if v.version_key.startswith("user:"):
+            try:
+                uid = int(v.version_key.split(":", 1)[1])
+                u = user_map.get(uid)
+                if u:
+                    if u.is_moderator or u.is_org_admin or u.is_super_admin:
+                        moderator_tracks.append(v)
+                    elif u.is_p2:
+                        p2_tracks.append(v)
+                    elif u.is_p1:
+                        p1_tracks.append(v)
+                    else:
+                        p1_tracks.append(v)
+                else:
+                    p1_tracks.append(v)
+            except ValueError:
+                p1_tracks.append(v)
+        elif v.version_key.startswith("ocr:"):
+            ocr_tracks.append(v)
+
+    # Sort tracks in each tier by updated_at descending
+    moderator_tracks.sort(key=lambda x: x.updated_at, reverse=True)
+    p2_tracks.sort(key=lambda x: x.updated_at, reverse=True)
+    p1_tracks.sort(key=lambda x: x.updated_at, reverse=True)
+    ocr_tracks.sort(key=lambda x: 0 if x.version_key == "ocr:chandra" else 1)
 
     existing_keys = {v.version_key for v in page.versions}
 
-    for key in fallback_order:
-        if key in existing_keys:
-            return target_key, key
+    # Determine fallback list based on logged-in user's roles
+    if getattr(user, "is_authenticated", False):
+        # 1. Always prefer own changes
+        if target_key in existing_keys:
+            return target_key, target_key
 
-    ocr_keys = [k for k in existing_keys if k.startswith("ocr:")]
-    if ocr_keys:
-        sorted_ocr = sorted(ocr_keys, key=lambda k: 0 if k == "ocr:chandra" else 1)
-        return target_key, sorted_ocr[0]
+        if user.is_moderator or user.is_org_admin or user.is_super_admin:
+            # Moderator fallback order: Moderator -> P2 -> P1 -> OCR
+            if moderator_tracks:
+                return target_key, moderator_tracks[0].version_key
+            if p2_tracks:
+                return target_key, p2_tracks[0].version_key
+            if p1_tracks:
+                return target_key, p1_tracks[0].version_key
+        elif user.is_p2:
+            # P2 fallback order: P2 -> P1 -> OCR
+            if p2_tracks:
+                return target_key, p2_tracks[0].version_key
+            if p1_tracks:
+                return target_key, p1_tracks[0].version_key
+        elif user.is_p1:
+            # P1 fallback order: P1 -> OCR
+            if p1_tracks:
+                return target_key, p1_tracks[0].version_key
+    else:
+        # Anonymous user fallback order: Moderator -> P2 -> P1 -> OCR
+        if moderator_tracks:
+            return target_key, moderator_tracks[0].version_key
+        if p2_tracks:
+            return target_key, p2_tracks[0].version_key
+        if p1_tracks:
+            return target_key, p1_tracks[0].version_key
 
+    # OCR Fallback
+    if ocr_tracks:
+        return target_key, ocr_tracks[0].version_key
+
+    # Hard default
     return target_key, target_key
 
 
 def get_version_display_name(version_key: str) -> str:
-    if version_key == "role:p1":
-        return _l("Consolidated P1 Version")
+    if version_key.startswith("user:"):
+        try:
+            user_id = int(version_key.split(":", 1)[1])
+            from kalanjiyam.database import User
+            from kalanjiyam.queries import get_session
+            session = get_session()
+            u = session.query(User).filter_by(id=user_id).first()
+            if u:
+                if u.is_moderator or u.is_org_admin or u.is_super_admin:
+                    role_str = "Moderator"
+                elif u.is_p2:
+                    role_str = "P2"
+                elif u.is_p1:
+                    role_str = "P1"
+                else:
+                    role_str = "Editor"
+                return f"{u.username} ({role_str})"
+            else:
+                return _l("Unknown (P1)")
+        except (ValueError, IndexError):
+            return _l("Unknown (P1)")
+    elif version_key == "role:p1":
+        return _l("Legacy Consolidated P1")
     elif version_key == "role:p2":
-        return _l("Consolidated P2 Version")
+        return _l("Legacy Consolidated P2")
     elif version_key == "role:moderator":
-        return _l("Consolidated Moderator Version")
+        return _l("Legacy Consolidated Moderator")
     elif version_key.startswith("ocr:"):
         engine_name = version_key.split(":", 1)[1]
         from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP

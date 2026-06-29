@@ -509,6 +509,9 @@ export default () => ({
 
   getVersionDisplayName(versionKey) {
     if (!versionKey) return '';
+    const found = this.availableVersions.find(v => v.version_key === versionKey);
+    if (found) return found.display_name;
+
     if (versionKey === 'role:p1') return 'Consolidated P1';
     if (versionKey === 'role:p2') return 'Consolidated P2';
     if (versionKey === 'role:moderator') return 'Moderator';
