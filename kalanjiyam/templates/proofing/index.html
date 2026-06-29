@@ -70,6 +70,19 @@
             class="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all"
             @keyup="filter">
         </div>
+        {% if current_user.is_super_admin %}
+        <div class="flex items-center gap-3 w-full md:w-auto">
+          <label class="text-sm font-semibold text-slate-500 whitespace-nowrap">{{ _('Mode:') }}</label>
+          <select
+            class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:border-royalblue outline-none transition-all flex-1"
+            x-model="selectedMode" @change="filter">
+            <option value="all" selected>{{ _('All') }}</option>
+            <option value="unregistered">{{ _('Unregistered') }}</option>
+            <option value="registered">{{ _('Registered') }}</option>
+            <option value="enterprise">{{ _('Enterprise') }}</option>
+          </select>
+        </div>
+        {% endif %}
         <div class="flex items-center gap-3 w-full md:w-auto">
           <label class="text-sm font-semibold text-slate-500 whitespace-nowrap">{{ _('Sort:') }}</label>
           <select
@@ -88,11 +101,11 @@
         </div>
       </form>
     </div>
-
-    <div class="grid gap-6">
+ 
+    <div x-ref="list" class="grid gap-6">
       {% for p in projects %}
       <div data-key="{{ p.id }}" data-title="{{ p.display_title }}" data-created="{{ p.created_at }}"
-        data-progress="{{ progress_per_project[p.id] }}" x-show="displayed.has('{{ p.id }}')" class="premium-card p-6">
+        data-progress="{{ progress_per_project[p.id] }}" data-mode="{{ p.creator_mode }}" x-show="displayed.has('{{ p.id }}')" class="premium-card p-6">
 
         <div class="flex items-start justify-between mb-4">
           <div class="flex-1">

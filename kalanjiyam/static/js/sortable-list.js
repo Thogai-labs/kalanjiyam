@@ -18,6 +18,8 @@ export default (defaultField) => ({
   field: defaultField,
   // The query to filter by. If empty, use all data.
   query: '',
+  // The creator mode filter value.
+  selectedMode: 'all',
   // The order of the sort ("asc" or "desc").
   order: 'asc',
   // The keys to display.
@@ -31,19 +33,23 @@ export default (defaultField) => ({
       key: x.dataset.key,
       // Store title in lowercase to support case-insensitive searching
       title: x.dataset.title.toLowerCase(),
+      ...(x.dataset.mode ? { mode: x.dataset.mode } : {}),
     }));
     // Collect all keys in `this.displayed`.
     this.displayed = new Set([...list.children].map((x) => x.dataset.key));
   },
 
-  /** Filter the list by the user's query string. */
+  /** Filter the list by the user's query string and selected creator mode. */
   filter() {
-    if (!this.query) return;
-
     const query = this.query.toLowerCase();
-    // toLowerCase for case-insensitive matching.
+    const mode = this.selectedMode || 'all';
+
     const newKeys = this.data
-      .filter((x) => x.title.includes(query))
+      .filter((x) => {
+        const matchesQuery = !query || x.title.includes(query);
+        const matchesMode = mode === 'all' || x.mode === mode;
+        return matchesQuery && matchesMode;
+      })
       .map((x) => x.key);
     this.displayed = new Set(newKeys);
   },
