@@ -79,7 +79,7 @@ def _enforce_project_access():
     project_ = q.project(slug)
     if project_ is None:
         return None
-    if not q.user_can_view_project(current_user, project_):
+    if not q.user_can_view_proofing_project(current_user, project_):
         flask_abort(403)
     return None
 

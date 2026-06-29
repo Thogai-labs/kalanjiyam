@@ -127,3 +127,32 @@ def is_restricted_ocr_user(user) -> bool:
         pass
 
     return False
+
+
+def user_can_view_proofing_project(user, project: db.Project) -> bool:
+    """True if user can access the project in proofing context (e.g. proofing index/summary/pages)."""
+    # 1. Super admins can always view
+    if getattr(user, "is_super_admin", False):
+        return True
+
+    # 2. If it is made public, we enforce the extra proofing restriction:
+    if getattr(project, "is_publicly_viewable", False):
+        # Allow creator (registered user)
+        if getattr(user, "is_authenticated", False) and project.creator_id == getattr(user, "id", None):
+            return True
+            
+        # Allow creator (guest fingerprint)
+        device_fp = request.cookies.get("device_fingerprint") if request else None
+        if project.fingerprint_id and device_fp and project.fingerprint_id == device_fp:
+            return True
+            
+        # Allow user of the same organization
+        org_id = user_organization_id(user)
+        if org_id and any(g.id == org_id for g in project.groups):
+            return True
+            
+        return False
+
+    # Otherwise, fall back to standard access check
+    return user_can_access_project(user, project)
+

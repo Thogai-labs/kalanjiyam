@@ -544,6 +544,14 @@ def user_can_view_project(user, project: db.Project) -> bool:
     return user_can_access_project(user, project)
 
 
+def user_can_view_proofing_project(user, project: db.Project) -> bool:
+    """Tenant-aware project visibility wrapper for proofing context."""
+    from kalanjiyam.utils.org_access import user_can_view_proofing_project
+
+    return user_can_view_proofing_project(user, project)
+
+
+
 def projects_in_group(
     group_id: int, page: int = 1, per_page: int = 20
 ) -> tuple[list[db.Project], int]:

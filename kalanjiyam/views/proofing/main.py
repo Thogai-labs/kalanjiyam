@@ -113,7 +113,7 @@ def index():
         SitePageStatus.SKIP: "bg-slate-100",
     }
 
-    projects = [p for p in q.projects() if q.user_can_view_project(current_user, p)]
+    projects = [p for p in q.projects() if q.user_can_view_proofing_project(current_user, p)]
     statuses_per_project = {}
     progress_per_project = {}
     pages_per_project = {}
@@ -328,7 +328,7 @@ def recent_changes():
         .limit(num_per_page * 2)  # Fetch more to allow filtering
         .all()
     )
-    recent_revisions = [r for r in recent_revisions if q.user_can_view_project(current_user, r.project)][:num_per_page]
+    recent_revisions = [r for r in recent_revisions if q.user_can_view_proofing_project(current_user, r.project)][:num_per_page]
     recent_activity = [("revision", r.created, r) for r in recent_revisions]
 
     recent_projects = (
@@ -337,7 +337,7 @@ def recent_changes():
         .limit(num_per_page * 2)
         .all()
     )
-    recent_projects = [p for p in recent_projects if q.user_can_view_project(current_user, p)][:num_per_page]
+    recent_projects = [p for p in recent_projects if q.user_can_view_proofing_project(current_user, p)][:num_per_page]
     recent_activity += [("project", p.created_at, p) for p in recent_projects]
 
     recent_activity.sort(key=lambda x: x[1], reverse=True)
@@ -350,7 +350,7 @@ def recent_changes():
 @bp.route("/talk")
 def talk():
     """Show discussion across all projects."""
-    projects = [p for p in q.projects() if q.user_can_view_project(current_user, p)]
+    projects = [p for p in q.projects() if q.user_can_view_proofing_project(current_user, p)]
 
     # FIXME: optimize this once we have a higher thread volume.
     all_threads = [(p, t) for p in projects for t in p.board.threads]

@@ -55,7 +55,7 @@ def _enforce_project_access():
     project_ = q.project(project_slug)
     if project_ is None:
         return None
-    if not q.user_can_view_project(current_user, project_):
+    if not q.user_can_view_proofing_project(current_user, project_):
         abort(403)
     return None
 
@@ -428,7 +428,7 @@ def ocr(project_slug, page_slug):
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
-    if not q.user_can_view_project(current_user, project_):
+    if not q.user_can_view_proofing_project(current_user, project_):
         abort(403)
 
     page_ = q.page(project_.id, page_slug)
@@ -525,7 +525,7 @@ def translate(project_slug, page_slug):
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
-    if not q.user_can_view_project(current_user, project_):
+    if not q.user_can_view_proofing_project(current_user, project_):
         abort(403)
 
     page_ = q.page(project_.id, page_slug)
@@ -613,7 +613,7 @@ def upload_image(project_slug, page_slug):
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
-    if not q.user_can_view_project(current_user, project_):
+    if not q.user_can_view_proofing_project(current_user, project_):
         abort(403)
 
     page_ = q.page(project_.id, page_slug)
