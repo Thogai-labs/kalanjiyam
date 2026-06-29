@@ -1472,8 +1472,11 @@ class ProjectView(BaseView):
 
     can_create = False
     list_template = "admin/project_list.html"
-    column_list = ["slug", "display_title", "is_publicly_viewable", "creator"]
-    column_labels = {"is_publicly_viewable": "Public on /books/"}
+    column_list = ["slug", "display_title", "is_publicly_viewable", "creator", "creator_mode"]
+    column_labels = {
+        "is_publicly_viewable": "Public on /books/",
+        "creator_mode": "Creation Mode",
+    }
     form_columns = ["slug", "display_title", "is_publicly_viewable", "description"]
     form_excluded_columns = ["creator", "board", "pages", "created_at", "updated_at"]
 

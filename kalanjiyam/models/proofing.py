@@ -125,6 +125,22 @@ class Project(Base):
         "Page", order_by=lambda: Page.order, backref="project", cascade="delete"
     )
 
+    @property
+    def creator_mode(self) -> str:
+        """Return the user mode that created this project.
+        Possible values: 'unregistered', 'registered', 'enterprise'
+        """
+        if self.fingerprint_id:
+            return "unregistered"
+        
+        # Check if project belongs to any group whose slug is not "open-tenant"
+        has_enterprise_group = any(g.slug != "open-tenant" for g in self.groups)
+        if has_enterprise_group:
+            return "enterprise"
+            
+        return "registered"
+
+
 
 class Page(Base):
 

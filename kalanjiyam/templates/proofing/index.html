@@ -106,6 +106,21 @@
                 class="text-xs font-bold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg uppercase tracking-wider">
                 {{ ngettext('%(num)d page', '%(num)d pages', count) }}
               </span>
+              {% if current_user.is_super_admin %}
+                {% if p.creator_mode == 'unregistered' %}
+                  <span class="text-xs font-bold px-2.5 py-1 bg-rose-100 text-rose-700 rounded-lg uppercase tracking-wider">
+                    {{ _('Unregistered') }}
+                  </span>
+                {% elif p.creator_mode == 'registered' %}
+                  <span class="text-xs font-bold px-2.5 py-1 bg-amber-100 text-amber-700 rounded-lg uppercase tracking-wider">
+                    {{ _('Registered') }}
+                  </span>
+                {% elif p.creator_mode == 'enterprise' %}
+                  <span class="text-xs font-bold px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-lg uppercase tracking-wider">
+                    {{ _('Enterprise') }}
+                  </span>
+                {% endif %}
+              {% endif %}
               <span class="text-xs text-slate-400 font-medium">
                 {{ p.created_at.strftime('%b %d, %Y') }}
               </span>

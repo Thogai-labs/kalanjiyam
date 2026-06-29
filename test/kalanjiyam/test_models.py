@@ -90,3 +90,52 @@ def test_token__set_and_check_token(client):
     assert not row.check_token("password2")
 
     _cleanup(session, row)
+
+
+def test_project__creator_mode(client):
+    session = get_session()
+
+    # 1. Unregistered project (has fingerprint_id)
+    project_unregistered = db.Project(
+        slug="unregistered-proj",
+        display_title="Unregistered Project",
+        fingerprint_id="some-fingerprint",
+    )
+    session.add(project_unregistered)
+
+    # 2. Registered project (has creator_id, no custom enterprise group)
+    project_registered = db.Project(
+        slug="registered-proj",
+        display_title="Registered Project",
+        creator_id=1,
+    )
+    # Give it the open-tenant group
+    open_tenant = session.query(db.Group).filter_by(slug="open-tenant").first()
+    if not open_tenant:
+        open_tenant = db.Group(name="Open Tenant", slug="open-tenant")
+        session.add(open_tenant)
+        session.flush()
+    project_registered.groups.append(open_tenant)
+    session.add(project_registered)
+
+    # 3. Enterprise project (has creator_id, has enterprise group)
+    project_enterprise = db.Project(
+        slug="enterprise-proj",
+        display_title="Enterprise Project",
+        creator_id=1,
+    )
+    enterprise_group = db.Group(name="Enterprise Org", slug="enterprise-org")
+    session.add(enterprise_group)
+    session.flush()
+    project_enterprise.groups.append(enterprise_group)
+    session.add(project_enterprise)
+
+    session.commit()
+
+    try:
+        assert project_unregistered.creator_mode == "unregistered"
+        assert project_registered.creator_mode == "registered"
+        assert project_enterprise.creator_mode == "enterprise"
+    finally:
+        _cleanup(session, project_unregistered, project_registered, project_enterprise, enterprise_group)
+
