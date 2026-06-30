@@ -226,6 +226,16 @@ To run all Python tests using `pytest` on the host:
 make test
 ```
 
+To run the unit tests inside the active running Docker container:
+```bash
+docker exec -it kalanjiyam-web pytest
+```
+
+To run a specific test file inside the container (e.g., versioning tests):
+```bash
+docker exec -it kalanjiyam-web pytest test/kalanjiyam/views/proofing/test_proofing_versions.py
+```
+
 ### 3. Run Python Linters and Formatters
 To run code formatting checks (`black` and `ruff`) on the host:
 ```bash
@@ -405,12 +415,20 @@ erDiagram
         int id PK
         string name
     }
+    proof_page_versions {
+        int id PK
+        int page_id FK "proof_pages.id"
+        string version_key
+        int version
+        datetime updated_at
+    }
     proof_revisions {
         int id PK
         int project_id FK "proof_projects.id"
         int page_id FK "proof_pages.id"
         int author_id FK "users.id"
         int status_id FK "proof_page_statuses.id"
+        int page_version_id FK "proof_page_versions.id"
         datetime created
         string summary
         text content
@@ -544,6 +562,8 @@ erDiagram
     proof_pages ||--o{ proof_revisions : "has history of"
     users ||--o{ proof_revisions : "submits"
     proof_page_statuses ||--o{ proof_revisions : "status during revision"
+    proof_pages ||--o{ proof_page_versions : "has parallel tracks"
+    proof_page_versions ||--o{ proof_revisions : "contains revisions"
     proof_pages ||--o{ proof_translations : "translated from"
     proof_revisions ||--o{ proof_translations : "revision translated"
     users ||--o{ proof_translations : "translates"
@@ -583,18 +603,19 @@ erDiagram
 14. **`project_groups`**: Association table mapping projects to their owning organizations.
 15. **`proof_pages`**: Individual page records containing OCR bounding boxes and images.
 16. **`proof_page_statuses`**: Enumerated validation status types (`reviewed-0`, `reviewed-1`, etc.).
-17. **`proof_revisions`**: Transcription edit history recording plain-text and structured documents.
-18. **`proof_translations`**: Keeps translations of revisions across languages and engines (e.g., GPT, Google).
-19. **`proof_ocr_comparisons`**: Analytics for comparing OCR engine results against manual proofing ground truth.
-20. **`discussion_boards`**: Associated forum board instances.
-21. **`discussion_threads`**: Forum topic structures created by users.
-22. **`discussion_posts`**: Thread comments/posts compiled under a forum thread.
-23. **`blog_posts`**: Announcements and updates authored by system operators.
-24. **`site_project_sponsorship`**: Public donation goals to support book digitizations.
-25. **`contributor_info`**: Public recognition list for contributors and moderators.
-26. **`dictionaries`**: Lexicon definitions mapping to various languages.
-27. **`dictionary_entries`**: Lexical index mappings containing value definitions in XML.
-28. **`alembic_version`**: Schema migration states tracked internally by Alembic.
+17. **`proof_page_versions`**: Parallel branch/version tracks for page edits (such as user-specific and OCR engine tracks) performing optimistic locking.
+18. **`proof_revisions`**: Transcription edit history recording plain-text and structured documents, linked to a specific version track.
+19. **`proof_translations`**: Keeps translations of revisions across languages and engines (e.g., GPT, Google).
+20. **`proof_ocr_comparisons`**: Analytics for comparing OCR engine results against manual proofing ground truth.
+21. **`discussion_boards`**: Associated forum board instances.
+22. **`discussion_threads`**: Forum topic structures created by users.
+23. **`discussion_posts`**: Thread comments/posts compiled under a forum thread.
+24. **`blog_posts`**: Announcements and updates authored by system operators.
+25. **`site_project_sponsorship`**: Public donation goals to support book digitizations.
+26. **`contributor_info`**: Public recognition list for contributors and moderators.
+27. **`dictionaries`**: Lexicon definitions mapping to various languages.
+28. **`dictionary_entries`**: Lexical index mappings containing value definitions in XML.
+29. **`alembic_version`**: Schema migration states tracked internally by Alembic.
 
 ---
 
