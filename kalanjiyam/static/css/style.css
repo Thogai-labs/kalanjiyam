@@ -522,22 +522,22 @@
   }
 
   .toolbar-btn {
-    @apply flex items-center justify-center w-9 h-9 rounded transition-all duration-150;
-    @apply text-gray-700 hover:bg-gray-100 hover:text-gray-900;
-    @apply disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent;
-    @apply focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-1;
+    @apply flex items-center justify-center w-8 h-8 rounded-md transition-all duration-150 mx-0.5;
+    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+    @apply disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent;
+    @apply focus:outline-none focus:ring-2 focus:ring-slate-300;
   }
 
   .toolbar-btn.active {
-    @apply bg-gray-100 text-gray-900;
+    @apply bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 font-semibold;
   }
 
   .toolbar-btn svg {
-    @apply flex-shrink-0 w-5 h-5;
+    @apply flex-shrink-0 w-4 h-4;
   }
 
   .toolbar-separator {
-    @apply w-px h-6 bg-gray-300 mx-1;
+    @apply w-px h-5 bg-slate-200 mx-2 self-center;
   }
 
   .toolbar-group {

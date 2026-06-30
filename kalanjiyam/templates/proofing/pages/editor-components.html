@@ -666,7 +666,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
      @dragleave="handleDragLeave"
      @drop.prevent="handleDrop"
      :class="isDragging ? 'ring-2 ring-amber-400' : ''">
-  <div id="rich-editor-toolbar" class="book-editor-flow-toolbar px-2 py-1 border-b border-slate-100 shrink-0" x-show="richEditor">
+  <div id="rich-editor-toolbar" class="book-editor-flow-toolbar px-2 py-1.5 border-b border-slate-100 shrink-0 bg-white" x-show="richEditor">
     <div class="flex items-center gap-0 flex-wrap">
       {# Undo/Redo #}
       <div class="toolbar-group">
@@ -674,18 +674,43 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                 class="toolbar-btn"
                 data-tiptap-command="undo"
                 title="{{ _('Undo') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 7v6h6"></path>
+            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
           </svg>
         </button>
         <button type="button"
                 class="toolbar-btn"
                 data-tiptap-command="redo"
                 title="{{ _('Redo') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6"></path>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <path d="M21 7v6h-6"></path>
+            <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path>
           </svg>
         </button>
+      </div>
+      <div class="toolbar-separator"></div>
+
+      {# Headings/Styles Dropdown (Google Docs style) #}
+      <div class="toolbar-group relative" x-data="{ open: false }">
+        <button type="button"
+                class="flex items-center justify-between px-2.5 py-1 text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300 text-xs font-medium h-8 min-w-[110px] mx-1 transition-colors"
+                @click.prevent="open = !open"
+                @click.outside="open = false"
+                title="{{ _('Styles') }}">
+          <span id="rich-editor-style-label" class="truncate mr-1.5 text-slate-700">Normal text</span>
+          <svg class="w-3 h-3 text-slate-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div x-show="open" x-cloak class="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-md shadow-lg z-50 p-1" style="min-width: 160px;">
+          <ul class="py-0.5">
+            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 font-normal text-sm" data-tiptap-command="setParagraph" @click="open = false">{{ _('Normal text') }}</button></li>
+            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 font-bold text-base" data-tiptap-command="toggleHeading" data-level="1" @click="open = false">{{ _('Heading 1') }}</button></li>
+            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 font-semibold text-sm" data-tiptap-command="toggleHeading" data-level="2" @click="open = false">{{ _('Heading 2') }}</button></li>
+            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 font-medium text-xs" data-tiptap-command="toggleHeading" data-level="3" @click="open = false">{{ _('Heading 3') }}</button></li>
+          </ul>
+        </div>
       </div>
       <div class="toolbar-separator"></div>
 
@@ -695,53 +720,29 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                 class="toolbar-btn"
                 data-tiptap-command="toggleBold"
                 title="{{ _('Bold') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 4h8a4 4 0 014 4v8a4 4 0 01-4 4H6a4 4 0 01-4-4V8a4 4 0 014-4z"></path>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6"></path>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7.5a3.5 3.5 0 0 1 0 7H6z"></path>
           </svg>
         </button>
         <button type="button"
                 class="toolbar-btn"
                 data-tiptap-command="toggleItalic"
                 title="{{ _('Italic') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <line x1="19" y1="4" x2="10" y2="4"></line>
+            <line x1="14" y1="20" x2="5" y2="20"></line>
+            <line x1="15" y1="4" x2="9" y2="20"></line>
           </svg>
         </button>
         <button type="button"
                 class="toolbar-btn"
                 data-tiptap-command="toggleUnderline"
                 title="{{ _('Underline') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16a2 2 0 01-2 2H7a2 2 0 01-2-2V5z"></path>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6"></path>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"></path>
+            <line x1="4" y1="21" x2="20" y2="21"></line>
           </svg>
         </button>
-      </div>
-      <div class="toolbar-separator"></div>
-
-      {# Headings Dropdown #}
-      <div class="toolbar-group relative" x-data="{ open: false }">
-        <button type="button"
-                class="toolbar-btn"
-                @click.prevent="open = !open"
-                @click.outside="open = false"
-                title="{{ _('Heading') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-          </svg>
-          <svg class="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-          </svg>
-        </button>
-        <div x-show="open" x-cloak class="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50" style="min-width: 150px;">
-          <ul class="py-1">
-            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 hover:bg-gray-100" data-tiptap-command="setParagraph" @click="open = false">{{ _('Paragraph') }}</button></li>
-            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 hover:bg-gray-100" data-tiptap-command="toggleHeading" data-level="1" @click="open = false">{{ _('Heading 1') }}</button></li>
-            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 hover:bg-gray-100" data-tiptap-command="toggleHeading" data-level="2" @click="open = false">{{ _('Heading 2') }}</button></li>
-            <li><button type="button" class="dropdown-item w-full text-left px-3 py-1.5 hover:bg-gray-100" data-tiptap-command="toggleHeading" data-level="3" @click="open = false">{{ _('Heading 3') }}</button></li>
-          </ul>
-        </div>
       </div>
       <div class="toolbar-separator"></div>
 
@@ -751,16 +752,24 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                 class="toolbar-btn"
                 data-tiptap-command="toggleBulletList"
                 title="{{ _('Bullet List') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6h13M8 12h13m-13 6h13M3 6h.01M3 12h.01M3 18h.01"></path>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <line x1="8" y1="6" x2="21" y2="6"></line>
+            <line x1="8" y1="12" x2="21" y2="12"></line>
+            <line x1="8" y1="18" x2="21" y2="18"></line>
+            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+            <line x1="3" y1="18" x2="3.01" y2="18"></line>
           </svg>
         </button>
         <button type="button"
                 class="toolbar-btn"
                 data-tiptap-command="toggleOrderedList"
                 title="{{ _('Numbered List') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <line x1="10" y1="6" x2="21" y2="6"></line>
+            <line x1="10" y1="12" x2="21" y2="12"></line>
+            <line x1="10" y1="18" x2="21" y2="18"></line>
+            <path d="M4 6h1v4M4 10h2M4 16h2v1H4v1.5h2v1H4"></path>
           </svg>
         </button>
       </div>
@@ -773,8 +782,11 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                 data-tiptap-command="setTextAlign"
                 data-align="left"
                 title="{{ _('Align Left') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18M3 6h18"></path>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <line x1="17" y1="10" x2="3" y2="10"></line>
+            <line x1="21" y1="6" x2="3" y2="6"></line>
+            <line x1="21" y1="14" x2="3" y2="14"></line>
+            <line x1="17" y1="18" x2="3" y2="18"></line>
           </svg>
         </button>
         <button type="button"
@@ -782,8 +794,11 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                 data-tiptap-command="setTextAlign"
                 data-align="center"
                 title="{{ _('Align Center') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M6 14h12M9 6h6"></path>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <line x1="18" y1="10" x2="6" y2="10"></line>
+            <line x1="21" y1="6" x2="3" y2="6"></line>
+            <line x1="21" y1="14" x2="3" y2="14"></line>
+            <line x1="18" y1="18" x2="6" y2="18"></line>
           </svg>
         </button>
         <button type="button"
@@ -791,8 +806,11 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                 data-tiptap-command="setTextAlign"
                 data-align="right"
                 title="{{ _('Align Right') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M9 14h12M3 6h18"></path>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <line x1="21" y1="10" x2="7" y2="10"></line>
+            <line x1="21" y1="6" x2="3" y2="6"></line>
+            <line x1="21" y1="14" x2="3" y2="14"></line>
+            <line x1="21" y1="18" x2="7" y2="18"></line>
           </svg>
         </button>
         <button type="button"
@@ -800,8 +818,11 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                 data-tiptap-command="setTextAlign"
                 data-align="justify"
                 title="{{ _('Justify') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18M3 6h18M3 18h18"></path>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <line x1="21" y1="10" x2="3" y2="10"></line>
+            <line x1="21" y1="6" x2="3" y2="6"></line>
+            <line x1="21" y1="14" x2="3" y2="14"></line>
+            <line x1="21" y1="18" x2="3" y2="18"></line>
           </svg>
         </button>
       </div>
@@ -815,8 +836,9 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                 @click.prevent="open = !open"
                 @click.outside="open = false"
                 title="{{ _('Link') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
           </svg>
         </button>
         <div x-show="open" x-cloak class="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 p-3" style="min-width: 250px;">
@@ -853,8 +875,10 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                 class="toolbar-btn"
                 @click.prevent="document.getElementById('toolbar-image-upload').click()"
                 title="{{ _('Insert Image') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
           </svg>
         </button>
       </div>
@@ -867,11 +891,15 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                 @click.prevent="open = !open"
                 @click.outside="open = false"
                 title="{{ _('Insert Table') }}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+            <line x1="3" y1="15" x2="21" y2="15"></line>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+            <line x1="15" y1="3" x2="15" y2="21"></line>
           </svg>
-          <svg class="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          <svg class="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path>
           </svg>
         </button>
         <div x-show="open" x-cloak class="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50" style="min-width: 200px;">

@@ -515,6 +515,20 @@ export function initializeToolbar(editor) {
 
   // Update toolbar button states
   const updateToolbarState = () => {
+    // Style dropdown label (Google Docs style)
+    const styleLabel = document.getElementById('rich-editor-style-label');
+    if (styleLabel) {
+      if (editor.isActive('heading', { level: 1 })) {
+        styleLabel.textContent = 'Heading 1';
+      } else if (editor.isActive('heading', { level: 2 })) {
+        styleLabel.textContent = 'Heading 2';
+      } else if (editor.isActive('heading', { level: 3 })) {
+        styleLabel.textContent = 'Heading 3';
+      } else {
+        styleLabel.textContent = 'Normal text';
+      }
+    }
+
     // Bold
     const boldBtn = document.querySelector('[data-tiptap-command="toggleBold"]');
     if (boldBtn) {
