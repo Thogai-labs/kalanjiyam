@@ -54,3 +54,9 @@ def test_create_project__auth(rama_client):
 def test_talk(client):
     resp = client.get("/proofing/talk")
     assert "Talk" in resp.text
+
+
+def test_help_index(client):
+    resp = client.get("/proofing/help")
+    assert resp.status_code == 200
+    assert "Help Guidelines" in resp.text

@@ -148,6 +148,12 @@ def index():
     )
 
 
+@bp.route("/help")
+def help_index():
+    """Display index of all guidelines and manuals."""
+    return render_template("proofing/help.html")
+
+
 @bp.route("/help/beginners-guide")
 def beginners_guide():
     """Display our minimal proofing guidelines."""
