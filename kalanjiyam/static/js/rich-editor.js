@@ -55,6 +55,7 @@ export function createRichEditor(elementId, options = {}) {
     content = '',
     onUpdate = () => {},
     onSelectionUpdate = () => {},
+    onUploadImage = null,
   } = options;
 
   const editor = new Editor({
@@ -126,6 +127,35 @@ export function createRichEditor(elementId, options = {}) {
       attributes: {
         class: 'prose prose-lg max-w-none focus:outline-none min-h-[500px] px-4 py-6 text-base leading-relaxed',
       },
+      handlePaste(view, event) {
+        if (!onUploadImage) return false;
+        const items = (event.clipboardData || event.originalEvent.clipboardData || {}).items || [];
+        for (const item of items) {
+          if (item.type.indexOf('image') === 0) {
+            const file = item.getAsFile();
+            if (file) {
+              event.preventDefault();
+              onUploadImage(file);
+              return true;
+            }
+          }
+        }
+        return false;
+      },
+      handleDrop(view, event, slice, moved) {
+        if (!moved && onUploadImage && event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length) {
+          const files = Array.from(event.dataTransfer.files);
+          const imageFiles = files.filter(f => f.type.startsWith('image/'));
+          if (imageFiles.length > 0) {
+            event.preventDefault();
+            imageFiles.forEach(file => {
+              onUploadImage(file);
+            });
+            return true;
+          }
+        }
+        return false;
+      }
     },
   });
 

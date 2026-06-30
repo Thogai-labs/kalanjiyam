@@ -56,12 +56,17 @@ export function parseDocument(raw) {
   return data;
 }
 
+function stripHtml(html) {
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, '');
+}
+
 export function documentToPlainText(doc) {
   const blocks = [...(doc.blocks || [])].sort(
     (a, b) => (a.reading_order || 0) - (b.reading_order || 0),
   );
   return blocks
-    .map((b) => (b.content || '').trim())
+    .map((b) => stripHtml(b.content || '').trim())
     .filter(Boolean)
     .join('\n\n');
 }
@@ -78,6 +83,7 @@ const BLOCK_TYPE_TO_TAG = {
 };
 
 export function documentToFlowHtml(doc) {
+  const isRichFormat = doc.content_format === 'blocks';
   const blocks = [...(doc.blocks || [])].sort(
     (a, b) => (a.reading_order || 0) - (b.reading_order || 0),
   );
@@ -93,15 +99,18 @@ export function documentToFlowHtml(doc) {
       return;
     }
     const tag = BLOCK_TYPE_TO_TAG[block.type] ?? 'p';
-    const text = content
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\n/g, '<br>');
+    const text = isRichFormat
+      ? content.replace(/\n/g, '<br>')
+      : content
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\n/g, '<br>');
     parts.push(`<${tag} data-block-id="${block.id}">${text}</${tag}>`);
   });
   return parts.join('');
 }
+
 
 /* Extract block text, keeping <br> as newlines (textContent drops them). */
 function elementText(el) {
@@ -146,10 +155,12 @@ export function blocksFromFlowHtml(html, previousBlocks = []) {
       parsed.push({ kind: 'table', content: tableEl.outerHTML, blockId });
       return;
     }
-    const text = elementText(el);
-    if (!text) return;
+    const hasImage = el.querySelector('img') || tag === 'img';
+    const plainText = elementText(el);
+    if (!plainText && !hasImage) return;
+    const content = tag === 'img' ? el.outerHTML : el.innerHTML;
     const type = (tag === 'h1' || tag === 'h2') ? 'heading' : tag === 'h3' ? 'subheading' : 'paragraph';
-    parsed.push({ kind: type, content: text, blockId });
+    parsed.push({ kind: type, content: content, blockId });
   });
   parsed.forEach((p) => {
     if (p.blockId && prevById.has(p.blockId)) matchedIds.add(p.blockId);

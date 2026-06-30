@@ -585,6 +585,9 @@ export default () => ({
     this._isProgrammaticUpdate = true;
     const editor = createRichEditor('rich-editor', {
       content: initialHtml || '',
+      onUploadImage: (file) => {
+        this.uploadImageFiles([file]);
+      },
       onUpdate: (html) => {
         this.content = html;
         const contentTextarea = document.getElementById('content');

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -148,7 +149,7 @@ class PageDocument:
             return ""
         parts = []
         for block in sorted(self.blocks, key=lambda b: b.reading_order):
-            text = block.content.strip()
+            text = _strip_html_tags(block.content).strip()
             if text:
                 parts.append(text)
         return "\n\n".join(parts)
@@ -160,7 +161,7 @@ class PageDocument:
             return ""
         if replica and self.page_width and self.page_height:
             return _blocks_to_replica_html(self.blocks, self.page_width, self.page_height)
-        return _blocks_to_flow_html(self.blocks)
+        return _blocks_to_flow_html(self.blocks, content_format=self.content_format)
 
     def to_tei_fragment(self) -> str:
         parts = []
@@ -289,6 +290,12 @@ class PageDocument:
 
 def _new_block_id() -> str:
     return f"b{uuid.uuid4().hex[:8]}"
+
+
+def _strip_html_tags(text: str) -> str:
+    if not text:
+        return ""
+    return re.sub(r"<[^>]*>", "", text)
 
 
 def _clamp_confidence(value: Any) -> float | None:
@@ -638,7 +645,7 @@ _BLOCK_TYPE_TO_HTML_TAG: dict[str, str] = {
 }
 
 
-def _blocks_to_flow_html(blocks: list[Block]) -> str:
+def _blocks_to_flow_html(blocks: list[Block], content_format: str = "plain") -> str:
     parts = []
     for block in sorted(blocks, key=lambda b: b.reading_order):
         if block.type in DECORATIVE_BLOCK_TYPES:
@@ -652,7 +659,10 @@ def _blocks_to_flow_html(blocks: list[Block]) -> str:
                 f"{inner}</div>"
             )
             continue
-        text = html.escape(block.content).replace("\n", "<br>")
+        if content_format == "blocks":
+            text = block.content.replace("\n", "<br>")
+        else:
+            text = html.escape(block.content).replace("\n", "<br>")
         tag = _BLOCK_TYPE_TO_HTML_TAG.get(block.type, "p")
         parts.append(f'<{tag} data-block-id="{block.id}">{text}</{tag}>')
     return "\n".join(parts)
