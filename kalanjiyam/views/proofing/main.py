@@ -168,6 +168,9 @@ def editor_guide():
 
 @bp.route("/create-project", methods=["GET", "POST"])
 def create_project():
+    settings = q.get_system_settings()
+    guest_upload_limit = getattr(settings, "unregistered_user_upload_limit", 10)
+
     # Authorization checks
     is_p2_or_admin = (
         getattr(current_user, "is_p2", False)
@@ -199,7 +202,6 @@ def create_project():
         from kalanjiyam.utils.rate_limit import is_rate_limited
         ip_address = request.remote_addr
         fingerprint_id = request.cookies.get("device_fingerprint")
-        settings = q.get_system_settings()
         limit = settings.unregistered_user_project_limit
         if is_rate_limited("create_project", ip_address, fingerprint_id, limit=limit):
             flash(f"Rate limit exceeded. Guests can only create {limit} projects per 24 hours.", "error")
@@ -212,7 +214,7 @@ def create_project():
                 current_user, "organization_id", None
             ):
                 flash("Your account is not assigned to an organization.")
-                return render_template("proofing/create-project.html", form=form)
+                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit)
         title = form.local_title.data
 
         # TODO: add timestamp to slug for extra uniqueness?
@@ -223,7 +225,7 @@ def create_project():
         filename = form.local_file.raw_data[0].filename
         if not _is_allowed_document_file(filename):
             flash("Please upload a PDF.")
-            return render_template("proofing/create-project.html", form=form)
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit)
         upload_size = 0
         if form.local_file.data and hasattr(form.local_file.data, "stream"):
             cur_pos = form.local_file.data.stream.tell()
@@ -233,6 +235,10 @@ def create_project():
         
         if current_user.is_authenticated:
             ensure_storage_quota_for_user(current_user, upload_size)
+        else:
+            if upload_size > guest_upload_limit * 1024 * 1024:
+                flash(f"PDF size exceeds the allowed limit of {guest_upload_limit}MB for guest users.", "error")
+                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit)
 
         # Save the original PDF so that it can be downloaded later or reused
         # for future tasks (thumbnails, better image formats, etc.). The
@@ -282,7 +288,7 @@ def create_project():
             task_id=task.id,
         )
 
-    return render_template("proofing/create-project.html", form=form)
+    return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit)
 
 
 @bp.route("/status/<task_id>")

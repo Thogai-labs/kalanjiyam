@@ -15,6 +15,7 @@ class SystemSetting(Base):
     # Unregistered users (guests)
     unregistered_user_ocr_limit = Column(Integer, nullable=False, default=10)
     unregistered_user_project_limit = Column(Integer, nullable=False, default=5)
+    unregistered_user_upload_limit = Column(Integer, nullable=False, default=10)
 
     default_ocr_engine = Column(String, nullable=False, default="tesseract")
     recommended_ocr_engine = Column(String, nullable=True)

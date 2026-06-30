@@ -53,6 +53,21 @@
          status: '',
          submitForm() {
            const form = this.$refs.projectForm;
+
+           {% if not current_user.is_authenticated %}
+           const uploadLimitMB = {{ guest_upload_limit | default(10) }};
+           if (this.source === 'local') {
+             const fileInput = document.getElementById('local_file');
+             if (fileInput && fileInput.files && fileInput.files.length > 0) {
+               const file = fileInput.files[0];
+               if (file.size > uploadLimitMB * 1024 * 1024) {
+                 alert(`PDF size exceeds the allowed limit of ${uploadLimitMB}MB for guest users.`);
+                 return;
+               }
+             }
+           }
+           {% endif %}
+
            const formData = new FormData(form);
            this.uploading = true;
            this.status = '{{ _('Beginning upload ...') }}';

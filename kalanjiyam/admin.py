@@ -874,6 +874,11 @@ class PlatformView(AdminBaseView):
                 validators=[wtform_Optional(), NumberRange(min=0)],
                 description="Daily project creation limit per guest user (IP/fingerprint)."
             )
+            unregistered_user_upload_limit = IntegerField(
+                "Guest Upload Limit (MB)",
+                validators=[wtform_Optional(), NumberRange(min=1)],
+                description="Max PDF upload size in MB for guest users."
+            )
             default_ocr_engine = SelectField(
                 "Default OCR Engine",
                 choices=[],
@@ -912,6 +917,7 @@ class PlatformView(AdminBaseView):
         if form.validate_on_submit():
             system_settings.unregistered_user_ocr_limit = form.unregistered_user_ocr_limit.data if form.unregistered_user_ocr_limit.data is not None else 10
             system_settings.unregistered_user_project_limit = form.unregistered_user_project_limit.data if form.unregistered_user_project_limit.data is not None else 5
+            system_settings.unregistered_user_upload_limit = form.unregistered_user_upload_limit.data if form.unregistered_user_upload_limit.data is not None else 10
             system_settings.default_ocr_engine = form.default_ocr_engine.data if form.default_ocr_engine.data else "tesseract"
             system_settings.recommended_ocr_engine = form.recommended_ocr_engine.data if form.recommended_ocr_engine.data else None
             
@@ -923,6 +929,7 @@ class PlatformView(AdminBaseView):
         if request.method == "GET":
             form.unregistered_user_ocr_limit.data = system_settings.unregistered_user_ocr_limit
             form.unregistered_user_project_limit.data = system_settings.unregistered_user_project_limit
+            form.unregistered_user_upload_limit.data = getattr(system_settings, "unregistered_user_upload_limit", 10)
             form.default_ocr_engine.data = system_settings.default_ocr_engine
             form.recommended_ocr_engine.data = system_settings.recommended_ocr_engine or ""
             
