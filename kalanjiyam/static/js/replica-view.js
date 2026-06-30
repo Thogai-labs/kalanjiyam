@@ -119,12 +119,22 @@ export class ReplicaView {
         el.appendChild(hint);
       } else {
         el.contentEditable = 'true';
-        el.innerText = normalizeUnicodeText(block.content || '');
-        el.addEventListener('input', () => {
-          block.content = normalizeUnicodeText(el.innerText);
-          block.manually_edited = true;
-          this.onChange(this.document);
-        });
+        const hasHtml = /<[a-z][^>]*>/i.test(block.content || '');
+        if (hasHtml) {
+          el.innerHTML = block.content || '';
+          el.addEventListener('input', () => {
+            block.content = el.innerHTML;
+            block.manually_edited = true;
+            this.onChange(this.document);
+          });
+        } else {
+          el.innerText = normalizeUnicodeText(block.content || '');
+          el.addEventListener('input', () => {
+            block.content = normalizeUnicodeText(el.innerText);
+            block.manually_edited = true;
+            this.onChange(this.document);
+          });
+        }
       }
       el.addEventListener('focus', () => {
         if (this.selectedId !== block.id) {
