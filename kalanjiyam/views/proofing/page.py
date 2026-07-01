@@ -11,6 +11,7 @@ from flask import (
     Blueprint,
     flash,
     jsonify,
+    make_response,
     render_template,
     request,
     url_for,
@@ -420,6 +421,28 @@ def _get_page_number(project_: db.Project, page_: db.Page) -> str:
 
     # We shouldn't reach this case, but if we do, reuse the page's slug.
     return page_.slug
+
+
+@bp.route("/<project_slug>/<page_slug>/download/docx")
+def download_as_docx(project_slug, page_slug):
+    """Download a single page compiled into a DOCX document."""
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+
+    page_ = q.page(project_.id, page_slug)
+    if page_ is None:
+        abort(404)
+
+    from kalanjiyam.utils import proofing_utils
+    blob = proofing_utils.documents_to_docx([page_])
+
+    response = make_response(blob, 200)
+    response.mimetype = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="{project_slug}-{page_slug}.docx"'
+    )
+    return response
 
 
 @bp.route("/<project_slug>/<page_slug>/")
