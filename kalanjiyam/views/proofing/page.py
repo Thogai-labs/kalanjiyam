@@ -445,6 +445,114 @@ def download_as_docx(project_slug, page_slug):
     return response
 
 
+@bp.route("/<project_slug>/<page_slug>/download/html")
+def download_as_html(project_slug, page_slug):
+    """Download a single page compiled into HTML ZIP."""
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+
+    page_ = q.page(project_.id, page_slug)
+    if page_ is None:
+        abort(404)
+
+    from kalanjiyam.utils import proofing_utils
+    blob = proofing_utils.documents_to_html_zip(project_, [page_], replica=True)
+
+    response = make_response(blob, 200)
+    response.mimetype = "application/zip"
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="{project_slug}-{page_slug}-replica.zip"'
+    )
+    return response
+
+
+@bp.route("/<project_slug>/<page_slug>/download/txt")
+def download_as_text(project_slug, page_slug):
+    """Download a single page compiled into plain text."""
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+
+    page_ = q.page(project_.id, page_slug)
+    if page_ is None:
+        abort(404)
+
+    from kalanjiyam.utils import proofing_utils
+    content_blobs = [page_.revisions[-1].content if page_.revisions else ""]
+    raw_text = proofing_utils.to_plain_text(content_blobs)
+
+    response = make_response(raw_text, 200)
+    response.mimetype = "text/plain"
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="{project_slug}-{page_slug}.txt"'
+    )
+    return response
+
+
+@bp.route("/<project_slug>/<page_slug>/download/xml")
+def download_as_xml(project_slug, page_slug):
+    """Download a single page compiled into TEI XML."""
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+
+    page_ = q.page(project_.id, page_slug)
+    if page_ is None:
+        abort(404)
+
+    project_meta = {
+        "title": project_.display_title,
+        "author": project_.author,
+        "publication_year": project_.publication_year,
+        "publisher": project_.publisher,
+        "editor": project_.editor,
+    }
+    project_meta = {k: v or "TODO" for k, v in project_meta.items()}
+
+    from kalanjiyam.utils import proofing_utils
+    has_blocks = any(
+        p.revisions
+        and getattr(p.revisions[-1], "content_format", "plain") == "blocks"
+        and getattr(p.revisions[-1], "document", None)
+        for p in [page_]
+    )
+    if has_blocks:
+        xml_blob = proofing_utils.documents_to_tei_xml(project_meta, [page_])
+    else:
+        content_blobs = [page_.revisions[-1].content if page_.revisions else ""]
+        xml_blob = proofing_utils.to_tei_xml(project_meta, content_blobs)
+
+    response = make_response(xml_blob, 200)
+    response.mimetype = "application/xml"
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="{project_slug}-{page_slug}.xml"'
+    )
+    return response
+
+
+@bp.route("/<project_slug>/<page_slug>/download/json")
+def download_as_json(project_slug, page_slug):
+    """Download a single page compiled into PageDocument JSON."""
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+
+    page_ = q.page(project_.id, page_slug)
+    if page_ is None:
+        abort(404)
+
+    from kalanjiyam.utils import proofing_utils
+    blob = proofing_utils.documents_to_json_bundle(project_, [page_])
+
+    response = make_response(blob, 200)
+    response.mimetype = "application/json"
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="{project_slug}-{page_slug}.json"'
+    )
+    return response
+
+
 @bp.route("/<project_slug>/<page_slug>/")
 def edit(project_slug, page_slug):
     """Display the page editor."""
