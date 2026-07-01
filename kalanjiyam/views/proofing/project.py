@@ -430,6 +430,22 @@ def download_as_html(slug):
     return response
 
 
+@bp.route("/<slug>/download/docx")
+def download_as_docx(slug):
+    """Download project pages compiled into a single DOCX document."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    blob = proofing_utils.documents_to_docx(project_.pages)
+    response = make_response(blob, 200)
+    response.mimetype = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="{slug}.docx"'
+    )
+    return response
+
+
 @bp.route("/<slug>/stats")
 @moderator_required
 def stats(slug):
