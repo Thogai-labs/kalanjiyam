@@ -160,7 +160,7 @@ class PageDocument:
         if not self.blocks:
             return ""
         if replica and self.page_width and self.page_height:
-            return _blocks_to_replica_html(self.blocks, self.page_width, self.page_height)
+            return _blocks_to_replica_html(self.blocks, self.page_width, self.page_height, content_format=self.content_format)
         return _blocks_to_flow_html(self.blocks, content_format=self.content_format)
 
     def to_tei_fragment(self) -> str:
@@ -595,13 +595,15 @@ def _blocks_from_bounding_boxes(
     return blocks
 
 
-def _block_replica_inner_html(block: Block) -> str:
+def _block_replica_inner_html(block: Block, content_format: str = "plain") -> str:
     """HTML inside a replica block (tables as grids, not escaped plain text)."""
     content = (block.content or "").strip()
     if block.type == "table" or "<table" in content.lower():
         if "<table" in content.lower():
             return content
         return _plain_text_to_html_table(content)
+    if content_format == "blocks":
+        return block.content.replace("\n", "<br>")
     return html.escape(block.content).replace("\n", "<br>")
 
 
@@ -669,7 +671,7 @@ def _blocks_to_flow_html(blocks: list[Block], content_format: str = "plain") -> 
 
 
 def _blocks_to_replica_html(
-    blocks: list[Block], page_width: int, page_height: int
+    blocks: list[Block], page_width: int, page_height: int, content_format: str = "plain"
 ) -> str:
     inner = []
     for block in sorted(blocks, key=lambda b: b.reading_order):
@@ -681,17 +683,17 @@ def _blocks_to_replica_html(
             top = 100 * y1 / page_height
             width = 100 * (x2 - x1) / page_width
             height = 100 * (y2 - y1) / page_height
-        inner_html = _block_replica_inner_html(block)
+        inner_html = _block_replica_inner_html(block, content_format=content_format)
         inner.append(
             f'<div class="ocr-replica-block ocr-replica-block--{block.type}" '
             f'data-block-id="{block.id}" '
             f'data-block-type="{block.type}" '
-            f'style="left:{left:.2f}%;top:{top:.2f}%;width:{width:.2f}%;'
+            f'style="position: absolute; left:{left:.2f}%;top:{top:.2f}%;width:{width:.2f}%;'
             f'min-height:{height:.2f}%;">{inner_html}</div>'
         )
     return (
         f'<div class="ocr-replica-page" '
-        f'style="aspect-ratio:{page_width}/{page_height};">'
+        f'style="position: relative; aspect-ratio:{page_width}/{page_height};">'
         f'{"".join(inner)}</div>'
     )
 

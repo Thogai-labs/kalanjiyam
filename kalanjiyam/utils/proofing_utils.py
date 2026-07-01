@@ -2,7 +2,9 @@ from collections.abc import Iterator
 from datetime import date
 import io
 import json
+import os
 import re
+import zipfile
 
 from bs4 import BeautifulSoup, NavigableString
 from docx import Document
@@ -427,3 +429,68 @@ def documents_to_docx(pages) -> bytes:
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream.getvalue()
+
+
+def _inline_css_in_html(soup) -> None:
+    link_tag = soup.find("link", rel="stylesheet")
+    if link_tag:
+        from flask import current_app
+        try:
+            static_folder = current_app.static_folder
+            css_path = os.path.join(static_folder, "gen", "style.css")
+            if not os.path.exists(css_path):
+                css_path = os.path.join(static_folder, "css", "style.css")
+
+            if os.path.exists(css_path):
+                with open(css_path, encoding="utf-8") as f:
+                    css_content = f.read()
+
+                style_tag = soup.new_tag("style")
+                style_tag.string = css_content
+                link_tag.replace_with(style_tag)
+        except Exception:
+            pass
+
+
+def documents_to_html_zip(project, pages, *, replica: bool = True) -> bytes:
+    raw_html = documents_to_html(pages, replica=replica)
+    soup = BeautifulSoup(raw_html, "html.parser")
+
+    _inline_css_in_html(soup)
+
+    image_keys_to_fetch = {}  # maps zip_path -> storage_key
+
+    for img in soup.find_all("img"):
+        src = img.get("src")
+        if not src:
+            continue
+
+        match = re.search(r"static/uploads/([^/]+)/images/([^/?]+)", src)
+        if not match:
+            match = re.search(r"static/uploads/([^/]+)/([^/?]+)", src)
+
+        if match:
+            project_slug = match.group(1)
+            filename = match.group(2)
+            key = editor_image_key(project_slug, filename)
+
+            local_path = f"images/{filename}"
+            img["src"] = local_path
+            image_keys_to_fetch[local_path] = key
+
+    zip_buffer = io.BytesIO()
+    storage = get_storage()
+
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        zip_file.writestr("index.html", str(soup))
+
+        for zip_path, key in image_keys_to_fetch.items():
+            try:
+                if storage.exists(key):
+                    img_bytes = storage.read_bytes(key)
+                    zip_file.writestr(zip_path, img_bytes)
+            except Exception:
+                pass
+
+    zip_buffer.seek(0)
+    return zip_buffer.getvalue()

@@ -416,16 +416,16 @@ def download_as_json(slug):
 
 @bp.route("/<slug>/download/html")
 def download_as_html(slug):
-    """Download layout-faithful HTML export."""
+    """Download layout-faithful HTML export as a ZIP archive with images."""
     project_ = q.project(slug)
     if project_ is None:
         abort(404)
 
-    blob = proofing_utils.documents_to_html(project_.pages, replica=True)
+    blob = proofing_utils.documents_to_html_zip(project_, project_.pages, replica=True)
     response = make_response(blob, 200)
-    response.mimetype = "text/html"
+    response.mimetype = "application/zip"
     response.headers["Content-Disposition"] = (
-        f'attachment; filename="{slug}-replica.html"'
+        f'attachment; filename="{slug}-replica.zip"'
     )
     return response
 
