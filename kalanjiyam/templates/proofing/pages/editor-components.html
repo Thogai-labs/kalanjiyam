@@ -53,6 +53,13 @@ these components in our help text and documentation.
 {% set button_css = "p-2 rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors" %}
 <header class="book-editor-toolbar">
   <div class="book-editor-toolbar-left">
+    <a class="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+       href="{{ url_for('proofing.project.summary', slug=project.slug) }}"
+       title="{{ _('Back to Project Summary') }}">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path>
+      </svg>
+    </a>
     <a class="book-editor-back text-slate-600 hover:text-slate-900 truncate max-w-[12rem] sm:max-w-xs"
        href="{{ url_for('proofing.project.summary', slug=project.slug) }}"
        title="{{ project.display_title }}">
@@ -233,7 +240,7 @@ these components in our help text and documentation.
             :class="showMetaPanel ? 'bg-slate-100' : ''"
             title="{{ _('Publish & status') }}">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M6 13.5V3.75m0 9.75a1.5 1.5 0 0 1 0 3m0-3a1.5 1.5 0 0 0 0 3m0 3.75V16.5m12-3V3.75m0 9.75a1.5 1.5 0 0 1 0 3m0-3a1.5 1.5 0 0 0 0 3m0 3.75V16.5m-6-9V3.75m0 3.75a1.5 1.5 0 0 1 0 3m0-3a1.5 1.5 0 0 0 0 3m0 9.75V10.5"></path>
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V8l-4-4H8zm4 12a3 3 0 110-6 3 3 0 010 6zm-4-8h6V5H8v3z"></path>
       </svg>
     </button>
 
