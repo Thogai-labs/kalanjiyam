@@ -303,6 +303,44 @@ def edit(slug):
     )
 
 
+@bp.route("/<slug>/batch")
+def batch_processes(slug):
+    """View listing batch processes like OCR and translation."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    # Restrict guests to editing only their own created projects
+    if not current_user.is_authenticated:
+        fingerprint_id = request.cookies.get("device_fingerprint")
+        if project_.creator_id is not None or project_.fingerprint_id != fingerprint_id:
+            abort(403)
+
+    return render_template(
+        "proofing/projects/batch.html",
+        project=project_,
+    )
+
+
+@bp.route("/<slug>/search-operations")
+def search_operations(slug):
+    """View listing search-related operations."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    # Restrict guests to editing only their own created projects
+    if not current_user.is_authenticated:
+        fingerprint_id = request.cookies.get("device_fingerprint")
+        if project_.creator_id is not None or project_.fingerprint_id != fingerprint_id:
+            abort(403)
+
+    return render_template(
+        "proofing/projects/search-operations.html",
+        project=project_,
+    )
+
+
 @bp.route("/<slug>/delete", methods=["POST"])
 def delete_project(slug):
     """Delete a project and its associated files."""

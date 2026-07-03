@@ -56,17 +56,26 @@ def _run_ocr_for_page_inner(
         session.add(page)
         session.commit()
 
-        summary = f"Run OCR ({engine}, {language})"
+        # Resolve version_key and current version of the track
+        version_key = f"ocr:{engine}"
+        pv = session.query(db.PageVersion).filter_by(
+            page_id=page.id,
+            version_key=version_key
+        ).first()
+        current_ver = pv.version if pv else 0
+
+        summary = "OCR run"
         try:
             revision_id = add_revision(
                 page=page,
                 summary=summary,
                 content=doc.to_plain_text() or ocr_response.text_content,
                 status=SitePageStatus.R0,
-                version=page.version,
+                version=current_ver,
                 author_id=bot_user.id,
                 document=doc.to_dict(),
                 content_format=doc.content_format,
+                version_key=version_key,
             )
             consume_ocr_credit_for_project(project)
             return revision_id

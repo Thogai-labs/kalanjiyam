@@ -100,6 +100,8 @@
 ] %}
 {# ("talk", _("Talk"), url_for("proofing.talk.board", slug=project.slug)), #}
 {% set routes = routes + [
+("search_operations", _("Search"), url_for("proofing.project.search_operations", slug=project.slug)),
+("batch_processes", _("Batch Processes"), url_for("proofing.project.batch_processes", slug=project.slug)),
 ("edit", _("Edit"), url_for("proofing.project.edit", slug=project.slug)),
 ] %}
 {% if not (current_user.is_authenticated and current_user.is_super_admin) %}
