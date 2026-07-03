@@ -33,6 +33,40 @@
 {% block main %}
 {% set can_save = current_user.is_authenticated or (project.fingerprint_id and request.cookies.get('device_fingerprint') == project.fingerprint_id) %}
 
+<div x-data="{ isOpen: false }"
+     class="editor-sidebar-container"
+     :class="{ 'is-open': isOpen }"
+     @mouseenter="isOpen = true"
+     @mouseleave="isOpen = false">
+  
+  <div class="editor-sidebar">
+    <div class="editor-sidebar-header flex items-center justify-between pb-4 border-b border-slate-100 mb-4 shrink-0">
+      <h3 class="font-black text-xs text-slate-800 uppercase tracking-wider">{{ _('Pages') }}</h3>
+      <span class="text-xs text-slate-400 font-bold font-mono">{{ cur.slug }} / {{ project.pages|length }}</span>
+    </div>
+    
+    <div class="editor-sidebar-list flex-1 overflow-y-auto space-y-1 pr-1">
+      {% for page_title, p in pages %}
+        {% set colors = m.revision_colors(p.status.name) %}
+        {% set url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=p.slug) %}
+        {% set is_active = (p.id == cur.id) %}
+        
+        <a href="{{ url }}" 
+           class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all border border-transparent {% if is_active %}bg-royalblue/5 border-royalblue/20 text-royalblue active-page-item{% else %}hover:bg-slate-50 text-slate-600 hover:text-slate-900{% endif %}">
+          <span class="truncate pr-2">{{ page_title }}</span>
+          <span class="w-2.5 h-2.5 rounded-full shrink-0 {{ colors }}" title="{{ p.status.name }}"></span>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+  
+  <div class="editor-sidebar-handle" @click="isOpen = !isOpen">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16"></path>
+    </svg>
+  </div>
+</div>
+
 <article class="book-editor-page{% if conflict %} has-conflict{% endif %}">
 
   {% set num_images = project.pages|length %}
@@ -138,5 +172,14 @@ const PAGE_HEIGHT = {{ page_height|tojson }};
 const ACTIVE_VERSION = {{ active_version_key|tojson }};
 const TARGET_VERSION = {{ target_version_key|tojson }};
 const AVAILABLE_VERSIONS = {{ available_versions|tojson }};
+</script>
+
+<script type="text/javascript">
+  document.addEventListener("DOMContentLoaded", () => {
+    const activeItem = document.querySelector(".active-page-item");
+    if (activeItem) {
+      activeItem.scrollIntoView({ block: "center", inline: "nearest" });
+    }
+  });
 </script>
 {% endblock %}

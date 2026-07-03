@@ -375,6 +375,10 @@ def _editor_template_kwargs(
     from kalanjiyam.utils.org_access import is_restricted_ocr_user
     is_restricted_ocr = is_restricted_ocr_user(current_user)
 
+    page_rules = project_utils.parse_page_number_spec(ctx.project.page_numbers)
+    page_titles = project_utils.apply_rules(len(ctx.project.pages), page_rules)
+    pages = list(zip(page_titles, ctx.project.pages))
+
     return {
         "conflict": conflict,
         "cur": cur,
@@ -385,6 +389,7 @@ def _editor_template_kwargs(
         "page_context": ctx,
         "page_number": page_number,
         "project": ctx.project,
+        "pages": pages,
         "translation_content": translation_content,
         "translation_metadata": translation_metadata,
         "available_translations": available_translations,
