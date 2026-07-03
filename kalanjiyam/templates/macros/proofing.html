@@ -86,7 +86,7 @@
     {{ _link('create', "proofing.create_project", _("Create project"), active, icon_name='plus-circle') }}
     {{ _link('changes', "proofing.recent_changes", _("Recent changes"), active, icon_name='clock') }}
     {{ _link('tagging', "proofing.tagging.index", _("Tagging"), active, icon_name='tag') }}
-    {{ _link('talk', "proofing.talk", _("Talk"), active, icon_name='message-circle') }}
+    {# {{ _link('talk', "proofing.talk", _("Talk"), active, icon_name='message-circle') }} #}
   </ul>
 </nav>
 {% endmacro %}
@@ -97,7 +97,9 @@
 {% set routes = [
 ("summary", _("Summary"), url_for("proofing.project.summary", slug=project.slug)),
 ("activity", _("Activity"), url_for("proofing.project.activity", slug=project.slug)),
-("talk", _("Talk"), url_for("proofing.talk.board", slug=project.slug)),
+] %}
+{# ("talk", _("Talk"), url_for("proofing.talk.board", slug=project.slug)), #}
+{% set routes = routes + [
 ("edit", _("Edit"), url_for("proofing.project.edit", slug=project.slug)),
 ] %}
 {% if not (current_user.is_authenticated and current_user.is_super_admin) %}

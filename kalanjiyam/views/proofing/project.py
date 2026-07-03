@@ -273,12 +273,17 @@ def activity(slug):
 
 
 @bp.route("/<slug>/edit", methods=["GET", "POST"])
-@login_required
 def edit(slug):
     """Edit the project's metadata."""
     project_ = q.project(slug)
     if project_ is None:
         abort(404)
+
+    # Restrict guests to editing only their own created projects
+    if not current_user.is_authenticated:
+        fingerprint_id = request.cookies.get("device_fingerprint")
+        if project_.creator_id is not None or project_.fingerprint_id != fingerprint_id:
+            abort(403)
 
     form = EditMetadataForm(obj=project_)
     if form.validate_on_submit():
@@ -299,19 +304,30 @@ def edit(slug):
 
 
 @bp.route("/<slug>/delete", methods=["POST"])
-@login_required
 def delete_project(slug):
     """Delete a project and its associated files."""
     project_ = q.project(slug)
     if project_ is None:
         abort(404)
 
-    is_creator = project_.creator_id == current_user.id
-    is_org_admin = getattr(current_user, "is_org_admin", False) and any(g.id == current_user.organization_id for g in project_.groups)
-    is_super_admin = getattr(current_user, "is_super_admin", False)
-
-    if not (is_creator or is_org_admin or is_super_admin):
-        abort(403)
+    if current_user.is_authenticated:
+        is_super_admin = getattr(current_user, "is_super_admin", False)
+        if not is_super_admin:
+            is_open_tenant = any(g.slug == "open-tenant" for g in project_.groups)
+            if is_open_tenant:
+                # Registered user must be the creator of the open-tenant project
+                if project_.creator_id != current_user.id:
+                    abort(403)
+            else:
+                # Organization project: must be an org admin of this project's organization
+                is_org_admin = getattr(current_user, "is_org_admin", False) and any(g.id == getattr(current_user, "organization_id", None) for g in project_.groups)
+                if not is_org_admin:
+                    abort(403)
+    else:
+        # Restrict guests to deleting only their own created projects
+        fingerprint_id = request.cookies.get("device_fingerprint")
+        if project_.creator_id is not None or project_.fingerprint_id != fingerprint_id:
+            abort(403)
 
     form = DeleteProjectForm()
     if form.validate_on_submit():
