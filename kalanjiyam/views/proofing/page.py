@@ -904,7 +904,7 @@ def ocr(project_slug, page_slug):
         # Save a new revision to the ocr:{engine} version track
         add_revision(
             page_,
-            summary=f"OCR run using {engine}",
+            summary="OCR run",
             content=doc.to_plain_text(),
             status=SitePageStatus.R0.value,
             version=current_ver,
