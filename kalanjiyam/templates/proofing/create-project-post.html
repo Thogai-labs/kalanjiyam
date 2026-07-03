@@ -9,23 +9,23 @@
 {% block title %}Creating Project | Ambuda{% endblock %}
 
 
-{% block content %}
-<div class="premium-gradient-bg min-h-screen p-4 md:p-8">
-  <div class="max-w-4xl mx-auto">
-    <div class="mb-12 text-center">
-      <h1 class="text-5xl font-extrabold peacock-text-gradient mb-4">{{ _("Project Creation") }}</h1>
+{% block main %}
+<div class="premium-gradient-bg min-h-screen py-16 px-4 sm:px-6 lg:px-8 flex items-center">
+  <div class="max-w-3xl mx-auto w-full">
+    <div class="mb-10 text-center">
+      <h1 class="text-5xl font-peacock-text-gradient font-extrabold peacock-text-gradient mb-4">{{ _("Project Creation") }}</h1>
       
       {% if percent < 100 %}
-        <p class="text-xl text-peacock-secondary mb-4">
+        <p class="text-lg text-slate-500 font-medium max-w-xl mx-auto leading-relaxed">
           {% trans %}
           We are currently creating your project. If you accidentally close this page,
           don't worry: your project will still be created.
           {% endtrans %}
         </p>
 
-        <p class="text-lg text-peacock-secondary/80">
+        <p class="text-xs text-slate-400 font-semibold uppercase tracking-wider mt-4">
           {% trans %}
-          You can track progress below. This updates every 5 seconds.
+          Updates automatically every 5 seconds
           {% endtrans %}
         </p>
       {% endif %}

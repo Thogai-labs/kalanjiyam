@@ -287,7 +287,7 @@ def create_project():
             )
         return render_template(
             "proofing/create-project-post.html",
-            stauts=task.status,
+            status=task.status,
             current=0,
             total=0,
             percent=0,
@@ -303,9 +303,15 @@ def create_project_status(task_id):
     r = project_tasks.create_project.AsyncResult(task_id)
 
     info = r.info or {}
+    error = None
     if isinstance(info, Exception):
         current = total = percent = 0
         slug = None
+        error = str(info)
+    elif r.status == 'FAILURE':
+        current = total = percent = 0
+        slug = None
+        error = str(info) if info else "An error occurred during project creation."
     else:
         current = info.get("current", 100)
         total = info.get("total", 100)
@@ -319,6 +325,7 @@ def create_project_status(task_id):
         total=total,
         percent=percent,
         slug=slug,
+        error=error,
     )
 
 

@@ -289,8 +289,12 @@
   }
 
   .premium-gradient-bg {
-    background: radial-gradient(circle at top left, #f0fdfa, #ffffff),
-                radial-gradient(circle at bottom right, #f5f3ff, #ffffff);
+    background-color: #f8fafc;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(224, 242, 254, 0.4) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(243, 232, 255, 0.4) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(254, 243, 199, 0.3) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, rgba(236, 253, 245, 0.4) 0px, transparent 50%);
   }
 
   .progress-bar-premium {
