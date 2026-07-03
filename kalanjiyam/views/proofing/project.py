@@ -923,7 +923,7 @@ def batch_ocr(slug):
             fingerprint_id = request.cookies.get("device_fingerprint")
             limit = system_settings.unregistered_user_ocr_limit
             if is_rate_limited("run_ocr", ip_address, fingerprint_id, limit=limit):
-                flash(_l(f"Rate limit exceeded. Guests can only run OCR {limit} times per 24 hours."))
+                flash(_l(f"Rate limit exceeded. Guests can only run OCR {limit} times per 24 hours."), "error")
                 return redirect(url_for("proofing.project.batch_ocr", slug=slug))
 
         engine_num = request.form.get('engine', '')
@@ -934,7 +934,7 @@ def batch_ocr(slug):
             engine = ENGINE_MAP.get(engine_num)
 
         if not engine or engine not in SUPPORTED_ENGINES:
-            flash(_l("Unsupported OCR engine selected."))
+            flash(_l("Unsupported OCR engine selected."), "error")
         else:
             queue_name = "low_priority" if not current_user.is_authenticated else None
             task = ocr_tasks.run_ocr_for_project(
@@ -974,7 +974,7 @@ def batch_ocr(slug):
                     default_engine_value=default_engine_value,
                 )
             else:
-                flash(_l("All pages in this project have at least one edit already."))
+                flash(_l("All pages in this project have at least one edit already."), "error")
 
     ocr_status = get_available_engines()
     engine_choices = build_engine_choices(
@@ -1143,7 +1143,7 @@ def batch_translate(slug):
         # Validate engine
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
         if engine not in TranslationEngineFactory.get_supported_engines():
-            flash(_l("Unsupported translation engine selected."))
+            flash(_l("Unsupported translation engine selected."), "error")
             return render_template(
                 "proofing/projects/batch-translate.html",
                 project=project_,
@@ -1181,7 +1181,7 @@ def batch_translate(slug):
                 failed_tasks=0,
             )
         else:
-            flash(_l("No pages with revisions found in this project."))
+            flash(_l("No pages with revisions found in this project."), "error")
 
     return render_template(
         "proofing/projects/batch-translate.html",
@@ -1272,7 +1272,7 @@ def admin(slug):
 
             get_storage().delete_prefix(project_prefix(slug))
 
-            flash(f"Deleted project {slug}")
+            flash(f"Deleted project {slug}", "success")
             return redirect(url_for("proofing.index"))
         else:
             form.slug.errors.append("Deletion failed (incorrect field value).")

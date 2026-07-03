@@ -669,7 +669,7 @@ def edit_post(project_slug, page_slug):
             # Since changes saved successfully, our active key can now become target_key
             active_key = target_key
         except EditError:
-            flash("Edit conflict. Please incorporate the changes below:")
+            flash("Edit conflict. Please incorporate the changes below:", "error")
             # Get latest revision of target_key to display as conflict
             session = q.get_session()
             target_version_record = session.query(db.PageVersion).filter_by(

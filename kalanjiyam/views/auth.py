@@ -233,7 +233,7 @@ def sign_in():
             login_user(user, remember=True)
             return redirect(url_for(POST_AUTH_ROUTE))
         else:
-            flash("Invalid username or password.")
+            flash("Invalid username or password.", "error")
     return render_template("auth/sign-in.html", form=form)
 
 
@@ -266,7 +266,8 @@ def get_reset_password_token():
             return render_template("auth/reset-password-post.html", email=user.email)
         else:
             flash(
-                "Sorry, the email address you provided is not associated with any of our acounts."
+                "Sorry, the email address you provided is not associated with any of our acounts.",
+                "error",
             )
 
     # Override the default message ("The response parameter is missing.")
@@ -284,12 +285,12 @@ def reset_password_from_token(username, raw_token):
 
     user = q.user(username)
     if user is None:
-        flash(msg_invalid)
+        flash(msg_invalid, "error")
         return redirect(url_for("auth.get_reset_password_token"))
 
     token = _get_reset_token_for_user(user.id)
     if not _is_valid_reset_token(token, raw_token):
-        flash(msg_invalid)
+        flash(msg_invalid, "error")
         return redirect(url_for("auth.get_reset_password_token"))
 
     form = ResetPasswordFromTokenForm()
@@ -348,6 +349,6 @@ def change_password():
             url_for("proofing.user.summary", username=current_user.username)
         )
     else:
-        flash("Old password isn't valid.")
+        flash("Old password isn't valid.", "error")
 
     return render_template("auth/change-password.html", form=form)

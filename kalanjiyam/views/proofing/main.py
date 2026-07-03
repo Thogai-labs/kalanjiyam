@@ -200,7 +200,7 @@ def create_project():
         or is_p2_or_admin  # Enterprise P2 or Admin
     )
     if not allowed:
-        flash("Sorry, you aren't authorized to use this feature.")
+        flash("Sorry, you aren't authorized to use this feature.", "error")
         return redirect(url_for("proofing.index"))
 
     # Rate limiting for guest users
@@ -219,7 +219,7 @@ def create_project():
             if current_app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True) and not getattr(
                 current_user, "organization_id", None
             ):
-                flash("Your account is not assigned to an organization.")
+                flash("Your account is not assigned to an organization.", "error")
                 return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit)
         title = form.local_title.data
 
@@ -230,7 +230,7 @@ def create_project():
         # other kind of document format.
         filename = form.local_file.raw_data[0].filename
         if not _is_allowed_document_file(filename):
-            flash("Please upload a PDF.")
+            flash("Please upload a PDF.", "error")
             return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit)
         upload_size = 0
         if form.local_file.data and hasattr(form.local_file.data, "stream"):

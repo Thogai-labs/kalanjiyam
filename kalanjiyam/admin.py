@@ -183,7 +183,7 @@ class KalanjiyamIndexView(AdminIndexView):
             import shutil
             if export_dir.exists():
                 shutil.rmtree(export_dir)
-            flash(f"Export failed: {str(e)}")
+            flash(f"Export failed: {str(e)}", "error")
             return redirect(url_for('admin.index'))
     
     @expose('/export/all-projects')
@@ -261,7 +261,7 @@ class KalanjiyamIndexView(AdminIndexView):
             import shutil
             if export_dir.exists():
                 shutil.rmtree(export_dir)
-            flash(f"Export failed: {str(e)}")
+            flash(f"Export failed: {str(e)}", "error")
             return redirect(url_for('admin.index'))
     
     @expose('/export-import')
@@ -286,16 +286,16 @@ class KalanjiyamIndexView(AdminIndexView):
         
         if request.method == "POST":
             if 'project_file' not in request.files:
-                flash("No file selected")
+                flash("No file selected", "error")
                 return redirect(request.url)
             
             file = request.files['project_file']
             if file.filename == '':
-                flash("No file selected")
+                flash("No file selected", "error")
                 return redirect(request.url)
             
             if not file.filename.endswith('.zip'):
-                flash("Please upload a ZIP file")
+                flash("Please upload a ZIP file", "error")
                 return redirect(request.url)
             
             try:
@@ -315,12 +315,12 @@ class KalanjiyamIndexView(AdminIndexView):
                 # Clean up
                 temp_file.unlink()
                 
-                flash(f"Successfully imported project: {result['metadata']['display_title']}")
+                flash(f"Successfully imported project: {result['metadata']['display_title']}", "success")
                 return redirect(url_for("proofing.project.detail", slug=result['project'].slug))
                 
             except Exception as e:
                 session.rollback()
-                flash(f"Import failed: {str(e)}")
+                flash(f"Import failed: {str(e)}", "error")
                 return redirect(request.url)
         
         return render_template("admin/import.html")
@@ -336,16 +336,16 @@ class KalanjiyamIndexView(AdminIndexView):
         
         if request.method == "POST":
             if 'projects_file' not in request.files:
-                flash("No file selected")
+                flash("No file selected", "error")
                 return redirect(request.url)
             
             file = request.files['projects_file']
             if file.filename == '':
-                flash("No file selected")
+                flash("No file selected", "error")
                 return redirect(request.url)
             
             if not file.filename.endswith('.zip'):
-                flash("Please upload a ZIP file")
+                flash("Please upload a ZIP file", "error")
                 return redirect(request.url)
             
             try:
@@ -401,7 +401,7 @@ class KalanjiyamIndexView(AdminIndexView):
                                 project = self._import_project_data(session, project_data)
                             imported_projects.append(project.display_title)
                         except Exception as e:
-                            flash(f"Failed to import project {project_data['metadata']['display_title']}: {str(e)}")
+                            flash(f"Failed to import project {project_data['metadata']['display_title']}: {str(e)}", "error")
                             continue
                     
                     session.commit()
@@ -409,12 +409,12 @@ class KalanjiyamIndexView(AdminIndexView):
                     # Clean up
                     temp_file.unlink()
                     
-                    flash(f"Successfully imported {len(imported_projects)} projects")
+                    flash(f"Successfully imported {len(imported_projects)} projects", "success")
                     return redirect(url_for("proofing.index"))
                     
             except Exception as e:
                 session.rollback()
-                flash(f"Import failed: {str(e)}")
+                flash(f"Import failed: {str(e)}", "error")
                 return redirect(request.url)
         
         return render_template("admin/import_all.html")
@@ -923,7 +923,7 @@ class PlatformView(AdminBaseView):
             
             session.add(system_settings)
             session.commit()
-            flash("Platform settings saved successfully.")
+            flash("Platform settings saved successfully.", "success")
             return redirect(url_for(".settings"))
             
         if request.method == "GET":
@@ -997,7 +997,7 @@ class GroupsView(AdminBaseView):
             session.flush()
             _promote_org_admin(session, group, admin_user_id)
             session.commit()
-            flash("Group created.")
+            flash("Group created.", "success")
             return redirect(url_for("groups_view.manage", id=group.id))
         return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
 
@@ -1035,7 +1035,7 @@ class GroupsView(AdminBaseView):
             session.flush()
             _promote_org_admin(session, group, admin_user_id)
             session.commit()
-            flash("Group updated.")
+            flash("Group updated.", "success")
             return redirect(url_for("groups_view.index"))
         return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())
 
@@ -1048,7 +1048,7 @@ class GroupsView(AdminBaseView):
         session = q.get_session()
         session.delete(group)
         session.commit()
-        flash("Group deleted.")
+        flash("Group deleted.", "success")
         return redirect(url_for("groups_view.index"))
 
     @expose("/manage/<int:id>", methods=["GET", "POST"])

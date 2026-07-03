@@ -43,7 +43,7 @@ def p2_required(func: Callable):
                 if device_fp and project.fingerprint_id == device_fp:
                     return current_app.ensure_sync(func)(*args, **kwargs)
 
-        flash("Sorry, you aren't authorized to use this feature.")
+        flash("Sorry, you aren't authorized to use this feature.", "error")
         return redirect(url_for("proofing.index"))
 
     return decorated_view
@@ -53,7 +53,7 @@ def moderator_required(func: Callable):
     @wraps(func)
     def decorated_view(*args, **kwargs):
         if not (current_user.is_moderator or current_user.is_org_admin or current_user.is_super_admin):
-            flash("Sorry, you aren't authorized to use this feature.")
+            flash("Sorry, you aren't authorized to use this feature.", "error")
             return redirect(url_for("proofing.index"))
         return current_app.ensure_sync(func)(*args, **kwargs)
 
