@@ -1087,10 +1087,13 @@ export default () => ({
 
   // OCR controls
 
-  selectOcrEngine(engineValue) {
+  selectOcrEngine(engineValue, save = false) {
     this.selectedEngine = engineValue;
     window._ocrSelectedEngine = engineValue;
     this.updateLanguageOptions();
+    if (save) {
+      this.saveSettings();
+    }
   },
 
   updateLanguageOptions() {

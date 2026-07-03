@@ -277,9 +277,9 @@ these components in our help text and documentation.
         {% if ocr_status == "unavailable" %}
         <p class="text-xs text-red-600">{{ _('OCR service unavailable') }}</p>
         {% elif engine_choices %}
-        <div class="grid grid-cols-2 gap-2" x-init="selectOcrEngine('{{ engine_choices[0].value }}')">
+        <div class="grid grid-cols-2 gap-2" x-init="if (![{% for e in engine_choices %}'{{ e.value }}',{% endfor %}].includes(selectedEngine)) { selectOcrEngine('{{ engine_choices[0].value }}'); } else { selectOcrEngine(selectedEngine); }">
           {% for e in engine_choices %}
-          <button @click.prevent.stop="selectOcrEngine('{{ e.value }}')"
+          <button @click.prevent.stop="selectOcrEngine('{{ e.value }}', true)"
                   class="ocr-engine-btn flex items-center justify-between gap-1"
                   :class="selectedEngine === '{{ e.value }}' ? 'active' : ''">
             <span>{{ e.label }}</span>
@@ -296,7 +296,7 @@ these components in our help text and documentation.
       {% endif %}
       <li class="mb-3 px-3">
         <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Language') }}</label>
-        <select class="form-select-enhanced w-full" x-model="selectedLanguage" id="language-select" @click.stop></select>
+        <select class="form-select-enhanced w-full" x-model="selectedLanguage" id="language-select" @change="saveSettings()" @click.stop></select>
       </li>
       <li class="mb-3 px-3" x-show="selectedEngine === '2' || selectedEngine === '3'">
         <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Additional language') }}</label>
