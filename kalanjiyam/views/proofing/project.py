@@ -922,6 +922,8 @@ def batch_ocr(slug):
         try:
             task_data = json.loads(task_info)
             task_id = task_data.get('task_id')
+            engine = task_data.get('engine', 'google')
+            language = task_data.get('language', 'sa')
             
             # Try to restore the task to check if it's still active
             r = GroupResult.restore(task_id, app=celery_app)
@@ -937,6 +939,10 @@ def batch_ocr(slug):
                     pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
                     failed_tasks = sum(1 for result in r.results if result.failed())
                     
+                    from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
+                    numeric_value = REVERSE_ENGINE_MAP.get(engine, "1")
+                    engine_label = f"OCR {numeric_value}"
+
                     return render_template(
                         "proofing/projects/batch-ocr-post.html",
                         project=project_,
@@ -948,6 +954,9 @@ def batch_ocr(slug):
                         active_tasks=active_tasks,
                         pending_tasks=pending_tasks,
                         failed_tasks=failed_tasks,
+                        engine=engine,
+                        engine_label=engine_label,
+                        language=language,
                     )
                 else:
                     # Task is complete, remove from Redis
@@ -1016,6 +1025,10 @@ def batch_ocr(slug):
                     'project_slug': slug,
                 }
                 redis_client.setex(task_key, 86400, json.dumps(task_info))
+                from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
+                numeric_value = REVERSE_ENGINE_MAP.get(engine, "1")
+                engine_label = f"OCR {numeric_value}"
+
                 return render_template(
                     "proofing/projects/batch-ocr-post.html",
                     project=project_,
@@ -1024,6 +1037,7 @@ def batch_ocr(slug):
                     task_id=task.id,
                     active_tasks=0, pending_tasks=0, failed_tasks=0,
                     engine=engine, language=language,
+                    engine_label=engine_label,
                     is_restricted_ocr=is_restricted_ocr,
                     default_engine_value=default_engine_value,
                 )
@@ -1082,6 +1096,10 @@ def batch_ocr_status(task_id):
     except Exception as e:
         LOG.warning(f"Error getting OCR task info from Redis: {e}")
 
+    from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
+    numeric_value = REVERSE_ENGINE_MAP.get(engine, "1")
+    engine_label = f"OCR {numeric_value}"
+
     if r.results:
         current = r.completed_count()
         total = len(r.results)
@@ -1114,6 +1132,7 @@ def batch_ocr_status(task_id):
             "pending_tasks": pending_tasks,
             "failed_tasks": failed_tasks,
             "engine": engine,
+            "engine_label": engine_label,
             "language": language,
         }
     else:
@@ -1126,6 +1145,7 @@ def batch_ocr_status(task_id):
             "pending_tasks": 0,
             "failed_tasks": 0,
             "engine": engine,
+            "engine_label": engine_label,
             "language": language,
         }
 
