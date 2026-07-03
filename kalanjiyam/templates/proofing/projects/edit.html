@@ -14,9 +14,6 @@
 {{ m.project_header_nested('Edit', project) }}
 {{ m.project_tabs(project=project, active='edit', is_mod=current_user.is_moderator) }}
 
-<div class="prose">
-
-{{ components.flash_messages() }}
 {{ mf.show_errors_if_any(form.errors) }}
 
 <form method="POST">

@@ -5,10 +5,7 @@
 {% block title %}Batch Translate: {{ project.display_title }} | Kalanjiyam{% endblock %}
 
 {% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
-
 {% block content %}
-{{ components.flash_messages() }}
-
 {{ m.project_header_nested('Batch Translate', project) }}
 {{ m.project_tabs(project=project, active='edit') }}
 
