@@ -494,3 +494,268 @@ def documents_to_html_zip(project, pages, *, replica: bool = True) -> bytes:
 
     zip_buffer.seek(0)
     return zip_buffer.getvalue()
+
+
+def _crop_figure_image(img_path, bbox) -> bytes | None:
+    """Crop only the figure portion of the scanned page image using Pillow."""
+    from PIL import Image
+    import io
+    try:
+        with Image.open(img_path) as img:
+            w, h = img.size
+            x1 = max(0, min(bbox[0], w))
+            y1 = max(0, min(bbox[1], h))
+            x2 = max(0, min(bbox[2], w))
+            y2 = max(0, min(bbox[3], h))
+            if x2 <= x1 or y2 <= y1:
+                return None
+            cropped = img.crop((x1, y1, x2, y2))
+            img_byte_arr = io.BytesIO()
+            fmt = img.format or 'JPEG'
+            cropped.save(img_byte_arr, format=fmt)
+            return img_byte_arr.getvalue()
+    except Exception:
+        return None
+
+
+def _insert_styled_text(pdf_page, rect, html_content, fontname, fontsize):
+    """Insert text into a textbox preserving bold/italic if insert_htmlbox is available."""
+    from bs4 import BeautifulSoup
+    if hasattr(pdf_page, "insert_htmlbox"):
+        try:
+            css = f"""
+            * {{
+                font-family: "{fontname}", sans-serif;
+                font-size: {fontsize}pt;
+                line-height: 1.3;
+            }}
+            b, strong {{ font-weight: bold; }}
+            i, em {{ font-style: italic; }}
+            """
+            pdf_page.insert_htmlbox(rect, html_content, css=css)
+            return
+        except Exception:
+            pass
+
+    # Fallback to plain text
+    text = BeautifulSoup(html_content, "html.parser").get_text().strip()
+    pdf_page.insert_textbox(rect, text, fontname=fontname, fontsize=fontsize, align=0)
+
+
+def _insert_block_image(pdf_page, rect, html_content) -> bool:
+    """Check if the block content contains an <img> tag, and render it inside the PDF."""
+    from bs4 import BeautifulSoup
+    import re
+    from kalanjiyam.utils.storage import get_storage, editor_image_key
+
+    soup = BeautifulSoup(html_content, "html.parser")
+    img_tag = soup.find("img")
+    if not img_tag:
+        return False
+
+    src = img_tag.get("src")
+    if not src:
+        return False
+
+    # Extract project_slug and filename
+    match = re.search(r"static/uploads/([^/]+)/images/([^/?]+)", src)
+    if not match:
+        match = re.search(r"static/uploads/([^/]+)/([^/?]+)", src)
+
+    if match:
+        project_slug = match.group(1)
+        filename = match.group(2)
+        key = editor_image_key(project_slug, filename)
+
+        storage = get_storage()
+        try:
+            if storage.exists(key):
+                img_bytes = storage.read_bytes(key)
+                pdf_page.insert_image(rect, stream=img_bytes)
+                return True
+        except Exception:
+            pass
+
+    # Draw fallback placeholder box
+    shape = pdf_page.new_shape()
+    shape.draw_rect(rect)
+    shape.finish(color=(0.8, 0.8, 0.8), fill=(0.95, 0.95, 0.95), width=1)
+    shape.commit()
+
+    pdf_page.insert_textbox(
+        rect,
+        "[Image]",
+        fontname="helv",
+        fontsize=9,
+        align=1
+    )
+    return True
+
+
+def documents_to_pdf(project, pages) -> bytes:
+    """Download pages compiled into a single PDF document in replica layout."""
+    import fitz
+    from kalanjiyam.utils.assets import get_page_image_filepath
+    from kalanjiyam.utils.page_document import document_for_revision
+    import os
+    import re
+    import glob
+    from bs4 import BeautifulSoup
+
+    doc = fitz.open()
+
+    def _has_devanagari(text: str) -> bool:
+        return bool(re.search(r"[\u0900-\u097f]", text))
+
+    def _has_tamil(text: str) -> bool:
+        return bool(re.search(r"[\u0b80-\u0bff]", text))
+
+    # Paths to specific Noto Sans fonts for Unicode script rendering
+    font_paths = {
+        "devanagari": "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf",
+        "tamil": "/usr/share/fonts/truetype/noto/NotoSansTamil-Regular.ttf",
+        "latin": "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "fallback_dejavu": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    }
+
+    for page in pages:
+        # Enforce strict A4 format
+        width, height = 595, 842
+
+        # Create clean white page
+        pdf_page = doc.new_page(width=width, height=height)
+
+        # Register Unicode fonts available on the system for this page
+        registered_fonts = {}
+        for font_key, path in font_paths.items():
+            if os.path.exists(path):
+                try:
+                    pdf_page.insert_font(fontname=font_key, fontfile=path)
+                    registered_fonts[font_key] = font_key
+                except Exception:
+                    pass
+
+        # If no custom fonts were registered, look for any system TTF font as fallback
+        if not registered_fonts:
+            fallback_path = None
+            for p in glob.glob("/usr/share/fonts/truetype/**/*.ttf", recursive=True):
+                fallback_path = p
+                break
+            if fallback_path:
+                try:
+                    pdf_page.insert_font(fontname="general_fallback", fontfile=fallback_path)
+                    registered_fonts["general_fallback"] = "general_fallback"
+                except Exception:
+                    pass
+
+        # Helper to select the best registered font name for a given block text
+        def _get_font_for_text(text: str) -> str:
+            if _has_devanagari(text) and "devanagari" in registered_fonts:
+                return "devanagari"
+            elif _has_tamil(text) and "tamil" in registered_fonts:
+                return "tamil"
+            elif "latin" in registered_fonts:
+                return "latin"
+            elif "fallback_dejavu" in registered_fonts:
+                return "fallback_dejavu"
+            elif "general_fallback" in registered_fonts:
+                return "general_fallback"
+            return "helv"
+
+        # Render document content (text blocks, figures, tables) at coordinates
+        if page.revisions:
+            rev = page.revisions[-1]
+            if getattr(rev, "document", None):
+                doc_obj = document_for_revision(rev, page)
+
+                # Determine if we have a scanned image to extract figures from
+                img_path = None
+                try:
+                    img_path = get_page_image_filepath(project.slug, page.slug)
+                    if img_path and not img_path.exists():
+                        img_path = None
+                except Exception:
+                    pass
+
+                for block in doc_obj.blocks:
+                    bbox = block.bbox
+                    if not bbox or len(bbox) != 4:
+                        continue
+
+                    # Scale block coordinates relative to A4 page size
+                    pw = page.page_width or width
+                    ph = page.page_height or height
+                    scale_x = width / pw
+                    scale_y = height / ph
+
+                    rect = fitz.Rect(
+                        bbox[0] * scale_x,
+                        bbox[1] * scale_y,
+                        bbox[2] * scale_x,
+                        bbox[3] * scale_y
+                    )
+
+                    # 1. First check if block contains an inline <img> tag (uploaded image)
+                    if _insert_block_image(pdf_page, rect, block.content or ""):
+                        continue
+
+                    # 2. Otherwise render other types
+                    if block.type == "figure":
+                        # Attempt to crop the figure from the scanned book page image
+                        img_bytes = None
+                        if img_path:
+                            img_bytes = _crop_figure_image(img_path, bbox)
+                        
+                        if img_bytes:
+                            try:
+                                pdf_page.insert_image(rect, stream=img_bytes)
+                            except Exception:
+                                img_bytes = None
+                                
+                        if not img_bytes:
+                            # Fallback: Draw placeholder box for image
+                            shape = pdf_page.new_shape()
+                            shape.draw_rect(rect)
+                            shape.finish(color=(0.8, 0.8, 0.8), fill=(0.95, 0.95, 0.95), width=1)
+                            shape.commit()
+
+                            # Draw [Image] label in the center
+                            pdf_page.insert_textbox(
+                                rect,
+                                "[Image]",
+                                fontname="helv",
+                                fontsize=9,
+                                align=1
+                            )
+                    elif block.type == "table":
+                        # Render tables with a border
+                        shape = pdf_page.new_shape()
+                        shape.draw_rect(rect)
+                        shape.finish(color=(0.7, 0.7, 0.7), width=1)
+                        shape.commit()
+
+                        text = (block.content or "").strip()
+                        active_font = _get_font_for_text(text)
+                        # Render table content (using small monospace/fallback font)
+                        _insert_styled_text(pdf_page, rect + (4, 4, -4, -4), text, active_font, 8)
+                    else:
+                        text = (block.content or "").strip()
+                        if not text:
+                            continue
+
+                        # Select active font for this text block
+                        active_font = _get_font_for_text(text)
+
+                        # Insert the text block preserving styles
+                        _insert_styled_text(pdf_page, rect, text, active_font, 10)
+            else:
+                # Fallback: if there's no structured document model, draw raw content
+                text = rev.content or ""
+                margin_rect = pdf_page.rect + (36, 36, -36, -36)
+                active_font = _get_font_for_text(text)
+                _insert_styled_text(pdf_page, margin_rect, text, active_font, 12)
+
+    pdf_bytes = doc.write()
+    doc.close()
+    return pdf_bytes
+

@@ -450,6 +450,29 @@ def download_as_docx(project_slug, page_slug):
     return response
 
 
+@bp.route("/<project_slug>/<page_slug>/download/pdf")
+def download_as_pdf(project_slug, page_slug):
+    """Download a single page compiled into a PDF document in replica layout."""
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+
+    page_ = q.page(project_.id, page_slug)
+    if page_ is None:
+        abort(404)
+
+    from kalanjiyam.utils import proofing_utils
+    blob = proofing_utils.documents_to_pdf(project_, [page_])
+
+    response = make_response(blob, 200)
+    response.mimetype = "application/pdf"
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="{project_slug}-{page_slug}-replica.pdf"'
+    )
+    return response
+
+
+
 @bp.route("/<project_slug>/<page_slug>/download/html")
 def download_as_html(project_slug, page_slug):
     """Download a single page compiled into HTML ZIP."""

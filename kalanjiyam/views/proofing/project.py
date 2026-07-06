@@ -500,6 +500,23 @@ def download_as_docx(slug):
     return response
 
 
+@bp.route("/<slug>/download/pdf")
+def download_as_pdf(slug):
+    """Download project pages compiled into a single PDF document in replica layout."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    blob = proofing_utils.documents_to_pdf(project_, project_.pages)
+    response = make_response(blob, 200)
+    response.mimetype = "application/pdf"
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="{slug}-replica.pdf"'
+    )
+    return response
+
+
+
 @bp.route("/<slug>/stats")
 @moderator_required
 def stats(slug):
