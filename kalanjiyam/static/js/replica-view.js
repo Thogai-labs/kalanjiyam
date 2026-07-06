@@ -99,7 +99,7 @@ export class ReplicaView {
         el.style.left = `${(100 * x1) / pw}%`;
         el.style.top = `${(100 * y1) / ph}%`;
         el.style.width = `${(100 * (x2 - x1)) / pw}%`;
-        el.style.minHeight = `${(100 * (y2 - y1)) / ph}%`;
+        el.style.height = `${(100 * (y2 - y1)) / ph}%`;
       } else {
         el.style.position = 'relative';
         el.style.width = '100%';

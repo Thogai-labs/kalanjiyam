@@ -689,7 +689,7 @@ def _blocks_to_replica_html(
             f'data-block-id="{block.id}" '
             f'data-block-type="{block.type}" '
             f'style="position: absolute; left:{left:.2f}%;top:{top:.2f}%;width:{width:.2f}%;'
-            f'min-height:{height:.2f}%;">{inner_html}</div>'
+            f'height:{height:.2f}%;">{inner_html}</div>'
         )
     return (
         f'<div class="ocr-replica-page" '

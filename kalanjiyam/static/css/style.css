@@ -681,7 +681,7 @@
   }
 
   .ocr-replica-block {
-    @apply border border-transparent text-sm leading-snug;
+    @apply border border-transparent text-sm leading-snug overflow-auto;
   }
 
   .ocr-replica-block--table {
