@@ -1606,7 +1606,10 @@ export default () => ({
   },
   
   // Sync editor content to textarea before form submission
-  syncContentBeforeSubmit() {
+  syncContentBeforeSubmit(event) {
+    if (event) {
+      event.preventDefault();
+    }
     if (this.editorMode === 'flow') {
       const editor = window.richEditorInstance;
       if (editor) {
@@ -1632,5 +1635,18 @@ export default () => ({
       }
     }
     this.hasUnsavedChanges = false;
+
+    // Clear local storage cache right before programmatically submitting
+    const pathMatch = window.location.pathname.match(/\/proofing\/([^\/]+)\/([^\/]+)/);
+    if (pathMatch) {
+      const key = `kalanjiyam-replica-doc-${pathMatch[1]}-${pathMatch[2]}`;
+      localStorage.removeItem(key);
+    }
+
+    // Submit the form programmatically to ensure DOM fields are saved first
+    const form = document.querySelector('form.book-editor-shell');
+    if (form) {
+      form.submit();
+    }
   },
 });

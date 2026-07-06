@@ -706,6 +706,9 @@ def edit_post(project_slug, page_slug):
             ).first()
             conflict = target_version_record.revisions[-1] if target_version_record and target_version_record.revisions else None
             form.version.data = target_version_record.version if target_version_record else 0
+    else:
+        for field, errors in form.errors.items():
+            flash(f"Validation error in {field}: {', '.join(errors)}", "error")
 
     # Get target version counter
     session = q.get_session()

@@ -257,7 +257,7 @@ these components in our help text and documentation.
 
     {% if can_save %}
     <button type="submit" class="book-editor-publish hidden sm:inline-flex"
-            @click="syncContentBeforeSubmit()">
+            @click="syncContentBeforeSubmit($event)">
       {{ _('Publish') }}
     </button>
     {% endif %}

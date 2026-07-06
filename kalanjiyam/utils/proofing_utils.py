@@ -524,11 +524,17 @@ def _insert_styled_text(pdf_page, rect, html_content, fontname, fontsize):
     if hasattr(pdf_page, "insert_htmlbox"):
         try:
             css = f"""
-            * {{
+            body {{
                 font-family: "{fontname}", sans-serif;
                 font-size: {fontsize}pt;
                 line-height: 1.3;
+                margin: 0;
+                padding: 0;
             }}
+            h1 {{ font-size: 1.4em; font-weight: bold; margin: 0; }}
+            h2 {{ font-size: 1.2em; font-weight: bold; margin: 0; }}
+            h3 {{ font-size: 1.1em; font-weight: bold; margin: 0; }}
+            p {{ margin: 0; }}
             b, strong {{ font-weight: bold; }}
             i, em {{ font-style: italic; }}
             """
