@@ -263,8 +263,12 @@ these components in our help text and documentation.
   <button class="{{ button_css }}"
      @click.prevent="ocrDropdownOpen=!ocrDropdownOpen"
      title="{{ _('OCR') }}">
-    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+      <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+      <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+      <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+      <text x="12" y="12" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="currentColor" stroke="none">OCR</text>
     </svg>
   </button>
   <div x-show="ocrDropdownOpen" x-cloak class="dropdown-pane w-80 right-0 left-auto">
