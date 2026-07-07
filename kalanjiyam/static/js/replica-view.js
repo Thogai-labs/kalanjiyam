@@ -13,7 +13,7 @@ if (!document.getElementById('ocr-replica-styles')) {
     }
     .ocr-replica-block.is-selected {
       outline: 2px solid #2563eb !important;
-      z-index: 50 !important;
+      z-index: 5 !important;
       overflow: visible !important; /* Show overflow when editing to make resizing easier */
     }
     .ocr-replica-block {
@@ -57,7 +57,7 @@ if (!document.getElementById('ocr-replica-styles')) {
       border: 1.5px solid #ffffff;
       border-radius: 50%;
       cursor: se-resize;
-      z-index: 100;
+      z-index: 10;
       box-shadow: 0 1px 3px rgba(0,0,0,0.3);
     }
     .ocr-replica-toolbar-btn {
@@ -477,7 +477,7 @@ export class ReplicaView {
 
     // Create layout toolbar
     const toolbar = document.createElement('div');
-    toolbar.className = 'ocr-replica-toolbar flex flex-wrap gap-2 mb-3 p-2 bg-slate-50 rounded border border-slate-200 sticky top-0 z-[200] items-center shadow-sm';
+    toolbar.className = 'ocr-replica-toolbar flex flex-wrap gap-2 mb-3 p-2 bg-slate-50 rounded border border-slate-200 sticky top-0 z-[20] items-center shadow-sm';
     
     // Add Text Block button
     const addTextBtn = document.createElement('button');

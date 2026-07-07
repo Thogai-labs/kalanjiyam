@@ -48,7 +48,7 @@ these components in our help text and documentation.
 
 
 {# Compact toolbar for book editing: navigation + OCR/tools + publish. #}
-{% macro book_toolbar(ctx, page_number, image_number, num_images, ocr_status="unavailable", engine_choices=[], can_save=false) %}
+{% macro book_toolbar(ctx, page_number, image_number, num_images, ocr_status="unavailable", engine_choices=[], can_save=false, translation_engines=[]) %}
 {% set project = ctx.project %}
 {% set button_css = "p-2 rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors" %}
 <header class="book-editor-toolbar">
@@ -113,6 +113,11 @@ these components in our help text and documentation.
 
     {# OCR — reuse dropdown from menu_bar #}
     {{ _book_ocr_controls(ocr_status, engine_choices, button_css) }}
+
+    <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></span>
+
+    {# Translation #}
+    {{ _book_translation_controls(button_css, translation_engines) }}
 
     <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></span>
 
@@ -325,6 +330,89 @@ these components in our help text and documentation.
                 @click.prevent.stop="runOCR(); ocrDropdownOpen=false"
                 :disabled="isRunningOCR"
                 x-text="isRunningOCR ? '{{ _("Running OCR ...") }}' : '{{ _("Run OCR") }}'"></button>
+      </li>
+    </ul>
+  </div>
+</div>
+{% endmacro %}
+
+
+{% macro _book_translation_controls(button_css, translation_engines=[]) %}
+<div class="relative" @click.outside="translationDropdownOpen=false">
+  <button class="{{ button_css }} flex items-center justify-center"
+     @click.prevent="translationDropdownOpen=!translationDropdownOpen"
+     title="{{ _('Translation') }}">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
+    </svg>
+  </button>
+  <div x-show="translationDropdownOpen" x-cloak class="dropdown-pane w-80 right-0 left-auto">
+    <ul class="text-sm">
+      <li class="mb-3 px-3 pt-2">
+        <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Translation engine') }}</label>
+        <div class="grid grid-cols-2 gap-2" x-init="if (![{% for e in translation_engines %}'{{ e.value }}',{% endfor %}].includes(selectedTranslationEngine)) { selectedTranslationEngine = '{{ translation_engines[0].value if translation_engines else 'indictrans2' }}'; }">
+          {% for e in translation_engines %}
+          <button @click.prevent.stop="selectedTranslationEngine = '{{ e.value }}'" 
+                  class="ocr-engine-btn"
+                  :class="selectedTranslationEngine === '{{ e.value }}' ? 'active' : ''">
+            {{ e.label }}
+          </button>
+          {% else %}
+          <button @click.prevent.stop="selectedTranslationEngine = 'indictrans2'" 
+                  class="ocr-engine-btn active">
+            IndicTrans v2
+          </button>
+          {% endfor %}
+        </div>
+      </li>
+      <li class="mb-3 px-3">
+        <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Source Language') }}</label>
+        <select class="form-select-enhanced w-full" x-model="sourceLanguage" id="source-language-select" @click.stop>
+          <option value="hi">Hindi (hi)</option>
+          <option value="te">Telugu (te)</option>
+          <option value="mr">Marathi (mr)</option>
+          <option value="bn">Bengali (bn)</option>
+          <option value="gu">Gujarati (gu)</option>
+          <option value="kn">Kannada (kn)</option>
+          <option value="ml">Malayalam (ml)</option>
+          <option value="ta">Tamil (ta)</option>
+          <option value="pa">Punjabi (pa)</option>
+          <option value="or">Odia (or)</option>
+          <option value="ur">Urdu (ur)</option>
+          <option value="en">English (en)</option>
+          <option value="sa">Sanskrit (sa)</option>
+        </select>
+      </li>
+      <li class="mb-3 px-3">
+        <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Target Language') }}</label>
+        <select class="form-select-enhanced w-full" x-model="targetLanguage" id="target-language-select" @click.stop>
+          <option value="en">English (en)</option>
+          <option value="sa">Sanskrit (sa)</option>
+          <option value="hi">Hindi (hi)</option>
+          <option value="te">Telugu (te)</option>
+          <option value="mr">Marathi (mr)</option>
+          <option value="bn">Bengali (bn)</option>
+          <option value="gu">Gujarati (gu)</option>
+          <option value="kn">Kannada (kn)</option>
+          <option value="ml">Malayalam (ml)</option>
+          <option value="ta">Tamil (ta)</option>
+          <option value="pa">Punjabi (pa)</option>
+          <option value="or">Odia (or)</option>
+          <option value="ur">Urdu (ur)</option>
+          <option value="fr">French (fr)</option>
+          <option value="de">German (de)</option>
+          <option value="es">Spanish (es)</option>
+          <option value="ja">Japanese (ja)</option>
+          <option value="ko">Korean (ko)</option>
+          <option value="zh">Chinese (zh)</option>
+        </select>
+      </li>
+      <li class="border-t border-slate-100 pt-2 px-3 pb-2">
+        <button type="button"
+                class="w-full bg-slate-800 text-white rounded-lg py-2 text-sm hover:bg-slate-700 transition-colors"
+                @click.prevent.stop="runTranslation(selectedTranslationEngine, sourceLanguage, targetLanguage); translationDropdownOpen=false"
+                :disabled="isRunningTranslation"
+                x-text="isRunningTranslation ? '{{ _("Translating ...") }}' : '{{ _("Translate Page") }}'"></button>
       </li>
     </ul>
   </div>

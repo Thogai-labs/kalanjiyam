@@ -96,9 +96,11 @@ export default () => ({
   selectedLanguage: 'sa',
 
   // Translation settings
-  selectedTranslationEngine: 'google',
+  selectedTranslationEngine: 'indictrans2',
   sourceLanguage: 'hi',
   targetLanguage: 'en',
+  translationDropdownOpen: false,
+  showTranslationInfo: false,
 
   // OCR dropdown state
   ocrDropdownOpen: false,
@@ -1224,59 +1226,64 @@ export default () => ({
   async runTranslation(engine = 'google', sourceLang = 'sa', targetLang = 'en') {
     console.log('=== TRANSLATION DEBUG START ===');
     
-    // Get content from rich editor if available, otherwise use content property
-    let contentToTranslate = this.content;
-    const editor = window.richEditorInstance;
-    if (editor) {
-      // Get plain text from editor for translation
-      contentToTranslate = editor.getText();
-    }
-    
-    // Check if there's content to translate
-    if (!contentToTranslate || contentToTranslate.trim() === '') {
-      console.log('No content to translate');
-      this.showNotification('No content to translate. Please add some text to the editor first.', 'error');
+    if (!this.pageDocument) {
+      this.showNotification('No document content found to translate.', 'error');
       return;
     }
 
     this.isRunningTranslation = true;
 
     console.log('Starting translation:', { engine, sourceLang, targetLang });
-    console.log('Content to translate:', contentToTranslate);
     console.log('Current pathname:', window.location.pathname);
 
     const { pathname } = window.location;
-    // Send content as POST body for translation
     const url = pathname.replace('/proofing/', '/api/translate/') + `?engine=${engine}&source_lang=${sourceLang}&target_lang=${targetLang}`;
     
     console.log('Translation URL:', url);
 
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    const csrfInput = document.querySelector('input[name="csrf_token"]');
+    if (csrfInput) {
+      headers['X-CSRFToken'] = csrfInput.value;
+    }
+
     try {
-      console.log('Making fetch request...');
-      const response = await fetch(url);
+      console.log('Making POST fetch request...');
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(this.pageDocument),
+      });
       console.log('Translation response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
       
       if (response.ok) {
-        const translation = await response.text();
-        console.log('Translation result:', translation);
-        console.log('Translation result length:', translation.length);
+        const translatedDoc = await response.json();
+        console.log('Translation result document:', translatedDoc);
         
-        // Check if translation is empty or just whitespace
-        if (!translation || translation.trim() === '') {
-          console.warn('Translation result is empty');
-          this.showNotification('Translation result is empty. Please ensure there is content to translate.', 'error');
-          return;
+        // Update pageDocument
+        this.pageDocument = translatedDoc;
+        this._flowPlainCache = documentToPlainText(this.pageDocument);
+        
+        // Update replica view
+        if (this._replicaView) {
+          this._replicaView.setDocument(this.pageDocument);
         }
         
-        // Show success feedback
-        this.showNotification('Translation completed successfully!', 'success');
+        // Update flow / rich editor
+        this._syncDocumentToForm();
+        this.hasUnsavedChanges = true;
         
-        // Store translation in a variable that can be accessed by the image box
+        // Extract plain text for reference translation panel
+        const translation = this._flowPlainCache;
         this.currentTranslation = translation;
         
         // Trigger translation display in the image box
         this.showTranslationInImageBox(translation, sourceLang, targetLang, engine);
+        
+        // Show success feedback
+        this.showNotification('Translation completed successfully!', 'success');
       } else {
         const errorText = await this.getErrorMessage(response);
         console.error('Translation API error:', errorText);

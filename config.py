@@ -196,6 +196,15 @@ class BaseConfig:
     #: Timeout in seconds for OCR service HTTP requests.
     OCR_SERVICE_TIMEOUT = int(_env("OCR_SERVICE_TIMEOUT", "300") or "300")
 
+    #: Base URL of the standalone translation service.
+    TRANSLATION_SERVICE_URL = _env("TRANSLATION_SERVICE_URL", "http://10.129.6.170:8888")
+
+    #: API key for service-to-service translation requests.
+    TRANSLATION_SERVICE_API_KEY = _env("TRANSLATION_SERVICE_API_KEY", "")
+
+    #: Timeout in seconds for translation service HTTP requests.
+    TRANSLATION_SERVICE_TIMEOUT = int(_env("TRANSLATION_SERVICE_TIMEOUT", "300") or "300")
+
     #: Default OCR engine/model.
     DEFAULT_OCR_ENGINE = _env("DEFAULT_OCR_ENGINE", "tesseract")
 

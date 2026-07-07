@@ -374,6 +374,7 @@ def _editor_template_kwargs(
     default_engine_value = REVERSE_ENGINE_MAP.get(default_ocr_engine, "1")
     from kalanjiyam.utils.org_access import is_restricted_ocr_user
     is_restricted_ocr = is_restricted_ocr_user(current_user)
+    from kalanjiyam.utils.translation_engine import get_available_translation_engines
 
     page_rules = project_utils.parse_page_number_spec(ctx.project.page_numbers)
     page_titles = project_utils.apply_rules(len(ctx.project.pages), page_rules)
@@ -406,6 +407,7 @@ def _editor_template_kwargs(
         "active_version_key": active_version_key,
         "target_version_key": target_version_key,
         "available_versions": available_versions,
+        "translation_engines": get_available_translation_engines(),
     }
 
 
@@ -977,7 +979,37 @@ def ocr(project_slug, page_slug):
         abort(500, description=f"OCR failed: {str(e)}")
 
 
-@api.route("/translate/<project_slug>/<page_slug>/")
+def _translate_html_content(html: str, source_lang: str, target_lang: str, engine: str) -> str:
+    """Helper to translate plain text sections within HTML content, preserving HTML tags."""
+    import re
+    from kalanjiyam.utils.translation_engine import translate_text
+
+    # Split by HTML tags
+    parts = re.split(r'(<[^>]+>)', html)
+    for i in range(len(parts)):
+        # Even indices are text content, odd indices are tags
+        if i % 2 == 0:
+            text = parts[i]
+            if text and text.strip():
+                try:
+                    stripped = text.strip()
+                    leading_ws = text[:len(text) - len(text.lstrip())]
+                    trailing_ws = text[len(text.rstrip()):]
+                    
+                    translation_response = translate_text(
+                        stripped,
+                        source_lang,
+                        target_lang,
+                        engine
+                    )
+                    translated_text = translation_response.translated_text
+                    parts[i] = f"{leading_ws}{translated_text}{trailing_ws}"
+                except Exception as e:
+                    logging.error(f"Failed to translate segment '{text}': {e}")
+    return "".join(parts)
+
+
+@api.route("/translate/<project_slug>/<page_slug>/", methods=["GET", "POST"])
 @login_required
 def translate(project_slug, page_slug):
     """Apply translation to the given page using the specified engine."""
@@ -993,16 +1025,45 @@ def translate(project_slug, page_slug):
     if not page_:
         abort(404)
 
-    # Get translation parameters from query parameters
-    source_lang = request.args.get('source_lang', 'sa')
-    target_lang = request.args.get('target_lang', 'en')
-    engine = request.args.get('engine', 'google')
+    # Get translation parameters from query or body
+    doc_data = {}
+    if request.method == "POST":
+        if not request.is_json:
+            abort(400, description="Expected JSON payload")
+        doc_data = request.get_json() or {}
+
+    source_lang = request.args.get('source_lang') or doc_data.get('source_lang') or 'sa'
+    target_lang = request.args.get('target_lang') or doc_data.get('target_lang') or 'en'
+    engine = request.args.get('engine') or doc_data.get('engine') or 'indictrans2'
     revision_id = request.args.get('revision_id', type=int)
     
     # Validate engine
     from kalanjiyam.utils.translation_engine import TranslationEngineFactory
-    if engine not in TranslationEngineFactory.get_supported_engines():
+    if not TranslationEngineFactory.is_supported(engine):
         abort(400, description=f"Unsupported translation engine: {engine}")
+
+    if request.method == "POST":
+        blocks = doc_data.get("blocks", [])
+        if blocks:
+            for block in blocks:
+                content = block.get("content", "")
+                if content and content.strip():
+                    block["content"] = _translate_html_content(
+                        content,
+                        source_lang,
+                        target_lang,
+                        engine
+                    )
+        elif "content" in doc_data:
+            content = doc_data["content"]
+            if content and content.strip():
+                doc_data["content"] = _translate_html_content(
+                    content,
+                    source_lang,
+                    target_lang,
+                    engine
+                )
+        return jsonify(doc_data)
 
     # Get the revision to translate
     if revision_id is None:
@@ -1030,12 +1091,11 @@ def translate(project_slug, page_slug):
             # Return existing translation
             return existing_translation.content
 
-        # Perform translation
-        from kalanjiyam.utils.translation_engine import translate_text
-        translation_response = translate_text(
-            revision.content, 
-            source_lang, 
-            target_lang, 
+        # Perform translation preserving HTML tags
+        translated_text = _translate_html_content(
+            revision.content,
+            source_lang,
+            target_lang,
             engine
         )
 
@@ -1049,7 +1109,7 @@ def translate(project_slug, page_slug):
             page_id=page_.id,
             revision_id=revision.id,
             author_id=bot_user.id,
-            content=translation_response.translated_text,
+            content=translated_text,
             source_language=source_lang,
             target_language=target_lang,
             translation_engine=engine,
@@ -1059,7 +1119,7 @@ def translate(project_slug, page_slug):
         session.add(new_translation)
         session.commit()
 
-        return translation_response.translated_text
+        return translated_text
     except Exception as e:
         logging.error(f"Translation failed for {project_slug}/{page_slug} with engine {engine}: {e}")
         abort(500, description=f"Translation failed: {str(e)}")

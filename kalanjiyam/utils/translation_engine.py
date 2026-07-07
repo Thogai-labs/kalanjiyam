@@ -201,44 +201,139 @@ class OpenAITranslateEngine(TranslationEngine):
         return ['en', 'hi', 'sa', 'te', 'mr', 'fr', 'de', 'es', 'ja', 'ko', 'zh']
 
 
+class IndicTransEngine(TranslationEngine):
+    """Client for the external standalone IndicTrans translation service."""
+
+    def __init__(self, version: str):
+        # version is 'indictrans2' or 'indictrans3'
+        self.version = version
+
+    def translate(self, text: str, source_lang: str, target_lang: str, **kwargs) -> TranslationResponse:
+        import httpx
+        from flask import current_app
+
+        base_url = current_app.config.get("TRANSLATION_SERVICE_URL", "").rstrip("/")
+        if not base_url:
+            raise RuntimeError("TRANSLATION_SERVICE_URL is not configured")
+
+        url = f"{base_url}/translate/text"
+        timeout = float(current_app.config.get("TRANSLATION_SERVICE_TIMEOUT", 300))
+
+        # Map language codes to English names
+        language_map = {
+            'en': 'English',
+            'hi': 'Hindi',
+            'bn': 'Bengali',
+            'ta': 'Tamil',
+            'te': 'Telugu',
+            'mr': 'Marathi',
+            'gu': 'Gujarati',
+            'kn': 'Kannada',
+            'ml': 'Malayalam',
+            'pa': 'Punjabi',
+            'ur': 'Urdu',
+            'or': 'Odia',
+            'as': 'Assamese',
+            'sa': 'Sanskrit',
+            'ks': 'Kashmiri',
+            'sd': 'Sindhi',
+            'mni': 'Manipuri',
+            'sat': 'Santali',
+            'npi': 'Nepali',
+            'gom': 'Konkani',
+            'doi': 'Dogri',
+            'brx': 'Bodo',
+            'mai': 'Maithili',
+        }
+
+        source_name = language_map.get(source_lang, source_lang.capitalize())
+        target_name = language_map.get(target_lang, target_lang.capitalize())
+
+        # Determine the model name based on translation direction
+        if source_lang == 'en':
+            direction = 'en-indic'
+        elif target_lang == 'en':
+            direction = 'indic-en'
+        else:
+            direction = 'indic-indic'
+
+        model_name = f"ai4bharat/{self.version}-{direction}-1B"
+
+        payload = {
+            "text": text,
+            "model_name": model_name,
+            "source_language": source_name,
+            "target_language": target_name,
+            "gpu_id": 0,
+            "batch_size": 8
+        }
+
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                response = client.post(url, json=payload)
+
+            if response.status_code >= 400:
+                detail = response.text
+                try:
+                    detail = response.json().get("detail", detail)
+                except Exception:
+                    pass
+                raise RuntimeError(f"Translation service error ({response.status_code}): {detail}")
+
+            result = response.json()
+            translated_text = result.get("text", "")
+
+            return TranslationResponse(
+                translated_text=translated_text,
+                source_language=source_lang,
+                target_language=target_lang,
+                engine=self.version,
+                metadata={'model': model_name}
+            )
+        except Exception as e:
+            logging.error(f"IndicTrans translation failed: {e}")
+            raise
+
+    def get_supported_languages(self) -> List[str]:
+        return ['en', 'hi', 'bn', 'ta', 'te', 'mr', 'gu', 'kn', 'ml', 'pa', 'ur', 'or', 'as', 'sa', 'ks', 'sd', 'mni', 'sat', 'npi', 'gom', 'doi', 'brx', 'mai']
+
+
 class TranslationEngineFactory:
     """Factory for creating translation engines."""
     
     _engines = {
-        'google': GoogleTranslateEngine,
-        'openai': OpenAITranslateEngine,
+        'indictrans2': lambda: IndicTransEngine('indictrans2'),
     }
     
     @classmethod
     def create(cls, engine_name: str, **kwargs) -> TranslationEngine:
         """Create a translation engine instance.
         
-        :param engine_name: Name of the engine ('google' or 'openai')
+        :param engine_name: Name of the engine ('indictrans2' or other indictrans variants)
         :param kwargs: Additional arguments for the engine
         :return: Translation engine instance
         :raises: ValueError if engine name is not supported
         """
         if engine_name not in cls._engines:
+            if engine_name.startswith('indictrans'):
+                return IndicTransEngine(engine_name)
             raise ValueError(f"Unsupported translation engine: {engine_name}. Supported engines: {list(cls._engines.keys())}")
         
-        engine_class = cls._engines[engine_name]
-        
-        # Handle different constructor signatures
-        if engine_name == 'google':
-            return engine_class()  # GoogleTranslateEngine doesn't take kwargs
-        elif engine_name == 'openai':
-            api_key = kwargs.get('api_key')
-            return engine_class(api_key=api_key)
-        else:
-            return engine_class(**kwargs)
+        engine_class_or_factory = cls._engines[engine_name]
+        return engine_class_or_factory()
     
     @classmethod
     def get_supported_engines(cls) -> List[str]:
         """Get list of supported translation engines."""
         return list(cls._engines.keys())
 
+    @classmethod
+    def is_supported(cls, engine_name: str) -> bool:
+        """Check if the translation engine is supported."""
+        return engine_name in cls._engines or engine_name.startswith('indictrans')
 
-def translate_text(text: str, source_lang: str, target_lang: str, engine_name: str = 'google', **kwargs) -> TranslationResponse:
+
+def translate_text(text: str, source_lang: str, target_lang: str, engine_name: str = 'indictrans2', **kwargs) -> TranslationResponse:
     """Convenience function to translate text using the specified engine.
     
     :param text: Text to translate
@@ -317,3 +412,44 @@ def segment_text_for_translation(text: str, max_length: int = 1000) -> List[str]
         segments.append(current_segment.strip())
     
     return segments 
+
+
+def get_available_translation_engines() -> List[Dict[str, str]]:
+    """Fetch available translation engines dynamically from the translation service endpoint."""
+    import httpx
+    from flask import current_app
+    base_url = current_app.config.get("TRANSLATION_SERVICE_URL", "").rstrip("/")
+    if not base_url:
+        return []
+    url = f"{base_url}/models"
+    try:
+        timeout = float(current_app.config.get("TRANSLATION_SERVICE_TIMEOUT", 5.0))
+        with httpx.Client(timeout=timeout) as client:
+            response = client.get(url)
+        if response.status_code == 200:
+            models = response.json()
+            versions = set()
+            for m in models:
+                name = m.get("model_name", "")
+                parts = name.split('/')
+                if len(parts) > 1:
+                    family_part = parts[1]
+                    family = family_part.split('-')[0]
+                    versions.add(family)
+                else:
+                    versions.add(name)
+            
+            choices = []
+            label_map = {
+                'indictrans2': 'IndicTrans v2',
+                'indictrans3': 'IndicTrans v3',
+            }
+            for v in sorted(list(versions)):
+                choices.append({
+                    'value': v,
+                    'label': label_map.get(v, v.replace('_', ' ').title())
+                })
+            return choices
+    except Exception as e:
+        logging.error(f"Failed to fetch translation models: {e}")
+    return [] 

@@ -80,3 +80,82 @@ def test_revision__bad_revision(client):
 def test_revision__bad_revision_non_numeric(client):
     r = client.get("/proofing/test-project/1/revision/unknown")
     assert r.status_code == 404
+
+
+def test_translate_api_get(rama_client):
+    from unittest.mock import patch
+    from kalanjiyam.utils.translation_engine import TranslationResponse
+
+    with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
+        mock_translate.return_value = TranslationResponse(
+            translated_text="Translated Hello",
+            source_language="sa",
+            target_language="en",
+            engine="indictrans2"
+        )
+
+        r = rama_client.get("/api/translate/test-project/1/?source_lang=sa&target_lang=en&engine=indictrans2")
+        assert r.status_code == 200
+        assert r.text == "Translated Hello"
+
+
+def test_translate_api_post(rama_client):
+    from unittest.mock import patch
+    from kalanjiyam.utils.translation_engine import TranslationResponse
+
+    with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
+        mock_translate.return_value = TranslationResponse(
+            translated_text="Translated Hello Block",
+            source_language="sa",
+            target_language="en",
+            engine="indictrans2"
+        )
+
+        payload = {
+            "blocks": [
+                {
+                    "id": "b1",
+                    "type": "paragraph",
+                    "content": "Hello Sanskrit"
+                }
+            ]
+        }
+        r = rama_client.post(
+            "/api/translate/test-project/1/?source_lang=sa&target_lang=en&engine=indictrans2",
+            json=payload
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["blocks"][0]["content"] == "Translated Hello Block"
+        mock_translate.assert_called_once_with("Hello Sanskrit", "sa", "en", "indictrans2")
+
+
+def test_translate_api_post_preserves_html(rama_client):
+    from unittest.mock import patch
+    from kalanjiyam.utils.translation_engine import TranslationResponse
+
+    with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
+        mock_translate.return_value = TranslationResponse(
+            translated_text="नमस्ते",
+            source_language="en",
+            target_language="hi",
+            engine="indictrans2"
+        )
+
+        payload = {
+            "blocks": [
+                {
+                    "id": "b1",
+                    "type": "paragraph",
+                    "content": '<img class="w-full" src="/static/img.png"> Hello world'
+                }
+            ]
+        }
+        r = rama_client.post(
+            "/api/translate/test-project/1/?source_lang=en&target_lang=hi&engine=indictrans2",
+            json=payload
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["blocks"][0]["content"] == '<img class="w-full" src="/static/img.png"> नमस्ते'
+        mock_translate.assert_called_once_with("Hello world", "en", "hi", "indictrans2")
