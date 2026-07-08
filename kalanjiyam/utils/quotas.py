@@ -111,3 +111,45 @@ def consume_ocr_credit_for_project(project) -> None:
         session.add(org)
     session.commit()
 
+
+def ensure_translation_quota_for_project(project) -> None:
+    # 1. Enforce per-user Translation credit limit if configured on the creator's organization
+    session = q.get_session()
+    creator = None
+    if project.creator_id:
+        creator = session.query(db.User).filter_by(id=project.creator_id).first()
+
+    if creator:
+        org = _org_for_user(creator)
+        per_user_translation_limit = None
+        if org is not None:
+            per_user_translation_limit = org.default_user_translation_limit
+
+        if per_user_translation_limit is not None:
+            translation_used = creator.translation_credits_used or 0
+            if translation_used >= per_user_translation_limit:
+                abort(402, description="Your personal Translation credit limit has been exhausted")
+
+    # 2. Enforce overall organization/tenant Translation credit limit (or fallback)
+    org = _org_for_project(project)
+    if org is not None and org.translation_credit_limit is not None:
+        if (org.translation_credits_used or 0) >= org.translation_credit_limit:
+            abort(402, description="Organization/Tenant Translation credits exhausted")
+
+
+def consume_translation_credit_for_project(project) -> None:
+    org = _org_for_project(project)
+    if org is not None:
+        org.translation_credits_used = (org.translation_credits_used or 0) + 1
+    
+    session = q.get_session()
+    if project.creator_id:
+        creator = session.query(db.User).filter_by(id=project.creator_id).first()
+        if creator:
+            creator.translation_credits_used = (creator.translation_credits_used or 0) + 1
+            session.add(creator)
+
+    if org is not None:
+        session.add(org)
+    session.commit()
+

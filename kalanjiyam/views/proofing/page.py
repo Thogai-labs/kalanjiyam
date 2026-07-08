@@ -40,6 +40,8 @@ from kalanjiyam.utils.quotas import (
     consume_ocr_credit_for_project,
     ensure_ocr_quota_for_project,
     ensure_storage_quota_for_user,
+    consume_translation_credit_for_project,
+    ensure_translation_quota_for_project,
 )
 from kalanjiyam.utils.revisions import EditError, add_revision, parse_document_field
 from kalanjiyam.utils.translation_engine import translate_text
@@ -1253,6 +1255,11 @@ def translate(project_slug, page_slug):
     if request.method == "POST":
         try:
             blocks = doc_data.get("blocks", [])
+            has_content = bool(blocks or ("content" in doc_data and doc_data["content"] and doc_data["content"].strip()))
+            
+            if has_content:
+                ensure_translation_quota_for_project(project_)
+                
             if blocks:
                 _translate_blocks(
                     blocks,
@@ -1269,6 +1276,10 @@ def translate(project_slug, page_slug):
                         target_lang,
                         engine
                     )
+                    
+            if has_content:
+                consume_translation_credit_for_project(project_)
+                
             return jsonify(doc_data)
         except Exception as e:
             logging.error(f"Translation failed for {project_slug}/{page_slug} with engine {engine}: {e}")
@@ -1301,12 +1312,14 @@ def translate(project_slug, page_slug):
             return existing_translation.content
 
         # Perform translation preserving HTML tags
+        ensure_translation_quota_for_project(project_)
         translated_text = _translate_html_content(
             revision.content,
             source_lang,
             target_lang,
             engine
         )
+        consume_translation_credit_for_project(project_)
 
         # Save translation to database
         from kalanjiyam import consts

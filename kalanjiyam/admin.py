@@ -780,12 +780,14 @@ class PlatformView(AdminBaseView):
         orgs = q.groups()
         total_storage_used = sum(g.storage_used_bytes or 0 for g in orgs)
         total_ocr_used = sum(g.ocr_credits_used or 0 for g in orgs)
+        total_translation_used = sum(g.translation_credits_used or 0 for g in orgs)
         return render_template(
             "admin/platform_dashboard.html",
             orgs=orgs,
             org_count=len(orgs),
             total_storage_used=total_storage_used,
             total_ocr_used=total_ocr_used,
+            total_translation_used=total_translation_used,
         )
 
     @expose("/user_analytics")
@@ -813,6 +815,7 @@ class PlatformView(AdminBaseView):
                 "projects_count": projects_count,
                 "revisions_count": revisions_count,
                 "ocr_count": org.ocr_credits_used or 0,
+                "translation_count": org.translation_credits_used or 0,
                 "storage_used": org.storage_used_bytes or 0,
             })
             
@@ -837,11 +840,13 @@ class PlatformView(AdminBaseView):
             projects_count = session.query(db.Project).filter_by(creator_id=user.id).count()
             revisions_count = session.query(db.Revision).filter_by(author_id=user.id).count()
             ocr_count = session.query(db.UsageLog).filter_by(user_id=user.id, action="run_ocr").count()
+            translation_count = user.translation_credits_used or 0
             user_stats.append({
                 "user": user,
                 "projects_count": projects_count,
                 "revisions_count": revisions_count,
                 "ocr_count": ocr_count,
+                "translation_count": translation_count,
             })
             
         return render_template(
@@ -974,6 +979,7 @@ class GroupsView(AdminBaseView):
             slug = (request.form.get("slug") or slugify(name)).strip()
             storage_quota_mb = request.form.get("storage_quota_mb", type=int)
             ocr_credit_limit = request.form.get("ocr_credit_limit", type=int)
+            translation_credit_limit = request.form.get("translation_credit_limit", type=int)
             admin_user_id = request.form.get("admin_user_id", type=int)
             if not name:
                 flash("Name is required.", "error")
@@ -984,6 +990,9 @@ class GroupsView(AdminBaseView):
             if ocr_credit_limit is not None and ocr_credit_limit < 0:
                 flash("OCR credit limit cannot be negative.", "error")
                 return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
+            if translation_credit_limit is not None and translation_credit_limit < 0:
+                flash("Translation credit limit cannot be negative.", "error")
+                return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
             session = q.get_session()
             group = db.Group(
                 name=name,
@@ -991,6 +1000,7 @@ class GroupsView(AdminBaseView):
                 description=description,
                 storage_quota_bytes=(storage_quota_mb * 1024 * 1024) if storage_quota_mb else None,
                 ocr_credit_limit=ocr_credit_limit,
+                translation_credit_limit=translation_credit_limit,
                 admin_user_id=admin_user_id,
             )
             session.add(group)
@@ -1014,6 +1024,7 @@ class GroupsView(AdminBaseView):
             slug = (request.form.get("slug") or slugify(name)).strip()
             storage_quota_mb = request.form.get("storage_quota_mb", type=int)
             ocr_credit_limit = request.form.get("ocr_credit_limit", type=int)
+            translation_credit_limit = request.form.get("translation_credit_limit", type=int)
             admin_user_id = request.form.get("admin_user_id", type=int)
             if not name:
                 flash("Name is required.", "error")
@@ -1024,11 +1035,15 @@ class GroupsView(AdminBaseView):
             if not ocr_credit_limit is None and ocr_credit_limit < 0:
                 flash("OCR credit limit cannot be negative.", "error")
                 return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())   
+            if not translation_credit_limit is None and translation_credit_limit < 0:
+                flash("Translation credit limit cannot be negative.", "error")
+                return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())   
             group.name = name
             group.slug = slug
             group.description = description
             group.storage_quota_bytes = (storage_quota_mb * 1024 * 1024) if storage_quota_mb else None
             group.ocr_credit_limit = ocr_credit_limit
+            group.translation_credit_limit = translation_credit_limit
             group.admin_user_id = admin_user_id
             session = q.get_session()
             session.add(group)
@@ -1098,18 +1113,23 @@ class GroupsView(AdminBaseView):
             elif action == "update_user_quotas":
                 default_user_storage_mb = request.form.get("default_user_storage_mb")
                 default_user_ocr_limit = request.form.get("default_user_ocr_limit")
+                default_user_translation_limit = request.form.get("default_user_translation_limit")
                 
                 # Convert values to correct type/None
                 default_user_storage_mb = int(default_user_storage_mb) if default_user_storage_mb else None
                 default_user_ocr_limit = int(default_user_ocr_limit) if default_user_ocr_limit else None
+                default_user_translation_limit = int(default_user_translation_limit) if default_user_translation_limit else None
                 
                 if default_user_storage_mb is not None and default_user_storage_mb < 0:
                     flash("Default per-user storage quota cannot be negative.", "error")
                 elif default_user_ocr_limit is not None and default_user_ocr_limit < 0:
                     flash("Default per-user OCR credit limit cannot be negative.", "error")
+                elif default_user_translation_limit is not None and default_user_translation_limit < 0:
+                    flash("Default per-user Translation credit limit cannot be negative.", "error")
                 else:
                     group.default_user_storage_limit = (default_user_storage_mb * 1024 * 1024) if default_user_storage_mb is not None else None
                     group.default_user_ocr_limit = default_user_ocr_limit
+                    group.default_user_translation_limit = default_user_translation_limit
                     session = q.get_session()
                     session.add(group)
                     session.commit()
@@ -1296,6 +1316,7 @@ class OrgAdminView(AdminBaseView):
             "projects_count": len(projects),
             "revisions_count": revisions_count,
             "ocr_count": org.ocr_credits_used or 0,
+            "translation_count": org.translation_credits_used or 0,
             "storage_used": org.storage_used_bytes or 0,
         }
         
@@ -1320,11 +1341,13 @@ class OrgAdminView(AdminBaseView):
             projects_count = session.query(db.Project).filter_by(creator_id=user.id).count()
             revisions_count = session.query(db.Revision).filter_by(author_id=user.id).count()
             ocr_count = session.query(db.UsageLog).filter_by(user_id=user.id, action="run_ocr").count()
+            translation_count = user.translation_credits_used or 0
             user_stats.append({
                 "user": user,
                 "projects_count": projects_count,
                 "revisions_count": revisions_count,
                 "ocr_count": ocr_count,
+                "translation_count": translation_count,
             })
             
         return render_template(

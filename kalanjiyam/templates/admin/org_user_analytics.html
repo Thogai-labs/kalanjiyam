@@ -22,6 +22,7 @@
           <th class="px-4 py-3">{{ _('Projects Created') }}</th>
           <th class="px-4 py-3">{{ _('Page Revisions') }}</th>
           <th class="px-4 py-3">{{ _('OCR Credits Used') }}</th>
+          <th class="px-4 py-3">{{ _('Translation Credits Used') }}</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
@@ -37,6 +38,7 @@
           <td class="px-4 py-3 text-slate-600 font-bold">{{ stat.projects_count }}</td>
           <td class="px-4 py-3 text-slate-600 font-bold">{{ stat.revisions_count }}</td>
           <td class="px-4 py-3 text-slate-600 font-bold">{{ stat.ocr_count }}</td>
+          <td class="px-4 py-3 text-slate-600 font-bold">{{ stat.translation_count }}</td>
         </tr>
         {% endfor %}
       </tbody>

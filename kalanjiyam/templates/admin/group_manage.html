@@ -147,7 +147,7 @@
       {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
       <input type="hidden" name="action" value="update_user_quotas">
       
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <div>
           <label for="default_user_storage_mb" class="{{ admin.label_class() }}">{{ _('Per-User Storage Limit (MB)') }}</label>
           <input type="number" id="default_user_storage_mb" name="default_user_storage_mb" min=0
@@ -165,6 +165,16 @@
             class="{{ admin.input_class() }}" placeholder="e.g. 100 (leave blank for fallback / unlimited)">
           <span class="text-xs text-slate-400 mt-1.5 block">
             Fallback to organization OCR credit limit: <strong>{{ (group.ocr_credit_limit if group.ocr_credit_limit is not none else "∞") }}</strong>
+          </span>
+        </div>
+
+        <div>
+          <label for="default_user_translation_limit" class="{{ admin.label_class() }}">{{ _('Per-User Translation Limit') }}</label>
+          <input type="number" id="default_user_translation_limit" name="default_user_translation_limit" min=0
+            value="{{ group.default_user_translation_limit if group.default_user_translation_limit is not none else '' }}"
+            class="{{ admin.input_class() }}" placeholder="e.g. 100 (leave blank for fallback / unlimited)">
+          <span class="text-xs text-slate-400 mt-1.5 block">
+            Fallback to organization translation credit limit: <strong>{{ (group.translation_credit_limit if group.translation_credit_limit is not none else "∞") }}</strong>
           </span>
         </div>
       </div>

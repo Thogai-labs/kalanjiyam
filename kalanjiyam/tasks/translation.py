@@ -9,6 +9,7 @@ from kalanjiyam import database as db
 from kalanjiyam import queries as q
 from kalanjiyam.tasks import app
 from kalanjiyam.utils.translation_engine import translate_text, segment_text_for_translation
+from kalanjiyam.utils.quotas import ensure_translation_quota_for_project, consume_translation_credit_for_project
 from config import create_config_only_app
 
 LOG = logging.getLogger(__name__)
@@ -64,6 +65,8 @@ def _run_translation_for_page_inner(
             LOG.info(f"Translation already exists for {project_slug}/{page_slug} ({source_lang}->{target_lang})")
             return existing_translation.id
 
+        ensure_translation_quota_for_project(project)
+
         # Segment text for translation
         text_segments = segment_text_for_translation(revision.content, max_length=1000)
         
@@ -106,6 +109,7 @@ def _run_translation_for_page_inner(
             )
             
             session.add(translation)
+            consume_translation_credit_for_project(project)
             session.commit()
             
             LOG.info(f"Translation completed for {project_slug}/{page_slug} ({source_lang}->{target_lang})")

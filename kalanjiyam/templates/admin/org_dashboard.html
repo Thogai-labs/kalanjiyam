@@ -10,7 +10,7 @@
 {% block content %}
 {{ admin.page_header(org.name, _('Manage users and books for your organization.')) }}
 
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
   <div class="premium-card p-6">
     <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ _('Storage') }}</p>
     <p class="text-2xl font-extrabold text-slate-900">
@@ -23,6 +23,13 @@
     <p class="text-2xl font-extrabold text-slate-900">
       {{ org.ocr_credits_used or 0 }}
       <span class="text-base font-semibold text-slate-400">/ {{ org.ocr_credit_limit if org.ocr_credit_limit is not none else _('unlimited') }}</span>
+    </p>
+  </div>
+  <div class="premium-card p-6">
+    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ _('Translation credits') }}</p>
+    <p class="text-2xl font-extrabold text-slate-900">
+      {{ org.translation_credits_used or 0 }}
+      <span class="text-base font-semibold text-slate-400">/ {{ org.translation_credit_limit if org.translation_credit_limit is not none else _('unlimited') }}</span>
     </p>
   </div>
 </div>

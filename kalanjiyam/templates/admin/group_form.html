@@ -47,7 +47,7 @@ _('Admin') }}{% endblock %}
       </select>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <div>
         <label for="storage_quota_mb" class="{{ admin.label_class() }}">{{ _('Storage quota (MB)') }}</label>
         <input type="number" id="storage_quota_mb" name="storage_quota_mb" min=0
@@ -58,6 +58,12 @@ _('Admin') }}{% endblock %}
         <label for="ocr_credit_limit" class="{{ admin.label_class() }}">{{ _('OCR credit limit') }}</label>
         <input type="number" id="ocr_credit_limit" name="ocr_credit_limit" min=0
           value="{{ group.ocr_credit_limit if group and group.ocr_credit_limit is not none else '' }}"
+          class="{{ admin.input_class() }}">
+      </div>
+      <div>
+        <label for="translation_credit_limit" class="{{ admin.label_class() }}">{{ _('Translation credit limit') }}</label>
+        <input type="number" id="translation_credit_limit" name="translation_credit_limit" min=0
+          value="{{ group.translation_credit_limit if group and group.translation_credit_limit is not none else '' }}"
           class="{{ admin.input_class() }}">
       </div>
     </div>
