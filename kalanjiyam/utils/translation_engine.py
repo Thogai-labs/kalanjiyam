@@ -423,7 +423,8 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
         return []
     url = f"{base_url}/models"
     try:
-        timeout = float(current_app.config.get("TRANSLATION_SERVICE_TIMEOUT", 5.0))
+        # Use a short timeout (5s) for fetching available models to avoid blocking the app
+        timeout = 5.0
         with httpx.Client(timeout=timeout) as client:
             response = client.get(url)
         if response.status_code == 200:

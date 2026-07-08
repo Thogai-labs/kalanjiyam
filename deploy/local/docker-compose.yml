@@ -18,6 +18,7 @@ services:
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
+      - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
       - FLASK_UPLOAD_FOLDER=/data/uploads
       - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
       - S3_ENDPOINT_URL=http://kalanjiyam-versitygw:7070
@@ -59,6 +60,7 @@ services:
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
+      - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
       # - OCR_SERVICE_URL=${OCR_SERVICE_URL:-http://host.docker.internal:5001}
     depends_on:
       - kalanjiyam-db
