@@ -14,8 +14,8 @@ services:
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
-      # - OCR_SERVICE_URL=${OCR_SERVICE_URL}
       - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
+      - GUNICORN_TIMEOUT=300
       - FLASK_UPLOAD_FOLDER=/data/uploads
       - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
       - S3_ENDPOINT_URL=http://kalanjiyam-versitygw:7070

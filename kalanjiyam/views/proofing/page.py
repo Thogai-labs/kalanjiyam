@@ -272,6 +272,23 @@ def get_version_display_name(version_key: str) -> str:
         if num.isdigit():
             return _l("OCR %(number)s", number=num)
         return _l("%(engine)s OCR", engine=num.capitalize())
+    elif version_key.startswith("translation:"):
+        parts = version_key.split(":", 2)
+        engine_name = parts[1] if len(parts) > 1 else ""
+        lang_str = parts[2] if len(parts) > 2 else ""
+        if "->" in lang_str:
+            src, target = lang_str.split("->", 1)
+            lang_display = f"{src.upper()} → {target.upper()}"
+        else:
+            lang_display = lang_str.upper()
+        label_map = {
+            'indictrans2': 'IndicTrans v2',
+            'indictrans3': 'IndicTrans v3',
+            'google': 'Google',
+            'openai': 'OpenAI',
+        }
+        engine_label = label_map.get(engine_name, engine_name.capitalize())
+        return _l("Translation: %(engine)s (%(languages)s)", engine=engine_label, languages=lang_display)
     return version_key
 
 
@@ -1280,6 +1297,45 @@ def translate(project_slug, page_slug):
             if has_content:
                 consume_translation_credit_for_project(project_)
                 
+                # Create PageVersion and Revision
+                version_key = f"translation:{engine}:{source_lang}->{target_lang}"
+                
+                session = q.get_session()
+                pv = session.query(db.PageVersion).filter_by(
+                    page_id=page_.id,
+                    version_key=version_key
+                ).first()
+                current_ver = pv.version if pv else 0
+                
+                if blocks:
+                    from kalanjiyam.utils.page_document import PageDocument
+                    try:
+                        translated_text = PageDocument.from_dict(doc_data).to_plain_text()
+                    except Exception:
+                        translated_text = ""
+                    content_format = "blocks"
+                else:
+                    translated_text = doc_data.get("content", "")
+                    content_format = "plain"
+                
+                from kalanjiyam import consts
+                from kalanjiyam.enums import SitePageStatus
+                bot_user = q.user(consts.BOT_USERNAME)
+                author_id = bot_user.id if bot_user else (current_user.id if current_user.is_authenticated else None)
+                
+                summary = f"Translation: {engine} {source_lang}->{target_lang}"
+                add_revision(
+                    page=page_,
+                    summary=summary,
+                    content=translated_text,
+                    status=SitePageStatus.R0,
+                    version=current_ver,
+                    author_id=author_id,
+                    document=doc_data if content_format == "blocks" else None,
+                    content_format=content_format,
+                    version_key=version_key,
+                )
+                
             return jsonify(doc_data)
         except Exception as e:
             logging.error(f"Translation failed for {project_slug}/{page_slug} with engine {engine}: {e}")
@@ -1337,9 +1393,27 @@ def translate(project_slug, page_slug):
             translation_engine=engine,
             status='completed'
         )
-        
         session.add(new_translation)
-        session.commit()
+
+        # Create page version and revision following the OCR version track system
+        version_key = f"translation:{engine}:{source_lang}->{target_lang}"
+        pv = session.query(db.PageVersion).filter_by(
+            page_id=page_.id,
+            version_key=version_key
+        ).first()
+        current_ver = pv.version if pv else 0
+
+        from kalanjiyam.enums import SitePageStatus
+        summary = f"Translation: {engine} {source_lang}->{target_lang}"
+        add_revision(
+            page=page_,
+            summary=summary,
+            content=translated_text,
+            status=SitePageStatus.R0,
+            version=current_ver,
+            author_id=bot_user.id,
+            version_key=version_key,
+        )
 
         return translated_text
     except Exception as e:

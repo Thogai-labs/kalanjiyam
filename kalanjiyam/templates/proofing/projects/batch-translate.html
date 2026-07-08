@@ -157,11 +157,15 @@
           Translation Engine
         </label>
         <select id="engine" name="engine" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="google" selected>Google Translate</option>
-          <option value="openai">OpenAI GPT</option>
+          {% for eng in engines %}
+            <option value="{{ eng.value }}" {% if loop.first %}selected{% endif %}>{{ eng.label }}</option>
+          {% else %}
+            <option value="google" selected>Google Translate</option>
+            <option value="openai">OpenAI GPT</option>
+          {% endfor %}
         </select>
         <p class="mt-1 text-sm text-gray-500">
-          Google Translate is free but may have lower quality. OpenAI GPT provides better quality but requires an API key.
+          Select the translation engine to use for batch translating this project.
         </p>
       </div>
       

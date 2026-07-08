@@ -85,6 +85,8 @@ def test_revision__bad_revision_non_numeric(client):
 def test_translate_api_get(rama_client):
     from unittest.mock import patch
     from kalanjiyam.utils.translation_engine import TranslationResponse
+    import kalanjiyam.database as db
+    from kalanjiyam.queries import get_session
 
     with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
         mock_translate.return_value = TranslationResponse(
@@ -97,6 +99,17 @@ def test_translate_api_get(rama_client):
         r = rama_client.get("/api/translate/test-project/1/?source_lang=sa&target_lang=en&engine=indictrans2")
         assert r.status_code == 200
         assert r.text == "Translated Hello"
+
+        # Assert PageVersion was created
+        session = get_session()
+        page = session.query(db.Page).filter_by(slug="1").first()
+        pv = session.query(db.PageVersion).filter_by(
+            page_id=page.id,
+            version_key="translation:indictrans2:sa->en"
+        ).first()
+        assert pv is not None
+        assert len(pv.revisions) == 1
+        assert pv.revisions[0].content == "Translated Hello"
 
 
 def test_translate_api_post(rama_client):
@@ -128,6 +141,18 @@ def test_translate_api_post(rama_client):
         data = r.get_json()
         assert data["blocks"][0]["content"] == "Translated Hello Block"
         mock_translate.assert_called_once_with("Hello Sanskrit", "sa", "en", "indictrans2")
+
+        # Assert PageVersion and Revision records were created
+        session = get_session()
+        page = session.query(db.Page).filter_by(slug="1").first()
+        pv = session.query(db.PageVersion).filter_by(
+            page_id=page.id,
+            version_key="translation:indictrans2:sa->en"
+        ).first()
+        assert pv is not None
+        assert len(pv.revisions) == 1
+        assert pv.revisions[0].content == "Translated Hello Block"
+        assert pv.revisions[0].document["blocks"][0]["content"] == "Translated Hello Block"
 
 
 def test_translate_api_post_preserves_html(rama_client):

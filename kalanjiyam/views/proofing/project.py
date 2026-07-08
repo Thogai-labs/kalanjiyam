@@ -1179,6 +1179,9 @@ def batch_translate(slug):
     if project_ is None:
         abort(404)
 
+    from kalanjiyam.utils.translation_engine import get_available_translation_engines
+    engines = get_available_translation_engines()
+
     # Check if there's an ongoing translation task using Redis
     task_key = f"translation_task:{slug}"
     task_info = redis_client.get(task_key)
@@ -1213,6 +1216,7 @@ def batch_translate(slug):
                         active_tasks=active_tasks,
                         pending_tasks=pending_tasks,
                         failed_tasks=failed_tasks,
+                        engines=engines,
                     )
                 else:
                     # Task is complete, remove from Redis
@@ -1238,14 +1242,17 @@ def batch_translate(slug):
             return render_template(
                 "proofing/projects/batch-translate.html",
                 project=project_,
+                engines=engines,
             )
         
+        queue_name = "low_priority" if not current_user.is_authenticated else None
         task = translation_tasks.run_translation_for_project(
             app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
             project=project_,
             source_lang=source_lang,
             target_lang=target_lang,
             engine=engine,
+            queue=queue_name,
         )
         if task:
             # Store task info in Redis with expiration (24 hours)
@@ -1270,6 +1277,7 @@ def batch_translate(slug):
                 active_tasks=0,
                 pending_tasks=0,
                 failed_tasks=0,
+                engines=engines,
             )
         else:
             flash(_l("No pages with revisions found in this project."), "error")
@@ -1277,6 +1285,7 @@ def batch_translate(slug):
     return render_template(
         "proofing/projects/batch-translate.html",
         project=project_,
+        engines=engines,
     )
 
 

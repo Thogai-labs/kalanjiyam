@@ -252,3 +252,15 @@ def test_batch_ocr(moderator_client):
 def test_batch_ocr__unauth(client):
     resp = client.get("/proofing/test-project/batch-ocr")
     assert resp.status_code == 302
+
+
+def test_batch_translate_view_engines_list(rama_client):
+    from unittest.mock import patch
+    with patch("kalanjiyam.views.proofing.project.get_available_translation_engines") as mock_engines:
+        mock_engines.return_value = [
+            {"value": "test-engine", "label": "Test Dynamic Engine"}
+        ]
+        resp = rama_client.get("/proofing/test-project/batch-translate")
+        assert resp.status_code == 200
+        assert "Test Dynamic Engine" in resp.text
+        assert 'value="test-engine"' in resp.text

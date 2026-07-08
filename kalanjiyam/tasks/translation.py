@@ -107,8 +107,30 @@ def _run_translation_for_page_inner(
                 translation_engine=engine,
                 status='completed'
             )
-            
             session.add(translation)
+
+            # Create page version and revision following the OCR version track system
+            version_key = f"translation:{engine}:{source_lang}->{target_lang}"
+            pv = session.query(db.PageVersion).filter_by(
+                page_id=page.id,
+                version_key=version_key
+            ).first()
+            current_ver = pv.version if pv else 0
+
+            from kalanjiyam.utils.revisions import add_revision
+            from kalanjiyam.enums import SitePageStatus
+
+            summary = f"Translation: {engine} {source_lang}->{target_lang}"
+            add_revision(
+                page=page,
+                summary=summary,
+                content=translated_content,
+                status=SitePageStatus.R0,
+                version=current_ver,
+                author_id=bot_user.id,
+                version_key=version_key,
+            )
+
             consume_translation_credit_for_project(project)
             session.commit()
             
@@ -154,6 +176,7 @@ def run_translation_for_project(
     target_lang: str = 'en',
     engine: str = 'google',
     revision_id: int = None,
+    queue: str | None = None,
 ) -> GroupResult | None:
     """Create a `group` task to run translation on a project.
 
@@ -168,6 +191,7 @@ def run_translation_for_project(
     :param target_lang: Target language code
     :param engine: Translation engine to use
     :param revision_id: Specific revision ID to translate (optional)
+    :param queue: The Celery queue name to route tasks to
     :return: the Celery result, or ``None`` if no tasks were run.
     """
     flask_app = create_config_only_app(app_env)
@@ -188,7 +212,10 @@ def run_translation_for_project(
             )
             for p in pages_with_revisions
         )
-        ret = tasks.apply_async()
+        if queue:
+            ret = tasks.apply_async(queue=queue)
+        else:
+            ret = tasks.apply_async()
         # Save the result so that we can poll for it later
         ret.save()
         return ret
