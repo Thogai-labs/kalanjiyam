@@ -352,13 +352,13 @@ these components in our help text and documentation.
         <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Translation engine') }}</label>
         <div class="grid grid-cols-2 gap-2" x-init="if (![{% for e in translation_engines %}'{{ e.value }}',{% endfor %}].includes(selectedTranslationEngine)) { selectedTranslationEngine = '{{ translation_engines[0].value if translation_engines else 'indictrans2' }}'; }">
           {% for e in translation_engines %}
-          <button @click.prevent.stop="selectedTranslationEngine = '{{ e.value }}'" 
+          <button @click.prevent.stop="selectedTranslationEngine = '{{ e.value }}'; saveSettings()" 
                   class="ocr-engine-btn"
                   :class="selectedTranslationEngine === '{{ e.value }}' ? 'active' : ''">
             {{ e.label }}
           </button>
           {% else %}
-          <button @click.prevent.stop="selectedTranslationEngine = 'indictrans2'" 
+          <button @click.prevent.stop="selectedTranslationEngine = 'indictrans2'; saveSettings()" 
                   class="ocr-engine-btn active">
             IndicTrans v2
           </button>
@@ -367,7 +367,7 @@ these components in our help text and documentation.
       </li>
       <li class="mb-3 px-3">
         <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Source Language') }}</label>
-        <select class="form-select-enhanced w-full" x-model="sourceLanguage" id="source-language-select" @click.stop>
+        <select class="form-select-enhanced w-full" x-model="sourceLanguage" id="source-language-select" @change="saveSettings()" @click.stop>
           <option value="hi">Hindi (hi)</option>
           <option value="te">Telugu (te)</option>
           <option value="mr">Marathi (mr)</option>
@@ -385,7 +385,7 @@ these components in our help text and documentation.
       </li>
       <li class="mb-3 px-3">
         <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Target Language') }}</label>
-        <select class="form-select-enhanced w-full" x-model="targetLanguage" id="target-language-select" @click.stop>
+        <select class="form-select-enhanced w-full" x-model="targetLanguage" id="target-language-select" @change="saveSettings()" @click.stop>
           <option value="en">English (en)</option>
           <option value="sa">Sanskrit (sa)</option>
           <option value="hi">Hindi (hi)</option>
@@ -682,17 +682,17 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
     </div>
 
     <!-- Translation Dropdown -->
-    <div x-data="{open: false, selectedTranslationEngine: 'google', sourceLanguage: 'sa', targetLanguage: 'en', showTranslationInfo: false}" class="relative">
+    <div class="relative">
       <button class="{{ button_css }}"
-         @click.prevent="open=!open"
-         @click.outside="open=false">
+         @click.prevent="translationDropdownOpen=!translationDropdownOpen"
+         @click.outside="translationDropdownOpen=false">
         <svg class="w-5 h-5 text-peacock-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
         </svg>
         {{ _('Translation') }}
       </button>
-      <div x-show="open" x-cloak class="dropdown-pane w-80">
-        <ul class="text-sm" @click.prevent="open=false">
+      <div x-show="translationDropdownOpen" x-cloak class="dropdown-pane w-80">
+        <ul class="text-sm" @click.prevent="translationDropdownOpen=false">
           
           <!-- Translation Section Header -->
           <li class="border-b border-teal-100 pb-2 mb-2">
@@ -732,12 +732,12 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
             <div class="dropdown-item-no-hover">
               <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Select Engine:') }}</label>
               <div class="grid grid-cols-2 gap-2">
-                <button @click.prevent.stop="selectedTranslationEngine = 'google'" 
+                <button @click.prevent.stop="selectedTranslationEngine = 'google'; saveSettings()" 
                         class="ocr-engine-btn"
                         :class="selectedTranslationEngine === 'google' ? 'active' : ''">
                   Google
                 </button>
-                <button @click.prevent.stop="selectedTranslationEngine = 'openai'" 
+                <button @click.prevent.stop="selectedTranslationEngine = 'openai'; saveSettings()" 
                         class="ocr-engine-btn"
                         :class="selectedTranslationEngine === 'openai' ? 'active' : ''">
                   OpenAI
@@ -753,6 +753,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
               <select class="form-select-enhanced" 
                       x-model="sourceLanguage" 
                       id="source-language-select"
+                      @change="saveSettings()"
                       @click.stop>
                 <option value="hi">Hindi (hi)</option>
                 <option value="te">Telugu (te)</option>
@@ -777,6 +778,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
               <select class="form-select-enhanced" 
                       x-model="targetLanguage" 
                       id="target-language-select"
+                      @change="saveSettings()"
                       @click.stop>
                 <option value="en">English (en)</option>
                 <option value="sa">Sanskrit (sa)</option>
@@ -805,7 +807,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
           <li class="border-t border-teal-100 pt-2">
             <button type="button" 
                     class="dropdown-item flex items-center gap-2 w-full justify-center bg-peacock-primary text-white rounded-lg py-2 hover:bg-peacock-secondary transition-colors"
-                    @click.prevent.stop="runTranslation(selectedTranslationEngine, sourceLanguage, targetLanguage)"
+                    @click.prevent.stop="runTranslation(selectedTranslationEngine, sourceLanguage, targetLanguage); translationDropdownOpen=false"
                     :disabled="isRunningTranslation"
                     x-text="isRunningTranslation ? '{{ _("Translating...") }}' : '{{ _("Translate Page") }}'">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
