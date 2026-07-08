@@ -80,3 +80,5 @@ ignore = [
     "B007",
     "B905",
 ]
+
+# Cache invalidation to resolve 0-byte corrupt virtualenv files after OS crash

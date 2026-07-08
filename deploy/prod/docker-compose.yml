@@ -28,6 +28,8 @@ services:
       - kalanjiyam-db
       - kalanjiyam-redis
       - kalanjiyam-versitygw
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   kalanjiyam-db:
     image: postgres:15
@@ -76,6 +78,8 @@ services:
       - kalanjiyam-db
       - kalanjiyam-redis
       - kalanjiyam-versitygw
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # S3-compatible gateway (Versity Gateway) over the existing data directory.
   # The historical ~/kalanjiyam-data/uploads directory is exposed as the

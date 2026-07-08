@@ -4,6 +4,7 @@ The main route here is `edit`, which defines the page editor and the edit flow.
 """
 
 import logging
+import re
 import uuid
 from dataclasses import dataclass
 
@@ -41,9 +42,15 @@ from kalanjiyam.utils.quotas import (
     ensure_storage_quota_for_user,
 )
 from kalanjiyam.utils.revisions import EditError, add_revision, parse_document_field
+from kalanjiyam.utils.translation_engine import translate_text
 from kalanjiyam.views.api import bp as api
 
 bp = Blueprint("page", __name__)
+
+
+SENTENCE_SPLIT_REGEX = re.compile(
+    r'((?<!\bMs\.)(?<!\bMr\.)(?<!\bDr\.)(?<!\bProf\.)(?<!\bSr\.)(?<!\bJr\.)(?<=[.!?।॥])\s+|\n+)'
+)
 
 
 @bp.before_request
@@ -979,10 +986,51 @@ def ocr(project_slug, page_slug):
         abort(500, description=f"OCR failed: {str(e)}")
 
 
+def _is_matching_language(text: str, lang: str) -> bool:
+    """Check if the text segment matches the selected source language."""
+    import re
+
+    # Clean text to get only letters/alphabetic content.
+    # If no alphabetic chars, return False.
+    if not any(c.isalpha() for c in text):
+        return False
+
+    lang = lang.lower()
+
+    # 1. English
+    if lang == 'en':
+        # Must contain Latin characters
+        if not re.search(r'[a-zA-Z]', text):
+            return False
+        # Must not contain Indic script characters (Devanagari, Tamil, etc.) or Arabic/Urdu script.
+        if re.search(r'[\u0900-\u0D7F\u0600-\u06FF]', text):
+            return False
+        return True
+
+    # Script ranges maps for other supported source languages
+    script_ranges = {
+        'ta': r'[\u0B80-\u0BFF]', # Tamil
+        'te': r'[\u0C00-\u0C7F]', # Telugu
+        'kn': r'[\u0C80-\u0CFF]', # Kannada
+        'ml': r'[\u0D00-\u0D7F]', # Malayalam
+        'hi': r'[\u0900-\u097F]', # Hindi
+        'sa': r'[\u0900-\u097F]', # Sanskrit
+        'bn': r'[\u0980-\u09FF]', # Bengali
+        'gu': r'[\u0A80-\u0AFF]', # Gujarati
+        'or': r'[\u0B00-\u0B7F]', # Odia
+        'pa': r'[\u0A00-\u0A7F]', # Punjabi / Gurmukhi
+        'ur': r'[\u0600-\u06FF]', # Urdu / Arabic
+        'mr': r'[\u0900-\u097F]', # Marathi
+    }
+
+    if lang in script_ranges:
+        return bool(re.search(script_ranges[lang], text))
+
+    return True
+
+
 def _translate_html_content(html: str, source_lang: str, target_lang: str, engine: str) -> str:
     """Helper to translate plain text sections within HTML content, preserving HTML tags."""
-    import re
-    from kalanjiyam.utils.translation_engine import translate_text
 
     # Split by HTML tags
     parts = re.split(r'(<[^>]+>)', html)
@@ -992,21 +1040,181 @@ def _translate_html_content(html: str, source_lang: str, target_lang: str, engin
             text = parts[i]
             if text and text.strip():
                 try:
-                    stripped = text.strip()
-                    leading_ws = text[:len(text) - len(text.lstrip())]
-                    trailing_ws = text[len(text.rstrip()):]
+                    # Segment text into sentences/lines to handle multi-language documents selectively.
+                    # We split by sentence endings (.!? । ॥) followed by whitespace, or newlines.
+                    # We wrap in capturing group to keep delimiters and maintain exact layout.
+                    subparts = SENTENCE_SPLIT_REGEX.split(text)
                     
-                    translation_response = translate_text(
-                        stripped,
-                        source_lang,
-                        target_lang,
-                        engine
-                    )
-                    translated_text = translation_response.translated_text
-                    parts[i] = f"{leading_ws}{translated_text}{trailing_ws}"
+                    indices_to_translate = []
+                    texts_to_translate = []
+                    
+                    for j in range(len(subparts)):
+                        # Even indices are text segments, odd indices are delimiters
+                        if j % 2 == 0:
+                            sub_text = subparts[j]
+                            if sub_text and sub_text.strip() and _is_matching_language(sub_text, source_lang):
+                                indices_to_translate.append(j)
+                                texts_to_translate.append(sub_text.strip())
+                                
+                    if texts_to_translate:
+                        try:
+                            # Batch translate all matching segments by joining them with double newlines
+                            joined_text = "\n\n".join(texts_to_translate)
+                            translation_response = translate_text(
+                                joined_text,
+                                source_lang,
+                                target_lang,
+                                engine
+                            )
+                            # Split back the translated segments
+                            translated_segments = translation_response.translated_text.split("\n\n")
+                            
+                            # If count doesn't match, try splitting by single/consecutive newlines
+                            if len(translated_segments) != len(texts_to_translate):
+                                translated_segments = [s.strip() for s in re.split(r'\n+', translation_response.translated_text) if s.strip()]
+                                
+                            if len(translated_segments) == len(texts_to_translate):
+                                for idx, translated_segment in zip(indices_to_translate, translated_segments):
+                                    sub_text = subparts[idx]
+                                    leading_ws = sub_text[:len(sub_text) - len(sub_text.lstrip())]
+                                    trailing_ws = sub_text[len(sub_text.rstrip()):]
+                                    subparts[idx] = f"{leading_ws}{translated_segment}{trailing_ws}"
+                            else:
+                                raise ValueError("Mismatched translated segments count")
+                        except Exception as batch_err:
+                            logging.warning(f"Batched translation failed ({batch_err}), falling back to sequential.")
+                            # Fallback: sequential translation
+                            for idx in indices_to_translate:
+                                sub_text = subparts[idx]
+                                stripped = sub_text.strip()
+                                leading_ws = sub_text[:len(sub_text) - len(sub_text.lstrip())]
+                                trailing_ws = sub_text[len(sub_text.rstrip()):]
+                                
+                                translation_response = translate_text(
+                                    stripped,
+                                    source_lang,
+                                    target_lang,
+                                    engine
+                                )
+                                translated_text = translation_response.translated_text
+                                subparts[idx] = f"{leading_ws}{translated_text}{trailing_ws}"
+                                
+                    parts[i] = "".join(subparts)
                 except Exception as e:
                     logging.error(f"Failed to translate segment '{text}': {e}")
+                    raise
     return "".join(parts)
+
+
+def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: str) -> None:
+    """Translate multiple blocks in a single batched translation request."""
+    # We will gather info for all texts we want to translate across all blocks
+    translation_targets = []
+    
+    # Store parsed structures for all blocks
+    blocks_parsed = []
+
+    for block_idx, block in enumerate(blocks):
+        content = block.get("content", "")
+        if not content or not content.strip():
+            blocks_parsed.append(None)
+            continue
+
+        parts = re.split(r'(<[^>]+>)', content)
+        block_parts_structure = []
+        
+        for part_idx in range(len(parts)):
+            part = parts[part_idx]
+            # Even indices are text content, odd indices are tags
+            if part_idx % 2 == 0:
+                if part and part.strip():
+                    subparts = SENTENCE_SPLIT_REGEX.split(part)
+                    for subpart_idx in range(len(subparts)):
+                        # Even indices of subparts are text segments
+                        if subpart_idx % 2 == 0:
+                            sub_text = subparts[subpart_idx]
+                            if sub_text and sub_text.strip() and _is_matching_language(sub_text, source_lang):
+                                stripped = sub_text.strip()
+                                leading_ws = sub_text[:len(sub_text) - len(sub_text.lstrip())]
+                                trailing_ws = sub_text[len(sub_text.rstrip()):]
+                                translation_targets.append({
+                                    "block_idx": block_idx,
+                                    "part_idx": part_idx,
+                                    "subpart_idx": subpart_idx,
+                                    "original_text": stripped,
+                                    "leading_ws": leading_ws,
+                                    "trailing_ws": trailing_ws
+                                })
+                    block_parts_structure.append(subparts)
+                else:
+                    block_parts_structure.append(part)
+            else:
+                block_parts_structure.append(part)
+        blocks_parsed.append(block_parts_structure)
+
+    if not translation_targets:
+        return
+
+    texts_to_translate = [t["original_text"] for t in translation_targets]
+    
+    # Attempt batched translation in a single call
+    try:
+        joined_text = "\n\n".join(texts_to_translate)
+        translation_response = translate_text(
+            joined_text,
+            source_lang,
+            target_lang,
+            engine
+        )
+        translated_segments = translation_response.translated_text.split("\n\n")
+
+        # Fallback to single newlines if count doesn't match
+        if len(translated_segments) != len(texts_to_translate):
+            translated_segments = [s.strip() for s in re.split(r'\n+', translation_response.translated_text) if s.strip()]
+
+        if len(translated_segments) != len(texts_to_translate):
+            raise ValueError("Mismatched translated segments count in batch translation")
+
+        # Apply translations back to parsed structures
+        for target, translated in zip(translation_targets, translated_segments):
+            b_idx = target["block_idx"]
+            p_idx = target["part_idx"]
+            s_idx = target["subpart_idx"]
+            leading = target["leading_ws"]
+            trailing = target["trailing_ws"]
+            blocks_parsed[b_idx][p_idx][s_idx] = f"{leading}{translated}{trailing}"
+
+    except Exception as batch_err:
+        logging.warning(f"Batched block translation failed ({batch_err}), falling back to sequential block-by-block translation.")
+        # Fallback: Translate block by block sequentially
+        for block in blocks:
+            content = block.get("content", "")
+            if content and content.strip():
+                block["content"] = _translate_html_content(
+                    content,
+                    source_lang,
+                    target_lang,
+                    engine
+                )
+        return
+
+    # Reconstruct blocks content from blocks_parsed
+    for block_idx, block in enumerate(blocks):
+        parsed_structure = blocks_parsed[block_idx]
+        if parsed_structure is None:
+            continue
+        
+        parts_reconstructed = []
+        for part_idx, part in enumerate(parsed_structure):
+            if part_idx % 2 == 0:
+                # part is a list of subparts (strings)
+                if isinstance(part, list):
+                    parts_reconstructed.append("".join(part))
+                else:
+                    parts_reconstructed.append(part)
+            else:
+                parts_reconstructed.append(part)
+        block["content"] = "".join(parts_reconstructed)
 
 
 @api.route("/translate/<project_slug>/<page_slug>/", methods=["GET", "POST"])
@@ -1043,27 +1251,28 @@ def translate(project_slug, page_slug):
         abort(400, description=f"Unsupported translation engine: {engine}")
 
     if request.method == "POST":
-        blocks = doc_data.get("blocks", [])
-        if blocks:
-            for block in blocks:
-                content = block.get("content", "")
+        try:
+            blocks = doc_data.get("blocks", [])
+            if blocks:
+                _translate_blocks(
+                    blocks,
+                    source_lang,
+                    target_lang,
+                    engine
+                )
+            elif "content" in doc_data:
+                content = doc_data["content"]
                 if content and content.strip():
-                    block["content"] = _translate_html_content(
+                    doc_data["content"] = _translate_html_content(
                         content,
                         source_lang,
                         target_lang,
                         engine
                     )
-        elif "content" in doc_data:
-            content = doc_data["content"]
-            if content and content.strip():
-                doc_data["content"] = _translate_html_content(
-                    content,
-                    source_lang,
-                    target_lang,
-                    engine
-                )
-        return jsonify(doc_data)
+            return jsonify(doc_data)
+        except Exception as e:
+            logging.error(f"Translation failed for {project_slug}/{page_slug} with engine {engine}: {e}")
+            abort(500, description=f"Translation failed: {str(e)}")
 
     # Get the revision to translate
     if revision_id is None:

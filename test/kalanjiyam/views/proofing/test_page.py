@@ -159,3 +159,131 @@ def test_translate_api_post_preserves_html(rama_client):
         data = r.get_json()
         assert data["blocks"][0]["content"] == '<img class="w-full" src="/static/img.png"> नमस्ते'
         mock_translate.assert_called_once_with("Hello world", "en", "hi", "indictrans2")
+
+
+def test_translate_api_selective_translation_english(rama_client):
+    from unittest.mock import patch
+    from kalanjiyam.utils.translation_engine import TranslationResponse
+
+    with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
+        mock_translate.return_value = TranslationResponse(
+            translated_text="வணக்கம் உலகமே.",
+            source_language="en",
+            target_language="ta",
+            engine="indictrans2"
+        )
+
+        payload = {
+            "blocks": [
+                {
+                    "id": "b1",
+                    "type": "paragraph",
+                    "content": "சும்மா இருக்கச் சொல்லுது.\nHello world.\nनमः शिवाय"
+                }
+            ]
+        }
+        r = rama_client.post(
+            "/api/translate/test-project/1/?source_lang=en&target_lang=ta&engine=indictrans2",
+            json=payload
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["blocks"][0]["content"] == "சும்மா இருக்கச் சொல்லுது.\nவணக்கம் உலகமே.\nनमः शिवाय"
+        mock_translate.assert_called_once_with("Hello world.", "en", "ta", "indictrans2")
+
+
+def test_translate_api_selective_translation_tamil(rama_client):
+    from unittest.mock import patch
+    from kalanjiyam.utils.translation_engine import TranslationResponse
+
+    with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
+        mock_translate.return_value = TranslationResponse(
+            translated_text="Hello world translated.",
+            source_language="ta",
+            target_language="en",
+            engine="indictrans2"
+        )
+
+        payload = {
+            "blocks": [
+                {
+                    "id": "b1",
+                    "type": "paragraph",
+                    "content": "சும்மா இருக்கச் சொல்லுது.\nHello world.\nनमः शिवाय"
+                }
+            ]
+        }
+        r = rama_client.post(
+            "/api/translate/test-project/1/?source_lang=ta&target_lang=en&engine=indictrans2",
+            json=payload
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["blocks"][0]["content"] == "Hello world translated.\nHello world.\nनमः शिवाय"
+        mock_translate.assert_called_once_with("சும்மா இருக்கச் சொல்லுது.", "ta", "en", "indictrans2")
+
+
+def test_translate_api_selective_translation_proper_nouns(rama_client):
+    from unittest.mock import patch
+    from kalanjiyam.utils.translation_engine import TranslationResponse
+
+    with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
+        mock_translate.return_value = TranslationResponse(
+            translated_text=(
+                "திருமதி நளினி தனேஜா\n\n"
+                "டெல்லி பல்கலைக்கழகம்\n\n"
+                "பேராசிரியர் கபில் குமார் (கூட்டுபவர்)\n\n"
+                "இக்னோ, புது டெல்லி"
+            ),
+            source_language="en",
+            target_language="ta",
+            engine="indictrans2"
+        )
+
+        payload = {
+            "blocks": [
+                {
+                    "id": "b1",
+                    "type": "paragraph",
+                    "content": (
+                        "Ms. Nalini Taneja\n"
+                        "पत्रव्यवहार अभ्यास शाळा\n"
+                        "Delhi University\n"
+                        "\n"
+                        "Prof. Kapil Kumar (Convener)\n"
+                        "अध्यक्ष, इतिहास विभाग\n"
+                        "सामाजिक विज्ञान शाळा\n"
+                        "IGNOU, New Delhi"
+                    )
+                }
+            ]
+        }
+        r = rama_client.post(
+            "/api/translate/test-project/1/?source_lang=en&target_lang=ta&engine=indictrans2",
+            json=payload
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        
+        expected_content = (
+            "திருமதி நளினி தனேஜா\n"
+            "पत्रव्यवहार अभ्यास शाळा\n"
+            "டெல்லி பல்கலைக்கழகம்\n"
+            "\n"
+            "பேராசிரியர் கபில் குமார் (கூட்டுபவர்)\n"
+            "अध्यक्ष, इतिहास विभाग\n"
+            "सामाजिक विज्ञान शाळा\n"
+            "இக்னோ, புது டெல்லி"
+        )
+        assert data["blocks"][0]["content"] == expected_content
+        
+        expected_joined_text = (
+            "Ms. Nalini Taneja\n\n"
+            "Delhi University\n\n"
+            "Prof. Kapil Kumar (Convener)\n\n"
+            "IGNOU, New Delhi"
+        )
+        mock_translate.assert_called_once_with(expected_joined_text, "en", "ta", "indictrans2")
+
+
+

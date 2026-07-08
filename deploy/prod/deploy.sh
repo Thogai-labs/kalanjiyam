@@ -88,7 +88,7 @@ build_image() {
     GITBRANCH=$(git rev-parse --abbrev-ref HEAD | sed 's#[^A-Za-z0-9_.-]#-#g')
     IMAGE="kalanjiyam:v0.1-${GITBRANCH}-${GITCOMMIT}"
     IMAGE_LATEST="kalanjiyam-rel:latest"
-    docker build -t "${IMAGE}" -t "${IMAGE_LATEST}" -f build/containers/Dockerfile.final .
+    docker build --no-cache -t "${IMAGE}" -t "${IMAGE_LATEST}" -f build/containers/Dockerfile.final .
     export KALANJIYAM_IMAGE="${IMAGE}"
     echo "✔  Image: ${IMAGE}"
 }
