@@ -165,6 +165,7 @@ def resolve_version_keys(user, page) -> tuple:
     moderator_tracks = []
     p2_tracks = []
     p1_tracks = []
+    translation_tracks = []
     ocr_tracks = []
 
     for v in page.versions:
@@ -187,11 +188,14 @@ def resolve_version_keys(user, page) -> tuple:
                 p1_tracks.append(v)
         elif v.version_key.startswith("ocr:"):
             ocr_tracks.append(v)
+        elif v.version_key.startswith("translation:"):
+            translation_tracks.append(v)
 
     # Sort tracks in each tier by updated_at descending
     moderator_tracks.sort(key=lambda x: x.updated_at, reverse=True)
     p2_tracks.sort(key=lambda x: x.updated_at, reverse=True)
     p1_tracks.sort(key=lambda x: x.updated_at, reverse=True)
+    translation_tracks.sort(key=lambda x: x.updated_at, reverse=True)
     ocr_tracks.sort(key=lambda x: 0 if x.version_key == "ocr:chandra" else 1)
 
     existing_keys = {v.version_key for v in page.versions}
@@ -203,31 +207,43 @@ def resolve_version_keys(user, page) -> tuple:
             return target_key, target_key
 
         if user.is_moderator or user.is_org_admin or user.is_super_admin:
-            # Moderator fallback order: Moderator -> P2 -> P1 -> OCR
+            # Moderator fallback order: Moderator -> P2 -> P1 -> Translation -> OCR
             if moderator_tracks:
                 return target_key, moderator_tracks[0].version_key
             if p2_tracks:
                 return target_key, p2_tracks[0].version_key
             if p1_tracks:
                 return target_key, p1_tracks[0].version_key
+            if translation_tracks:
+                return target_key, translation_tracks[0].version_key
         elif user.is_p2:
-            # P2 fallback order: P2 -> P1 -> OCR
+            # P2 fallback order: P2 -> P1 -> Translation -> OCR
             if p2_tracks:
                 return target_key, p2_tracks[0].version_key
             if p1_tracks:
                 return target_key, p1_tracks[0].version_key
+            if translation_tracks:
+                return target_key, translation_tracks[0].version_key
         elif user.is_p1:
-            # P1 fallback order: P1 -> OCR
+            # P1 fallback order: P1 -> Translation -> OCR
             if p1_tracks:
                 return target_key, p1_tracks[0].version_key
+            if translation_tracks:
+                return target_key, translation_tracks[0].version_key
     else:
-        # Anonymous user fallback order: Moderator -> P2 -> P1 -> OCR
+        # Anonymous user fallback order: Moderator -> P2 -> P1 -> Translation -> OCR
         if moderator_tracks:
             return target_key, moderator_tracks[0].version_key
         if p2_tracks:
             return target_key, p2_tracks[0].version_key
         if p1_tracks:
             return target_key, p1_tracks[0].version_key
+        if translation_tracks:
+            return target_key, translation_tracks[0].version_key
+
+    # Translation Fallback
+    if translation_tracks:
+        return target_key, translation_tracks[0].version_key
 
     # OCR Fallback
     if ocr_tracks:
@@ -1236,7 +1252,7 @@ def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: 
         block["content"] = "".join(parts_reconstructed)
 
 
-@api.route("/translate/<project_slug>/<page_slug>/", methods=["GET", "POST"])
+@api.route("/translate/<project_slug>/<page_slug>/", methods=["GET", "POST"], strict_slashes=False)
 @login_required
 def translate(project_slug, page_slug):
     """Apply translation to the given page using the specified engine."""

@@ -196,8 +196,12 @@ def run_translation_for_project(
     """
     flask_app = create_config_only_app(app_env)
     with flask_app.app_context():
+        session = q.get_session()
+        db_project = session.query(db.Project).get(project.id)
+        if not db_project:
+            return None
         # Get pages that have revisions
-        pages_with_revisions = [p for p in project.pages if p.revisions]
+        pages_with_revisions = [p for p in db_project.pages if p.revisions]
 
     if pages_with_revisions:
         tasks = group(
