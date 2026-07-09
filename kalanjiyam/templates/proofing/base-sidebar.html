@@ -23,12 +23,12 @@ A state-of-the-art Sanskrit proofreading platform with best-in-class OCR. Join t
 {% if not current_user.is_authenticated %}
 <div class="bg-slate-50 p-8 rounded-3xl mb-8 border border-slate-100 shadow-sm text-center">
   <p class="mb-6 text-lg text-slate-600 font-medium">{% trans %}
-  Thousands of Sanskrit texts are available only in print. Join our global
-  volunteer effort to digitize these texts and make them accessible to all.
+  Sign in now to save your work and get faster results.
   {% endtrans %}</p>
 
-  <nav>
-  <a class="btn-premium" href="{{ url_for('auth.sign_in') }}">{{ _('Sign in to get started') }}</a>
+  <nav class="flex flex-col sm:flex-row items-center justify-center gap-4">
+    <a class="btn-premium" href="{{ url_for('auth.register') }}">{{ _('Register') }}</a>
+    <a class="text-sm font-semibold text-slate-600 hover:text-royalblue transition-colors" href="{{ url_for('auth.sign_in') }}">{{ _('Already have an account? Sign in') }}</a>
   </nav>
 </div>
 {% endif %}
