@@ -67,35 +67,66 @@ def _run_translation_for_page_inner(
 
         ensure_translation_quota_for_project(project)
 
-        # Segment text for translation
-        text_segments = segment_text_for_translation(revision.content, max_length=1000)
-        
-        # Translate each segment
-        translated_segments = []
+        # Check if the revision to translate is in blocks format to preserve page structure
+        translated_content = ""
+        document_payload = None
+        content_format = "plain"
         translation_failed = False
-        
-        for segment in text_segments:
-            if segment.strip():
+
+        if revision.content_format == "blocks" and revision.document:
+            import copy
+            doc_data = copy.deepcopy(revision.document)
+            blocks = doc_data.get("blocks", [])
+            
+            if blocks:
                 try:
-                    translation_response = translate_text(
-                        segment, 
-                        source_lang, 
-                        target_lang, 
-                        engine
-                    )
-                    translated_segments.append(translation_response.translated_text)
+                    from kalanjiyam.views.proofing.page import _translate_blocks
+                    _translate_blocks(blocks, source_lang, target_lang, engine)
                 except Exception as e:
-                    LOG.error(f"Translation failed for segment: {e}")
+                    LOG.error(f"Structured translation failed: {e}")
                     translation_failed = True
-                    break  # Stop translation if any segment fails
-            else:
-                translated_segments.append(segment)
+                
+            if not translation_failed:
+                from kalanjiyam.utils.page_document import PageDocument
+                try:
+                    translated_content = PageDocument.from_dict(doc_data).to_plain_text()
+                except Exception as e:
+                    LOG.error(f"Failed to generate plain text from translated document: {e}")
+                    translated_content = ""
+                content_format = "blocks"
+                document_payload = doc_data
+        else:
+            # Segment text for translation
+            text_segments = segment_text_for_translation(revision.content, max_length=1000)
+            
+            # Translate each segment
+            translated_segments = []
+            
+            for segment in text_segments:
+                if segment.strip():
+                    try:
+                        translation_response = translate_text(
+                            segment, 
+                            source_lang, 
+                            target_lang, 
+                            engine
+                        )
+                        translated_segments.append(translation_response.translated_text)
+                    except Exception as e:
+                        LOG.error(f"Translation failed for segment: {e}")
+                        translation_failed = True
+                        break  # Stop translation if any segment fails
+                else:
+                    translated_segments.append(segment)
+
+            if not translation_failed:
+                # Combine translated segments
+                translated_content = '\n\n'.join(translated_segments)
+                content_format = "plain"
+                document_payload = None
 
         # Only create translation record if translation was successful
         if not translation_failed:
-            # Combine translated segments
-            translated_content = '\n\n'.join(translated_segments)
-
             # Create translation record
             translation = db.Translation(
                 page_id=page.id,
@@ -128,6 +159,8 @@ def _run_translation_for_page_inner(
                 status=SitePageStatus.R0,
                 version=current_ver,
                 author_id=bot_user.id,
+                document=document_payload,
+                content_format=content_format,
                 version_key=version_key,
             )
 
