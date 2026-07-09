@@ -88,6 +88,124 @@
     </li>
     {% endif %}
 
+    <!-- Task Dropdown -->
+    <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+        x-show="tasks.length > 0 || {{ 'true' if current_user.is_authenticated else 'false' }}"
+        x-cloak
+        x-data="{ 
+            open: false, 
+            tasks: [], 
+            activeCount: 0,
+            pollTimer: null,
+            fetchTasks() {
+                fetch('{{ url_for('proofing.get_tasks_api') }}')
+                    .then(r => r.json())
+                    .then(data => {
+                        this.tasks = data.tasks || [];
+                        this.activeCount = this.tasks.filter(t => t.status === 'pending' || t.status === 'running').length;
+                        
+                        // If we have active tasks, poll every 5 seconds, otherwise don't poll
+                        if (this.activeCount > 0) {
+                            if (!this.pollTimer) {
+                                this.pollTimer = setInterval(() => this.fetchTasks(), 5000);
+                            }
+                        } else if (this.pollTimer) {
+                            clearInterval(this.pollTimer);
+                            this.pollTimer = null;
+                        }
+                    })
+                    .catch(err => console.error('Error fetching tasks:', err));
+            },
+            toggle() {
+                this.open = !this.open;
+                if (this.open) {
+                    this.fetchTasks();
+                }
+            },
+            init() {
+                this.fetchTasks();
+                // Check status every 30 seconds even when closed if we have active tasks
+                setInterval(() => {
+                    if (this.activeCount > 0) {
+                        this.fetchTasks();
+                    }
+                }, 30000);
+            }
+        }" 
+        @click.outside="open = false" 
+        @mouseenter="moveCursor($el)">
+        <button @click="toggle()" type="button" class="block flex items-center gap-2 px-3 py-1.5 rounded-full text-slate-900 focus:outline-none transition-colors select-none relative">
+            <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+            </svg>
+            <span x-show="activeCount > 0" class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-royalblue border border-white animate-pulse" x-cloak></span>
+        </button>
+        <div x-show="open" 
+             x-transition:enter="transition ease-out duration-100"
+             x-transition:enter-start="transform opacity-0 scale-95"
+             x-transition:enter-end="transform opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-75"
+             x-transition:leave-start="transform opacity-100 scale-100"
+             x-transition:leave-end="transform opacity-0 scale-95"
+             class="absolute right-0 mt-2 w-80 rounded-xl bg-white border border-slate-100 shadow-lg py-3 z-50 text-slate-700 normal-case font-medium text-sm"
+             x-cloak>
+            <div class="px-4 pb-2 border-b border-slate-100 text-xs font-bold uppercase tracking-wider text-slate-400 flex justify-between items-center">
+                <span>{{ _('Tasks') }}</span>
+                <span x-show="activeCount > 0" class="text-royalblue font-semibold normal-case" x-text="`${activeCount} active`" x-cloak></span>
+            </div>
+            
+            <div class="max-h-64 overflow-y-auto">
+                <template x-if="tasks.length === 0">
+                    <div class="px-4 py-4 text-center text-slate-400 text-xs">
+                        {{ _('No recent tasks') }}
+                    </div>
+                </template>
+                
+                <template x-for="task in tasks" :key="task.task_id">
+                    <div class="px-4 py-3 border-b border-slate-50 last:border-b-0 hover:bg-slate-50 transition-colors">
+                        <div class="flex justify-between items-start gap-2 mb-1">
+                            <span class="font-semibold text-slate-900 text-xs truncate max-w-[180px]" x-text="task.project_title"></span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider"
+                                  :class="{
+                                      'bg-blue-50 text-blue-600': task.status === 'running',
+                                      'bg-slate-100 text-slate-500': task.status === 'pending',
+                                      'bg-emerald-50 text-emerald-600': task.status === 'completed',
+                                      'bg-rose-50 text-rose-600': task.status === 'failed'
+                                  }"
+                                  x-text="task.status">
+                            </span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 mb-2 flex items-center gap-1">
+                            <span x-text="task.type === 'ocr' ? 'OCR' : (task.type === 'translation' ? 'Translation' : 'Create Project')"></span>
+                            <span>•</span>
+                            <span x-text="new Date(task.started_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></span>
+                        </div>
+                        
+                        <!-- Progress bar for active tasks -->
+                        <template x-if="task.status === 'running' || task.status === 'pending'">
+                            <div class="w-full bg-slate-100 rounded-full h-1.5 mb-2 overflow-hidden">
+                                <div class="bg-royalblue h-1.5 rounded-full transition-all duration-300"
+                                     :style="`width: ${Math.round((task.progress || 0) * 100)}%`">
+                                </div>
+                            </div>
+                        </template>
+                        
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-slate-500 text-[10px]" x-show="task.status === 'running'" x-text="`${Math.round((task.progress || 0) * 100)}% (${task.completed_count}/${task.total_count})`" x-cloak></span>
+                            <a x-show="task.project_slug" :href="'{{ url_for('proofing.project.summary', slug='SLUG_HOLDER') }}'.replace('SLUG_HOLDER', task.project_slug)" class="text-royalblue hover:underline text-[10px] font-bold ml-auto flex items-center gap-0.5" x-cloak>
+                                {{ _('View Project') }}
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </li>
+
+
     {% if current_user.is_authenticated %}
     {% set name = current_user.username %}
     <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"

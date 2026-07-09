@@ -1042,6 +1042,18 @@ def batch_ocr(slug):
                     'project_slug': slug,
                 }
                 redis_client.setex(task_key, 86400, json.dumps(task_info))
+
+                from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+                user_id = get_user_identifier(current_user, request)
+                if user_id:
+                    add_user_task(
+                        user_identifier=user_id,
+                        task_id=task.id,
+                        task_type="ocr",
+                        project_slug=slug,
+                        project_title=project_.display_title,
+                        extra_info={"engine": engine, "language": language}
+                    )
                 from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
                 numeric_value = REVERSE_ENGINE_MAP.get(engine, "1")
                 engine_label = f"OCR {numeric_value}"
@@ -1265,6 +1277,18 @@ def batch_translate(slug):
                 'project_slug': slug
             }
             redis_client.setex(task_key, 86400, json.dumps(task_info))
+
+            from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+            user_id = get_user_identifier(current_user, request)
+            if user_id:
+                add_user_task(
+                    user_identifier=user_id,
+                    task_id=task.id,
+                    task_type="translation",
+                    project_slug=slug,
+                    project_title=project_.display_title,
+                    extra_info={"engine": engine, "source_lang": source_lang, "target_lang": target_lang}
+                )
             
             return render_template(
                 "proofing/projects/batch-translate.html",

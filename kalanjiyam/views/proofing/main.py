@@ -285,6 +285,18 @@ def create_project():
                 app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
                 creator_id=current_user.id,
             )
+
+        from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+        user_id = get_user_identifier(current_user, request)
+        if user_id:
+            add_user_task(
+                user_identifier=user_id,
+                task_id=task.id,
+                task_type="create_project",
+                project_slug=slug,
+                project_title=title,
+            )
+
         return render_template(
             "proofing/create-project-post.html",
             status=task.status,
@@ -418,3 +430,21 @@ def dashboard():
         num_contributors_7d=num_contributors_7d,
         num_contributors_1d=num_contributors_1d,
     )
+
+
+@bp.route("/api/tasks")
+def get_tasks_api():
+    """Retrieve background tasks for the current user."""
+    from kalanjiyam.utils.user_tasks import get_user_tasks, get_user_identifier
+    user_id = get_user_identifier(current_user, request)
+    if not user_id:
+        return {"tasks": []}
+    
+    try:
+        tasks = get_user_tasks(user_id)
+        # Limit to the most recent 10 tasks to keep UI clean and fast
+        return {"tasks": tasks[:10]}
+    except Exception as e:
+        current_app.logger.warning(f"Error fetching tasks: {e}")
+        return {"tasks": []}, 500
+
