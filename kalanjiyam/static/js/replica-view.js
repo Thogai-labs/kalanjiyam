@@ -712,7 +712,23 @@ export class ReplicaView {
       toolbar.appendChild(discardBtn);
     }
 
-    this.container.appendChild(toolbar);
+    const toolbarContainer = document.getElementById('ocr-replica-toolbar-container');
+    if (toolbarContainer) {
+      toolbarContainer.innerHTML = '';
+      toolbarContainer.appendChild(toolbar);
+      
+      // Reset position/sticky styles since the container sits outside the scroll area
+      toolbar.style.position = '';
+      toolbar.style.top = '';
+      toolbar.style.left = '';
+      toolbar.style.width = '100%';
+      
+      // Strip outer framing classes to merge seamlessly as a clean ribbon bar
+      toolbar.classList.remove('mb-3', 'border', 'rounded', 'shadow-sm');
+      toolbar.classList.add('border-0', 'shadow-none', 'm-0', 'bg-transparent');
+    } else {
+      this.container.appendChild(toolbar);
+    }
 
     const page = document.createElement('div');
     page.className = 'ocr-replica-page book-editor-text relative mx-auto';

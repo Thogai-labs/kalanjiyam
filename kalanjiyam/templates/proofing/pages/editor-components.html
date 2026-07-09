@@ -1110,8 +1110,11 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
 
 
 {% macro replica_pane() %}
-<div class="book-editor-text-pane h-full overflow-auto px-2 py-2">
-  <div id="ocr-replica-root"></div>
+<div class="book-editor-text-pane h-full flex flex-col overflow-hidden">
+  <div id="ocr-replica-toolbar-container" class="flex-none p-2 border-b border-slate-200 bg-white"></div>
+  <div class="flex-1 overflow-auto p-2">
+    <div id="ocr-replica-root"></div>
+  </div>
 </div>
 {% endmacro %}
 
