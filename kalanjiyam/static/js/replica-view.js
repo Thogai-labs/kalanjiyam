@@ -17,7 +17,7 @@ if (!document.getElementById('ocr-replica-styles')) {
       overflow: visible !important; /* Show overflow when editing to make resizing easier */
     }
     .ocr-replica-block {
-      font-size: 1.25cqw !important; /* Scale text proportionally relative to responsive container width */
+      font-size: clamp(10px, 1.25cqw, 24px) !important; /* Scale text proportionally relative to responsive container width, clamping to 10px minimum */
       white-space: pre-wrap;
       overflow: hidden !important; /* Remove internal scrollbars for a clean print-accurate canvas */
     }
@@ -112,6 +112,7 @@ export class ReplicaView {
     this.copiedBlock = null;
     this.moveMode = false;
     this.isRestoredFromCache = false;
+    this.zoom = parseInt(localStorage.getItem('replica-zoom') || '100');
 
     // Clear local storage cache when the form is submitted
     const form = document.querySelector('form.book-editor-shell');
@@ -477,7 +478,12 @@ export class ReplicaView {
 
     // Create layout toolbar
     const toolbar = document.createElement('div');
-    toolbar.className = 'ocr-replica-toolbar flex flex-wrap gap-2 mb-3 p-2 bg-slate-50 rounded border border-slate-200 sticky top-0 z-[20] items-center shadow-sm';
+    toolbar.className = 'ocr-replica-toolbar flex flex-wrap gap-2 mb-3 p-2 bg-slate-50 rounded border border-slate-200 items-center shadow-sm';
+    toolbar.style.position = 'sticky';
+    toolbar.style.top = '0';
+    toolbar.style.left = '0';
+    toolbar.style.zIndex = '20';
+    toolbar.style.width = `${10000 / this.zoom}%`;
     
     // Add Text Block button
     const addTextBtn = document.createElement('button');
@@ -638,6 +644,50 @@ export class ReplicaView {
     deleteBtn.addEventListener('click', () => this.deleteSelectedBlock());
     toolbar.appendChild(deleteBtn);
 
+    // Add Separator
+    toolbar.appendChild(createSeparator());
+
+    // Zoom Out button
+    const zoomOutBtn = document.createElement('button');
+    zoomOutBtn.type = 'button';
+    zoomOutBtn.className = 'ocr-replica-toolbar-btn px-2';
+    zoomOutBtn.title = 'Zoom Out';
+    zoomOutBtn.innerHTML = `
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4"></path>
+      </svg>
+    `;
+    zoomOutBtn.disabled = this.zoom <= 50;
+    zoomOutBtn.addEventListener('click', () => {
+      this.zoom = Math.max(50, this.zoom - 25);
+      localStorage.setItem('replica-zoom', this.zoom.toString());
+      this._render();
+    });
+    toolbar.appendChild(zoomOutBtn);
+
+    const zoomVal = document.createElement('span');
+    zoomVal.className = 'text-xs font-semibold text-slate-600 min-w-[36px] text-center';
+    zoomVal.textContent = `${this.zoom}%`;
+    toolbar.appendChild(zoomVal);
+
+    // Zoom In button
+    const zoomInBtn = document.createElement('button');
+    zoomInBtn.type = 'button';
+    zoomInBtn.className = 'ocr-replica-toolbar-btn px-2';
+    zoomInBtn.title = 'Zoom In';
+    zoomInBtn.innerHTML = `
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path>
+      </svg>
+    `;
+    zoomInBtn.disabled = this.zoom >= 300;
+    zoomInBtn.addEventListener('click', () => {
+      this.zoom = Math.min(300, this.zoom + 25);
+      localStorage.setItem('replica-zoom', this.zoom.toString());
+      this._render();
+    });
+    toolbar.appendChild(zoomInBtn);
+
     // Render Cache alert message if restored from localStorage
     if (this.isRestoredFromCache) {
       const cacheSeparator = document.createElement('span');
@@ -671,8 +721,13 @@ export class ReplicaView {
     }
     page.style.background = '#faf8f5';
     page.style.aspectRatio = `${pw} / ${ph}`;
-    page.style.maxWidth = '100%';
-    page.style.width = '100%';
+    if (this.zoom > 100) {
+      page.style.maxWidth = 'none';
+      page.style.width = `${this.zoom}%`;
+    } else {
+      page.style.maxWidth = '100%';
+      page.style.width = `${this.zoom}%`;
+    }
     page.style.minHeight = '400px';
 
     blocks.forEach((block) => {
