@@ -141,7 +141,7 @@ def _run_translation_for_page_inner(
             session.add(translation)
 
             # Create page version and revision following the OCR version track system
-            version_key = f"translation:{engine}:{source_lang}->{target_lang}"
+            version_key = f"TR:{engine}:{source_lang}->{target_lang}"
             pv = session.query(db.PageVersion).filter_by(
                 page_id=page.id,
                 version_key=version_key
