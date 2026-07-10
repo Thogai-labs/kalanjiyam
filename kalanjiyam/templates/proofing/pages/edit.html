@@ -74,7 +74,7 @@
   </div>
 </div>
 
-<article class="book-editor-page{% if conflict %} has-conflict{% endif %}">
+<article class="book-editor-page{% if conflict %} has-conflict{% endif %}{% if is_docx %} is-docx-project{% endif %}">
 
   {% set num_images = project.pages|length %}
   {{ mc.flash_messages() }}
@@ -130,23 +130,8 @@
 
     <div class="book-editor-workspace{% if conflict %} has-conflict{% endif %}">
       {% if is_docx %}
-      <style>
-        .book-editor-image-pane h1 { font-size: 2.25rem; font-weight: 800; margin-top: 1.5rem; margin-bottom: 0.75rem; color: #1e293b; display: block; }
-        .book-editor-image-pane h2 { font-size: 1.75rem; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.6rem; color: #334155; display: block; }
-        .book-editor-image-pane h3 { font-size: 1.5rem; font-weight: 700; margin-top: 1rem; margin-bottom: 0.5rem; color: #475569; display: block; }
-        .book-editor-image-pane p { margin-bottom: 1rem; line-height: 1.75; color: #334155; display: block; }
-        .book-editor-image-pane ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; display: block; }
-        .book-editor-image-pane ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1rem; display: block; }
-        .book-editor-image-pane li { margin-bottom: 0.5rem; line-height: 1.6; display: list-item; }
-        .book-editor-image-pane table { width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1rem; display: table; }
-        .book-editor-image-pane tr { display: table-row; }
-        .book-editor-image-pane td, .book-editor-image-pane th { border: 1px solid #cbd5e1; padding: 0.75rem 1rem; text-align: left; display: table-cell; }
-        .book-editor-image-pane th { background-color: #f1f5f9; font-weight: 700; }
-        .book-editor-image-pane s, .book-editor-image-pane del { text-decoration: line-through; color: #94a3b8; }
-        .book-editor-image-pane a { color: #2563eb; text-decoration: underline; }
-      </style>
-      <div class="book-editor-image-pane overflow-y-auto p-8 bg-[#faf8f5] text-slate-800 border-r border-slate-200">
-        <div class="max-w-none text-left leading-relaxed">
+      <div class="book-editor-image-pane overflow-y-auto p-8 text-slate-800 border-r border-slate-200">
+        <div class="prose max-w-none text-left leading-relaxed">
           {{ original_html | safe }}
         </div>
       </div>

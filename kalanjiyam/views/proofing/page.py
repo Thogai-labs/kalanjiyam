@@ -414,15 +414,21 @@ def _editor_template_kwargs(
         is_docx = storage.exists(project_docx_key(ctx.project.slug))
         
     if is_docx:
-        # Fetch the original HTML content
+        # Fetch the original HTML content from the document dict,
+        # NOT from revision.content (which is plain text).
         orig_version = session.query(db.PageVersion).filter_by(
             page_id=cur.id,
             version_key="original"
         ).first()
         orig_rev = orig_version.revisions[-1] if orig_version and orig_version.revisions else None
-        if orig_rev:
-            original_html = orig_rev.content
-        page_plain_text = latest_revision.content if latest_revision else original_html
+        if orig_rev and orig_rev.document:
+            doc_data = orig_rev.document
+            blocks = doc_data.get("blocks", [])
+            if blocks and doc_data.get("content_format") == "html":
+                original_html = blocks[0].get("content", "")
+        # For the textarea, keep using plain text (the doc_obj.to_plain_text()
+        # already set above on line 407 is correct).
+        # page_plain_text is already set from doc_obj.to_plain_text().
 
     ocr_bounding_boxes = cur.ocr_bounding_boxes or ""
     has_ocr_content = bool(cur.ocr_bounding_boxes) or bool(page_document.get("blocks"))

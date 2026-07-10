@@ -808,4 +808,164 @@
     border-radius: 2px;
   }
 
+
+  /* ==========================================
+     DOCX Proofing Page Layout Styles
+     ========================================== */
+  .is-docx-project {
+    background-color: #f1f5f9 !important;
+  }
+
+  /* 1. Canvas backgrounds for both panels */
+  .is-docx-project .book-editor-image-pane {
+    background-color: #f1f5f9 !important;
+    padding: 2.5rem !important;
+    display: block;
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+
+  .is-docx-project #rich-editor {
+    background-color: #f1f5f9 !important;
+    padding: 2.5rem !important;
+    overflow-y: auto;
+    box-sizing: border-box;
+    display: block;
+  }
+
+  /* 2. Paper Sheet Styling */
+  .is-docx-project .book-editor-image-pane > div,
+  .is-docx-project #rich-editor .ProseMirror {
+    background-color: #ffffff !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 4px !important;
+    padding: 4.5rem !important; /* 1in - 1.2in margin */
+    margin: 0 auto 3rem auto !important;
+    width: 100% !important;
+    max-width: 812px !important; /* Standard A4 equivalent width at typical zoom */
+    min-height: 1120px !important; /* A4 aspect ratio height */
+    box-sizing: border-box !important;
+    color: #1e293b !important;
+    text-align: justify; /* justify text for docx-like standard formatting */
+  }
+
+  /* 3. Typography for DOCX Content (Preview & Editor) */
+  .is-docx-project .book-editor-image-pane h1,
+  .is-docx-project #rich-editor .ProseMirror h1 {
+    font-size: 2rem !important;
+    font-weight: 800 !important;
+    margin-top: 1.5rem !important;
+    margin-bottom: 0.75rem !important;
+    color: #1e293b !important;
+    display: block !important;
+  }
+
+  .is-docx-project .book-editor-image-pane h2,
+  .is-docx-project #rich-editor .ProseMirror h2 {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    margin-top: 1.25rem !important;
+    margin-bottom: 0.6rem !important;
+    color: #334155 !important;
+    display: block !important;
+  }
+
+  .is-docx-project .book-editor-image-pane h3,
+  .is-docx-project #rich-editor .ProseMirror h3 {
+    font-size: 1.25rem !important;
+    font-weight: 700 !important;
+    margin-top: 1rem !important;
+    margin-bottom: 0.5rem !important;
+    color: #475569 !important;
+    display: block !important;
+  }
+
+  .is-docx-project .book-editor-image-pane p,
+  .is-docx-project #rich-editor .ProseMirror p {
+    margin-bottom: 1rem !important;
+    line-height: 1.75 !important;
+    color: #334155 !important;
+    display: block !important;
+  }
+
+  /* 4. Lists styling */
+  .is-docx-project .book-editor-image-pane ul,
+  .is-docx-project #rich-editor .ProseMirror ul {
+    list-style-type: disc !important;
+    padding-left: 1.5rem !important;
+    margin-bottom: 1rem !important;
+    display: block !important;
+  }
+
+  .is-docx-project .book-editor-image-pane ol,
+  .is-docx-project #rich-editor .ProseMirror ol {
+    list-style-type: decimal !important;
+    padding-left: 1.5rem !important;
+    margin-bottom: 1rem !important;
+    display: block !important;
+  }
+
+  .is-docx-project .book-editor-image-pane li,
+  .is-docx-project #rich-editor .ProseMirror li {
+    margin-bottom: 0.5rem !important;
+    line-height: 1.6 !important;
+    display: list-item !important;
+  }
+
+  /* 5. Tables styling */
+  .is-docx-project .book-editor-image-pane table,
+  .is-docx-project #rich-editor .ProseMirror table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-top: 1rem !important;
+    margin-bottom: 1rem !important;
+    display: table !important;
+  }
+
+  .is-docx-project .book-editor-image-pane tr,
+  .is-docx-project #rich-editor .ProseMirror tr {
+    display: table-row !important;
+  }
+
+  .is-docx-project .book-editor-image-pane td,
+  .is-docx-project .book-editor-image-pane th,
+  .is-docx-project #rich-editor .ProseMirror td,
+  .is-docx-project #rich-editor .ProseMirror th {
+    border: 1px solid #cbd5e1 !important;
+    padding: 0.75rem 1rem !important;
+    text-align: left !important;
+    display: table-cell !important;
+  }
+
+  .is-docx-project .book-editor-image-pane th,
+  .is-docx-project #rich-editor .ProseMirror th {
+    background-color: #f1f5f9 !important;
+    font-weight: 700 !important;
+  }
+
+  /* 6. Formatting */
+  .is-docx-project .book-editor-image-pane s,
+  .is-docx-project .book-editor-image-pane del,
+  .is-docx-project #rich-editor .ProseMirror s,
+  .is-docx-project #rich-editor .ProseMirror del {
+    text-decoration: line-through !important;
+    color: #94a3b8 !important;
+  }
+
+  .is-docx-project .book-editor-image-pane a,
+  .is-docx-project #rich-editor .ProseMirror a {
+    color: #2563eb !important;
+    text-decoration: underline !important;
+  }
+
+  .is-docx-project .book-editor-image-pane img,
+  .is-docx-project #rich-editor .ProseMirror img {
+    max-width: 100% !important;
+    height: auto !important;
+    border-radius: 4px !important;
+    margin: 1.5rem auto !important;
+    display: block !important;
+  }
+
 }

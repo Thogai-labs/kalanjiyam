@@ -482,6 +482,17 @@ export default () => ({
     }
     this.layoutClasses = this.getLayoutClasses();
 
+    // For DOCX projects, eagerly parse pageDocument *before* the flow editor
+    // so that _flowHtmlFromDocument() returns the real HTML, not empty/plain.
+    if (this.isDocx) {
+      const raw = typeof PAGE_DOCUMENT_JSON !== 'undefined' ? PAGE_DOCUMENT_JSON : null;
+      if (raw) {
+        this.pageDocument = parseDocument(raw);
+        // Do NOT recluster DOCX blocks — they are a single HTML blob,
+        // not OCR word-level boxes.
+      }
+    }
+
     // Initialize content from the textarea if it exists
     const textarea = document.getElementById('content');
     if (textarea && textarea.value) {
@@ -754,6 +765,16 @@ export default () => ({
 
   initPageDocumentEditor() {
     setTimeout(() => {
+      // For DOCX projects, pageDocument was already parsed eagerly in init().
+      // Skip re-parsing and the destructive _syncDocumentToForm that blanks
+      // the flow editor.
+      if (this.isDocx && this.pageDocument) {
+        // Just sync the hidden form field so Publish works.
+        const docField = document.getElementById('document');
+        if (docField) docField.value = JSON.stringify(this.pageDocument);
+        return;
+      }
+
       const raw = typeof PAGE_DOCUMENT_JSON !== 'undefined' ? PAGE_DOCUMENT_JSON : null;
       this.pageDocument = reclusterDocumentBlocks(parseDocument(raw));
       if (typeof PAGE_WIDTH !== 'undefined' && PAGE_WIDTH && !this.pageDocument.page_width) {
@@ -829,6 +850,13 @@ export default () => ({
     if (!this.pageDocument) return;
     this._updateUncertainCount();
 
+    // For html-format documents (DOCX), documentToPlainText returns the raw
+    // HTML string.  Writing that into the textarea is fine (it is the
+    // canonical content), but we must NOT feed it back into
+    // _applyFlowEditorContent because that would cause TipTap to re-parse
+    // and normalize the HTML, losing content on every round-trip.
+    const isHtmlFormat = this.pageDocument.content_format === 'html';
+
     const plain = documentToPlainText(this.pageDocument);
     this._flowPlainCache = plain;
 
@@ -841,7 +869,9 @@ export default () => ({
       textarea.value = plain;
       this.content = plain;
     }
-    if (this.editorMode === 'flow') {
+    // Skip _applyFlowEditorContent for DOCX/html-format documents:
+    // the flow editor is authoritative and should not be overwritten.
+    if (this.editorMode === 'flow' && !isHtmlFormat) {
       this._applyFlowEditorContent();
     }
   },
