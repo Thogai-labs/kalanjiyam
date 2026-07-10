@@ -108,7 +108,7 @@ def _add_project_to_database(
 
 def _extract_docx_images(doc, project_slug, storage) -> dict:
     image_mapping = {}
-    for r_id, rel in doc.part.relations.items():
+    for r_id, rel in doc.part.rels.items():
         if "image" in rel.target_ref:
             try:
                 img_bytes = rel.target_part.blob
@@ -158,8 +158,8 @@ def _parse_paragraph_to_html(p, project_slug, image_mapping) -> str | tuple:
             link_text = child.text or ""
             r_id = child.get(qn('r:id'))
             href = ""
-            if r_id and r_id in p.part.relations:
-                href = p.part.relations[r_id].target_ref
+            if r_id and r_id in p.part.rels:
+                href = p.part.rels[r_id].target_ref
             html_runs.append(f'<a href="{html.escape(href)}">{html.escape(link_text)}</a>')
         elif tag.endswith('oMath'):
             oMath_xml = etree.tostring(child, encoding='utf-8').decode('utf-8')
