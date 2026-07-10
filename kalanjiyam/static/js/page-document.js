@@ -83,7 +83,7 @@ const BLOCK_TYPE_TO_TAG = {
 };
 
 export function documentToFlowHtml(doc) {
-  const isRichFormat = doc.content_format === 'blocks';
+  const isRichFormat = doc.content_format === 'blocks' || doc.content_format === 'html';
   const blocks = [...(doc.blocks || [])].sort(
     (a, b) => (a.reading_order || 0) - (b.reading_order || 0),
   );
@@ -92,6 +92,10 @@ export function documentToFlowHtml(doc) {
     if (SKIP_BLOCK_TYPES.has(block.type)) return;
     const content = String(block.content || '').trim();
     if (!content && block.type !== 'table') return;
+    if (doc.content_format === 'html') {
+      parts.push(content);
+      return;
+    }
     if (block.type === 'table' || /<table[\s>]/i.test(content)) {
       parts.push(
         `<div class="ocr-detected-table-wrap" data-block-id="${block.id}">${blockReplicaInnerHtml(block)}</div>`,
@@ -136,8 +140,19 @@ function inheritBlock(prev, content, type, order) {
   };
 }
 
-export function blocksFromFlowHtml(html, previousBlocks = []) {
+export function blocksFromFlowHtml(html, previousBlocks = [], format = 'blocks') {
   if (!html) return [];
+  if (format === 'html') {
+    return [{
+      id: (previousBlocks && previousBlocks[0]?.id) || 'b1',
+      type: 'paragraph',
+      bbox: [0, 0, 0, 0],
+      content: html,
+      reading_order: 1,
+      manually_edited: true,
+      children: []
+    }];
+  }
   const container = document.createElement('div');
   container.innerHTML = html;
   const prevById = new Map((previousBlocks || []).map((b) => [b.id, b]));

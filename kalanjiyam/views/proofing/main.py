@@ -324,15 +324,23 @@ def create_project():
                 flash(f"PDF size exceeds the allowed limit of {guest_upload_limit}MB for guest users.", "error")
                 return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
 
-        # Save the original PDF so that it can be downloaded later or reused
-        # for future tasks (thumbnails, better image formats, etc.). The
-        # Celery worker fetches it from storage by key, so web and worker
+        # Save the original file so that it can be processed/downloaded later.
+        # The Celery worker fetches it from storage by key, so web and worker
         # don't need a shared filesystem.
-        from kalanjiyam.utils.storage import get_storage, pdf_key
+        from kalanjiyam.utils.storage import get_storage, pdf_key, project_docx_key
 
-        source_pdf_key = pdf_key(slug)
-        form.local_file.data.stream.seek(0)
-        get_storage().save(source_pdf_key, form.local_file.data.stream)
+        is_uploaded_docx = filename.lower().endswith((".docx", ".doc"))
+        source_pdf_key = None
+        source_docx_key = None
+
+        if is_uploaded_docx:
+            source_docx_key = project_docx_key(slug)
+            form.local_file.data.stream.seek(0)
+            get_storage().save(source_docx_key, form.local_file.data.stream)
+        else:
+            source_pdf_key = pdf_key(slug)
+            form.local_file.data.stream.seek(0)
+            get_storage().save(source_pdf_key, form.local_file.data.stream)
 
         # Log usage action for guests
         if not current_user.is_authenticated:
@@ -350,6 +358,7 @@ def create_project():
                 kwargs={
                     "display_title": title,
                     "pdf_key": source_pdf_key,
+                    "docx_key": source_docx_key,
                     "app_environment": current_app.config["KALANJIYAM_ENVIRONMENT"],
                     "creator_id": None,
                     "fingerprint_id": request.cookies.get("device_fingerprint"),
@@ -360,6 +369,7 @@ def create_project():
             task = project_tasks.create_project.delay(
                 display_title=title,
                 pdf_key=source_pdf_key,
+                docx_key=source_docx_key,
                 app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
                 creator_id=current_user.id,
             )

@@ -320,6 +320,17 @@ def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=Fa
                 run.underline = True
             elif tag == "img":
                 _add_image_to_paragraph(child, paragraph)
+            elif tag == "span" and ("math-placeholder" in (child.get("class") or []) or "math-placeholder" in child.get("class", "")):
+                from docx.oxml import parse_xml
+                xml_str = child.get("data-xml", "")
+                if xml_str:
+                    try:
+                        omath_el = parse_xml(xml_str.encode('utf-8'))
+                        paragraph._p.append(omath_el)
+                    except Exception:
+                        paragraph.add_run(child.get_text())
+                else:
+                    paragraph.add_run(child.get_text())
             else:
                 _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=underline)
 

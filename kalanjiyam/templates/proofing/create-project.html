@@ -166,22 +166,34 @@
 
               <!-- Dynamic Settings for Word Documents -->
               <div class="mt-8 p-6 bg-white rounded-2xl border border-slate-200 shadow-sm" x-show="isDocx" x-cloak x-transition>
-                <input type="hidden" name="docx_workflow" value="direct">
-                
-                <div class="flex items-center space-x-3 mb-6">
-                  <div class="p-2 bg-royalblue/5 rounded-xl text-royalblue">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
+                <h4 class="text-base font-bold text-slate-800 mb-4">{{ _("Choose DOCX Workflow") }}</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <!-- Option A: Direct Translation -->
+                  <div class="p-5 rounded-xl border-2 transition-all cursor-pointer text-left"
+                    :class="docxWorkflow === 'direct' ? 'border-royalblue bg-royalblue/5' : 'border-slate-100 hover:border-slate-200 bg-white'"
+                    @click="docxWorkflow = 'direct'">
+                    <label class="flex items-center cursor-pointer">
+                      <input type="radio" name="docx_workflow" value="direct" x-model="docxWorkflow"
+                        class="w-5 h-5 text-royalblue border-slate-300 focus:ring-royalblue">
+                      <span class="ml-3 font-bold text-slate-800 text-sm">{{ _("Direct Translation") }}</span>
+                    </label>
+                    <p class="text-xs text-slate-400 mt-2 ml-8">{{ _("Translates your file in-place, keeping all styles, tables, and images intact.") }}</p>
                   </div>
-                  <div>
-                    <h4 class="text-lg font-bold text-slate-800">{{ _("Word Document Direct Translation") }}</h4>
-                    <p class="text-xs text-slate-400">{{ _("Translates your file in-place, keeping all styles, tables, and images intact.") }}</p>
+                  <!-- Option B: Interactive Project -->
+                  <div class="p-5 rounded-xl border-2 transition-all cursor-pointer text-left"
+                    :class="docxWorkflow === 'project' ? 'border-royalblue bg-royalblue/5' : 'border-slate-100 hover:border-slate-200 bg-white'"
+                    @click="docxWorkflow = 'project'">
+                    <label class="flex items-center cursor-pointer">
+                      <input type="radio" name="docx_workflow" value="project" x-model="docxWorkflow"
+                        class="w-5 h-5 text-royalblue border-slate-300 focus:ring-royalblue">
+                      <span class="ml-3 font-bold text-slate-800 text-sm">{{ _("Interactive Proofing Project") }}</span>
+                    </label>
+                    <p class="text-xs text-slate-400 mt-2 ml-8">{{ _("Imports the Word file into the multi-page side-by-side editing interface.") }}</p>
                   </div>
                 </div>
 
                 <!-- Dynamic Translation Settings -->
-                <div class="p-6 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-6">
+                <div class="p-6 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-6" x-show="docxWorkflow === 'direct'" x-transition>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
                     <div>
                       <label for="source_lang" class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Source Language") }}</label>

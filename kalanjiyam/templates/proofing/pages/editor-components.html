@@ -73,7 +73,7 @@ these components in our help text and documentation.
   </div>
 
   <div class="book-editor-toolbar-center">
-    <div class="book-editor-mode-toggle">
+    <div class="book-editor-mode-toggle" x-show="!isDocx" x-cloak>
       <button type="button"
               :class="editorMode === 'replica' ? 'active' : ''"
               @click.prevent="setEditorMode('replica')">{{ _('Replica') }}</button>
@@ -84,7 +84,7 @@ these components in our help text and documentation.
 
     {# Confidence review: count of low-confidence blocks; click cycles through them. #}
     <button type="button"
-            x-show="uncertainCount > 0" x-cloak
+            x-show="!isDocx && uncertainCount > 0" x-cloak
             @click.prevent="jumpToNextUncertain()"
             class="ocr-review-chip"
             title="{{ _('Blocks the OCR model was unsure about. Click to review the next one. Red: likely error (<50%%), amber: check (<75%%), blue edge: human-edited.') }}">
@@ -109,12 +109,14 @@ these components in our help text and documentation.
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
     </a>
 
-    <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></span>
+    <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block" x-show="!isDocx" x-cloak></span>
 
     {# OCR — reuse dropdown from menu_bar #}
-    {{ _book_ocr_controls(ocr_status, engine_choices, button_css) }}
+    <div x-show="!isDocx" x-cloak class="flex items-center">
+      {{ _book_ocr_controls(ocr_status, engine_choices, button_css) }}
+    </div>
 
-    <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></span>
+    <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block" x-show="!isDocx" x-cloak></span>
 
     {# Translation #}
     {{ _book_translation_controls(button_css, translation_engines) }}

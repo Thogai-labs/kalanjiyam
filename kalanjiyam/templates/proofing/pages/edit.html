@@ -36,6 +36,9 @@
 
 {% block main %}
 {% set can_save = current_user.is_authenticated or (project.fingerprint_id and request.cookies.get('device_fingerprint') == project.fingerprint_id) %}
+<script>
+  window.IS_DOCX = {{ 'true' if is_docx else 'false' }};
+</script>
 
 <div x-data="{ isOpen: false }"
      class="editor-sidebar-container"
@@ -126,7 +129,15 @@
     {% endif %}
 
     <div class="book-editor-workspace{% if conflict %} has-conflict{% endif %}">
+      {% if is_docx %}
+      <div class="book-editor-image-pane overflow-y-auto p-6 bg-[#faf8f5] text-slate-800 border-r border-slate-200">
+        <div class="prose max-w-none text-left leading-relaxed">
+          {{ original_html | safe }}
+        </div>
+      </div>
+      {% else %}
       {{ editor.image_box(translation_content, translation_metadata, available_translations) }}
+      {% endif %}
 
       <section class="book-editor-content-pane">
         <div x-show="editorMode === 'replica'" class="h-full">

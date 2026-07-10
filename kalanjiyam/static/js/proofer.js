@@ -81,7 +81,8 @@ export default () => ({
   content: '',
 
   // Editor mode: replica | flow
-  editorMode: 'replica',
+  editorMode: (typeof window.IS_DOCX !== 'undefined' && window.IS_DOCX) ? 'flow' : 'replica',
+  isDocx: (typeof window.IS_DOCX !== 'undefined') ? window.IS_DOCX : false,
   showMetaPanel: false,
   activeVersion: (typeof ACTIVE_VERSION !== 'undefined') ? ACTIVE_VERSION : 'role:p1',
   targetVersion: (typeof TARGET_VERSION !== 'undefined') ? TARGET_VERSION : 'role:p1',
@@ -471,7 +472,14 @@ export default () => ({
   },
 
   init() {
+    this.isDocx = (typeof window.IS_DOCX !== 'undefined') ? window.IS_DOCX : false;
+    if (this.isDocx) {
+      this.editorMode = 'flow';
+    }
     this.loadSettings();
+    if (this.isDocx) {
+      this.editorMode = 'flow';
+    }
     this.layoutClasses = this.getLayoutClasses();
 
     // Initialize content from the textarea if it exists
@@ -481,12 +489,14 @@ export default () => ({
       this._flowPlainCache = textarea.value;
     }
 
-    // Set `imageZoom` only after the viewer is fully initialized.
-    this.imageViewer = initializeImageViewer(IMAGE_URL);
-    this.imageViewer.addHandler('open', () => {
-      this.imageZoom = this.imageZoom || this.imageViewer.viewport.getHomeZoom();
-      this.imageViewer.viewport.zoomTo(this.imageZoom);
-    });
+    // Set `imageViewer` only if not a DOCX project
+    if (!this.isDocx) {
+      this.imageViewer = initializeImageViewer(IMAGE_URL);
+      this.imageViewer.addHandler('open', () => {
+        this.imageZoom = this.imageZoom || this.imageViewer.viewport.getHomeZoom();
+        this.imageViewer.viewport.zoomTo(this.imageZoom);
+      });
+    }
 
     // Use `.bind(this)` so that `this` in the function refers to this app and
     // not `window`.
@@ -496,7 +506,9 @@ export default () => ({
     this.updateLanguageOptions();
     
     // Add event listeners for rotation buttons
-    this.setupRotationButtons();
+    if (!this.isDocx) {
+      this.setupRotationButtons();
+    }
     
     // Initialize translation selector
     this.initTranslationSelector();
@@ -506,7 +518,9 @@ export default () => ({
     if (this.editorMode === 'flow') {
       setTimeout(() => this.ensureFlowEditor(), 0);
     }
-    this.setupZoomButtons();
+    if (!this.isDocx) {
+      this.setupZoomButtons();
+    }
   },
 
   getVersionDisplayName(versionKey) {
@@ -596,7 +610,7 @@ export default () => ({
         if (contentTextarea) contentTextarea.value = html;
         // Rebuild pageDocument blocks from flow HTML so replica stays in sync.
         // Pass the current blocks so ids/geometry/provenance survive the trip.
-        const newBlocks = blocksFromFlowHtml(html, this.pageDocument?.blocks || []);
+        const newBlocks = blocksFromFlowHtml(html, this.pageDocument?.blocks || [], this.pageDocument?.content_format || 'blocks');
         if (newBlocks.length && this.pageDocument) {
           this.pageDocument = { ...this.pageDocument, blocks: newBlocks };
           const docField = document.getElementById('document');
@@ -750,7 +764,7 @@ export default () => ({
       }
       this._applyPageDimensionsFromImage();
       const replicaRoot = document.getElementById('ocr-replica-root');
-      if (replicaRoot) {
+      if (replicaRoot && !this.isDocx) {
         this._replicaView = new ReplicaView(replicaRoot, {
           onChange: (doc) => {
             this.pageDocument = doc;

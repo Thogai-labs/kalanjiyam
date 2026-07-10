@@ -406,6 +406,24 @@ def _editor_template_kwargs(
     doc_obj = PageDocument.from_dict(page_document)
     page_plain_text = doc_obj.to_plain_text()
     
+    is_docx = False
+    original_html = ""
+    from kalanjiyam.utils.storage import project_docx_key, get_storage
+    storage = get_storage()
+    if ctx.project:
+        is_docx = storage.exists(project_docx_key(ctx.project.slug))
+        
+    if is_docx:
+        # Fetch the original HTML content
+        orig_version = session.query(db.PageVersion).filter_by(
+            page_id=cur.id,
+            version_key="original"
+        ).first()
+        orig_rev = orig_version.revisions[-1] if orig_version and orig_version.revisions else None
+        if orig_rev:
+            original_html = orig_rev.content
+        page_plain_text = latest_revision.content if latest_revision else original_html
+
     ocr_bounding_boxes = cur.ocr_bounding_boxes or ""
     has_ocr_content = bool(cur.ocr_bounding_boxes) or bool(page_document.get("blocks"))
 
@@ -450,6 +468,8 @@ def _editor_template_kwargs(
         "target_version_key": target_version_key,
         "available_versions": available_versions,
         "translation_engines": get_available_translation_engines(),
+        "is_docx": is_docx,
+        "original_html": original_html,
     }
 
 
@@ -721,8 +741,25 @@ def edit_post(project_slug, page_slug):
     conflict = None
 
     if form.validate_on_submit():
+        from kalanjiyam.utils.storage import project_docx_key, get_storage
+        is_docx = get_storage().exists(project_docx_key(ctx.project.slug))
         doc = parse_document_field(form.document.data)
-        content_format = "blocks" if doc else "plain"
+        if is_docx:
+            content_format = "html"
+            if not doc:
+                import uuid
+                doc = {
+                    "content_format": "html",
+                    "blocks": [{
+                        "id": f"b{uuid.uuid4().hex[:8]}",
+                        "type": "paragraph",
+                        "bbox": [0, 0, 0, 0],
+                        "content": form.content.data,
+                        "reading_order": 1
+                    }]
+                }
+        else:
+            content_format = "blocks" if doc else "plain"
         try:
             # We save to target_key
             new_version = add_revision(
