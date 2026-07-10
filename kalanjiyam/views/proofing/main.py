@@ -25,7 +25,7 @@ bp = Blueprint("proofing", __name__)
 
 def _is_allowed_document_file(filename: str) -> bool:
     """True iff we accept this type of document upload."""
-    return Path(filename).suffix == ".pdf"
+    return Path(filename).suffix in (".pdf", ".docx", ".doc")
 
 
 def _required_if_archive(message: str):
@@ -213,25 +213,90 @@ def create_project():
             flash(f"Rate limit exceeded. Guests can only create {limit} projects per 24 hours.", "error")
             return redirect(url_for("proofing.index"))
 
+    from kalanjiyam.utils.translation_engine import get_available_translation_engines
+    engines = get_available_translation_engines()
+
     form = CreateProjectForm()
+
+    if request.method == "POST" and request.form.get("docx_workflow") == "direct":
+        import uuid
+        import json
+        import redis
+        import os
+        from kalanjiyam.tasks.translation import run_docx_translation
+
+        file = request.files.get("local_file")
+        if not file or not file.filename:
+            flash("Please upload a file.", "error")
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines)
+
+        filename = file.filename
+        if Path(filename).suffix not in (".docx", ".doc"):
+            flash("Please upload a Word document (.docx).", "error")
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines)
+
+        source_lang = request.form.get("source_lang", "sa")
+        target_lang = request.form.get("target_lang", "en")
+        engine = request.form.get("engine", "indictrans2")
+
+        # Validate engine
+        from kalanjiyam.utils.translation_engine import TranslationEngineFactory
+        if not TranslationEngineFactory.is_supported(engine):
+            flash("Unsupported translation engine selected.", "error")
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines)
+
+        docx_id = str(uuid.uuid4())
+        from kalanjiyam.utils.storage import get_storage, docx_upload_key
+        storage = get_storage()
+        storage.save(docx_upload_key(docx_id), file.stream)
+
+        # Store docx original filename and parameters in Redis
+        r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+        r_client.setex(
+            f"docx_info:{docx_id}",
+            86400,
+            json.dumps({
+                "original_filename": filename,
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+                "engine": engine
+            })
+        )
+
+        task = run_docx_translation.delay(
+            app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
+            docx_id=docx_id,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            engine=engine,
+        )
+
+        return render_template(
+            "proofing/docx-translate-post.html",
+            task_id=task.id,
+            docx_id=docx_id,
+            status="PENDING",
+            percent=0,
+            current=0,
+            total=0,
+        )
+
     if form.validate_on_submit():
         if current_user.is_authenticated:
             if current_app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True) and not getattr(
                 current_user, "organization_id", None
             ):
                 flash("Your account is not assigned to an organization.", "error")
-                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit)
+                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines)
         title = form.local_title.data
 
         # TODO: add timestamp to slug for extra uniqueness?
         slug = slugify(title)
 
-        # We accept only PDFs, so validate that the user hasn't uploaded some
-        # other kind of document format.
         filename = form.local_file.raw_data[0].filename
         if not _is_allowed_document_file(filename):
-            flash("Please upload a PDF.", "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit)
+            flash("Please upload a PDF or DOCX.", "error")
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines)
         upload_size = 0
         if form.local_file.data and hasattr(form.local_file.data, "stream"):
             cur_pos = form.local_file.data.stream.tell()
@@ -244,7 +309,7 @@ def create_project():
         else:
             if upload_size > guest_upload_limit * 1024 * 1024:
                 flash(f"PDF size exceeds the allowed limit of {guest_upload_limit}MB for guest users.", "error")
-                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit)
+                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines)
 
         # Save the original PDF so that it can be downloaded later or reused
         # for future tasks (thumbnails, better image formats, etc.). The
@@ -306,7 +371,7 @@ def create_project():
             task_id=task.id,
         )
 
-    return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit)
+    return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines)
 
 
 @bp.route("/status/<task_id>")
@@ -447,4 +512,133 @@ def get_tasks_api():
     except Exception as e:
         current_app.logger.warning(f"Error fetching tasks: {e}")
         return {"tasks": []}, 500
+
+
+@bp.route("/translate/docx", methods=["GET", "POST"])
+def docx_translate():
+    import uuid
+    import json
+    import redis
+    import os
+    from flask import abort
+    from kalanjiyam.utils.translation_engine import get_available_translation_engines
+    from kalanjiyam.tasks.translation import run_docx_translation
+
+    engines = get_available_translation_engines()
+
+    if request.method == "POST":
+        # Check if file uploaded
+        file = request.files.get("file")
+        if not file or not file.filename:
+            flash("Please upload a file.", "error")
+            return render_template("proofing/docx-translate.html", engines=engines)
+
+        filename = file.filename
+        if Path(filename).suffix not in (".docx", ".doc"):
+            flash("Please upload a Word document (.docx).", "error")
+            return render_template("proofing/docx-translate.html", engines=engines)
+
+        source_lang = request.form.get("source_lang", "sa")
+        target_lang = request.form.get("target_lang", "en")
+        engine = request.form.get("engine", "indictrans2")
+
+        # Validate engine
+        from kalanjiyam.utils.translation_engine import TranslationEngineFactory
+        if not TranslationEngineFactory.is_supported(engine):
+            flash("Unsupported translation engine selected.", "error")
+            return render_template("proofing/docx-translate.html", engines=engines)
+
+        docx_id = str(uuid.uuid4())
+        from kalanjiyam.utils.storage import get_storage, docx_upload_key
+        storage = get_storage()
+        storage.save(docx_upload_key(docx_id), file.stream)
+
+        # Store docx original filename and parameters in Redis
+        r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+        r_client.setex(
+            f"docx_info:{docx_id}",
+            86400,
+            json.dumps({
+                "original_filename": filename,
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+                "engine": engine
+            })
+        )
+
+        task = run_docx_translation.delay(
+            app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
+            docx_id=docx_id,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            engine=engine,
+        )
+
+        return render_template(
+            "proofing/docx-translate-post.html",
+            task_id=task.id,
+            docx_id=docx_id,
+            status="PENDING",
+            percent=0,
+            current=0,
+            total=0,
+        )
+
+    return render_template("proofing/docx-translate.html", engines=engines)
+
+
+@bp.route("/translate/docx/status/<task_id>")
+def docx_translate_status(task_id):
+    from celery.result import AsyncResult
+    from kalanjiyam.tasks import app as celery_app
+    
+    r = AsyncResult(task_id, app=celery_app)
+    info = r.info or {}
+    
+    error = None
+    if isinstance(info, Exception):
+        current = total = percent = 0
+        error = str(info)
+    elif r.status == 'FAILURE':
+        current = total = percent = 0
+        error = str(info) if info else "An error occurred during translation."
+    else:
+        current = info.get("current", 0)
+        total = info.get("total", 0)
+        percent = info.get("percent", 0)
+        
+    return {
+        "status": r.status,
+        "current": current,
+        "total": total,
+        "percent": percent,
+        "error": error
+    }
+
+
+@bp.route("/translate/docx/download/<docx_id>")
+def docx_translate_download(docx_id):
+    import redis
+    import os
+    import json
+    from flask import abort
+    from kalanjiyam.utils.storage import get_storage, docx_translation_key
+    storage = get_storage()
+    trans_key = docx_translation_key(docx_id)
+    
+    if not storage.exists(trans_key):
+        abort(404, description="Translated file not found.")
+
+    r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+    info_json = r_client.get(f"docx_info:{docx_id}")
+    if info_json:
+        info = json.loads(info_json)
+        original_filename = info.get("original_filename", "translated_document.docx")
+        base_name = Path(original_filename).stem
+        download_name = f"{base_name}_translated.docx"
+    else:
+        download_name = "translated_document.docx"
+
+    return storage.serve(trans_key, as_attachment=True, download_name=download_name)
+
 

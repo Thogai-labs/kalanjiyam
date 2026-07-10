@@ -312,4 +312,135 @@ def _clear_translation_task_from_redis(task_id):
                     redis_client.delete(key)
                     break
     except Exception as e:
-        LOG.warning(f"Error clearing translation task from Redis: {e}") 
+        LOG.warning(f"Error clearing translation task from Redis: {e}")
+
+
+@app.task(bind=True)
+def run_docx_translation(
+    self,
+    *,
+    app_env: str,
+    docx_id: str,
+    source_lang: str = 'sa',
+    target_lang: str = 'en',
+    engine: str = 'indictrans2',
+):
+    """Run direct in-place translation for a standalone DOCX file."""
+    import tempfile
+    from pathlib import Path
+    from docx import Document
+    from kalanjiyam.utils.storage import get_storage, docx_upload_key, docx_translation_key
+    from kalanjiyam.utils.translation_engine import translate_text
+
+    flask_app = create_config_only_app(app_env)
+    with flask_app.app_context():
+        storage = get_storage()
+        upload_key = docx_upload_key(docx_id)
+        trans_key = docx_translation_key(docx_id)
+
+        local_path = storage.local_copy(upload_key)
+        if not local_path.exists():
+            raise ValueError(f"Uploaded DOCX not found in storage: {upload_key}")
+
+        doc = Document(local_path)
+
+        def _is_safe_run(run):
+            xml = run._element.xml
+            if "w:drawing" in xml or "m:oMath" in xml or "m:oMathPara" in xml:
+                return False
+            return True
+
+        def translate_paragraph_in_place(p, source, target, eng):
+            text = p.text
+            if not text or not text.strip():
+                return
+            
+            try:
+                response = translate_text(text, source, target, eng)
+                translated = response.translated_text
+                
+                runs = p.runs
+                if runs:
+                    safe_runs = [r for r in runs if _is_safe_run(r)]
+                    if safe_runs:
+                        safe_runs[0].text = translated
+                        for r in safe_runs[1:]:
+                            r.text = ""
+                    else:
+                        p.add_run(f" {translated} ")
+                else:
+                    p.text = translated
+            except Exception as pe:
+                LOG.error(f"Failed to translate paragraph in-place: {pe}")
+
+        def collect_all_docx_paragraphs(d):
+            paragraphs = []
+            for p in d.paragraphs:
+                paragraphs.append(p)
+            
+            def collect_from_table(table):
+                for row in table.rows:
+                    for cell in row.cells:
+                        for p in cell.paragraphs:
+                            paragraphs.append(p)
+                        for nested_table in cell.tables:
+                            collect_from_table(nested_table)
+            
+            for table in d.tables:
+                collect_from_table(table)
+                
+            for section in d.sections:
+                for h_or_f in [
+                    section.header, section.first_page_header, section.even_page_header,
+                    section.footer, section.first_page_footer, section.even_page_footer
+                ]:
+                    if h_or_f:
+                        for p in h_or_f.paragraphs:
+                            paragraphs.append(p)
+                        for table in h_or_f.tables:
+                            collect_from_table(table)
+            return paragraphs
+
+        all_paragraphs = collect_all_docx_paragraphs(doc)
+        paragraphs_to_translate = [p for p in all_paragraphs if p.text.strip()]
+        total = len(paragraphs_to_translate)
+
+        # Set initial progress
+        self.update_state(
+            state='PROGRESS',
+            meta={
+                'current': 0,
+                'total': total,
+                'percent': 0
+            }
+        )
+
+        for idx, p in enumerate(paragraphs_to_translate):
+            translate_paragraph_in_place(p, source_lang, target_lang, engine)
+            current_count = idx + 1
+            self.update_state(
+                state='PROGRESS',
+                meta={
+                    'current': current_count,
+                    'total': total,
+                    'percent': int(100 * current_count / total) if total > 0 else 0
+                }
+            )
+
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            doc.save(str(tmp_path))
+            storage.save(trans_key, tmp_path)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+
+        return {
+            'status': 'SUCCESS',
+            'current': total,
+            'total': total,
+            'percent': 100,
+            'docx_id': docx_id
+        }
+ 

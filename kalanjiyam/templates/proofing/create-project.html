@@ -47,8 +47,20 @@
          uploading: false,
          progress: 0,
          status: '',
+         isDocx: false,
+         docxWorkflow: 'direct',
+         handleFileChange(e) {
+           const files = e.target.files;
+           if (files && files.length > 0) {
+             const name = files[0].name.toLowerCase();
+             this.isDocx = name.endsWith('.docx') || name.endsWith('.doc');
+           } else {
+             this.isDocx = false;
+           }
+         },
          submitForm() {
            const form = this.$refs.projectForm;
+           const isDirect = this.isDocx && this.docxWorkflow === 'direct';
 
            {% if not current_user.is_authenticated %}
            const uploadLimitMB = {{ guest_upload_limit | default(10) }};
@@ -57,7 +69,7 @@
              if (fileInput && fileInput.files && fileInput.files.length > 0) {
                const file = fileInput.files[0];
                if (file.size > uploadLimitMB * 1024 * 1024) {
-                 alert(`PDF size exceeds the allowed limit of ${uploadLimitMB}MB for guest users.`);
+                 alert(`File size exceeds the allowed limit of ${uploadLimitMB}MB for guest users.`);
                  return;
                }
              }
@@ -66,7 +78,7 @@
 
            const formData = new FormData(form);
            this.uploading = true;
-           this.status = '{{ _('Beginning upload ...') }}';
+           this.status = isDirect ? '{{ _('Uploading document ...') }}' : '{{ _('Beginning upload ...') }}';
            
            const xhr = new XMLHttpRequest();
            xhr.open('POST', form.action, true);
@@ -75,7 +87,7 @@
              if (e.lengthComputable) {
                this.progress = Math.round((e.loaded / e.total) * 100);
                if (this.progress > 0) {
-                 this.status = `{{ _('Uploading PDF') }} (${this.progress}%)...`;
+                 this.status = isDirect ? `{{ _('Uploading Document') }} (${this.progress}%)...` : `{{ _('Uploading PDF') }} (${this.progress}%)...`;
                }
              }
            };
@@ -122,7 +134,7 @@
           <section>
             {{ step(2, _('Upload')) }}
             <div class="bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
-              <p class="mb-6 text-slate-500 font-bold uppercase tracking-wider text-xs">PDF Documents Only</p>
+              <p class="mb-6 text-slate-500 font-bold uppercase tracking-wider text-xs">{{ _("PDF or Word Documents (.pdf, .docx, .doc)") }}</p>
 
               <fieldset x-ref="source" class="space-y-4">
                 <div class="flex flex-col space-y-4">
@@ -132,71 +144,128 @@
                     <label class="flex items-center cursor-pointer">
                       <input type="radio" name="pdf_source" value="local" x-model="source"
                         class="w-6 h-6 text-royalblue border-slate-300 focus:ring-royalblue">
-                      <span class="ml-4 text-xl font-bold text-slate-800">From my computer</span>
+                      <span class="ml-4 text-xl font-bold text-slate-800">{{ _("From my computer") }}</span>
                     </label>
                     <div class="ml-10 mt-6" x-show="source === 'local'" x-transition>
                       <div class="p-6 bg-white rounded-xl border border-slate-100 shadow-sm">
-                        {{ form.local_file(accept=".pdf", class_="block w-full text-sm text-slate-500 file:mr-4
+                        {{ form.local_file(accept=".pdf,.docx,.doc", class_="block w-full text-sm text-slate-500 file:mr-4
                         file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold
-                        file:bg-royalblue file:text-white hover:file:bg-royalblue/90 cursor-pointer transition-all") }}
+                        file:bg-royalblue file:text-white hover:file:bg-royalblue/90 cursor-pointer transition-all", **{"@change": "handleFileChange($event)"}) }}
                       </div>
                     </div>
                   </div>
                 </div>
               </fieldset>
+
+              <!-- Dynamic Settings for Word Documents -->
+              <div class="mt-8 p-6 bg-white rounded-2xl border border-slate-200 shadow-sm" x-show="isDocx" x-cloak x-transition>
+                <input type="hidden" name="docx_workflow" value="direct">
+                
+                <div class="flex items-center space-x-3 mb-6">
+                  <div class="p-2 bg-royalblue/5 rounded-xl text-royalblue">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 class="text-lg font-bold text-slate-800">{{ _("Word Document Direct Translation") }}</h4>
+                    <p class="text-xs text-slate-400">{{ _("Translates your file in-place, keeping all styles, tables, and images intact.") }}</p>
+                  </div>
+                </div>
+
+                <!-- Dynamic Translation Settings -->
+                <div class="p-6 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-6">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                    <div>
+                      <label for="source_lang" class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Source Language") }}</label>
+                      <select id="source_lang" name="source_lang" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700">
+                        <option value="sa" selected>Sanskrit (sa)</option>
+                        <option value="hi">Hindi (hi)</option>
+                        <option value="te">Telugu (te)</option>
+                        <option value="mr">Marathi (mr)</option>
+                        <option value="ta">Tamil (ta)</option>
+                        <option value="en">English (en)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label for="target_lang" class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Target Language") }}</label>
+                      <select id="target_lang" name="target_lang" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700">
+                        <option value="en" selected>English (en)</option>
+                        <option value="sa">Sanskrit (sa)</option>
+                        <option value="hi">Hindi (hi)</option>
+                        <option value="te">Telugu (te)</option>
+                        <option value="mr">Marathi (mr)</option>
+                        <option value="ta">Tamil (ta)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="text-left">
+                    <label for="engine" class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Translation Engine") }}</label>
+                    <select id="engine" name="engine" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700" {% if not engines %}disabled{% endif %}>
+                      {% for eng in engines %}
+                        <option value="{{ eng.value }}" {% if loop.first %}selected{% endif %}>{{ eng.label }}</option>
+                      {% else %}
+                        <option value="" disabled selected>No translation models available</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
 
-          <!-- Step 3 -->
-          <section>
-            {{ step(3, _('Describe')) }}
-            <div class="bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
-              <p class="mb-6 text-slate-500 font-bold uppercase tracking-wider text-xs">Book Title</p>
-              <fieldset>
-                {{ form.local_title(class_="w-full p-5 text-xl border-2 border-slate-100 rounded-2xl
-                focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all bg-white
-                font-medium", placeholder="e.g. Raghuvamsha with Mallinatha's commentary") }}
-              </fieldset>
-            </div>
-          </section>
-
-          <!-- Step 4 -->
-          <section>
-            {{ step(4, _('Verify')) }}
-            <div class="bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
-              <p class="mb-6 text-slate-500 font-bold uppercase tracking-wider text-xs">Licensing Information</p>
-
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {% set radios = form.license|list %}
-                {% for radio in radios %}
-                <label class="p-5 rounded-2xl border-2 transition-all cursor-pointer flex items-center"
-                  :class="license === '{{ radio.data }}' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 hover:border-slate-200 bg-white'">
-                  <input type="radio" name="license" value="{{ radio.data }}" x-model="license"
-                    class="w-6 h-6 text-emerald-500 border-slate-300 focus:ring-emerald-500">
-                  <span class="ml-4 text-base font-bold text-slate-800">{{ radio.label.text }}</span>
-                </label>
-                {% endfor %}
+          <div x-show="!isDocx || docxWorkflow === 'project'" x-transition>
+            <!-- Step 3 -->
+            <section>
+              {{ step(3, _('Describe')) }}
+              <div class="bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
+                <p class="mb-6 text-slate-500 font-bold uppercase tracking-wider text-xs">Book Title</p>
+                <fieldset>
+                  {{ form.local_title(class_="w-full p-5 text-xl border-2 border-slate-100 rounded-2xl
+                  focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all bg-white
+                  font-medium", placeholder="e.g. Raghuvamsha with Mallinatha's commentary") }}
+                </fieldset>
               </div>
+            </section>
 
-              <div
-                class="mt-8 p-6 bg-amber-50 rounded-2xl border border-amber-100 prose prose-slate prose-sm max-w-none"
-                x-show="license === 'public'">
-                <p class="text-amber-700 font-medium">Public domain books can be used by anyone for any purpose. Books
-                  published in India on or before 1957 are typically in the public domain.</p>
-              </div>
+            <!-- Step 4 -->
+            <section>
+              {{ step(4, _('Verify')) }}
+              <div class="bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
+                <p class="mb-6 text-slate-500 font-bold uppercase tracking-wider text-xs">Licensing Information</p>
 
-              <div class="mt-6" x-show="license === 'other'" x-transition>
-                {{ form.custom_license(class_="w-full p-5 border-2 border-slate-100 rounded-2xl focus:border-royalblue
-                focus:ring-4 focus:ring-royalblue/5 outline-none transition-all h-40 bg-white font-medium",
-                placeholder="Tell us more about the license...") }}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {% set radios = form.license|list %}
+                  {% for radio in radios %}
+                  <label class="p-5 rounded-2xl border-2 transition-all cursor-pointer flex items-center"
+                    :class="license === '{{ radio.data }}' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 hover:border-slate-200 bg-white'">
+                    <input type="radio" name="license" value="{{ radio.data }}" x-model="license"
+                      class="w-6 h-6 text-emerald-500 border-slate-300 focus:ring-emerald-500">
+                    <span class="ml-4 text-base font-bold text-slate-800">{{ radio.label.text }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+
+                <div
+                  class="mt-8 p-6 bg-amber-50 rounded-2xl border border-amber-100 prose prose-slate prose-sm max-w-none"
+                  x-show="license === 'public'">
+                  <p class="text-amber-700 font-medium">Public domain books can be used by anyone for any purpose. Books
+                    published in India on or before 1957 are typically in the public domain.</p>
+                </div>
+
+                <div class="mt-6" x-show="license === 'other'" x-transition>
+                  {{ form.custom_license(class_="w-full p-5 border-2 border-slate-100 rounded-2xl focus:border-royalblue
+                  focus:ring-4 focus:ring-royalblue/5 outline-none transition-all h-40 bg-white font-medium",
+                  placeholder="Tell us more about the license...") }}
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
 
         <div class="mt-16 flex justify-center">
           <button type="submit" class="btn-premium px-20 py-6 text-2xl rounded-2xl">
-            <span class="relative z-10">{{ _('Create Project') }}</span>
+            <span class="relative z-10" x-text="isDocx && docxWorkflow === 'direct' ? '{{ _("Translate Document") }}' : '{{ _("Create Project") }}'"></span>
           </button>
         </div>
       </div>

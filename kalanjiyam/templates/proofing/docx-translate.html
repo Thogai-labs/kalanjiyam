@@ -1,0 +1,129 @@
+{% extends 'proofing/base-sidebar.html' %}
+{% import "macros/components.html" as components %}
+{% import "macros/proofing.html" as m %}
+{% import "macros/forms.html" as mf %}
+
+{% block title %}{{ _('DOCX Translator') }} | Kalanjiyam{% endblock %}
+
+{% block sidebar %}{{ m.main_nav('docx_translate', current_user=current_user) }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto py-8">
+  <div class="mb-12">
+    <h1 class="text-5xl font-black text-slate-900 mb-4 flex items-center">
+      <span class="pulse-indicator"></span>
+      {{ _("DOCX Document Translator") }}
+    </h1>
+    <p class="text-xl text-slate-500 font-medium">{{ _("Translate Microsoft Word files (.docx) directly and losslessly in-place.") }}</p>
+  </div>
+
+  <div class="bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-slate-50"
+       x-data="{
+         isDragging: false,
+         fileName: '',
+         handleFileSelect(e) {
+           const files = e.target.files;
+           if (files.length > 0) {
+             this.fileName = files[0].name;
+           }
+         },
+         handleDrop(e) {
+           this.isDragging = false;
+           const files = e.dataTransfer.files;
+           if (files.length > 0) {
+             const fileInput = document.getElementById('file');
+             fileInput.files = files;
+             this.fileName = files[0].name;
+           }
+         }
+       }">
+
+    <form action="{{ url_for('proofing.docx_translate') }}" method="POST" enctype="multipart/form-data">
+      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+
+      <div class="space-y-12">
+        <!-- Upload File Section -->
+        <section>
+          <h2 class="text-2xl font-bold text-slate-800 mb-6 flex items-center">
+            <span class="flex items-center justify-center w-10 h-10 rounded-2xl bg-premium-subtle text-premium text-lg mr-4 shadow-sm border border-royalblue/10">1</span>
+            {{ _("Upload Document") }}
+          </h2>
+          
+          <div class="bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
+            <div class="relative flex flex-col items-center justify-center border-2 border-dashed border-slate-200 hover:border-royalblue rounded-2xl p-8 text-center bg-white transition-all cursor-pointer"
+                 :class="isDragging ? 'border-royalblue bg-royalblue/5' : ''"
+                 @dragover.prevent="isDragging = true"
+                 @dragleave.prevent="isDragging = false"
+                 @drop.prevent="handleDrop">
+              
+              <input type="file" id="file" name="file" accept=".docx,.doc" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" @change="handleFileSelect">
+              
+              <div class="p-4 bg-royalblue/5 rounded-2xl text-royalblue mb-4">
+                <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                </svg>
+              </div>
+              
+              <h3 class="text-lg font-bold text-slate-800 mb-1" x-text="fileName ? fileName : '{{ _("Select or drag Word file") }}'"></h3>
+              <p class="text-xs text-slate-400 font-medium">{{ _("Supports DOCX and DOC up to 20MB. Keep original layouts, tables, and images.") }}</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Translation Options Section -->
+        <section>
+          <h2 class="text-2xl font-bold text-slate-800 mb-6 flex items-center">
+            <span class="flex items-center justify-center w-10 h-10 rounded-2xl bg-premium-subtle text-premium text-lg mr-4 shadow-sm border border-royalblue/10">2</span>
+            {{ _("Translation Settings") }}
+          </h2>
+
+          <div class="bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label for="source_lang" class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Source Language") }}</label>
+                <select id="source_lang" name="source_lang" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700">
+                  <option value="sa" selected>Sanskrit (sa)</option>
+                  <option value="hi">Hindi (hi)</option>
+                  <option value="te">Telugu (te)</option>
+                  <option value="mr">Marathi (mr)</option>
+                  <option value="ta">Tamil (ta)</option>
+                  <option value="en">English (en)</option>
+                </select>
+              </div>
+
+              <div>
+                <label for="target_lang" class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Target Language") }}</label>
+                <select id="target_lang" name="target_lang" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700">
+                  <option value="en" selected>English (en)</option>
+                  <option value="sa">Sanskrit (sa)</option>
+                  <option value="hi">Hindi (hi)</option>
+                  <option value="te">Telugu (te)</option>
+                  <option value="mr">Marathi (mr)</option>
+                  <option value="ta">Tamil (ta)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="mt-6">
+              <label for="engine" class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Translation Engine") }}</label>
+              <select id="engine" name="engine" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700" {% if not engines %}disabled{% endif %}>
+                {% for eng in engines %}
+                  <option value="{{ eng.value }}" {% if loop.first %}selected{% endif %}>{{ eng.label }}</option>
+                {% else %}
+                  <option value="" disabled selected>No translation models available</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="mt-12 flex justify-center">
+        <button type="submit" class="btn-premium px-16 py-4 text-xl rounded-2xl transition-transform active:scale-98">
+          {{ _('Translate Document') }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

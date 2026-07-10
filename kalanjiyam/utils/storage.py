@@ -55,6 +55,21 @@ def editor_image_key(project_slug: str, filename: str) -> str:
     return f"projects/{project_slug}/images/{filename}"
 
 
+def project_docx_key(project_slug: str) -> str:
+    """Key of a project's source DOCX."""
+    return f"projects/{project_slug}/docx/source.docx"
+
+
+def docx_upload_key(docx_id: str) -> str:
+    """Key of an uploaded DOCX file for standalone translation."""
+    return f"docx/uploads/{docx_id}.docx"
+
+
+def docx_translation_key(docx_id: str) -> str:
+    """Key of a translated DOCX file for standalone translation."""
+    return f"docx/translations/{docx_id}.docx"
+
+
 # Storage interface
 # -----------------
 
