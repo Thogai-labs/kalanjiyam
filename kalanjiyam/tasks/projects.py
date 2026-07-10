@@ -308,6 +308,7 @@ def create_project_inner(
             if not docx_path.exists():
                 raise ValueError(f'Source DOCX not found in storage: "{docx_key}".')
 
+            from docx import Document
             doc = Document(docx_path)
             image_mapping = _extract_docx_images(doc, slug, storage)
             pages_list = _segment_docx(doc, slug, image_mapping)
