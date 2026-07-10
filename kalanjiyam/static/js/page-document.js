@@ -62,6 +62,9 @@ function stripHtml(html) {
 }
 
 export function documentToPlainText(doc) {
+  if (doc.content_format === 'html') {
+    return (doc.blocks && doc.blocks[0]?.content) || '';
+  }
   const blocks = [...(doc.blocks || [])].sort(
     (a, b) => (a.reading_order || 0) - (b.reading_order || 0),
   );
