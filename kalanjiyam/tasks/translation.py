@@ -151,7 +151,7 @@ def _run_translation_for_page_inner(
             from kalanjiyam.utils.revisions import add_revision
             from kalanjiyam.enums import SitePageStatus
 
-            summary = f"Translation: {engine} {source_lang}->{target_lang}"
+            summary = f"TR: {engine} {source_lang}->{target_lang}"
             add_revision(
                 page=page,
                 summary=summary,
