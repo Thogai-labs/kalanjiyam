@@ -292,7 +292,7 @@ def _add_image_to_paragraph(img_tag, paragraph) -> bool:
     return False
 
 
-def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=False, underline=False) -> None:
+def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=False, underline=False, strike=False) -> None:
     for child in parent_el.children:
         if isinstance(child, NavigableString):
             text = str(child).replace("\r", "").replace("\n", " ")
@@ -301,16 +301,20 @@ def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=Fa
                 run.bold = bold
                 run.italic = italic
                 run.underline = underline
+                if strike:
+                    run.font.strike = True
         else:
             tag = child.name
             if tag == "br":
                 paragraph.add_run().add_break()
             elif tag in ["strong", "b"]:
-                _parse_inline_elements(child, paragraph, docx_doc, bold=True, italic=italic, underline=underline)
+                _parse_inline_elements(child, paragraph, docx_doc, bold=True, italic=italic, underline=underline, strike=strike)
             elif tag in ["em", "i"]:
-                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=True, underline=underline)
+                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=True, underline=underline, strike=strike)
             elif tag in ["u"]:
-                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=True)
+                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=True, strike=strike)
+            elif tag in ["s", "strike", "del"]:
+                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=underline, strike=True)
             elif tag == "a":
                 href = child.get("href", "")
                 text_content = child.get_text()
@@ -332,7 +336,7 @@ def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=Fa
                 else:
                     paragraph.add_run(child.get_text())
             else:
-                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=underline)
+                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=underline, strike=strike)
 
 
 def parse_html_to_docx(html_content: str, docx_doc) -> None:
@@ -387,16 +391,37 @@ def parse_html_to_docx(html_content: str, docx_doc) -> None:
             level = int(tag[1])
             heading_text = el.get_text().strip()
             if heading_text:
-                docx_doc.add_heading(heading_text, level=level)
+                p = docx_doc.add_heading(heading_text, level=level)
+                style = el.get("style", "")
+                if "text-align: center" in style:
+                    p.alignment = 1
+                elif "text-align: right" in style:
+                    p.alignment = 2
+                elif "text-align: justify" in style:
+                    p.alignment = 3
 
         elif tag in ["ul", "ol"]:
             style = 'List Bullet' if tag == "ul" else 'List Number'
             for li in el.find_all("li"):
                 p = docx_doc.add_paragraph(style=style)
+                li_style = li.get("style", "")
+                if "text-align: center" in li_style:
+                    p.alignment = 1
+                elif "text-align: right" in li_style:
+                    p.alignment = 2
+                elif "text-align: justify" in li_style:
+                    p.alignment = 3
                 _parse_inline_elements(li, p, docx_doc)
 
         elif tag == "p":
             p = docx_doc.add_paragraph()
+            style = el.get("style", "")
+            if "text-align: center" in style:
+                p.alignment = 1
+            elif "text-align: right" in style:
+                p.alignment = 2
+            elif "text-align: justify" in style:
+                p.alignment = 3
             _parse_inline_elements(el, p, docx_doc)
 
         else:
@@ -405,6 +430,13 @@ def parse_html_to_docx(html_content: str, docx_doc) -> None:
                 _add_image_to_paragraph(el, p)
             else:
                 p = docx_doc.add_paragraph()
+                style = el.get("style", "")
+                if "text-align: center" in style:
+                    p.alignment = 1
+                elif "text-align: right" in style:
+                    p.alignment = 2
+                elif "text-align: justify" in style:
+                    p.alignment = 3
                 _parse_inline_elements(el, p, docx_doc)
 
 
