@@ -213,8 +213,9 @@ def create_project():
             flash(f"Rate limit exceeded. Guests can only create {limit} projects per 24 hours.", "error")
             return redirect(url_for("proofing.index"))
 
-    from kalanjiyam.utils.translation_engine import get_available_translation_engines
+    from kalanjiyam.utils.translation_engine import get_available_translation_engines, get_supported_languages_list
     engines = get_available_translation_engines()
+    languages = get_supported_languages_list()
 
     form = CreateProjectForm()
 
@@ -228,12 +229,12 @@ def create_project():
         file = request.files.get("local_file")
         if not file or not file.filename:
             flash("Please upload a file.", "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines)
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
 
         filename = file.filename
         if Path(filename).suffix not in (".docx", ".doc"):
             flash("Please upload a Word document (.docx).", "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines)
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
 
         source_lang = request.form.get("source_lang", "sa")
         target_lang = request.form.get("target_lang", "en")
@@ -243,7 +244,7 @@ def create_project():
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
         if not TranslationEngineFactory.is_supported(engine):
             flash("Unsupported translation engine selected.", "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines)
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
 
         docx_id = str(uuid.uuid4())
         from kalanjiyam.utils.storage import get_storage, docx_upload_key
@@ -271,6 +272,18 @@ def create_project():
             engine=engine,
         )
 
+        from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+        user_id = get_user_identifier(current_user, request)
+        if user_id:
+            add_user_task(
+                user_identifier=user_id,
+                task_id=task.id,
+                task_type="docx_translation",
+                project_slug="",
+                project_title=filename,
+                extra_info={"docx_id": docx_id}
+            )
+
         return render_template(
             "proofing/docx-translate-post.html",
             task_id=task.id,
@@ -287,7 +300,7 @@ def create_project():
                 current_user, "organization_id", None
             ):
                 flash("Your account is not assigned to an organization.", "error")
-                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines)
+                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
         title = form.local_title.data
 
         # TODO: add timestamp to slug for extra uniqueness?
@@ -296,7 +309,7 @@ def create_project():
         filename = form.local_file.raw_data[0].filename
         if not _is_allowed_document_file(filename):
             flash("Please upload a PDF or DOCX.", "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines)
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
         upload_size = 0
         if form.local_file.data and hasattr(form.local_file.data, "stream"):
             cur_pos = form.local_file.data.stream.tell()
@@ -309,7 +322,7 @@ def create_project():
         else:
             if upload_size > guest_upload_limit * 1024 * 1024:
                 flash(f"PDF size exceeds the allowed limit of {guest_upload_limit}MB for guest users.", "error")
-                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines)
+                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
 
         # Save the original PDF so that it can be downloaded later or reused
         # for future tasks (thumbnails, better image formats, etc.). The
@@ -371,7 +384,7 @@ def create_project():
             task_id=task.id,
         )
 
-    return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines)
+    return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
 
 
 @bp.route("/status/<task_id>")
@@ -521,22 +534,23 @@ def docx_translate():
     import redis
     import os
     from flask import abort
-    from kalanjiyam.utils.translation_engine import get_available_translation_engines
+    from kalanjiyam.utils.translation_engine import get_available_translation_engines, get_supported_languages_list
     from kalanjiyam.tasks.translation import run_docx_translation
 
     engines = get_available_translation_engines()
+    languages = get_supported_languages_list()
 
     if request.method == "POST":
         # Check if file uploaded
         file = request.files.get("file")
         if not file or not file.filename:
             flash("Please upload a file.", "error")
-            return render_template("proofing/docx-translate.html", engines=engines)
+            return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
 
         filename = file.filename
         if Path(filename).suffix not in (".docx", ".doc"):
             flash("Please upload a Word document (.docx).", "error")
-            return render_template("proofing/docx-translate.html", engines=engines)
+            return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
 
         source_lang = request.form.get("source_lang", "sa")
         target_lang = request.form.get("target_lang", "en")
@@ -546,7 +560,7 @@ def docx_translate():
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
         if not TranslationEngineFactory.is_supported(engine):
             flash("Unsupported translation engine selected.", "error")
-            return render_template("proofing/docx-translate.html", engines=engines)
+            return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
 
         docx_id = str(uuid.uuid4())
         from kalanjiyam.utils.storage import get_storage, docx_upload_key
@@ -574,6 +588,18 @@ def docx_translate():
             engine=engine,
         )
 
+        from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+        user_id = get_user_identifier(current_user, request)
+        if user_id:
+            add_user_task(
+                user_identifier=user_id,
+                task_id=task.id,
+                task_type="docx_translation",
+                project_slug="",
+                project_title=filename,
+                extra_info={"docx_id": docx_id}
+            )
+
         return render_template(
             "proofing/docx-translate-post.html",
             task_id=task.id,
@@ -584,7 +610,7 @@ def docx_translate():
             total=0,
         )
 
-    return render_template("proofing/docx-translate.html", engines=engines)
+    return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
 
 
 @bp.route("/translate/docx/status/<task_id>")

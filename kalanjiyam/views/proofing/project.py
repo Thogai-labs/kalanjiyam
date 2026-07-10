@@ -1191,8 +1191,9 @@ def batch_translate(slug):
     if project_ is None:
         abort(404)
 
-    from kalanjiyam.utils.translation_engine import get_available_translation_engines
+    from kalanjiyam.utils.translation_engine import get_available_translation_engines, get_supported_languages_list
     engines = get_available_translation_engines()
+    languages = get_supported_languages_list()
 
     # Check if there's an ongoing translation task using Redis
     task_key = f"translation_task:{slug}"
@@ -1229,6 +1230,7 @@ def batch_translate(slug):
                         pending_tasks=pending_tasks,
                         failed_tasks=failed_tasks,
                         engines=engines,
+                        languages=languages,
                     )
                 else:
                     # Task is complete, remove from Redis
@@ -1246,6 +1248,15 @@ def batch_translate(slug):
         source_lang = request.form.get('source_lang', 'sa')
         target_lang = request.form.get('target_lang', 'en')
         engine = request.form.get('engine', 'google')
+
+        if source_lang == target_lang:
+            flash(_l("Source and Target languages must be different."), "error")
+            return render_template(
+                "proofing/projects/batch-translate.html",
+                project=project_,
+                engines=engines,
+                languages=languages,
+            )
         
         # Validate engine
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
@@ -1255,6 +1266,7 @@ def batch_translate(slug):
                 "proofing/projects/batch-translate.html",
                 project=project_,
                 engines=engines,
+                languages=languages,
             )
         
         queue_name = "low_priority" if not current_user.is_authenticated else None
@@ -1302,6 +1314,7 @@ def batch_translate(slug):
                 pending_tasks=0,
                 failed_tasks=0,
                 engines=engines,
+                languages=languages,
             )
         else:
             flash(_l("No pages with revisions found in this project."), "error")
@@ -1310,6 +1323,7 @@ def batch_translate(slug):
         "proofing/projects/batch-translate.html",
         project=project_,
         engines=engines,
+        languages=languages,
     )
 
 

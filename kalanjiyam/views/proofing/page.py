@@ -1285,6 +1285,9 @@ def translate(project_slug, page_slug):
     if not TranslationEngineFactory.is_supported(engine):
         abort(400, description=f"Unsupported translation engine: {engine}")
 
+    if source_lang == target_lang:
+        abort(400, description="Source and Target languages must be different.")
+
     if request.method == "POST":
         try:
             blocks = doc_data.get("blocks", [])

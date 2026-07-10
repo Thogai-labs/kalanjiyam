@@ -114,7 +114,7 @@
     </div>
   </div>
 
-  <form method="POST">
+  <form method="POST" x-data="{ sourceLang: 'sa', targetLang: 'en' }" @submit.prevent="if (sourceLang === targetLang) { alert('{{ _("Source and Target languages must be different.") }}'); } else { $el.submit(); }">
     <div class="bg-white shadow rounded-lg p-6">
       <h3 class="text-lg font-medium text-gray-900 mb-4">Translation Settings</h3>
       
@@ -123,15 +123,10 @@
           <label for="source_lang" class="block text-sm font-medium text-gray-700 mb-2">
             Source Language
           </label>
-          <select id="source_lang" name="source_lang" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="sa" selected>Sanskrit (sa)</option>
-            <option value="hi">Hindi (hi)</option>
-            <option value="te">Telugu (te)</option>
-            <option value="mr">Marathi (mr)</option>
-            <option value="en">English (en)</option>
-            <option value="fr">French (fr)</option>
-            <option value="de">German (de)</option>
-            <option value="es">Spanish (es)</option>
+          <select id="source_lang" name="source_lang" x-model="sourceLang" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            {% for lang in languages %}
+              <option value="{{ lang.code }}" {% if lang.code == 'sa' %}selected{% endif %}>{{ lang.name }}</option>
+            {% endfor %}
           </select>
         </div>
         
@@ -139,15 +134,10 @@
           <label for="target_lang" class="block text-sm font-medium text-gray-700 mb-2">
             Target Language
           </label>
-          <select id="target_lang" name="target_lang" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="en" selected>English (en)</option>
-            <option value="sa">Sanskrit (sa)</option>
-            <option value="hi">Hindi (hi)</option>
-            <option value="te">Telugu (te)</option>
-            <option value="mr">Marathi (mr)</option>
-            <option value="fr">French (fr)</option>
-            <option value="de">German (de)</option>
-            <option value="es">Spanish (es)</option>
+          <select id="target_lang" name="target_lang" x-model="targetLang" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            {% for lang in languages %}
+              <option value="{{ lang.code }}" {% if lang.code == 'en' %}selected{% endif %}>{{ lang.name }}</option>
+            {% endfor %}
           </select>
         </div>
       </div>
@@ -166,6 +156,9 @@
         <p class="mt-1 text-sm text-gray-500">
           Select the translation engine to use for batch translating this project.
         </p>
+        <p class="text-sm text-red-500 font-semibold mt-3" x-show="sourceLang === targetLang" x-cloak>
+          {{ _("Source and Target languages must be different.") }}
+        </p>
       </div>
       
       <div class="mt-6 flex justify-end space-x-3">
@@ -175,7 +168,7 @@
         </a>
         <button type="submit" 
                 class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                {% if not engines %}disabled{% endif %}>
+                :disabled="sourceLang === targetLang || {% if not engines %}true{% else %}false{% endif %}">
           Start Translation
         </button>
       </div>

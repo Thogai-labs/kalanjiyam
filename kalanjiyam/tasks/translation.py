@@ -344,6 +344,38 @@ def run_docx_translation(
 
         doc = Document(local_path)
 
+        import re
+
+        SENTENCE_SPLIT_REGEX = re.compile(r'((?<=[.!?।॥])\s+|\n+)')
+
+        def _is_matching_language(text: str, lang: str) -> bool:
+            if not any(c.isalpha() for c in text):
+                return False
+            lang = lang.lower()
+            if lang == 'en':
+                if not re.search(r'[a-zA-Z]', text):
+                    return False
+                if re.search(r'[\u0900-\u0D7F\u0600-\u06FF]', text):
+                    return False
+                return True
+            script_ranges = {
+                'ta': r'[\u0B80-\u0BFF]', # Tamil
+                'te': r'[\u0C00-\u0C7F]', # Telugu
+                'kn': r'[\u0C80-\u0CFF]', # Kannada
+                'ml': r'[\u0D00-\u0D7F]', # Malayalam
+                'hi': r'[\u0900-\u097F]', # Hindi
+                'sa': r'[\u0900-\u097F]', # Sanskrit
+                'bn': r'[\u0980-\u09FF]', # Bengali
+                'gu': r'[\u0A80-\u0AFF]', # Gujarati
+                'or': r'[\u0B00-\u0B7F]', # Odia
+                'pa': r'[\u0A00-\u0A7F]', # Punjabi / Gurmukhi
+                'ur': r'[\u0600-\u06FF]', # Urdu / Arabic
+                'mr': r'[\u0900-\u097F]', # Marathi
+            }
+            if lang in script_ranges:
+                return bool(re.search(script_ranges[lang], text))
+            return True
+
         def _is_safe_run(run):
             xml = run._element.xml
             if "w:drawing" in xml or "m:oMath" in xml or "m:oMathPara" in xml:
@@ -356,8 +388,24 @@ def run_docx_translation(
                 return
             
             try:
-                response = translate_text(text, source, target, eng)
-                translated = response.translated_text
+                # Segment text into sentences to selectively translate matching language only
+                subparts = SENTENCE_SPLIT_REGEX.split(text)
+                reconstructed = []
+                for j in range(len(subparts)):
+                    # Even indices are text segments, odd indices are delimiters
+                    if j % 2 == 0:
+                        sub_text = subparts[j]
+                        if sub_text and sub_text.strip() and _is_matching_language(sub_text, source):
+                            response = translate_text(sub_text, source, target, eng)
+                            reconstructed.append(response.translated_text)
+                        else:
+                            reconstructed.append(sub_text)
+                    else:
+                        reconstructed.append(subparts[j])
+                
+                translated = "".join(reconstructed)
+                if translated == text:
+                    return # No changes made
                 
                 runs = p.runs
                 if runs:

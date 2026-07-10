@@ -49,6 +49,8 @@
          status: '',
          isDocx: false,
          docxWorkflow: 'direct',
+         sourceLang: 'sa',
+         targetLang: 'en',
          handleFileChange(e) {
            const files = e.target.files;
            if (files && files.length > 0) {
@@ -61,6 +63,11 @@
          submitForm() {
            const form = this.$refs.projectForm;
            const isDirect = this.isDocx && this.docxWorkflow === 'direct';
+
+           if (isDirect && this.sourceLang === this.targetLang) {
+             alert('{{ _("Source and Target languages must be different.") }}');
+             return;
+           }
 
            {% if not current_user.is_authenticated %}
            const uploadLimitMB = {{ guest_upload_limit | default(10) }};
@@ -178,24 +185,18 @@
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
                     <div>
                       <label for="source_lang" class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Source Language") }}</label>
-                      <select id="source_lang" name="source_lang" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700">
-                        <option value="sa" selected>Sanskrit (sa)</option>
-                        <option value="hi">Hindi (hi)</option>
-                        <option value="te">Telugu (te)</option>
-                        <option value="mr">Marathi (mr)</option>
-                        <option value="ta">Tamil (ta)</option>
-                        <option value="en">English (en)</option>
+                      <select id="source_lang" name="source_lang" x-model="sourceLang" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700">
+                        {% for lang in languages %}
+                          <option value="{{ lang.code }}" {% if lang.code == 'sa' %}selected{% endif %}>{{ lang.name }}</option>
+                        {% endfor %}
                       </select>
                     </div>
                     <div>
                       <label for="target_lang" class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Target Language") }}</label>
-                      <select id="target_lang" name="target_lang" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700">
-                        <option value="en" selected>English (en)</option>
-                        <option value="sa">Sanskrit (sa)</option>
-                        <option value="hi">Hindi (hi)</option>
-                        <option value="te">Telugu (te)</option>
-                        <option value="mr">Marathi (mr)</option>
-                        <option value="ta">Tamil (ta)</option>
+                      <select id="target_lang" name="target_lang" x-model="targetLang" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700">
+                        {% for lang in languages %}
+                          <option value="{{ lang.code }}" {% if lang.code == 'en' %}selected{% endif %}>{{ lang.name }}</option>
+                        {% endfor %}
                       </select>
                     </div>
                   </div>
@@ -208,6 +209,12 @@
                         <option value="" disabled selected>No translation models available</option>
                       {% endfor %}
                     </select>
+                    <p class="text-sm text-red-500 font-bold mt-3 flex items-center" x-show="sourceLang === targetLang" x-cloak>
+                      <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                      </svg>
+                      {{ _("Source and Target languages must be different.") }}
+                    </p>
                   </div>
                 </div>
               </div>

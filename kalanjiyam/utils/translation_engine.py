@@ -453,4 +453,35 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
             return choices
     except Exception as e:
         logging.error(f"Failed to fetch translation models: {e}")
-    return [] 
+    return []
+
+
+def get_supported_languages_list() -> List[Dict[str, str]]:
+    """Get list of supported languages for display, matching IndicTrans and other engines."""
+    language_names = {
+        'sa': 'Sanskrit',
+        'hi': 'Hindi',
+        'en': 'English',
+        'ta': 'Tamil',
+        'te': 'Telugu',
+        'mr': 'Marathi',
+        'kn': 'Kannada',
+        'ml': 'Malayalam',
+        'bn': 'Bengali',
+        'gu': 'Gujarati',
+        'or': 'Odia',
+        'pa': 'Punjabi',
+        'ur': 'Urdu',
+        'as': 'Assamese',
+        'ks': 'Kashmiri',
+        'sd': 'Sindhi',
+        'mni': 'Manipuri',
+        'sat': 'Santali',
+        'npi': 'Nepali',
+        'gom': 'Konkani',
+        'doi': 'Dogri',
+        'brx': 'Bodo',
+        'mai': 'Maithili',
+    }
+    return [{'code': code, 'name': f"{name} ({code})"} for code, name in language_names.items()]
+ 
