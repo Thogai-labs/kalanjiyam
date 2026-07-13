@@ -131,7 +131,7 @@ def test_create_project_direct_docx_translate_with_glossary(rama_client):
         mock_celery_task.return_value.id = "mock-task-id"
 
         r = rama_client.post(
-            "/proofing/new",
+            "/proofing/create-project",
             data=data,
             content_type="multipart/form-data"
         )
@@ -147,4 +147,41 @@ def test_create_project_direct_docx_translate_with_glossary(rama_client):
         redis_args = mock_redis.setex.call_args[0]
         stored_info = json.loads(redis_args[2])
         assert stored_info["glossary"] == "administrative"
+
+
+def test_api_translate_with_multiple_glossaries(rama_client):
+    """Test that the translation API passes multiple glossaries formatted as comma-separated string to translate_text."""
+    from kalanjiyam.utils.translation_engine import TranslationResponse
+
+    with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
+        mock_translate.return_value = TranslationResponse(
+            translated_text="Translated with multiple",
+            source_language="sa",
+            target_language="en",
+            engine="indictrans2"
+        )
+
+        r = rama_client.get("/api/translate/test-project/1/?source_lang=sa&target_lang=en&engine=indictrans2&glossary=administrative,%20agri")
+        assert r.status_code == 200
+        assert r.text == "Translated with multiple"
+        mock_translate.assert_called_once_with("Translated with multiple", "sa", "en", "indictrans2", glossary="administrative, agri")
+
+
+def test_api_translate_with_all_glossaries(rama_client):
+    """Test that the translation API passes the special 'all' option to translate_text."""
+    from kalanjiyam.utils.translation_engine import TranslationResponse
+
+    with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
+        mock_translate.return_value = TranslationResponse(
+            translated_text="Translated with all",
+            source_language="sa",
+            target_language="en",
+            engine="indictrans2"
+        )
+
+        r = rama_client.get("/api/translate/test-project/1/?source_lang=sa&target_lang=en&engine=indictrans2&glossary=all")
+        assert r.status_code == 200
+        assert r.text == "Translated with all"
+        mock_translate.assert_called_once_with("Translated with all", "sa", "en", "indictrans2", glossary="all")
+
 

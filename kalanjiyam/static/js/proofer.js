@@ -103,7 +103,7 @@ export default () => ({
   translationDropdownOpen: false,
   showTranslationInfo: false,
   allGlossaries: [],
-  selectedGlossaryName: null,
+  selectedGlossaries: [],
 
   // OCR dropdown state
   ocrDropdownOpen: false,
@@ -1269,7 +1269,7 @@ export default () => ({
   },
 
   // Translation controls
-  async runTranslation(engine = 'google', sourceLang = 'sa', targetLang = 'en', glossary = null) {
+  async runTranslation(engine = 'google', sourceLang = 'sa', targetLang = 'en', glossaries = []) {
     console.log('=== TRANSLATION DEBUG START ===');
     
     if (!this.pageDocument) {
@@ -1279,13 +1279,14 @@ export default () => ({
 
     this.isRunningTranslation = true;
 
-    console.log('Starting translation:', { engine, sourceLang, targetLang, glossary });
+    console.log('Starting translation:', { engine, sourceLang, targetLang, glossaries });
     console.log('Current pathname:', window.location.pathname);
 
     const { pathname } = window.location;
     let url = pathname.replace('/proofing/', '/api/translate/') + `?engine=${engine}&source_lang=${sourceLang}&target_lang=${targetLang}`;
-    if (glossary) {
-      url += `&glossary=${encodeURIComponent(glossary)}`;
+    if (glossaries && glossaries.length > 0) {
+      const glossaryVal = glossaries.includes('all') ? 'all' : glossaries.join(',');
+      url += `&glossary=${encodeURIComponent(glossaryVal)}`;
     }
     
     console.log('Translation URL:', url);
@@ -1377,10 +1378,14 @@ export default () => ({
       g.source_language_code === this.sourceLanguage && 
       g.target_language_code === this.targetLanguage
     );
-    if (this.selectedGlossaryName && !filtered.some(g => g.name === this.selectedGlossaryName)) {
-      this.selectedGlossaryName = null;
-    }
+    this.selectedGlossaries = this.selectedGlossaries.filter(name => 
+      name === 'all' || filtered.some(g => g.name === name)
+    );
     return filtered;
+  },
+
+  get showGlossaryWarning() {
+    return this.selectedGlossaries.includes('all') || this.selectedGlossaries.length > 3;
   },
 
   getGlossaryDisplayName(name) {

@@ -411,19 +411,59 @@ these components in our help text and documentation.
           <option value="zh">Chinese (zh)</option>
         </select>
       </li>
-      <li class="mb-3 px-3" x-show="filteredGlossaries.length > 0" x-cloak>
-        <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Select Glossary (Optional)') }}</label>
-        <select class="form-select-enhanced w-full" x-model="selectedGlossaryName" @click.stop>
-          <option :value="null">{{ _('None') }}</option>
+      <li class="mb-3 px-3 relative" x-show="filteredGlossaries.length > 0" x-cloak x-data="{ open: false }" @click.outside="open = false">
+        <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Select Glossaries (Optional)') }}</label>
+        
+        <!-- Selector trigger -->
+        <div @click.stop="open = !open" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus-within:border-royalblue focus-within:ring-4 focus-within:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[40px] select-none">
+          <div class="flex flex-wrap gap-1 items-center">
+            <template x-if="selectedGlossaries.length === 0">
+              <span class="text-slate-400 font-medium">{{ _("Select glossaries...") }}</span>
+            </template>
+            <template x-if="selectedGlossaries.includes('all')">
+              <div class="flex items-center bg-royalblue/10 text-royalblue rounded-lg px-2 py-0.5 text-[10px] font-bold">
+                <span>{{ _("All Glossaries") }}</span>
+                <button type="button" @click.stop="selectedGlossaries = []" class="ml-1 hover:text-royalblue/80 focus:outline-none text-xs">&times;</button>
+              </div>
+            </template>
+            <template x-if="!selectedGlossaries.includes('all')">
+              <template x-for="name in selectedGlossaries" :key="name">
+                <div class="flex items-center bg-slate-100 text-slate-700 rounded-lg px-2 py-0.5 text-[10px] font-bold border border-slate-200">
+                  <span x-text="getGlossaryDisplayName(name)"></span>
+                  <button type="button" @click.stop="selectedGlossaries = selectedGlossaries.filter(n => n !== name)" class="ml-1 text-slate-400 hover:text-slate-600 focus:outline-none text-xs">&times;</button>
+                </div>
+              </template>
+            </template>
+          </div>
+          <svg class="w-3.5 h-3.5 text-slate-400 ml-2 flex-shrink-0 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </div>
+
+        <!-- Dropdown menu -->
+        <div x-show="open" class="absolute z-[100] w-[calc(100%-1.5rem)] mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-2 space-y-1 text-left" x-cloak x-transition>
+          <label class="flex items-center px-2 py-1.5 hover:bg-slate-50 rounded-lg cursor-pointer text-xs font-semibold text-slate-700 select-none">
+            <input type="checkbox" value="all" x-model="selectedGlossaries" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-2 w-3.5 h-3.5">
+            <span>{{ _("All Glossaries") }}</span>
+          </label>
+          <div class="h-px bg-slate-100 my-1"></div>
           <template x-for="g in filteredGlossaries" :key="g.name">
-            <option :value="g.name" x-text="getGlossaryDisplayName(g.name)"></option>
+            <label class="flex items-center px-2 py-1.5 hover:bg-slate-50 rounded-lg cursor-pointer text-xs font-medium text-slate-600 select-none">
+              <input type="checkbox" :value="g.name" x-model="selectedGlossaries" :disabled="selectedGlossaries.includes('all')" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-2 w-3.5 h-3.5">
+              <span x-text="getGlossaryDisplayName(g.name)"></span>
+            </label>
           </template>
-        </select>
+        </div>
+
+        <!-- Warning Message -->
+        <div x-show="showGlossaryWarning" x-transition class="mt-2 text-xs text-yellow-600 bg-yellow-50 border border-yellow-100 rounded-xl p-3 font-medium" x-cloak>
+          {{ _("Adding all / more than 3 glossaries may increase translation time.") }}
+        </div>
       </li>
       <li class="border-t border-slate-100 pt-2 px-3 pb-2">
         <button type="button"
                 class="w-full bg-slate-800 text-white rounded-lg py-2 text-sm hover:bg-slate-700 transition-colors"
-                @click.prevent.stop="runTranslation(selectedTranslationEngine, sourceLanguage, targetLanguage, selectedGlossaryName); translationDropdownOpen=false"
+                @click.prevent.stop="runTranslation(selectedTranslationEngine, sourceLanguage, targetLanguage, selectedGlossaries); translationDropdownOpen=false"
                 :disabled="isRunningTranslation"
                 x-text="isRunningTranslation ? '{{ _("Translating ...") }}' : '{{ _("Translate Page") }}'"></button>
       </li>
@@ -817,13 +857,55 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
           </li>
           <li class="px-4 py-2" x-show="filteredGlossaries.length > 0" x-cloak>
             <div class="flex flex-col">
-              <label class="block text-xs text-slate-500 mb-1 font-medium">{{ _('Select Glossary (Optional)') }}</label>
-              <select class="form-select-enhanced w-full" x-model="selectedGlossaryName" @click.stop>
-                <option :value="null">{{ _('None') }}</option>
-                <template x-for="g in filteredGlossaries" :key="g.name">
-                  <option :value="g.name" x-text="getGlossaryDisplayName(g.name)"></option>
-                </template>
-              </select>
+              <label class="block text-xs text-slate-500 mb-1 font-medium">{{ _('Select Glossaries (Optional)') }}</label>
+              
+              <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                <!-- Selector trigger -->
+                <div @click.stop="open = !open" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus-within:border-royalblue focus-within:ring-4 focus-within:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[40px] select-none">
+                  <div class="flex flex-wrap gap-1 items-center">
+                    <template x-if="selectedGlossaries.length === 0">
+                      <span class="text-slate-400 font-medium">{{ _("Select glossaries...") }}</span>
+                    </template>
+                    <template x-if="selectedGlossaries.includes('all')">
+                      <div class="flex items-center bg-royalblue/10 text-royalblue rounded-lg px-2 py-0.5 text-[10px] font-bold">
+                        <span>{{ _("All Glossaries") }}</span>
+                        <button type="button" @click.stop="selectedGlossaries = []" class="ml-1 hover:text-royalblue/80 focus:outline-none text-xs">&times;</button>
+                      </div>
+                    </template>
+                    <template x-if="!selectedGlossaries.includes('all')">
+                      <template x-for="name in selectedGlossaries" :key="name">
+                        <div class="flex items-center bg-slate-100 text-slate-700 rounded-lg px-2 py-0.5 text-[10px] font-bold border border-slate-200">
+                          <span x-text="getGlossaryDisplayName(name)"></span>
+                          <button type="button" @click.stop="selectedGlossaries = selectedGlossaries.filter(n => n !== name)" class="ml-1 text-slate-400 hover:text-slate-600 focus:outline-none text-xs">&times;</button>
+                        </div>
+                      </template>
+                    </template>
+                  </div>
+                  <svg class="w-3.5 h-3.5 text-slate-400 ml-2 flex-shrink-0 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
+                </div>
+
+                <!-- Dropdown menu -->
+                <div x-show="open" class="absolute z-[100] w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-2 space-y-1 text-left" x-cloak x-transition>
+                  <label class="flex items-center px-2 py-1.5 hover:bg-slate-50 rounded-lg cursor-pointer text-xs font-semibold text-slate-700 select-none">
+                    <input type="checkbox" value="all" x-model="selectedGlossaries" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-2 w-3.5 h-3.5">
+                    <span>{{ _("All Glossaries") }}</span>
+                  </label>
+                  <div class="h-px bg-slate-100 my-1"></div>
+                  <template x-for="g in filteredGlossaries" :key="g.name">
+                    <label class="flex items-center px-2 py-1.5 hover:bg-slate-50 rounded-lg cursor-pointer text-xs font-medium text-slate-600 select-none">
+                      <input type="checkbox" :value="g.name" x-model="selectedGlossaries" :disabled="selectedGlossaries.includes('all')" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-2 w-3.5 h-3.5">
+                      <span x-text="getGlossaryDisplayName(g.name)"></span>
+                    </label>
+                  </template>
+                </div>
+              </div>
+              
+              <!-- Warning Message -->
+              <div x-show="showGlossaryWarning" x-transition class="mt-2 text-xs text-yellow-600 bg-yellow-50 border border-yellow-100 rounded-xl p-3 font-medium" x-cloak>
+                {{ _("Adding all / more than 3 glossaries may increase translation time.") }}
+              </div>
             </div>
           </li>
           
@@ -831,7 +913,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
           <li class="border-t border-teal-100 pt-2">
             <button type="button" 
                     class="dropdown-item flex items-center gap-2 w-full justify-center bg-peacock-primary text-white rounded-lg py-2 hover:bg-peacock-secondary transition-colors"
-                    @click.prevent.stop="runTranslation(selectedTranslationEngine, sourceLanguage, targetLanguage, selectedGlossaryName); translationDropdownOpen=false"
+                    @click.prevent.stop="runTranslation(selectedTranslationEngine, sourceLanguage, targetLanguage, selectedGlossaries); translationDropdownOpen=false"
                     :disabled="isRunningTranslation"
                     x-text="isRunningTranslation ? '{{ _("Translating...") }}' : '{{ _("Translate Page") }}'">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
