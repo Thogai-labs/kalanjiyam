@@ -1,0 +1,40 @@
+# Command to run rsync with this exclude file:
+# rsync -avz --exclude-from='.rsync-exclude' ./ pranav@10.129.6.47:/home/pranav/kalanjiyam/
+
+# Python Virtual Environments
+.venv
+.venv/
+venv
+venv/
+env
+env/
+
+# Python caching
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Git repository directory
+.git/
+
+# IDE configs
+.idea/
+.vscode/
+*.swp
+*~
+
+# Local environment & config backups
+.env
+.env.bak
+.flaskenv
+
+# Node packages & frontend builds
+node_modules/
+dist/
+build/
+
+# IDE Agent custom caches
+.agents/
+.gemini/
+.system_generated/
