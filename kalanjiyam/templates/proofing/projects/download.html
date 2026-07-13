@@ -60,6 +60,7 @@
     </div>
 
     {# PDF Document Card #}
+    {% if not is_docx %}
     <div class="flex flex-col justify-between bg-white border border-slate-100 rounded-xl p-5 shadow-sm hover:shadow-md hover:border-slate-200 transition-all duration-200 group">
       <div>
         <div class="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center mb-4 transition-transform group-hover:scale-110">
@@ -78,6 +79,7 @@
         {{ _('Download PDF') }}
       </a>
     </div>
+    {% endif %}
 
 
     {# Plain Text Card #}

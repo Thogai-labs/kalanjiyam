@@ -394,7 +394,10 @@ def download(slug):
     if project_ is None:
         abort(404)
 
-    return render_template("proofing/projects/download.html", project=project_)
+    from kalanjiyam.utils.storage import project_docx_key, get_storage
+    is_docx = get_storage().exists(project_docx_key(slug))
+
+    return render_template("proofing/projects/download.html", project=project_, is_docx=is_docx)
 
 
 @bp.route("/<slug>/download/text")

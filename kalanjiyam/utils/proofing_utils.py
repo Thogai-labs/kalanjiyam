@@ -259,6 +259,29 @@ def documents_to_json_bundle(project, pages) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
+def _parse_dimension(val_str: str):
+    if not val_str:
+        return None
+    val_str = val_str.strip().lower()
+    import re
+    m = re.match(r"^([\d.]+)\s*(px|in|cm|pt|%)?$", val_str)
+    if not m:
+        return None
+    num = float(m.group(1))
+    unit = m.group(2) or "px"
+    
+    from docx.shared import Inches, Pt, Cm
+    if unit == "px":
+        return Pt(num * 0.75)
+    elif unit == "in":
+        return Inches(num)
+    elif unit == "cm":
+        return Cm(num)
+    elif unit == "pt":
+        return Pt(num)
+    return None
+
+
 def _add_image_to_paragraph(img_tag, paragraph) -> bool:
     src = img_tag.get("src")
     if not src:
@@ -279,8 +302,32 @@ def _add_image_to_paragraph(img_tag, paragraph) -> bool:
             if storage.exists(key):
                 img_bytes = storage.read_bytes(key)
                 img_io = io.BytesIO(img_bytes)
+
+                # Parse dimensions from attributes or inline styles
+                width_str = img_tag.get("width")
+                height_str = img_tag.get("height")
+
+                style = img_tag.get("style", "")
+                if style:
+                    w_match = re.search(r"width\s*:\s*([^;]+)", style, re.IGNORECASE)
+                    if w_match:
+                        width_str = w_match.group(1)
+                    h_match = re.search(r"height\s*:\s*([^;]+)", style, re.IGNORECASE)
+                    if h_match:
+                        height_str = h_match.group(1)
+
+                w_docx = _parse_dimension(width_str)
+                h_docx = _parse_dimension(height_str)
+
                 run = paragraph.add_run()
-                run.add_picture(img_io, width=Inches(4.5))
+                if w_docx and h_docx:
+                    run.add_picture(img_io, width=w_docx, height=h_docx)
+                elif w_docx:
+                    run.add_picture(img_io, width=w_docx)
+                elif h_docx:
+                    run.add_picture(img_io, height=h_docx)
+                else:
+                    run.add_picture(img_io, width=Inches(4.5))
                 return True
         except Exception:
             # Fallback text if image load/parse failed

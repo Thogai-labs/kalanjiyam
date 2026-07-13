@@ -206,6 +206,7 @@ these components in our help text and documentation.
               <span>{{ _('Layout HTML (ZIP)') }}</span>
             </a>
           </li>
+          {% if not is_docx %}
           <li>
             <a href="{{ url_for('proofing.page.download_as_pdf', project_slug=project.slug, page_slug=ctx.cur.slug) }}"
                class="dropdown-item flex items-center gap-2 text-xs text-slate-700 hover:bg-slate-50"
@@ -216,6 +217,7 @@ these components in our help text and documentation.
               <span>{{ _('PDF Document') }}</span>
             </a>
           </li>
+          {% endif %}
           <li>
 
             <a href="{{ url_for('proofing.page.download_as_text', project_slug=project.slug, page_slug=ctx.cur.slug) }}"

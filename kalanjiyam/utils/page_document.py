@@ -654,6 +654,9 @@ def _blocks_to_flow_html(blocks: list[Block], content_format: str = "plain") -> 
             continue
         if not block.content.strip() and block.type != "table":
             continue
+        if content_format == "html":
+            parts.append(block.content)
+            continue
         if block.type == "table" or "<table" in block.content.lower():
             inner = _block_replica_inner_html(block)
             parts.append(
