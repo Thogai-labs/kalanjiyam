@@ -109,7 +109,7 @@ def _add_project_to_database(
 def _extract_docx_images(doc, project_slug, storage) -> dict:
     image_mapping = {}
     for r_id, rel in doc.part.rels.items():
-        if "image" in rel.target_ref:
+        if "image" in rel.reltype or "image" in rel.target_ref:
             try:
                 img_bytes = rel.target_part.blob
                 ext = rel.target_ref.split(".")[-1]
@@ -130,8 +130,8 @@ def _parse_run_to_html(run, child, project_slug, image_mapping) -> str:
     text = run.text or ""
     if not text:
         if "w:drawing" in child.xml:
-            for blip in child.xpath('.//a:blip'):
-                embed_id = blip.get(qn('r:embed'))
+            for blip in child.xpath('.//*[local-name()="blip"]'):
+                embed_id = blip.get(qn('r:embed')) or blip.get(qn('r:link'))
                 if embed_id in image_mapping:
                     filename = image_mapping[embed_id]
                     return f'<img src="/static/uploads/{project_slug}/images/{filename}" alt="Image" />'
@@ -341,42 +341,105 @@ def _compile_elements_to_html(elements) -> str:
 def _segment_docx(doc, slug, image_mapping) -> list[tuple[str, str]]:
     from docx.text.paragraph import Paragraph
     from docx.table import Table
+    from docx.oxml.ns import qn
 
-    current_page_html = []
-    current_page_text = []
     pages = []
+    current_page_elements = []  # list of (element_html, cols)
+    current_page_text = []
+
+    # Get the columns of the final section in the body
+    final_cols = 1
+    body_sectPr = doc.element.body.find(qn('w:sectPr'))
+    if body_sectPr is not None:
+        cols_el = body_sectPr.find(qn('w:cols'))
+        if cols_el is not None:
+            val = cols_el.get(qn('w:num'))
+            if val:
+                try:
+                    final_cols = int(val)
+                except Exception:
+                    pass
 
     def flush_page():
-        if current_page_html:
-            page_html = _compile_elements_to_html(current_page_html)
+        if current_page_elements:
+            sections_html = []
+            sec_elements = []
+            sec_cols = None
+
+            for item, cols in current_page_elements:
+                if sec_cols is None:
+                    sec_cols = cols
+                elif sec_cols != cols:
+                    sec_html = _compile_elements_to_html(sec_elements)
+                    if sec_cols > 1:
+                        sections_html.append(f'<div class="docx-column-section" style="column-count: {sec_cols}; column-gap: 2rem;">{sec_html}</div>')
+                    else:
+                        sections_html.append(sec_html)
+                    sec_elements = []
+                    sec_cols = cols
+                sec_elements.append(item)
+
+            if sec_elements:
+                sec_html = _compile_elements_to_html(sec_elements)
+                if sec_cols > 1:
+                    sections_html.append(f'<div class="docx-column-section" style="column-count: {sec_cols}; column-gap: 2rem;">{sec_html}</div>')
+                else:
+                    sections_html.append(sec_html)
+
+            page_html = "".join(sections_html)
             page_text = "\n".join(current_page_text)
             pages.append((page_text, page_html))
-            current_page_html.clear()
+            current_page_elements.clear()
             current_page_text.clear()
 
-    def is_break_para(p):
-        p_xml = p._p.xml
-        if 'w:br' in p_xml and 'w:type="page"' in p_xml:
-            return True
-        if 'w:lastRenderedPageBreak' in p_xml:
-            return True
-        if 'w:sectPr' in p_xml:
-            return True
-        return False
+    # Pre-parse sections to map children to section column counts
+    body_children = list(doc.element.body.iterchildren())
+    element_sections = []
+    current_sec = []
+    
+    for child in body_children:
+        if child.tag.endswith('sectPr'):
+            continue
+        current_sec.append(child)
+        if child.tag.endswith('p'):
+            pPr = child.find(qn('w:pPr'))
+            if pPr is not None and pPr.find(qn('w:sectPr')) is not None:
+                element_sections.append((current_sec, pPr.find(qn('w:sectPr'))))
+                current_sec = []
+    if current_sec:
+        element_sections.append((current_sec, body_sectPr))
 
-    body_elm = doc.element.body
-    for child in body_elm.iterchildren():
+    blocks_with_cols = []
+    for sec_children, sectPr in element_sections:
+        cols_num = 1
+        if sectPr is not None:
+            cols_el = sectPr.find(qn('w:cols'))
+            if cols_el is not None:
+                val = cols_el.get(qn('w:num'))
+                if val:
+                    try:
+                        cols_num = int(val)
+                    except Exception:
+                        pass
+        for child in sec_children:
+            blocks_with_cols.append((child, cols_num))
+
+    for child, cols in blocks_with_cols:
         if child.tag.endswith('p'):
             p = Paragraph(child, doc)
             res = _parse_paragraph_to_html(p, slug, image_mapping)
-            current_page_html.append(res)
+            current_page_elements.append((res, cols))
             current_page_text.append(p.text)
-            if is_break_para(p) or len("".join(current_page_text)) > 1500:
+            
+            p_xml = child.xml
+            is_break = ('w:br' in p_xml and 'w:type="page"' in p_xml) or ('w:lastRenderedPageBreak' in p_xml)
+            if is_break or len("".join(current_page_text)) > 1500:
                 flush_page()
+                
         elif child.tag.endswith('tbl'):
             table = Table(child, doc)
             res = _parse_table_to_html(table, slug, image_mapping)
-            current_page_html.append(res)
+            current_page_elements.append((res, cols))
             table_text = " ".join(pt.text for row in table.rows for cell in row.cells for pt in cell.paragraphs)
             current_page_text.append(table_text)
             if len("".join(current_page_text)) > 1500:

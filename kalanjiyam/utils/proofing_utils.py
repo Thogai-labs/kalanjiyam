@@ -339,19 +339,18 @@ def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=Fa
                 _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=underline, strike=strike)
 
 
-def parse_html_to_docx(html_content: str, docx_doc) -> None:
-    if not html_content:
-        return
-
-    soup = BeautifulSoup(html_content, "html.parser")
-
-    for el in soup.children:
+def _parse_soup_nodes(container_el, docx_doc) -> None:
+    for el in container_el.children:
         if isinstance(el, NavigableString):
             if el.strip():
                 docx_doc.add_paragraph(el.strip())
             continue
 
         tag = el.name
+
+        if tag == "div" and ("docx-column-section" in (el.get("class") or []) or "docx-column-section" in el.get("class", "")):
+            _parse_soup_nodes(el, docx_doc)
+            continue
 
         # Check if this element is a table or wraps a table (e.g. ocr-detected-table-wrap)
         table_el = None
@@ -379,7 +378,20 @@ def parse_html_to_docx(html_content: str, docx_doc) -> None:
             for row_idx, row in enumerate(rows):
                 cols = row.find_all(["td", "th"])
                 for col_idx, cell in enumerate(cols):
+                    if col_idx >= max_cols:
+                        continue
+                    
+                    colspan = int(cell.get("colspan", 1))
+                    rowspan = int(cell.get("rowspan", 1))
+                    
                     docx_cell = table.cell(row_idx, col_idx)
+                    
+                    if colspan > 1 or rowspan > 1:
+                        target_row = min(row_idx + rowspan - 1, len(rows) - 1)
+                        target_col = min(col_idx + colspan - 1, max_cols - 1)
+                        target_cell = table.cell(target_row, target_col)
+                        docx_cell.merge(target_cell)
+
                     if docx_cell.paragraphs:
                         p = docx_cell.paragraphs[0]
                     else:
@@ -438,6 +450,14 @@ def parse_html_to_docx(html_content: str, docx_doc) -> None:
                 elif "text-align: justify" in style:
                     p.alignment = 3
                 _parse_inline_elements(el, p, docx_doc)
+
+
+def parse_html_to_docx(html_content: str, docx_doc) -> None:
+    if not html_content:
+        return
+
+    soup = BeautifulSoup(html_content, "html.parser")
+    _parse_soup_nodes(soup, docx_doc)
 
 
 def documents_to_docx(pages) -> bytes:
