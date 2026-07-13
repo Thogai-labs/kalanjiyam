@@ -239,6 +239,7 @@ def create_project():
         source_lang = request.form.get("source_lang", "sa")
         target_lang = request.form.get("target_lang", "en")
         engine = request.form.get("engine", "indictrans2")
+        glossary = request.form.get("glossary") or None
 
         # Validate engine
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
@@ -260,7 +261,8 @@ def create_project():
                 "original_filename": filename,
                 "source_lang": source_lang,
                 "target_lang": target_lang,
-                "engine": engine
+                "engine": engine,
+                "glossary": glossary
             })
         )
 
@@ -270,6 +272,7 @@ def create_project():
             source_lang=source_lang,
             target_lang=target_lang,
             engine=engine,
+            glossary=glossary,
         )
 
         from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
@@ -281,7 +284,7 @@ def create_project():
                 task_type="docx_translation",
                 project_slug="",
                 project_title=filename,
-                extra_info={"docx_id": docx_id}
+                extra_info={"docx_id": docx_id, "glossary": glossary}
             )
 
         return render_template(
@@ -565,6 +568,7 @@ def docx_translate():
         source_lang = request.form.get("source_lang", "sa")
         target_lang = request.form.get("target_lang", "en")
         engine = request.form.get("engine", "indictrans2")
+        glossary = request.form.get("glossary") or None
 
         # Validate engine
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
@@ -586,7 +590,8 @@ def docx_translate():
                 "original_filename": filename,
                 "source_lang": source_lang,
                 "target_lang": target_lang,
-                "engine": engine
+                "engine": engine,
+                "glossary": glossary
             })
         )
 
@@ -596,6 +601,7 @@ def docx_translate():
             source_lang=source_lang,
             target_lang=target_lang,
             engine=engine,
+            glossary=glossary,
         )
 
         from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
@@ -607,7 +613,7 @@ def docx_translate():
                 task_type="docx_translation",
                 project_slug="",
                 project_title=filename,
-                extra_info={"docx_id": docx_id}
+                extra_info={"docx_id": docx_id, "glossary": glossary}
             )
 
         return render_template(

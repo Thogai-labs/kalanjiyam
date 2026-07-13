@@ -267,6 +267,8 @@ class IndicTransEngine(TranslationEngine):
             "gpu_id": 0,
             "batch_size": 8
         }
+        if kwargs.get("glossary"):
+            payload["glossary"] = kwargs["glossary"]
 
         try:
             with httpx.Client(timeout=timeout) as client:

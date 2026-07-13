@@ -18,27 +18,71 @@
   </div>
 
   <div class="bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-slate-50"
-       x-data="{
-         isDragging: false,
-         fileName: '',
-         sourceLang: 'sa',
-         targetLang: 'en',
-         handleFileSelect(e) {
-           const files = e.target.files;
-           if (files.length > 0) {
-             this.fileName = files[0].name;
-           }
-         },
-         handleDrop(e) {
-           this.isDragging = false;
-           const files = e.dataTransfer.files;
-           if (files.length > 0) {
-             const fileInput = document.getElementById('file');
-             fileInput.files = files;
-             this.fileName = files[0].name;
-           }
-         }
-       }">
+        x-data="{
+          isDragging: false,
+          fileName: '',
+          sourceLang: 'sa',
+          targetLang: 'en',
+          allGlossaries: [],
+          selectedGlossaryName: null,
+          init() {
+            this.$watch('sourceLang', () => this.selectedGlossaryName = null);
+            this.$watch('targetLang', () => this.selectedGlossaryName = null);
+            
+            const { pathname } = window.location;
+            const prefixMatch = pathname.match(/^(.*)\/proofing\//);
+            const prefix = prefixMatch ? prefixMatch[1] : '';
+            fetch(`${prefix}/api/glossaries`)
+              .then(response => {
+                if (response.ok) return response.json();
+                return [];
+              })
+              .then(data => {
+                this.allGlossaries = data;
+              })
+              .catch(error => {
+                console.error('Error fetching glossaries:', error);
+              });
+          },
+          get filteredGlossaries() {
+            return this.allGlossaries.filter(g => 
+              g.source_language_code === this.sourceLang && 
+              g.target_language_code === this.targetLang
+            );
+          },
+          getGlossaryDisplayName(name) {
+            const lookup = {
+              'agri': 'Agriculture',
+              'mech': 'Mechanical',
+              'bio': 'Biology',
+              'chem': 'Chemistry',
+              'comp': 'Computer Science',
+              'phy': 'Physics',
+              'math': 'Mathematics',
+              'it': 'Information Technology'
+            };
+            if (lookup[name]) {
+              return lookup[name];
+            }
+            if (!name) return '';
+            return name.charAt(0).toUpperCase() + name.slice(1);
+          },
+          handleFileSelect(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+              this.fileName = files[0].name;
+            }
+          },
+          handleDrop(e) {
+            this.isDragging = false;
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+              const fileInput = document.getElementById('file');
+              fileInput.files = files;
+              this.fileName = files[0].name;
+            }
+          }
+        }">
 
     <form action="{{ url_for('proofing.docx_translate') }}" method="POST" enctype="multipart/form-data" @submit.prevent="if (sourceLang === targetLang) { alert('{{ _("Source and Target languages must be different.") }}'); } else { $el.submit(); }">
       {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
@@ -109,6 +153,20 @@
                   <option value="" disabled selected>No translation models available</option>
                 {% endfor %}
               </select>
+            </div>
+
+            <!-- Glossary Selection Dropdown -->
+            <div class="mt-6" x-show="filteredGlossaries.length > 0" x-cloak>
+              <label for="glossary" class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Select Glossary (Optional)") }}</label>
+              <select id="glossary" name="glossary" x-model="selectedGlossaryName" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700">
+                <option :value="null">{{ _("None") }}</option>
+                <template x-for="g in filteredGlossaries" :key="g.name">
+                  <option :value="g.name" x-text="getGlossaryDisplayName(g.name)"></option>
+                </template>
+              </select>
+            </div>
+
+            <div class="mt-6">
               <p class="text-sm text-red-500 font-bold mt-3 flex items-center" x-show="sourceLang === targetLang" x-cloak>
                 <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>

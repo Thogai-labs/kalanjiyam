@@ -411,10 +411,19 @@ these components in our help text and documentation.
           <option value="zh">Chinese (zh)</option>
         </select>
       </li>
+      <li class="mb-3 px-3" x-show="filteredGlossaries.length > 0" x-cloak>
+        <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Select Glossary (Optional)') }}</label>
+        <select class="form-select-enhanced w-full" x-model="selectedGlossaryName" @click.stop>
+          <option :value="null">{{ _('None') }}</option>
+          <template x-for="g in filteredGlossaries" :key="g.name">
+            <option :value="g.name" x-text="getGlossaryDisplayName(g.name)"></option>
+          </template>
+        </select>
+      </li>
       <li class="border-t border-slate-100 pt-2 px-3 pb-2">
         <button type="button"
                 class="w-full bg-slate-800 text-white rounded-lg py-2 text-sm hover:bg-slate-700 transition-colors"
-                @click.prevent.stop="runTranslation(selectedTranslationEngine, sourceLanguage, targetLanguage); translationDropdownOpen=false"
+                @click.prevent.stop="runTranslation(selectedTranslationEngine, sourceLanguage, targetLanguage, selectedGlossaryName); translationDropdownOpen=false"
                 :disabled="isRunningTranslation"
                 x-text="isRunningTranslation ? '{{ _("Translating ...") }}' : '{{ _("Translate Page") }}'"></button>
       </li>
@@ -806,12 +815,23 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
               </select>
             </div>
           </li>
+          <li class="px-4 py-2" x-show="filteredGlossaries.length > 0" x-cloak>
+            <div class="flex flex-col">
+              <label class="block text-xs text-slate-500 mb-1 font-medium">{{ _('Select Glossary (Optional)') }}</label>
+              <select class="form-select-enhanced w-full" x-model="selectedGlossaryName" @click.stop>
+                <option :value="null">{{ _('None') }}</option>
+                <template x-for="g in filteredGlossaries" :key="g.name">
+                  <option :value="g.name" x-text="getGlossaryDisplayName(g.name)"></option>
+                </template>
+              </select>
+            </div>
+          </li>
           
           <!-- Run Translation Button -->
           <li class="border-t border-teal-100 pt-2">
             <button type="button" 
                     class="dropdown-item flex items-center gap-2 w-full justify-center bg-peacock-primary text-white rounded-lg py-2 hover:bg-peacock-secondary transition-colors"
-                    @click.prevent.stop="runTranslation(selectedTranslationEngine, sourceLanguage, targetLanguage); translationDropdownOpen=false"
+                    @click.prevent.stop="runTranslation(selectedTranslationEngine, sourceLanguage, targetLanguage, selectedGlossaryName); translationDropdownOpen=false"
                     :disabled="isRunningTranslation"
                     x-text="isRunningTranslation ? '{{ _("Translating...") }}' : '{{ _("Translate Page") }}'">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

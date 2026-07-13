@@ -23,6 +23,7 @@ def _run_translation_for_page_inner(
     target_lang: str = 'en',
     engine: str = 'google',
     revision_id: int = None,
+    glossary: str = None,
 ) -> int:
     """Must run in the application context."""
 
@@ -81,7 +82,7 @@ def _run_translation_for_page_inner(
             if blocks:
                 try:
                     from kalanjiyam.views.proofing.page import _translate_blocks
-                    _translate_blocks(blocks, source_lang, target_lang, engine)
+                    _translate_blocks(blocks, source_lang, target_lang, engine, glossary=glossary)
                 except Exception as e:
                     LOG.error(f"Structured translation failed: {e}")
                     translation_failed = True
@@ -109,7 +110,8 @@ def _run_translation_for_page_inner(
                             segment, 
                             source_lang, 
                             target_lang, 
-                            engine
+                            engine,
+                            glossary=glossary
                         )
                         translated_segments.append(translation_response.translated_text)
                     except Exception as e:
@@ -185,6 +187,7 @@ def run_translation_for_page(
     target_lang: str = 'en',
     engine: str = 'google',
     revision_id: int = None,
+    glossary: str = None,
 ):
     """Run translation for a single page."""
     try:
@@ -196,6 +199,7 @@ def run_translation_for_page(
             target_lang,
             engine,
             revision_id,
+            glossary,
         )
     except Exception as e:
         LOG.error(f"Translation task failed for {project_slug}/{page_slug}: {e}")
@@ -210,6 +214,7 @@ def run_translation_for_project(
     engine: str = 'google',
     revision_id: int = None,
     queue: str | None = None,
+    glossary: str = None,
 ) -> GroupResult | None:
     """Create a `group` task to run translation on a project.
 
@@ -246,6 +251,7 @@ def run_translation_for_project(
                 target_lang=target_lang,
                 engine=engine,
                 revision_id=revision_id,
+                glossary=glossary,
             )
             for p in pages_with_revisions
         )
@@ -269,6 +275,7 @@ def run_translation_for_revision(
     source_lang: str = 'sa',
     target_lang: str = 'en',
     engine: str = 'google',
+    glossary: str = None,
 ):
     """Run translation for a specific revision across all pages in the project."""
     flask_app = create_config_only_app(app_env)
@@ -291,6 +298,7 @@ def run_translation_for_revision(
             target_lang,
             engine,
             revision_id,
+            glossary,
         )
 
 
@@ -324,6 +332,7 @@ def run_docx_translation(
     source_lang: str = 'sa',
     target_lang: str = 'en',
     engine: str = 'indictrans2',
+    glossary: str = None,
 ):
     """Run direct in-place translation for a standalone DOCX file."""
     import tempfile
@@ -382,7 +391,7 @@ def run_docx_translation(
                 return False
             return True
 
-        def translate_paragraph_in_place(p, source, target, eng):
+        def translate_paragraph_in_place(p, source, target, eng, glossary=None):
             text = p.text
             if not text or not text.strip():
                 return
@@ -396,7 +405,7 @@ def run_docx_translation(
                     if j % 2 == 0:
                         sub_text = subparts[j]
                         if sub_text and sub_text.strip() and _is_matching_language(sub_text, source):
-                            response = translate_text(sub_text, source, target, eng)
+                            response = translate_text(sub_text, source, target, eng, glossary=glossary)
                             reconstructed.append(response.translated_text)
                         else:
                             reconstructed.append(sub_text)
@@ -464,7 +473,7 @@ def run_docx_translation(
         )
 
         for idx, p in enumerate(paragraphs_to_translate):
-            translate_paragraph_in_place(p, source_lang, target_lang, engine)
+            translate_paragraph_in_place(p, source_lang, target_lang, engine, glossary=glossary)
             current_count = idx + 1
             self.update_state(
                 state='PROGRESS',

@@ -51,6 +51,50 @@
          docxWorkflow: 'direct',
          sourceLang: 'sa',
          targetLang: 'en',
+         allGlossaries: [],
+         selectedGlossaryName: null,
+         init() {
+           this.$watch('sourceLang', () => this.selectedGlossaryName = null);
+           this.$watch('targetLang', () => this.selectedGlossaryName = null);
+           
+           const { pathname } = window.location;
+           const prefixMatch = pathname.match(/^(.*)\/proofing\//);
+           const prefix = prefixMatch ? prefixMatch[1] : '';
+           fetch(`${prefix}/api/glossaries`)
+             .then(response => {
+               if (response.ok) return response.json();
+               return [];
+             })
+             .then(data => {
+               this.allGlossaries = data;
+             })
+             .catch(error => {
+               console.error('Error fetching glossaries:', error);
+             });
+         },
+         get filteredGlossaries() {
+           return this.allGlossaries.filter(g => 
+             g.source_language_code === this.sourceLang && 
+             g.target_language_code === this.targetLang
+           );
+         },
+         getGlossaryDisplayName(name) {
+           const lookup = {
+             'agri': 'Agriculture',
+             'mech': 'Mechanical',
+             'bio': 'Biology',
+             'chem': 'Chemistry',
+             'comp': 'Computer Science',
+             'phy': 'Physics',
+             'math': 'Mathematics',
+             'it': 'Information Technology'
+           };
+           if (lookup[name]) {
+             return lookup[name];
+           }
+           if (!name) return '';
+           return name.charAt(0).toUpperCase() + name.slice(1);
+         },
          handleFileChange(e) {
            const files = e.target.files;
            if (files && files.length > 0) {
@@ -171,9 +215,9 @@
                   <!-- Option A: Direct Translation -->
                   <div class="p-5 rounded-xl border-2 transition-all cursor-pointer text-left"
                     :class="docxWorkflow === 'direct' ? 'border-royalblue bg-royalblue/5' : 'border-slate-100 hover:border-slate-200 bg-white'"
-                    @click="docxWorkflow = 'direct'">
+                    @click="if (isDocx) { docxWorkflow = 'direct' }">
                     <label class="flex items-center cursor-pointer">
-                      <input type="radio" name="docx_workflow" value="direct" x-model="docxWorkflow"
+                      <input type="radio" name="docx_workflow" value="direct" x-model="docxWorkflow" :disabled="!isDocx"
                         class="w-5 h-5 text-royalblue border-slate-300 focus:ring-royalblue">
                       <span class="ml-3 font-bold text-slate-800 text-sm">{{ _("Direct Translation") }}</span>
                     </label>
@@ -182,9 +226,9 @@
                   <!-- Option B: Interactive Project -->
                   <div class="p-5 rounded-xl border-2 transition-all cursor-pointer text-left"
                     :class="docxWorkflow === 'project' ? 'border-royalblue bg-royalblue/5' : 'border-slate-100 hover:border-slate-200 bg-white'"
-                    @click="docxWorkflow = 'project'">
+                    @click="if (isDocx) { docxWorkflow = 'project' }">
                     <label class="flex items-center cursor-pointer">
-                      <input type="radio" name="docx_workflow" value="project" x-model="docxWorkflow"
+                      <input type="radio" name="docx_workflow" value="project" x-model="docxWorkflow" :disabled="!isDocx"
                         class="w-5 h-5 text-royalblue border-slate-300 focus:ring-royalblue">
                       <span class="ml-3 font-bold text-slate-800 text-sm">{{ _("Interactive Proofing Project") }}</span>
                     </label>
@@ -221,6 +265,20 @@
                         <option value="" disabled selected>No translation models available</option>
                       {% endfor %}
                     </select>
+                  </div>
+
+                  <!-- Glossary Selection Dropdown -->
+                  <div class="text-left" x-show="filteredGlossaries.length > 0" x-cloak>
+                    <label for="glossary" class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Select Glossary (Optional)") }}</label>
+                    <select id="glossary" name="glossary" x-model="selectedGlossaryName" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700">
+                      <option :value="null">{{ _("None") }}</option>
+                      <template x-for="g in filteredGlossaries" :key="g.name">
+                        <option :value="g.name" x-text="getGlossaryDisplayName(g.name)"></option>
+                      </template>
+                    </select>
+                  </div>
+
+                  <div class="text-left">
                     <p class="text-sm text-red-500 font-bold mt-3 flex items-center" x-show="sourceLang === targetLang" x-cloak>
                       <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>

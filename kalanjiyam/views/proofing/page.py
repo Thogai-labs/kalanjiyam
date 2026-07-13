@@ -1128,7 +1128,7 @@ def _is_matching_language(text: str, lang: str) -> bool:
     return True
 
 
-def _translate_html_content(html: str, source_lang: str, target_lang: str, engine: str) -> str:
+def _translate_html_content(html: str, source_lang: str, target_lang: str, engine: str, glossary: str = None) -> str:
     """Helper to translate plain text sections within HTML content, preserving HTML tags."""
 
     # Split by HTML tags
@@ -1163,7 +1163,8 @@ def _translate_html_content(html: str, source_lang: str, target_lang: str, engin
                                 joined_text,
                                 source_lang,
                                 target_lang,
-                                engine
+                                engine,
+                                glossary=glossary
                             )
                             # Split back the translated segments
                             translated_segments = translation_response.translated_text.split("\n\n")
@@ -1193,7 +1194,8 @@ def _translate_html_content(html: str, source_lang: str, target_lang: str, engin
                                     stripped,
                                     source_lang,
                                     target_lang,
-                                    engine
+                                    engine,
+                                    glossary=glossary
                                 )
                                 translated_text = translation_response.translated_text
                                 subparts[idx] = f"{leading_ws}{translated_text}{trailing_ws}"
@@ -1205,7 +1207,7 @@ def _translate_html_content(html: str, source_lang: str, target_lang: str, engin
     return "".join(parts)
 
 
-def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: str) -> None:
+def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: str, glossary: str = None) -> None:
     """Translate multiple blocks in a single batched translation request."""
     # We will gather info for all texts we want to translate across all blocks
     translation_targets = []
@@ -1263,7 +1265,8 @@ def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: 
             joined_text,
             source_lang,
             target_lang,
-            engine
+            engine,
+            glossary=glossary
         )
         translated_segments = translation_response.translated_text.split("\n\n")
 
@@ -1293,7 +1296,8 @@ def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: 
                     content,
                     source_lang,
                     target_lang,
-                    engine
+                    engine,
+                    glossary=glossary
                 )
         return
 
@@ -1343,6 +1347,7 @@ def translate(project_slug, page_slug):
     target_lang = request.args.get('target_lang') or doc_data.get('target_lang') or 'en'
     engine = request.args.get('engine') or doc_data.get('engine') or 'indictrans2'
     revision_id = request.args.get('revision_id', type=int)
+    glossary = request.args.get('glossary') or doc_data.get('glossary') or None
     
     # Validate engine
     from kalanjiyam.utils.translation_engine import TranslationEngineFactory
@@ -1365,7 +1370,8 @@ def translate(project_slug, page_slug):
                     blocks,
                     source_lang,
                     target_lang,
-                    engine
+                    engine,
+                    glossary=glossary
                 )
             elif "content" in doc_data:
                 content = doc_data["content"]
@@ -1374,7 +1380,8 @@ def translate(project_slug, page_slug):
                         content,
                         source_lang,
                         target_lang,
-                        engine
+                        engine,
+                        glossary=glossary
                     )
                     
             if has_content:
@@ -1572,3 +1579,24 @@ def upload_image(project_slug, page_slug):
     except Exception as e:
         logging.error(f"Image upload failed for {project_slug}/{page_slug}: {e}")
         abort(500, description=f"Image upload failed: {str(e)}")
+
+
+@api.route("/glossaries", methods=["GET"])
+def get_glossaries():
+    """Proxy available glossaries from the external translation service."""
+    import httpx
+    base_url = current_app.config.get("TRANSLATION_SERVICE_URL", "").rstrip("/")
+    if not base_url:
+        return jsonify([])
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.get(f"{base_url}/glossaries")
+        if resp.status_code == 200:
+            return jsonify(resp.json())
+        else:
+            current_app.logger.warning(f"Translation service glossaries returned status {resp.status_code}: {resp.text}")
+            return jsonify([])
+    except Exception as e:
+        current_app.logger.error(f"Failed to fetch glossaries from translation service: {e}")
+        return jsonify([])
+

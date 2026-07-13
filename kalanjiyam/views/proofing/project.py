@@ -1251,6 +1251,7 @@ def batch_translate(slug):
         source_lang = request.form.get('source_lang', 'sa')
         target_lang = request.form.get('target_lang', 'en')
         engine = request.form.get('engine', 'google')
+        glossary = request.form.get('glossary') or None
 
         if source_lang == target_lang:
             flash(_l("Source and Target languages must be different."), "error")
@@ -1279,6 +1280,7 @@ def batch_translate(slug):
             source_lang=source_lang,
             target_lang=target_lang,
             engine=engine,
+            glossary=glossary,
             queue=queue_name,
         )
         if task:
@@ -1302,7 +1304,7 @@ def batch_translate(slug):
                     task_type="translation",
                     project_slug=slug,
                     project_title=project_.display_title,
-                    extra_info={"engine": engine, "source_lang": source_lang, "target_lang": target_lang}
+                    extra_info={"engine": engine, "source_lang": source_lang, "target_lang": target_lang, "glossary": glossary}
                 )
             
             return render_template(
