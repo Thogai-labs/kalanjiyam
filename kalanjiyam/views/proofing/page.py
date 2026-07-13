@@ -414,8 +414,6 @@ def _editor_template_kwargs(
         is_docx = storage.exists(project_docx_key(ctx.project.slug))
         
     if is_docx:
-        # Fetch the original HTML content from the document dict,
-        # NOT from revision.content (which is plain text).
         orig_version = session.query(db.PageVersion).filter_by(
             page_id=cur.id,
             version_key="original"
@@ -426,9 +424,19 @@ def _editor_template_kwargs(
             blocks = doc_data.get("blocks", [])
             if blocks and doc_data.get("content_format") == "html":
                 original_html = blocks[0].get("content", "")
-        # For the textarea, keep using plain text (the doc_obj.to_plain_text()
-        # already set above on line 407 is correct).
-        # page_plain_text is already set from doc_obj.to_plain_text().
+        page_plain_text = latest_revision.content if latest_revision else original_html
+
+    # Prepend URL prefix to image paths in HTML to serve them correctly if APPLICATION_URL_PREFIX is set
+    prefix = current_app.config.get("APPLICATION_URL_PREFIX") or ""
+    if prefix:
+        if original_html:
+            original_html = original_html.replace('/static/uploads/', f'{prefix}/static/uploads/')
+        if page_plain_text:
+            page_plain_text = page_plain_text.replace('/static/uploads/', f'{prefix}/static/uploads/')
+        if page_document and "blocks" in page_document:
+            for block in page_document["blocks"]:
+                if "content" in block and block["content"]:
+                    block["content"] = block["content"].replace('/static/uploads/', f'{prefix}/static/uploads/')
 
     ocr_bounding_boxes = cur.ocr_bounding_boxes or ""
     has_ocr_content = bool(cur.ocr_bounding_boxes) or bool(page_document.get("blocks"))
@@ -747,9 +755,21 @@ def edit_post(project_slug, page_slug):
     conflict = None
 
     if form.validate_on_submit():
+        from flask import current_app
+        prefix = current_app.config.get("APPLICATION_URL_PREFIX") or ""
+        if prefix:
+            if form.content.data:
+                form.content.data = form.content.data.replace(f'{prefix}/static/uploads/', '/static/uploads/')
+
         from kalanjiyam.utils.storage import project_docx_key, get_storage
         is_docx = get_storage().exists(project_docx_key(ctx.project.slug))
         doc = parse_document_field(form.document.data)
+
+        if prefix and doc and "blocks" in doc:
+            for block in doc["blocks"]:
+                if "content" in block and block["content"]:
+                    block["content"] = block["content"].replace(f'{prefix}/static/uploads/', '/static/uploads/')
+
         if is_docx:
             content_format = "html"
             if not doc:

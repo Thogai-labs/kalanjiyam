@@ -129,13 +129,22 @@ def _parse_run_to_html(run, child, project_slug, image_mapping) -> str:
     
     text = run.text or ""
     if not text:
-        if "w:drawing" in child.xml:
-            for blip in child.xpath('.//*[local-name()="blip"]'):
-                embed_id = blip.get(qn('r:embed')) or blip.get(qn('r:link'))
-                if embed_id in image_mapping:
-                    filename = image_mapping[embed_id]
-                    return f'<img src="/static/uploads/{project_slug}/images/{filename}" alt="Image" />'
-        elif "w:br" in child.xml:
+        embed_id = None
+        for blip in child.xpath('.//*[local-name()="blip"]'):
+            embed_id = blip.get(qn('r:embed')) or blip.get(qn('r:link'))
+            if embed_id:
+                break
+        if not embed_id:
+            for img_data in child.xpath('.//*[local-name()="imagedata"]'):
+                embed_id = img_data.get(qn('r:id')) or img_data.get(qn('r:href'))
+                if embed_id:
+                    break
+                    
+        if embed_id and embed_id in image_mapping:
+            filename = image_mapping[embed_id]
+            return f'<img src="/static/uploads/{project_slug}/images/{filename}" alt="Image" />'
+            
+        if child.xpath('.//*[local-name()="br"]'):
             return '<br/>'
         return ""
         
