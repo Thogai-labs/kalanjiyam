@@ -112,6 +112,13 @@ def consume_ocr_credit_for_project(project) -> None:
     session.commit()
 
 
+from werkzeug.exceptions import HTTPException
+
+class PaymentRequired(HTTPException):
+    code = 402
+    description = "Payment Required"
+
+
 def ensure_translation_quota_for_project(project) -> None:
     # 1. Enforce per-user Translation credit limit if configured on the creator's organization
     session = q.get_session()
@@ -128,13 +135,13 @@ def ensure_translation_quota_for_project(project) -> None:
         if per_user_translation_limit is not None:
             translation_used = creator.translation_credits_used or 0
             if translation_used >= per_user_translation_limit:
-                abort(402, description="Your personal Translation credit limit has been exhausted")
+                raise PaymentRequired(description="Your personal Translation credit limit has been exhausted")
 
     # 2. Enforce overall organization/tenant Translation credit limit (or fallback)
     org = _org_for_project(project)
     if org is not None and org.translation_credit_limit is not None:
         if (org.translation_credits_used or 0) >= org.translation_credit_limit:
-            abort(402, description="Organization/Tenant Translation credits exhausted")
+            raise PaymentRequired(description="Organization/Tenant Translation credits exhausted")
 
 
 def consume_translation_credit_for_project(project) -> None:

@@ -1,6 +1,6 @@
 from xml.etree import ElementTree as ET
 
-import kalanjiyam.utils.xml as x
+import kalanjiyam.utils.xml_utils as x
 
 
 def test_delete():

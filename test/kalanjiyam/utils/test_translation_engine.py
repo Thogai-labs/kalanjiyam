@@ -7,6 +7,7 @@ from kalanjiyam.utils.translation_engine import (
     TranslationResponse,
     GoogleTranslateEngine,
     OpenAITranslateEngine,
+    IndicTransEngine,
     TranslationEngineFactory,
     translate_text,
     segment_text_for_translation,

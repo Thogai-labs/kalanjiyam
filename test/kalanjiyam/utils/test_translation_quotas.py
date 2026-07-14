@@ -26,13 +26,19 @@ def test_translation_quota_enforcement(client):
         email="quota-user@siddhasagaram.in",
         organization_id=org.id,
     )
+    user.set_password("quota-password")
     session.add(user)
+    session.flush()
+
+    board = db.Board(title="Quota Board")
+    session.add(board)
     session.flush()
 
     project = db.Project(
         slug="quota-project",
         display_title="Quota Project",
         creator_id=user.id,
+        board_id=board.id,
     )
     # Associate project with organization
     project.groups.append(org)
@@ -85,6 +91,7 @@ def test_translation_quota_enforcement(client):
     finally:
         # Cleanup
         session.delete(project)
+        session.delete(board)
         session.delete(user)
         session.delete(org)
         session.commit()

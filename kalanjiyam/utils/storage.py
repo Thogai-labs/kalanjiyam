@@ -152,7 +152,7 @@ class LocalStorage(Storage):
             return
         for path in base.rglob("*"):
             if path.is_file():
-                yield str(path.relative_to(self.root)), path.stat().st_size
+                yield path.relative_to(self.root).as_posix(), path.stat().st_size
 
     def delete_prefix(self, prefix: str) -> int:
         base = self._path(prefix)
