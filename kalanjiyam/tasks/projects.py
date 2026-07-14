@@ -347,6 +347,26 @@ def _compile_elements_to_html(elements) -> str:
     return "".join(grouped_html)
 
 
+def _get_paragraph_plain_text(p) -> str:
+    from docx.text.run import Run
+    text_parts = []
+    for child in p._p.iterchildren():
+        tag = child.tag
+        if tag.endswith('r'):
+            run = Run(child, p)
+            text_parts.append(run.text or "")
+        elif tag.endswith('hyperlink'):
+            for sub_child in child.iterchildren():
+                if sub_child.tag.endswith('r'):
+                    run = Run(sub_child, p)
+                    text_parts.append(run.text or "")
+        elif tag.endswith('oMath') or tag.endswith('oMathPara'):
+            t_elements = child.xpath('.//*[local-name()="t"]')
+            for t_el in t_elements:
+                text_parts.append(t_el.text or "")
+    return "".join(text_parts)
+
+
 def _segment_docx(doc, slug, image_mapping) -> list[tuple[str, str]]:
     from docx.text.paragraph import Paragraph
     from docx.table import Table
@@ -438,7 +458,8 @@ def _segment_docx(doc, slug, image_mapping) -> list[tuple[str, str]]:
             p = Paragraph(child, doc)
             res = _parse_paragraph_to_html(p, slug, image_mapping)
             current_page_elements.append((res, cols))
-            current_page_text.append(p.text)
+            p_text = _get_paragraph_plain_text(p)
+            current_page_text.append(p_text)
             
             p_xml = child.xml
             is_break = ('w:br' in p_xml and 'w:type="page"' in p_xml) or ('w:lastRenderedPageBreak' in p_xml)
@@ -449,7 +470,7 @@ def _segment_docx(doc, slug, image_mapping) -> list[tuple[str, str]]:
             table = Table(child, doc)
             res = _parse_table_to_html(table, slug, image_mapping)
             current_page_elements.append((res, cols))
-            table_text = " ".join(pt.text for row in table.rows for cell in row.cells for pt in cell.paragraphs)
+            table_text = " ".join(_get_paragraph_plain_text(pt) for row in table.rows for cell in row.cells for pt in cell.paragraphs)
             current_page_text.append(table_text)
             if len("".join(current_page_text)) > 1500:
                 flush_page()

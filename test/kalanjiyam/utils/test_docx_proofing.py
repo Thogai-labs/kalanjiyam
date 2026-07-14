@@ -93,7 +93,7 @@ def test_docx_segmentation_and_export():
         # Verify page 2 content
         assert "Header A" in page2_text
         assert "Value B" in page2_text
-        assert "<table>" in page2_html
+        assert "<table" in page2_html
         assert "<td>" in page2_html
 
         # 2. Test compiling back to DOCX

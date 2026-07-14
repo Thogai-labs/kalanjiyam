@@ -234,6 +234,10 @@ class UnitTestConfig(BaseConfig):
 
     KALANJIYAM_ENVIRONMENT = TESTING
     TESTING = True
+    APPLICATION_URL_PREFIX = ""
+    STORAGE_BACKEND = "local"
+    MULTI_TENANT_MODE = False
+    ENFORCE_ORG_ACCESS = False
     SECRET_KEY = "insecure unit test secret"
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     UPLOAD_FOLDER = _make_path(Path(__file__).parent / "data" / "file-uploads")

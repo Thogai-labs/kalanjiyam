@@ -9,9 +9,19 @@ def test_run_translation_for_project_queue_routing(flask_app):
     session = get_session()
     
     # 1. Setup a dummy project and a page with revisions so we trigger the task group creation
+    board = session.query(db.Board).first()
+    if not board:
+        board = db.Board(name="Test Board")
+        session.add(board)
+        session.flush()
+
+    status = session.query(db.PageStatus).first()
+    user = session.query(db.User).first()
+
     project = db.Project(
         slug="test-translate-queue-project",
         display_title="Test Translate Queue Project",
+        board_id=board.id,
     )
     session.add(project)
     session.flush()
@@ -20,6 +30,7 @@ def test_run_translation_for_project_queue_routing(flask_app):
         project_id=project.id,
         slug="1",
         order=1,
+        status_id=status.id,
     )
     session.add(page)
     session.flush()
@@ -28,6 +39,8 @@ def test_run_translation_for_project_queue_routing(flask_app):
         project_id=project.id,
         page_id=page.id,
         content="Test translation content",
+        author_id=user.id if user else None,
+        status_id=status.id,
     )
     session.add(revision)
     session.commit()
@@ -70,14 +83,15 @@ def test_run_translation_for_project_queue_routing(flask_app):
         session.delete(project)
         session.commit()
 
-
 def test_batch_translate_view_queue_routing(rama_client, client):
     # This tests the view logic in project.py to ensure queue routing is correctly selected
     session = get_session()
     project = session.query(db.Project).filter_by(slug="test-project").first()
 
-    with patch("kalanjiyam.tasks.translation.run_translation_for_project") as mock_run_translation:
+    with patch("kalanjiyam.tasks.translation.run_translation_for_project") as mock_run_translation, \
+         patch("kalanjiyam.views.proofing.project.redis_client") as mock_redis:
         mock_run_translation.return_value = None  # Mock to avoid running actual task
+        mock_redis.get.return_value = None
         
         # Test as authenticated user (rama_client)
         r = rama_client.post(

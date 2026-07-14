@@ -71,7 +71,7 @@
 {% macro main_nav(active, current_user) %}
 
 {% if current_user.is_moderator %}
-<nav class="mb-6">
+<nav>
   <h1 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Moderation') }}</h1>
   <ul class="space-y-1">
     {{ _link('stats', "proofing.dashboard", _("Dashboard"), active, icon_name='layout-dashboard') }}

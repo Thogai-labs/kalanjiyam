@@ -306,6 +306,51 @@ class S3Storage(Storage):
         if self.public_endpoint_url:
             return redirect(self.presigned_url(key))
         return send_file(self.local_copy(key), **send_file_kwargs)
+class MemoryStorage(Storage):
+    """In-memory storage backend for testing."""
+
+    def __init__(self):
+        self.files = {}
+
+    def save(self, key: str, source: Path | str | bytes | BinaryIO) -> None:
+        if isinstance(source, (Path, str)):
+            self.files[key] = Path(source).read_bytes()
+        elif isinstance(source, bytes):
+            self.files[key] = source
+        else:
+            self.files[key] = source.read()
+
+    def read_bytes(self, key: str) -> bytes:
+        if key not in self.files:
+            raise FileNotFoundError(f"memory:///{key}")
+        return self.files[key]
+
+    def exists(self, key: str) -> bool:
+        return key in self.files
+
+    def list_keys(self, prefix: str) -> Iterator[tuple[str, int]]:
+        for key, data in self.files.items():
+            if key.startswith(prefix):
+                yield key, len(data)
+
+    def delete_prefix(self, prefix: str) -> int:
+        to_delete = [k for k in self.files if k.startswith(prefix)]
+        for k in to_delete:
+            del self.files[k]
+        return len(to_delete)
+
+    def local_copy(self, key: str) -> Path:
+        if key not in self.files:
+            return Path(tempfile.gettempdir()) / f"missing-{uuid.uuid4().hex}"
+        temp_dir = Path(tempfile.gettempdir()) / "kalanjiyam-memory-storage"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        temp_file = temp_dir / Path(key).name
+        temp_file.write_bytes(self.files[key])
+        return temp_file
+
+    def serve(self, key: str, **send_file_kwargs):
+        import io
+        return send_file(io.BytesIO(self.read_bytes(key)), **send_file_kwargs)
 
 
 def _build_storage(config) -> Storage:

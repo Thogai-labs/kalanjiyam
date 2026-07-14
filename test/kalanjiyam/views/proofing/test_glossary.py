@@ -30,19 +30,26 @@ def test_api_glossaries_proxy(rama_client):
 def test_api_translate_with_glossary(rama_client):
     """Test that the translation API passes the glossary parameter to translate_text."""
     from kalanjiyam.utils.translation_engine import TranslationResponse
+    from kalanjiyam.queries import get_session
+    import kalanjiyam.database as db
+
+    session = get_session()
+    session.query(db.Translation).delete()
+    session.query(db.Revision).filter(db.Revision.id > 1).delete()
+    session.commit()
 
     with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
         mock_translate.return_value = TranslationResponse(
             translated_text="Translated with Glossary",
-            source_language="sa",
-            target_language="en",
+            source_language="en",
+            target_language="sa",
             engine="indictrans2"
         )
 
-        r = rama_client.get("/api/translate/test-project/1/?source_lang=sa&target_lang=en&engine=indictrans2&glossary=administrative")
+        r = rama_client.get("/api/translate/test-project/1/?source_lang=en&target_lang=sa&engine=indictrans2&glossary=administrative")
         assert r.status_code == 200
         assert r.text == "Translated with Glossary"
-        mock_translate.assert_called_once_with("Translated with Glossary", "sa", "en", "indictrans2", glossary="administrative")
+        mock_translate.assert_called_once_with("Foo", "en", "sa", "indictrans2", glossary="administrative")
 
 
 def test_docx_translate_with_glossary(rama_client):
@@ -95,8 +102,10 @@ def test_project_batch_translate_with_glossary(rama_client):
         "glossary": "administrative"
     }
 
-    with patch("kalanjiyam.tasks.translation.run_translation_for_project") as mock_run_project_trans:
+    with patch("kalanjiyam.tasks.translation.run_translation_for_project") as mock_run_project_trans, \
+         patch("kalanjiyam.views.proofing.project.redis_client") as mock_redis:
         mock_run_project_trans.return_value.id = "mock-group-task-id"
+        mock_redis.get.return_value = None
 
         r = rama_client.post(
             "/proofing/test-project/batch-translate",
@@ -152,36 +161,50 @@ def test_create_project_direct_docx_translate_with_glossary(rama_client):
 def test_api_translate_with_multiple_glossaries(rama_client):
     """Test that the translation API passes multiple glossaries formatted as comma-separated string to translate_text."""
     from kalanjiyam.utils.translation_engine import TranslationResponse
+    from kalanjiyam.queries import get_session
+    import kalanjiyam.database as db
+
+    session = get_session()
+    session.query(db.Translation).delete()
+    session.query(db.Revision).filter(db.Revision.id > 1).delete()
+    session.commit()
 
     with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
         mock_translate.return_value = TranslationResponse(
             translated_text="Translated with multiple",
-            source_language="sa",
-            target_language="en",
+            source_language="en",
+            target_language="sa",
             engine="indictrans2"
         )
 
-        r = rama_client.get("/api/translate/test-project/1/?source_lang=sa&target_lang=en&engine=indictrans2&glossary=administrative,%20agri")
+        r = rama_client.get("/api/translate/test-project/1/?source_lang=en&target_lang=sa&engine=indictrans2&glossary=administrative,%20agri")
         assert r.status_code == 200
         assert r.text == "Translated with multiple"
-        mock_translate.assert_called_once_with("Translated with multiple", "sa", "en", "indictrans2", glossary="administrative, agri")
+        mock_translate.assert_called_once_with("Foo", "en", "sa", "indictrans2", glossary="administrative, agri")
 
 
 def test_api_translate_with_all_glossaries(rama_client):
     """Test that the translation API passes the special 'all' option to translate_text."""
     from kalanjiyam.utils.translation_engine import TranslationResponse
+    from kalanjiyam.queries import get_session
+    import kalanjiyam.database as db
+
+    session = get_session()
+    session.query(db.Translation).delete()
+    session.query(db.Revision).filter(db.Revision.id > 1).delete()
+    session.commit()
 
     with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
         mock_translate.return_value = TranslationResponse(
             translated_text="Translated with all",
-            source_language="sa",
-            target_language="en",
+            source_language="en",
+            target_language="sa",
             engine="indictrans2"
         )
 
-        r = rama_client.get("/api/translate/test-project/1/?source_lang=sa&target_lang=en&engine=indictrans2&glossary=all")
+        r = rama_client.get("/api/translate/test-project/1/?source_lang=en&target_lang=sa&engine=indictrans2&glossary=all")
         assert r.status_code == 200
         assert r.text == "Translated with all"
-        mock_translate.assert_called_once_with("Translated with all", "sa", "en", "indictrans2", glossary="all")
+        mock_translate.assert_called_once_with("Foo", "en", "sa", "indictrans2", glossary="all")
 
 

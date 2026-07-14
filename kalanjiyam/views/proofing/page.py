@@ -1159,12 +1159,15 @@ def _translate_html_content(html: str, source_lang: str, target_lang: str, engin
                         try:
                             # Batch translate all matching segments by joining them with double newlines
                             joined_text = "\n\n".join(texts_to_translate)
+                            trans_kwargs = {}
+                            if glossary:
+                                trans_kwargs["glossary"] = glossary
                             translation_response = translate_text(
                                 joined_text,
                                 source_lang,
                                 target_lang,
                                 engine,
-                                glossary=glossary
+                                **trans_kwargs
                             )
                             # Split back the translated segments
                             translated_segments = translation_response.translated_text.split("\n\n")
@@ -1190,12 +1193,15 @@ def _translate_html_content(html: str, source_lang: str, target_lang: str, engin
                                 leading_ws = sub_text[:len(sub_text) - len(sub_text.lstrip())]
                                 trailing_ws = sub_text[len(sub_text.rstrip()):]
                                 
+                                trans_kwargs = {}
+                                if glossary:
+                                    trans_kwargs["glossary"] = glossary
                                 translation_response = translate_text(
                                     stripped,
                                     source_lang,
                                     target_lang,
                                     engine,
-                                    glossary=glossary
+                                    **trans_kwargs
                                 )
                                 translated_text = translation_response.translated_text
                                 subparts[idx] = f"{leading_ws}{translated_text}{trailing_ws}"
@@ -1261,12 +1267,15 @@ def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: 
     # Attempt batched translation in a single call
     try:
         joined_text = "\n\n".join(texts_to_translate)
+        trans_kwargs = {}
+        if glossary:
+            trans_kwargs["glossary"] = glossary
         translation_response = translate_text(
             joined_text,
             source_lang,
             target_lang,
             engine,
-            glossary=glossary
+            **trans_kwargs
         )
         translated_segments = translation_response.translated_text.split("\n\n")
 
@@ -1463,7 +1472,8 @@ def translate(project_slug, page_slug):
             revision.content,
             source_lang,
             target_lang,
-            engine
+            engine,
+            glossary=glossary
         )
         consume_translation_credit_for_project(project_)
 
