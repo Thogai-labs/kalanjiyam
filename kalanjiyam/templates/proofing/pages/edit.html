@@ -145,7 +145,13 @@
         .book-editor-image-pane s, .book-editor-image-pane del { text-decoration: line-through; color: #94a3b8; }
         .book-editor-image-pane a { color: #2563eb; text-decoration: underline; }
         .book-editor-image-pane img { max-width: 100%; height: auto; display: block; margin: 1rem auto; border-radius: 0.5rem; }
-        .book-editor-image-pane .docx-column-section { display: block; column-gap: 2rem; margin-bottom: 1rem; }
+        .book-editor-image-pane .docx-column-section,
+        #rich-editor .docx-column-section,
+        .ProseMirror .docx-column-section {
+          display: block;
+          column-gap: 2rem;
+          margin-bottom: 1rem;
+        }
       </style>
       <div class="book-editor-image-pane overflow-y-auto p-8 text-slate-800 border-r border-slate-200 bg-[#faf8f5]">
         <div class="max-w-none text-left leading-relaxed">

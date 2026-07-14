@@ -1150,6 +1150,30 @@ def _is_matching_language(text: str, lang: str) -> bool:
     return True
 
 
+def _clean_translation_input(text: str) -> str:
+    """Clean translation input text by replacing &nbsp; and \xa0 with normal spaces and stripping."""
+    if not text:
+        return ""
+    # Standardize &nbsp; (including variants with spaces) and unicode non-breaking space
+    cleaned = re.sub(r'&\s*nbsp\s*;*', ' ', text)
+    cleaned = cleaned.replace('\xa0', ' ')
+    # Normalize multiple consecutive spaces to a single space
+    cleaned = re.sub(r' +', ' ', cleaned)
+    return cleaned.strip()
+
+
+def _clean_translation_output(text: str) -> str:
+    """Clean translation output text to remove corrupted &nbsp; entities or trailing &nbsp;."""
+    if not text:
+        return ""
+    # Remove any stray &nbsp; or &nbsp;; or & nbsp;; or \xa0 resulting from translation
+    cleaned = re.sub(r'&\s*nbsp\s*;*', ' ', text)
+    cleaned = cleaned.replace('\xa0', ' ')
+    # Normalize multiple consecutive spaces to a single space
+    cleaned = re.sub(r' +', ' ', cleaned)
+    return cleaned.strip()
+
+
 def _translate_html_content(html: str, source_lang: str, target_lang: str, engine: str, glossary: str = None) -> str:
     """Helper to translate plain text sections within HTML content, preserving HTML tags."""
 
@@ -1175,7 +1199,7 @@ def _translate_html_content(html: str, source_lang: str, target_lang: str, engin
                             sub_text = subparts[j]
                             if sub_text and sub_text.strip() and _is_matching_language(sub_text, source_lang):
                                 indices_to_translate.append(j)
-                                texts_to_translate.append(sub_text.strip())
+                                texts_to_translate.append(_clean_translation_input(sub_text))
                                 
                     if texts_to_translate:
                         try:
@@ -1192,11 +1216,18 @@ def _translate_html_content(html: str, source_lang: str, target_lang: str, engin
                                 **trans_kwargs
                             )
                             # Split back the translated segments
-                            translated_segments = translation_response.translated_text.split("\n\n")
+                            translated_segments = [
+                                _clean_translation_output(seg)
+                                for seg in translation_response.translated_text.split("\n\n")
+                            ]
                             
                             # If count doesn't match, try splitting by single/consecutive newlines
                             if len(translated_segments) != len(texts_to_translate):
-                                translated_segments = [s.strip() for s in re.split(r'\n+', translation_response.translated_text) if s.strip()]
+                                translated_segments = [
+                                    _clean_translation_output(s)
+                                    for s in re.split(r'\n+', translation_response.translated_text)
+                                    if s.strip()
+                                ]
                                 
                             if len(translated_segments) == len(texts_to_translate):
                                 for idx, translated_segment in zip(indices_to_translate, translated_segments):
@@ -1211,7 +1242,7 @@ def _translate_html_content(html: str, source_lang: str, target_lang: str, engin
                             # Fallback: sequential translation
                             for idx in indices_to_translate:
                                 sub_text = subparts[idx]
-                                stripped = sub_text.strip()
+                                cleaned_input = _clean_translation_input(sub_text)
                                 leading_ws = sub_text[:len(sub_text) - len(sub_text.lstrip())]
                                 trailing_ws = sub_text[len(sub_text.rstrip()):]
                                 
@@ -1219,13 +1250,13 @@ def _translate_html_content(html: str, source_lang: str, target_lang: str, engin
                                 if glossary:
                                     trans_kwargs["glossary"] = glossary
                                 translation_response = translate_text(
-                                    stripped,
+                                    cleaned_input,
                                     source_lang,
                                     target_lang,
                                     engine,
                                     **trans_kwargs
                                 )
-                                translated_text = translation_response.translated_text
+                                translated_text = _clean_translation_output(translation_response.translated_text)
                                 subparts[idx] = f"{leading_ws}{translated_text}{trailing_ws}"
                                 
                     parts[i] = "".join(subparts)
@@ -1263,7 +1294,7 @@ def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: 
                         if subpart_idx % 2 == 0:
                             sub_text = subparts[subpart_idx]
                             if sub_text and sub_text.strip() and _is_matching_language(sub_text, source_lang):
-                                stripped = sub_text.strip()
+                                stripped = _clean_translation_input(sub_text)
                                 leading_ws = sub_text[:len(sub_text) - len(sub_text.lstrip())]
                                 trailing_ws = sub_text[len(sub_text.rstrip()):]
                                 translation_targets.append({
@@ -1299,11 +1330,18 @@ def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: 
             engine,
             **trans_kwargs
         )
-        translated_segments = translation_response.translated_text.split("\n\n")
+        translated_segments = [
+            _clean_translation_output(seg)
+            for seg in translation_response.translated_text.split("\n\n")
+        ]
 
         # Fallback to single newlines if count doesn't match
         if len(translated_segments) != len(texts_to_translate):
-            translated_segments = [s.strip() for s in re.split(r'\n+', translation_response.translated_text) if s.strip()]
+            translated_segments = [
+                _clean_translation_output(s)
+                for s in re.split(r'\n+', translation_response.translated_text)
+                if s.strip()
+            ]
 
         if len(translated_segments) != len(texts_to_translate):
             raise ValueError("Mismatched translated segments count in batch translation")

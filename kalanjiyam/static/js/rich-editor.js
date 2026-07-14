@@ -1,7 +1,7 @@
 /* Rich text editor using TipTap */
 /* global Editor, Image, Table, TableRow, TableCell, TableHeader, StarterKit, Underline, TextAlign */
 
-import { Editor, Extension } from '@tiptap/core';
+import { Editor, Extension, Node } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Table from '@tiptap/extension-table';
@@ -38,6 +38,41 @@ const BlockId = Extension.create({
         },
       },
     ];
+  },
+});
+
+/* Custom TipTap Node to support DOCX column sections */
+const DocxColumnSection = Node.create({
+  name: 'docxColumnSection',
+  group: 'block',
+  content: 'block+',
+  defining: true,
+
+  addAttributes() {
+    return {
+      style: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('style'),
+        renderHTML: (attributes) => {
+          if (!attributes.style) {
+            return {};
+          }
+          return { style: attributes.style };
+        },
+      },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'div.docx-column-section',
+      },
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['div', { class: 'docx-column-section', ...HTMLAttributes }, 0];
   },
 });
 
@@ -114,6 +149,7 @@ export function createRichEditor(elementId, options = {}) {
         },
       }),
       BlockId,
+      DocxColumnSection,
     ],
     content,
     onUpdate: ({ editor }) => {
