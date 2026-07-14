@@ -99,7 +99,7 @@ def test_batch_translate_view_queue_routing(rama_client, client):
             data={
                 "source_lang": "sa",
                 "target_lang": "en",
-                "engine": "google"
+                "engine": "indictrans2"
             }
         )
         # Check that it called run_translation_for_project with queue=None
@@ -122,7 +122,7 @@ def test_batch_translate_view_queue_routing(rama_client, client):
             data={
                 "source_lang": "sa",
                 "target_lang": "en",
-                "engine": "google"
+                "engine": "indictrans2"
             }
         )
         # Check that it called run_translation_for_project with queue='low_priority'

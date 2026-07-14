@@ -351,4 +351,54 @@ def test_translate_api_selective_translation_proper_nouns(rama_client):
         mock_translate.assert_called_once_with(expected_joined_text, "en", "ta", "indictrans2")
 
 
+def test_translate_api_post_docx_html(rama_client):
+    from unittest.mock import patch
+    from kalanjiyam.utils.translation_engine import TranslationResponse
+    from kalanjiyam.queries import get_session
+    import kalanjiyam.database as db
+
+    session = get_session()
+    session.query(db.Translation).delete()
+    session.query(db.Revision).filter(db.Revision.id > 1).delete()
+    session.commit()
+
+    with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
+        mock_translate.return_value = TranslationResponse(
+            translated_text="नमस्ते",
+            source_language="en",
+            target_language="hi",
+            engine="indictrans2"
+        )
+
+        payload = {
+            "content_format": "html",
+            "blocks": [
+                {
+                    "id": "b1",
+                    "type": "paragraph",
+                    "content": "<p>Hello Sanskrit</p>"
+                }
+            ]
+        }
+        r = rama_client.post(
+            "/api/translate/test-project/1/?source_lang=en&target_lang=hi&engine=indictrans2",
+            json=payload
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["content_format"] == "html"
+        assert data["blocks"][0]["content"] == "<p>नमस्ते</p>"
+
+        # Verify saved revision has content_format = "html" and document is preserved
+        pv = session.query(db.PageVersion).filter_by(
+            page_id=1,
+            version_key="translation:indictrans2:en->hi"
+        ).first()
+        assert pv is not None
+        assert pv.revisions[0].content_format == "html"
+        assert pv.revisions[0].document is not None
+        assert pv.revisions[0].document["blocks"][0]["content"] == "<p>नमस्ते</p>"
+
+
+
 

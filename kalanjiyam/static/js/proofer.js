@@ -1323,6 +1323,9 @@ export default () => ({
         
         // Update flow / rich editor
         this._syncDocumentToForm();
+        if (this.editorMode === 'flow') {
+          this._applyFlowEditorContent();
+        }
         this.hasUnsavedChanges = true;
         
         // Extract plain text for reference translation panel

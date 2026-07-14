@@ -187,6 +187,12 @@ def resolve_version_keys(user, page) -> tuple:
                     p1_tracks.append(v)
             except ValueError:
                 p1_tracks.append(v)
+        elif v.version_key == "role:moderator":
+            moderator_tracks.append(v)
+        elif v.version_key == "role:p2":
+            p2_tracks.append(v)
+        elif v.version_key == "role:p1":
+            p1_tracks.append(v)
         elif v.version_key.startswith("ocr:"):
             ocr_tracks.append(v)
         elif v.version_key.startswith("translation:"):
@@ -354,13 +360,29 @@ def _page_document_dict_for_version(cur: db.Page, version_key: str) -> dict:
     if latest_revision:
         doc = document_for_revision(latest_revision, cur)
     else:
-        doc = PageDocument.empty()
-        if cur.page_width:
-            doc.page_width = cur.page_width
-        if cur.page_height:
-            doc.page_height = cur.page_height
-        from kalanjiyam.utils.page_document import enrich_document_from_page_ocr
-        doc = enrich_document_from_page_ocr(doc, cur)
+        from kalanjiyam.utils.storage import project_docx_key, get_storage
+        is_docx = False
+        if cur.project:
+            is_docx = get_storage().exists(project_docx_key(cur.project.slug))
+            
+        if is_docx:
+            orig_version = session.query(db.PageVersion).filter_by(
+                page_id=cur.id,
+                version_key="original"
+            ).first()
+            orig_rev = orig_version.revisions[-1] if orig_version and orig_version.revisions else None
+            if orig_rev and orig_rev.document:
+                doc = PageDocument.from_dict(orig_rev.document)
+            else:
+                doc = PageDocument.empty()
+        else:
+            doc = PageDocument.empty()
+            if cur.page_width:
+                doc.page_width = cur.page_width
+            if cur.page_height:
+                doc.page_height = cur.page_height
+            from kalanjiyam.utils.page_document import enrich_document_from_page_ocr
+            doc = enrich_document_from_page_ocr(doc, cur)
 
     if (not doc.page_width or not doc.page_height) and cur.project:
         try:
@@ -1412,7 +1434,7 @@ def translate(project_slug, page_slug):
                         translated_text = PageDocument.from_dict(doc_data).to_plain_text()
                     except Exception:
                         translated_text = ""
-                    content_format = "blocks"
+                    content_format = "html" if doc_data.get("content_format") == "html" else "blocks"
                 else:
                     translated_text = doc_data.get("content", "")
                     content_format = "plain"
@@ -1430,7 +1452,7 @@ def translate(project_slug, page_slug):
                     status=SitePageStatus.R0,
                     version=current_ver,
                     author_id=author_id,
-                    document=doc_data if content_format == "blocks" else None,
+                    document=doc_data if content_format in ("blocks", "html") else None,
                     content_format=content_format,
                     version_key=version_key,
                 )
