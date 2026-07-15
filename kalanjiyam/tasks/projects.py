@@ -142,7 +142,7 @@ def _parse_run_to_html(run, child, project_slug, image_mapping) -> str:
                     
         if embed_id and embed_id in image_mapping:
             filename = image_mapping[embed_id]
-            return f'<img src="/static/uploads/{project_slug}/images/{filename}" alt="Image" />'
+            return f'<img src="/static/uploads/{project_slug}/images/{filename}" class="inline-block align-middle max-h-16 mx-1" alt="Image" />'
             
         if child.xpath('.//*[local-name()="br"]'):
             return '<br/>'
