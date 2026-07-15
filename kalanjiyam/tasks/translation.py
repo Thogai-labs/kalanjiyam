@@ -333,6 +333,7 @@ def run_docx_translation(
     target_lang: str = 'en',
     engine: str = 'indictrans2',
     glossary: str = None,
+    creator_id: int = None,
 ):
     """Run direct in-place translation for a standalone DOCX file."""
     import tempfile
@@ -340,6 +341,11 @@ def run_docx_translation(
     from docx import Document
     from kalanjiyam.utils.storage import get_storage, docx_upload_key, docx_translation_key
     from kalanjiyam.utils.translation_engine import translate_text
+    from kalanjiyam.utils.quotas import (
+        estimate_docx_pages,
+        ensure_translation_quota_for_user,
+        consume_translation_credits_for_user,
+    )
 
     flask_app = create_config_only_app(app_env)
     with flask_app.app_context():
@@ -352,6 +358,19 @@ def run_docx_translation(
             raise ValueError(f"Uploaded DOCX not found in storage: {upload_key}")
 
         doc = Document(local_path)
+
+        # Quota check
+        creator = None
+        if creator_id:
+            from kalanjiyam import database as db
+            from kalanjiyam import queries as q
+            session = q.get_session()
+            creator = session.query(db.User).filter_by(id=creator_id).first()
+
+        estimated_pages = estimate_docx_pages(doc)
+        if creator:
+            ensure_translation_quota_for_user(creator, estimated_pages)
+
 
         import re
 
@@ -489,6 +508,10 @@ def run_docx_translation(
         try:
             doc.save(str(tmp_path))
             storage.save(trans_key, tmp_path)
+            
+            # Consume credits after saving successfully
+            if creator:
+                consume_translation_credits_for_user(creator, estimated_pages)
         finally:
             if tmp_path.exists():
                 tmp_path.unlink()

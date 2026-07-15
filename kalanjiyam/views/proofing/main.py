@@ -273,6 +273,7 @@ def create_project():
             target_lang=target_lang,
             engine=engine,
             glossary=glossary,
+            creator_id=current_user.id if current_user.is_authenticated else None,
         )
 
         from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
@@ -602,6 +603,7 @@ def docx_translate():
             target_lang=target_lang,
             engine=engine,
             glossary=glossary,
+            creator_id=current_user.id if current_user.is_authenticated else None,
         )
 
         from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
