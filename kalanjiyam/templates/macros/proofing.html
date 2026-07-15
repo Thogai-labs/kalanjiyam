@@ -104,12 +104,12 @@
 ("search_operations", _("Search"), url_for("proofing.project.search_operations", slug=project.slug)),
 ("batch_processes", _("Batch Processes"), url_for("proofing.project.batch_processes", slug=project.slug)),
 ("edit", _("Edit"), url_for("proofing.project.edit", slug=project.slug)),
+("stats", _("Stats"), url_for("proofing.project.stats", slug=project.slug)),
 ] %}
 {% if not (current_user.is_authenticated and current_user.is_super_admin) %}
   {% set routes = routes + [("download", _("Download"), url_for("proofing.project.download", slug=project.slug))] %}
 {% endif %}
 {% if is_mod %}{% set routes = routes + [
-("stats", _("Stats"), url_for("proofing.project.stats", slug=project.slug)),
 ("admin", _("Admin"), url_for("proofing.project.admin", slug=project.slug)),
 ] %}{% endif %}
 

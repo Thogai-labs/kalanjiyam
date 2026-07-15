@@ -300,6 +300,7 @@ def edit(slug):
         project=project_,
         form=form,
         delete_form=delete_form,
+        supported_engines=SUPPORTED_ENGINES,
     )
 
 
@@ -521,12 +522,10 @@ def download_as_pdf(slug):
 
 
 @bp.route("/<slug>/stats")
-@moderator_required
 def stats(slug):
     """Show basic statistics about this project.
 
-    Currently, these stats don't show any sensitive information. But since that
-    might change in the future, limit this page to moderators only.
+    Currently, these stats don't show any sensitive information.
     """
     project_ = q.project(slug)
     if project_ is None:
@@ -550,7 +549,6 @@ def stats(slug):
 
 
 @bp.route("/<slug>/stats/compare", methods=["POST"])
-@moderator_required
 def run_comparison(slug):
     """Run an OCR comparison against ground truth."""
     project_ = q.project(slug)
@@ -580,7 +578,6 @@ def run_comparison(slug):
 
 
 @bp.route("/<slug>/stats/compare/<int:comparison_id>")
-@moderator_required
 def comparison_details(slug, comparison_id):
     """Show detailed results for a comparison."""
     project_ = q.project(slug)
@@ -591,6 +588,19 @@ def comparison_details(slug, comparison_id):
     comparison = session.query(OCRComparison).get(comparison_id)
     if not comparison or comparison.project_id != project_.id:
         abort(404)
+
+    # Ensure JSON columns are deserialized if they are returned as string (SQLite fallback)
+    import json
+    if isinstance(comparison.page_results, str):
+        try:
+            comparison.page_results = json.loads(comparison.page_results)
+        except Exception as e:
+            LOG.warning(f"Failed to deserialize page_results: {e}")
+    if isinstance(comparison.summary_metrics, str):
+        try:
+            comparison.summary_metrics = json.loads(comparison.summary_metrics)
+        except Exception as e:
+            LOG.warning(f"Failed to deserialize summary_metrics: {e}")
 
     return render_template(
         "proofing/projects/comparison_details.html",

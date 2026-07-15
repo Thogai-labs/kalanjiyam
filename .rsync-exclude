@@ -14,19 +14,11 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Git repository directory
-.git/
-
 # IDE configs
 .idea/
 .vscode/
 *.swp
 *~
-
-# Local environment & config backups
-.env
-.env.bak
-.flaskenv
 
 # Node packages & frontend builds
 node_modules/
