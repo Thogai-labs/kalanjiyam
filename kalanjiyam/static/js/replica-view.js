@@ -1,7 +1,8 @@
 /* Bbox-scaled replica canvas for page layout editing. */
 
 import { scaleBoxesToImage } from './osd-overlay.js';
-import { blockReplicaInnerHtml, normalizeUnicodeText } from './page-document.js';
+import { blockReplicaInnerHtml, normalizeUnicodeText, autoWrapMath } from './page-document.js';
+import renderMathInElement from 'katex/dist/contrib/auto-render.js';
 
 /* Inject styles for selection, move/resize, and toolbar custom tokens */
 if (!document.getElementById('ocr-replica-styles')) {
@@ -630,6 +631,61 @@ export class ReplicaView {
     });
     toolbar.appendChild(moveModeBtn);
 
+    // Math/Formula Editor button
+    const mathEditorBtn = document.createElement('button');
+    mathEditorBtn.type = 'button';
+    mathEditorBtn.className = 'ocr-replica-toolbar-btn';
+    mathEditorBtn.disabled = !this.selectedId;
+    mathEditorBtn.innerHTML = `
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+      </svg>
+      <span>Math Editor</span>
+    `;
+    mathEditorBtn.addEventListener('click', () => {
+      if (!this.selectedId) return;
+      const el = this.container.querySelector(`[data-block-id="${this.selectedId}"]`);
+      if (el) {
+        let selText = '';
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0 && el.contains(selection.anchorNode)) {
+          selText = selection.toString();
+        }
+        if (!selText) {
+          selText = el.innerText || el.textContent || '';
+        }
+        
+        const initialMathText = selText.replace(/^\$\$?|\$\$?$/g, '').trim();
+        
+        if (window.openMathEditorModal) {
+          window.openMathEditorModal(initialMathText, (latex) => {
+            if (latex && latex.trim()) {
+              const mathString = `$${latex.trim()}$`;
+              
+              if (selection.rangeCount > 0 && el.contains(selection.anchorNode) && selection.toString()) {
+                const range = selection.getRangeAt(0);
+                range.deleteContents();
+                range.insertNode(document.createTextNode(mathString));
+              } else {
+                el.innerText = mathString;
+              }
+              
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              
+              const originalBlock = this.document.blocks.find(b => b.id === this.selectedId);
+              if (originalBlock) {
+                originalBlock.content = el.innerHTML;
+                originalBlock.manually_edited = true;
+              }
+              this.triggerChange();
+              this._render();
+            }
+          });
+        }
+      }
+    });
+    toolbar.appendChild(mathEditorBtn);
+
     // Delete Block button
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
@@ -813,7 +869,8 @@ export class ReplicaView {
         el.contentEditable = (this.moveMode || isImageBlock) ? 'false' : 'true';
         
         // Render block content as HTML always to preserve bold/italic/headings formattings from user or OCR engine
-        el.innerHTML = block.content || '';
+        // Render raw LaTeX in edit/focused mode to prevent KaTeX HTML corruption, and compiled KaTeX in view mode.
+        el.innerHTML = isSelected ? (block.content || '') : autoWrapMath(block.content || '');
         el.addEventListener('input', () => {
           const originalBlock = this.document.blocks.find(b => b.id === block.id);
           if (originalBlock) {
@@ -935,6 +992,21 @@ export class ReplicaView {
     }
 
     this.container.appendChild(page);
+
+    try {
+      renderMathInElement(page, {
+        delimiters: [
+          { left: '$$', right: '$$', display: true },
+          { left: '$', right: '$', display: false },
+          { left: '\\(', right: '\\)', display: false },
+          { left: '\\[', right: '\\[', display: true },
+        ],
+        ignoredClasses: ['is-selected'],
+        throwOnError: false,
+      });
+    } catch (e) {
+      console.warn('KaTeX render failed:', e);
+    }
 
     // Automatically expand heights for text boxes on initial load if text exceeds default OCR dimensions
     requestAnimationFrame(() => {

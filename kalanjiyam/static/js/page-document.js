@@ -85,6 +85,47 @@ const BLOCK_TYPE_TO_TAG = {
   paragraph: 'p',
 };
 
+export function autoWrapMath(text) {
+  if (!text) return '';
+  if (text.includes('$')) return text;
+
+  // Check if there are any Devanagari characters: [\u0900-\u097F]
+  const hasDevanagari = /[\u0900-\u097F]/.test(text);
+
+  if (!hasDevanagari) {
+    const hasLatex = /\\(begin|end|Delta|times|therefore|vmatrix|frac|alpha|beta|gamma|theta|approx|neq|pm|lambda|sigma|pi|phi|omega|sqrt|partial|nabla|int|sum|prod|cup|cap|in|subset|infty|left|right|vmatrix|matrix|align)/.test(text);
+    const hasMathSubSuper = /[a-zA-Z0-9]+_[a-zA-Z0-9]+|[a-zA-Z0-9]+\^[a-zA-Z0-9]+/.test(text);
+    const hasMathEquation = /[a-zA-Z0-9]+\s*[\+\-\*\/=]\s*[a-zA-Z0-9]+/.test(text);
+
+    if (hasLatex || hasMathSubSuper || hasMathEquation) {
+      if (text.includes('\\begin') || text.includes('\n')) {
+        return `$$${text}$$`;
+      }
+      return `$${text}$`;
+    }
+    return text;
+  } else {
+    let result = text;
+    const envPattern = /(\\begin\{[a-zA-Z]+\}[\s\S]*?\\end\{[a-zA-Z]+\})/g;
+    result = result.replace(envPattern, '$$$1$$');
+
+    // Matches math patterns with optional leading variables (like I = \frac...)
+    const mathPattern = /((?:[a-zA-Z0-9\(\)\[\]\s=\+\-\*\/]*?)(?:(?:\\[a-zA-Z]+)|(?:[a-zA-Z0-9]+(?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)))(?:[a-zA-Z0-9\+\-\*\/=\(\)\[\]_\^\\\{\}\:\.,\s\times\therefore]|(?:\\[a-zA-Z]+)|(?:[a-zA-Z0-9]+(?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)))*)/g;
+    result = result.replace(mathPattern, (match) => {
+      const trimmed = match.trim();
+      if (!trimmed) return match;
+      if (trimmed.startsWith('$') || trimmed.endsWith('$')) return match;
+      if (/^[a-zA-Z]$/.test(trimmed)) return match;
+      if (/^\d+$/.test(trimmed)) return match;
+      
+      const leadingSpace = match.match(/^\s*/)[0];
+      const trailingSpace = match.match(/\s*$/)[0];
+      return `${leadingSpace}$${trimmed}$${trailingSpace}`;
+    });
+    return result;
+  }
+}
+
 export function documentToFlowHtml(doc) {
   const isRichFormat = doc.content_format === 'blocks' || doc.content_format === 'html';
   const blocks = [...(doc.blocks || [])].sort(
@@ -106,9 +147,10 @@ export function documentToFlowHtml(doc) {
       return;
     }
     const tag = BLOCK_TYPE_TO_TAG[block.type] ?? 'p';
+    const wrappedContent = autoWrapMath(content);
     const text = isRichFormat
-      ? content.replace(/\n/g, '<br>')
-      : content
+      ? wrappedContent.replace(/\n/g, '<br>')
+      : wrappedContent
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
@@ -524,7 +566,8 @@ export function blockReplicaInnerHtml(block) {
     if (/<table[\s>]/i.test(content)) return content;
     return plainTextToHtmlTable(content);
   }
-  return content
+  const wrapped = autoWrapMath(content);
+  return wrapped
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

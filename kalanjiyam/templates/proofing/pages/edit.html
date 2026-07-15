@@ -257,4 +257,7 @@ const AVAILABLE_VERSIONS = {{ available_versions|tojson }};
     }
   });
 </script>
+
+{% include 'include/math_editor_modal.html' %}
+<script src="https://unpkg.com/mathlive@0.98.6/dist/mathlive.min.js"></script>
 {% endblock %}

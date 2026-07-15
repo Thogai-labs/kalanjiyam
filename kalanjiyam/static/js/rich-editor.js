@@ -680,6 +680,19 @@ export function initializeToolbar(editor) {
             }).run();
           }
           break;
+        case 'openMathEditor':
+          const currentSelectionText = editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to, ' ');
+          const initialMathText = currentSelectionText.replace(/^\$\$?|\$\$?$/g, '').trim();
+          if (window.openMathEditorModal) {
+            window.openMathEditorModal(initialMathText, (latex) => {
+              if (latex && latex.trim()) {
+                editor.chain().focus().insertContent(`$${latex.trim()}$`).run();
+              }
+            });
+          } else {
+            console.error('openMathEditorModal is not loaded on window.');
+          }
+          break;
         default:
           console.warn('Unknown toolbar command:', command);
       }
