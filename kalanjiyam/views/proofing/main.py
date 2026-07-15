@@ -138,7 +138,7 @@ def index():
         statuses_per_project[project.id] = project_counts
         pages_per_project[project.id] = num_pages
 
-    projects.sort(key=lambda x: x.display_title)
+    projects.sort(key=lambda x: x.created_at, reverse=True)
     return render_template(
         "proofing/index.html",
         projects=projects,

@@ -13,7 +13,7 @@ function sortDescending(field) {
  * and data in JS (through `this.data`). If we need to add more features here,
  * clean it up properly first.
  */
-export default (defaultField) => ({
+export default (defaultField, defaultOrder = 'asc') => ({
   // The sort field. Initialize this in `x-data`.
   field: defaultField,
   // The query to filter by. If empty, use all data.
@@ -21,7 +21,7 @@ export default (defaultField) => ({
   // The creator mode filter value.
   selectedMode: 'all',
   // The order of the sort ("asc" or "desc").
-  order: 'asc',
+  order: defaultOrder,
   // The keys to display.
   displayed: new Set(),
   // A simplified representation of the project data.
@@ -37,6 +37,7 @@ export default (defaultField) => ({
     }));
     // Collect all keys in `this.displayed`.
     this.displayed = new Set([...list.children].map((x) => x.dataset.key));
+    this.sort();
   },
 
   /** Filter the list by the user's query string and selected creator mode. */
