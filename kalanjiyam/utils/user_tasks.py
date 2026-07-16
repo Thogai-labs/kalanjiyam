@@ -118,12 +118,29 @@ def get_user_tasks(user_identifier):
                             info['total_count'] = total
                             updated_entries[task_id] = json.dumps(info)
                         else:
-                            info['status'] = 'running'
-                            info['progress'] = current / total if total > 0 else 0
-                            info['completed_count'] = current
-                            info['total_count'] = total
-                            if failed > 0:
-                                info['failed_count'] = failed
+                            started_at_str = info.get('started_at')
+                            is_stale = False
+                            if started_at_str:
+                                try:
+                                    started_at = datetime.fromisoformat(started_at_str)
+                                    if (datetime.utcnow() - started_at).total_seconds() > 3600:
+                                        is_stale = True
+                                except Exception:
+                                    pass
+                            
+                            if is_stale or r.ready():
+                                info['status'] = 'completed' if current > 0 else 'failed'
+                                info['progress'] = 1.0
+                                info['completed_count'] = current
+                                info['total_count'] = total
+                                updated_entries[task_id] = json.dumps(info)
+                            else:
+                                info['status'] = 'running'
+                                info['progress'] = current / total if total > 0 else 0
+                                info['completed_count'] = current
+                                info['total_count'] = total
+                                if failed > 0:
+                                    info['failed_count'] = failed
                     else:
                         # Fallback for old/unrestorable task groups
                         started_at_str = info.get('started_at')
