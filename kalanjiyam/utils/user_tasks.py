@@ -207,3 +207,45 @@ def get_user_tasks(user_identifier):
 
     tasks.sort(key=get_started_at_key, reverse=True)
     return tasks
+
+
+def cancel_user_task(user_identifier, task_id):
+    """
+    Revokes the Celery task and updates its status in Redis to 'cancelled'.
+    """
+    if not user_identifier or not task_id:
+        return False
+        
+    key = f"user_tasks:{user_identifier}"
+    try:
+        task_data = redis_client.hget(key, task_id)
+        if not task_data:
+            return False
+            
+        info = json.loads(safe_decode(task_data))
+        status = info.get('status', 'pending')
+        task_type = info.get('type')
+        
+        if status in ['pending', 'running']:
+            # Revoke the task in Celery
+            try:
+                if task_type in ['ocr', 'translation']:
+                    r = GroupResult.restore(task_id, app=celery_app)
+                    if r:
+                        r.revoke(terminate=True)
+                else:
+                    r = AsyncResult(task_id, app=celery_app)
+                    r.revoke(terminate=True)
+            except Exception as e:
+                LOG.warning(f"Error revoking Celery task {task_id}: {e}")
+                
+            # Update status to cancelled
+            info['status'] = 'cancelled'
+            redis_client.hset(key, task_id, json.dumps(info))
+            return True
+            
+    except Exception as e:
+        LOG.warning(f"Error cancelling user task: {e}")
+        
+    return False
+

@@ -1,7 +1,7 @@
 import json
 import pytest
 from unittest.mock import MagicMock, patch
-from kalanjiyam.utils.user_tasks import get_user_identifier, add_user_task, get_user_tasks
+from kalanjiyam.utils.user_tasks import get_user_identifier, add_user_task, get_user_tasks, cancel_user_task
 
 
 def test_get_user_identifier_auth(flask_app):
@@ -153,6 +153,43 @@ def test_get_user_tasks_stale_or_ready(mock_group_result, mock_redis):
     # Since it is older than 1 hour (started in 2020), it should be marked as completed (since current > 0)
     assert tasks[0]['status'] == "completed"
     assert tasks[0]['progress'] == 1.0
+
+
+@patch('kalanjiyam.utils.user_tasks.redis_client')
+@patch('kalanjiyam.utils.user_tasks.GroupResult')
+def test_cancel_user_task_success(mock_group_result, mock_redis):
+    # Setup mock data for hget
+    mock_redis.hget.return_value = b'{"task_id": "task-123", "type": "ocr", "status": "running"}'
+    mock_redis.hset.return_value = 1
+    
+    mock_group = MagicMock()
+    mock_group_result.restore.return_value = mock_group
+    
+    res = cancel_user_task("user:42", "task-123")
+    
+    assert res is True
+    mock_group.revoke.assert_called_once_with(terminate=True)
+    mock_redis.hset.assert_called_once()
+    # verify the status is updated to cancelled
+    called_args = mock_redis.hset.call_args[1] if mock_redis.hset.call_args[1] else mock_redis.hset.call_args[0]
+    # Check JSON contains status cancelled
+    assert "cancelled" in str(mock_redis.hset.call_args)
+
+
+@patch('kalanjiyam.utils.user_tasks.redis_client')
+def test_cancel_user_task_not_found(mock_redis):
+    mock_redis.hget.return_value = None
+    res = cancel_user_task("user:42", "task-123")
+    assert res is False
+
+
+@patch('kalanjiyam.utils.user_tasks.cancel_user_task')
+def test_cancel_task_api_auth(mock_cancel_user_task, rama_client):
+    mock_cancel_user_task.return_value = True
+    resp = rama_client.post("/proofing/api/tasks/task-123/cancel")
+    assert resp.status_code == 200
+    assert resp.json == {"success": True}
+
 
 
 
