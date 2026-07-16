@@ -224,7 +224,9 @@ def resolve_version_keys(user, page) -> tuple:
             if translation_tracks:
                 return target_key, translation_tracks[0].version_key
         elif user.is_p2:
-            # P2 fallback order: P2 -> P1 -> Translation -> OCR
+            # P2 fallback order: Moderator -> P2 -> P1 -> Translation -> OCR
+            if moderator_tracks:
+                return target_key, moderator_tracks[0].version_key
             if p2_tracks:
                 return target_key, p2_tracks[0].version_key
             if p1_tracks:
@@ -232,7 +234,11 @@ def resolve_version_keys(user, page) -> tuple:
             if translation_tracks:
                 return target_key, translation_tracks[0].version_key
         elif user.is_p1:
-            # P1 fallback order: P1 -> Translation -> OCR
+            # P1 fallback order: Moderator -> P2 -> P1 -> Translation -> OCR
+            if moderator_tracks:
+                return target_key, moderator_tracks[0].version_key
+            if p2_tracks:
+                return target_key, p2_tracks[0].version_key
             if p1_tracks:
                 return target_key, p1_tracks[0].version_key
             if translation_tracks:

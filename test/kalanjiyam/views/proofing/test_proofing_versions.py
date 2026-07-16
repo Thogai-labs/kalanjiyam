@@ -132,10 +132,10 @@ def test_role_based_fallback_resolution(flask_app):
 def test_get_version_display_name(flask_app):
     with flask_app.app_context():
         with flask_app.test_request_context():
-            # ID 1 is seeded as admin in initialize_test_db()
-            name_1 = get_version_display_name("user:1")
-            assert "u-admin" in str(name_1)
-            assert "Moderator" in str(name_1)
+            # ID 4 is seeded as admin in initialize_test_db()
+            name_4 = get_version_display_name("user:4")
+            assert "u-admin" in str(name_4)
+            assert "Moderator" in str(name_4)
 
             # OCR engine formatting
             name_ocr = get_version_display_name("ocr:chandra")
