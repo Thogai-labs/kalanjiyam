@@ -95,8 +95,8 @@ export function autoWrapMath(text) {
   if (!hasDevanagari) {
     const hasLatex = /\\(begin|end|Delta|times|therefore|vmatrix|frac|alpha|beta|gamma|theta|approx|neq|pm|lambda|sigma|pi|phi|omega|sqrt|partial|nabla|int|sum|prod|cup|cap|in|subset|infty|left|right|vmatrix|matrix|align)/.test(text);
     const hasMathSubSuper = /[a-zA-Z0-9]+_[a-zA-Z0-9]+|[a-zA-Z0-9]+\^[a-zA-Z0-9]+/.test(text);
-    // Exclude hyphen (-) from direct matching unless surrounded by spaces, to prevent false positives on codes, postcodes, phone numbers, and addresses (like C-206, Site-B)
-    const hasMathEquation = /[a-zA-Z0-9]+\s*[\+\*\/=]\s*[a-zA-Z0-9]+/.test(text) || /[a-zA-Z0-9]+\s+-\s+[a-zA-Z0-9]+/.test(text);
+    // Exclude hyphens (-) and slashes (/) from direct matching unless surrounded by spaces, to prevent false positives on hyphenated words/codes/addresses and words separated by slashes (like C-206, Son/wife/widow)
+    const hasMathEquation = /[a-zA-Z0-9]+\s*[\+\*=]\s*[a-zA-Z0-9]+/.test(text) || /[a-zA-Z0-9]+\s+[\-\/]\s+[a-zA-Z0-9]+/.test(text);
 
     if (hasLatex || hasMathSubSuper || hasMathEquation) {
       if (text.includes('\\begin') || text.includes('\n')) {

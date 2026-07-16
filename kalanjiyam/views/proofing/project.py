@@ -1151,6 +1151,7 @@ def batch_ocr_status(task_id):
         active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
         pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
         failed_tasks = sum(1 for result in r.results if result.failed())
+        revoked_tasks = sum(1 for result in r.results if result.state == 'REVOKED')
 
         status = None
         if total:
@@ -1161,6 +1162,9 @@ def batch_ocr_status(task_id):
             elif failed_tasks > 0:
                 status = "FAILURE"
                 # Clear the task from Redis when failed
+                _clear_ocr_task_from_redis(task_id)
+            elif revoked_tasks > 0:
+                status = "CANCELLED"
                 _clear_ocr_task_from_redis(task_id)
             else:
                 status = "PROGRESS"
@@ -1356,6 +1360,7 @@ def batch_translate_status(task_id):
         active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
         pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
         failed_tasks = sum(1 for result in r.results if result.failed())
+        revoked_tasks = sum(1 for result in r.results if result.state == 'REVOKED')
 
         status = None
         if total:
@@ -1367,6 +1372,10 @@ def batch_translate_status(task_id):
             elif failed_tasks > 0:
                 status = "FAILURE"
                 # Clear the task from Redis when failed
+                from kalanjiyam.tasks.translation import _clear_translation_task_from_redis
+                _clear_translation_task_from_redis(task_id)
+            elif revoked_tasks > 0:
+                status = "CANCELLED"
                 from kalanjiyam.tasks.translation import _clear_translation_task_from_redis
                 _clear_translation_task_from_redis(task_id)
             else:

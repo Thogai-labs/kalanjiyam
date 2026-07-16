@@ -123,10 +123,11 @@
                 }
             },
             cancelTask(taskId) {
-                if (!confirm("{{ _('Are you sure you want to cancel this task?') }}")) {
+                if (!confirm('{{ _('Are you sure you want to cancel this task?') }}')) {
                     return;
                 }
-                fetch(`/proofing/api/tasks/${taskId}/cancel`, {
+                const url = '{{ url_for('proofing.cancel_task_api', task_id='TASK_ID_HOLDER') }}'.replace('TASK_ID_HOLDER', taskId);
+                fetch(url, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -138,7 +139,7 @@
                     if (data.success) {
                         this.fetchTasks();
                     } else {
-                        alert(data.error || "{{ _('Failed to cancel task') }}");
+                        alert(data.error || '{{ _('Failed to cancel task') }}');
                     }
                 })
                 .catch(err => console.error('Error cancelling task:', err));
