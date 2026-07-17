@@ -933,6 +933,9 @@ export class ReplicaView {
         const isResizeHandle = e.target.classList.contains('ocr-replica-resize-handle');
         
         if (this.selectedId !== block.id) {
+          this.selectedId = block.id;
+          this.onSelect(block);
+          this._render();
           return;
         }
 
