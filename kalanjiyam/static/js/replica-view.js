@@ -901,7 +901,7 @@ export class ReplicaView {
         
         // Render block content as HTML always to preserve bold/italic/headings formattings from user or OCR engine
         // Render raw LaTeX in edit/focused mode to prevent KaTeX HTML corruption, and compiled KaTeX in view mode.
-        el.innerHTML = isSelected ? (block.content || '') : autoWrapMath(block.content || '');
+        el.innerHTML = (isSelected || isImageBlock) ? (block.content || '') : autoWrapMath(block.content || '');
         el.addEventListener('input', () => {
           const originalBlock = this.document.blocks.find(b => b.id === block.id);
           if (originalBlock) {
