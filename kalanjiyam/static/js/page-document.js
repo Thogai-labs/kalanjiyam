@@ -87,44 +87,73 @@ const BLOCK_TYPE_TO_TAG = {
 
 export function autoWrapMath(text) {
   if (!text) return '';
-  if (text.includes('$')) return text;
 
-  // Check if there are any Devanagari characters: [\u0900-\u097F]
-  const hasDevanagari = /[\u0900-\u097F]/.test(text);
+  const parts = text.split(/(\$\$.*?\$\$|\$.*?\$)/g);
 
-  if (!hasDevanagari) {
-    const hasLatex = /\\(begin|end|Delta|times|therefore|vmatrix|frac|alpha|beta|gamma|theta|approx|neq|pm|lambda|sigma|pi|phi|omega|sqrt|partial|nabla|int|sum|prod|cup|cap|in|subset|infty|left|right|vmatrix|matrix|align)/.test(text);
-    const hasMathSubSuper = /[a-zA-Z0-9]+_[a-zA-Z0-9]+|[a-zA-Z0-9]+\^[a-zA-Z0-9]+/.test(text);
-    // Exclude hyphens (-) and slashes (/) from direct matching unless surrounded by spaces, to prevent false positives on hyphenated words/codes/addresses and words separated by slashes (like C-206, Son/wife/widow)
-    const hasMathEquation = /[a-zA-Z0-9]+\s*[\+\*=]\s*[a-zA-Z0-9]+/.test(text) || /[a-zA-Z0-9]+\s+[\-\/]\s+[a-zA-Z0-9]+/.test(text);
+  const wrapSegment = (seg) => {
+    if (!seg.trim()) return seg;
 
-    if (hasLatex || hasMathSubSuper || hasMathEquation) {
-      if (text.includes('\\begin') || text.includes('\n')) {
-        return `$$${text}$$`;
-      }
-      return `$${text}$`;
+    if (/\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(seg.trim()) || /^https?:\/\//i.test(seg.trim()) || /^\/static\//i.test(seg.trim())) {
+      return seg;
     }
-    return text;
-  } else {
-    let result = text;
-    const envPattern = /(\\begin\{[a-zA-Z]+\}[\s\S]*?\\end\{[a-zA-Z]+\})/g;
-    result = result.replace(envPattern, '$$$1$$');
 
-    // Matches math patterns with optional leading variables (like I = \frac...)
-    const mathPattern = /((?:[a-zA-Z0-9\(\)\[\]\s=\+\-\*\/]*?)(?:(?:\\[a-zA-Z]+)|(?:[a-zA-Z0-9]+(?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)))(?:[a-zA-Z0-9\+\-\*\/=\(\)\[\]_\^\\\{\}\:\.,\s\times\therefore]|(?:\\[a-zA-Z]+)|(?:[a-zA-Z0-9]+(?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)))*)/g;
-    result = result.replace(mathPattern, (match) => {
-      const trimmed = match.trim();
-      if (!trimmed) return match;
-      if (trimmed.startsWith('$') || trimmed.endsWith('$')) return match;
-      if (/^[a-zA-Z]$/.test(trimmed)) return match;
-      if (/^\d+$/.test(trimmed)) return match;
-      
-      const leadingSpace = match.match(/^\s*/)[0];
-      const trailingSpace = match.match(/\s*$/)[0];
-      return `${leadingSpace}$${trimmed}$${trailingSpace}`;
-    });
-    return result;
-  }
+    const hasDevanagari = /[\u0900-\u097F]/.test(seg);
+
+    if (!hasDevanagari) {
+      const hasLatex = /\\(begin|end|Delta|times|therefore|vmatrix|frac|alpha|beta|gamma|theta|approx|neq|pm|lambda|sigma|pi|phi|omega|sqrt|partial|nabla|int|sum|prod|cup|cap|in|subset|infty|left|right|vmatrix|matrix|align|circ|text|deg)/.test(seg);
+      const words = seg.match(/[a-z]{4,}/g) || [];
+      const isStandaloneEquation = words.length === 0 || seg.includes('\\begin') || !seg.includes(' ');
+
+      if (isStandaloneEquation) {
+        const hasMathSubSuper = /[a-zA-Z0-9]*_[a-zA-Z0-9\{\}\\\s]+|[a-zA-Z0-9]*\^[a-zA-Z0-9\{\}\\\s]+/.test(seg);
+        const hasMathEquation = /[a-zA-Z0-9]+\s*[\+\*=]\s*[a-zA-Z0-9]+/.test(seg) || /[a-zA-Z0-9]+\s+[\-\/]\s+[a-zA-Z0-9]+/.test(seg);
+        if (hasLatex || hasMathSubSuper || hasMathEquation) {
+          if (seg.includes('\\begin') || seg.includes('\n')) {
+            return `$$${seg}$$`;
+          }
+          return `$${seg}$`;
+        }
+        return seg;
+      } else {
+        return seg.replace(/([a-zA-Z0-9]*[\^\_\\][a-zA-Z0-9\{\}\\\:\.\,\-\+\*\/]*[a-zA-Z0-9\}]+)/g, (match) => {
+          const trimmed = match.trim();
+          if (!trimmed) return match;
+          if (trimmed.includes('/') || trimmed.includes('\\Users') || trimmed.includes(':\\')) {
+            return match;
+          }
+          const leadingSpace = match.match(/^\s*/)[0];
+          const trailingSpace = match.match(/\s*$/)[0];
+          return `${leadingSpace}$${trimmed}$${trailingSpace}`;
+        });
+      }
+    } else {
+      let result = seg;
+      const envPattern = /(\\begin\{[a-zA-Z]+\}[\s\S]*?\\end\{[a-zA-Z]+\})/g;
+      result = result.replace(envPattern, '$$$1$$');
+
+      const mathPattern = /((?:[a-zA-Z0-9\(\)\[\]\s=\+\-\*\/]*?)(?:(?:\\[a-zA-Z]+)|(?:[a-zA-Z0-9]+(?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)))(?:[a-zA-Z0-9\+\-\*\/=\(\)\[\]_\^\\\{\}\:\.,\s\times\therefore]|(?:\\[a-zA-Z]+)|(?:[a-zA-Z0-9]+(?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)))*)/g;
+      result = result.replace(mathPattern, (match) => {
+        const trimmed = match.trim();
+        if (!trimmed) return match;
+        if (/^[a-zA-Z]$/.test(trimmed)) return match;
+        if (/^\d+$/.test(trimmed)) return match;
+        
+        const leadingSpace = match.match(/^\s*/)[0];
+        const trailingSpace = match.match(/\s*$/)[0];
+        return `${leadingSpace}$${trimmed}$${trailingSpace}`;
+      });
+      return result;
+    }
+  };
+
+  const processedParts = parts.map((part) => {
+    if ((part.startsWith('$$') && part.endsWith('$$')) || (part.startsWith('$') && part.endsWith('$'))) {
+      return part;
+    }
+    return wrapSegment(part);
+  });
+
+  return processedParts.join('');
 }
 
 export function documentToFlowHtml(doc) {

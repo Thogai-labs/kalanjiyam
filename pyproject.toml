@@ -50,6 +50,8 @@ dependencies = [
     "regex>=2022.6",
     "python-docx>=0.8.11",
     "beautifulsoup4>=4.11",
+    "latex2mathml>=3.81.0",
+    "mathml2omml>=0.0.2",
 ]
 
 [dependency-groups]

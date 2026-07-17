@@ -342,17 +342,125 @@ def _add_image_to_paragraph(img_tag, paragraph) -> bool:
     return False
 
 
-def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=False, underline=False, strike=False) -> None:
-    for child in parent_el.children:
-        if isinstance(child, NavigableString):
-            text = str(child).replace("\r", "").replace("\n", " ")
-            if text:
-                run = paragraph.add_run(text)
+def auto_wrap_math(text: str) -> str:
+    if not text:
+        return ""
+    
+    import re
+    parts = re.split(r'(\$\$.*?\$\$|\$.*?\$)', text)
+    
+    def wrap_segment(seg: str) -> str:
+        if not seg.strip():
+            return seg
+            
+        trimmed = seg.strip()
+        if re.search(r'\.(png|jpe?g|gif|webp|svg)(\?.*)?$', trimmed, re.I) or re.match(r'^https?://', trimmed, re.I) or trimmed.startswith('/static/'):
+            return seg
+            
+        has_devanagari = bool(re.search(r'[\u0900-\u097F]', seg))
+        
+        if not has_devanagari:
+            has_latex = bool(re.search(r'\\(begin|end|Delta|times|therefore|vmatrix|frac|alpha|beta|gamma|theta|approx|neq|pm|lambda|sigma|pi|phi|omega|sqrt|partial|nabla|int|sum|prod|cup|cap|in|subset|infty|left|right|vmatrix|matrix|align|circ|text|deg)', seg))
+            words = re.findall(r'[a-z]{4,}', seg)
+            is_standalone_equation = len(words) == 0 or '\\begin' in seg or ' ' not in seg
+            
+            if is_standalone_equation:
+                has_math_sub_super = bool(re.search(r'[a-zA-Z0-9]*_[a-zA-Z0-9\{\}\\\s]+|[a-zA-Z0-9]*\^[a-zA-Z0-9\{\}\\\s]+', seg))
+                has_math_equation = bool(re.search(r'[a-zA-Z0-9]+\s*[\+\*=]\s*[a-zA-Z0-9]+', seg) or re.search(r'[a-zA-Z0-9]+\s+[\-\/]\s+[a-zA-Z0-9]+', seg))
+                if has_latex or has_math_sub_super or has_math_equation:
+                    if '\\begin' in seg or '\n' in seg:
+                        return f"$${seg}$$"
+                    return f"${seg}$"
+                return seg
+            else:
+                def token_replacer(match):
+                    m = match.group(1)
+                    t = m.strip()
+                    if not t:
+                        return m
+                    if '/' in t or '\\Users' in t or ':\\' in t:
+                        return m
+                    leading_space = re.match(r'^\s*', m).group(0)
+                    trailing_space = re.search(r'\s*$', m).group(0)
+                    return f"{leading_space}${t}${trailing_space}"
+                
+                pattern = r'([a-zA-Z0-9]*[\^\_\\][a-zA-Z0-9\{\}\\\:\.\,\-\+\*\/]*[a-zA-Z0-9\}]+)'
+                return re.sub(pattern, token_replacer, seg)
+        else:
+            result = seg
+            result = re.sub(r'(\\begin\{[a-zA-Z]+\}[\s\S]*?\\end\{[a-zA-Z]+\})', r'$$\1$$', result)
+            
+            def devanagari_replacer(match):
+                m = match.group(1)
+                t = m.strip()
+                if not t:
+                    return m
+                if re.match(r'^[a-zA-Z]$', t) or re.match(r'^\d+$', t):
+                    return m
+                leading_space = re.match(r'^\s*', m).group(0)
+                trailing_space = re.search(r'\s*$', m).group(0)
+                return f"{leading_space}${t}${trailing_space}"
+                
+            math_pattern = r'((?:[a-zA-Z0-9\(\)\[\]\s=\+\-\*\/]*?)(?:(?:\\[a-zA-Z]+)|(?:[a-zA-Z0-9]+(?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)))(?:[a-zA-Z0-9\+\-\*\/=\(\)\[\]_\^\\\{\}\:\.,\s\times\therefore]|(?:\\[a-zA-Z]+)|(?:[a-zA-Z0-9]+(?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)))*)'
+            return re.sub(math_pattern, devanagari_replacer, result)
+            
+    processed_parts = []
+    for part in parts:
+        if not part:
+            continue
+        if (part.startswith('$$') and part.endswith('$$')) or (part.startswith('$') and part.endswith('$')):
+            processed_parts.append(part)
+        else:
+            processed_parts.append(wrap_segment(part))
+            
+    return "".join(processed_parts)
+
+
+def _add_text_and_math_to_paragraph(text, paragraph, bold=False, italic=False, underline=False, strike=False) -> None:
+    import re
+    from docx.oxml import parse_xml
+    import latex2mathml.converter
+    import mathml2omml
+
+    parts = re.split(r'(\$\$.*?\$\$|\$.*?\$)', text)
+    for part in parts:
+        if not part:
+            continue
+        if (part.startswith('$$') and part.endswith('$$')) or (part.startswith('$') and part.endswith('$')):
+            is_display = part.startswith('$$')
+            latex_formula = part[2:-2] if is_display else part[1:-1]
+            latex_formula = latex_formula.strip()
+            if not latex_formula:
+                continue
+            try:
+                mathml = latex2mathml.converter.convert(latex_formula)
+                omml = mathml2omml.convert(mathml)
+                xml_str = f'<m:oMathPara xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">{omml}</m:oMathPara>'
+                omathpara_el = parse_xml(xml_str.encode("utf-8"))
+                paragraph._element.append(omathpara_el)
+            except Exception:
+                run = paragraph.add_run(part)
                 run.bold = bold
                 run.italic = italic
                 run.underline = underline
                 if strike:
                     run.font.strike = True
+        else:
+            run = paragraph.add_run(part)
+            run.bold = bold
+            run.italic = italic
+            run.underline = underline
+            if strike:
+                run.font.strike = True
+
+
+def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=False, underline=False, strike=False) -> None:
+    for child in parent_el.children:
+        if isinstance(child, NavigableString):
+            text = str(child).replace("\r", "").replace("\n", " ")
+            if text:
+                wrapped_text = auto_wrap_math(text)
+                _add_text_and_math_to_paragraph(wrapped_text, paragraph, bold, italic, underline, strike)
         else:
             tag = child.name
             if tag == "br":
@@ -540,7 +648,9 @@ def documents_to_docx(pages) -> bytes:
             lines = (rev.content or "").strip().split("\n\n")
             for paragraph_text in lines:
                 if paragraph_text.strip():
-                    doc.add_paragraph(paragraph_text.strip())
+                    p = doc.add_paragraph()
+                    wrapped_text = auto_wrap_math(paragraph_text.strip())
+                    _add_text_and_math_to_paragraph(wrapped_text, p)
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
