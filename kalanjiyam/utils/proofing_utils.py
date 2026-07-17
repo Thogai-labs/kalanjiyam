@@ -437,10 +437,14 @@ def _parse_soup_nodes(container_el, docx_doc) -> None:
                     docx_cell = table.cell(row_idx, col_idx)
                     
                     if colspan > 1 or rowspan > 1:
-                        target_row = min(row_idx + rowspan - 1, len(rows) - 1)
-                        target_col = min(col_idx + colspan - 1, max_cols - 1)
-                        target_cell = table.cell(target_row, target_col)
-                        docx_cell.merge(target_cell)
+                        try:
+                            target_row = min(row_idx + rowspan - 1, len(rows) - 1)
+                            target_col = min(col_idx + colspan - 1, max_cols - 1)
+                            target_cell = table.cell(target_row, target_col)
+                            docx_cell.merge(target_cell)
+                        except Exception:
+                            # Ignore merge errors due to complex/non-rectangular HTML table structures
+                            pass
 
                     if docx_cell.paragraphs:
                         p = docx_cell.paragraphs[0]
