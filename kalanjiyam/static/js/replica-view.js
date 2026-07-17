@@ -81,6 +81,14 @@ if (!document.getElementById('ocr-replica-styles')) {
       opacity: 0.5;
       cursor: not-allowed;
     }
+    .ocr-replica-toolbar-btn.active {
+      color: #ffffff !important;
+      background-color: #2563eb !important;
+      border-color: #1d4ed8 !important;
+    }
+    .ocr-replica-toolbar-btn.active:hover {
+      background-color: #1d4ed8 !important;
+    }
     .ocr-replica-page.move-mode-active .ocr-replica-block {
       cursor: move !important;
     }
@@ -619,7 +627,7 @@ export class ReplicaView {
     // Toggle Move Mode button
     const moveModeBtn = document.createElement('button');
     moveModeBtn.type = 'button';
-    moveModeBtn.className = `ocr-replica-toolbar-btn ${this.moveMode ? 'bg-blue-600 text-white border-blue-700 font-semibold shadow-inner hover:bg-blue-700' : ''}`;
+    moveModeBtn.className = `ocr-replica-toolbar-btn ${this.moveMode ? 'active font-semibold shadow-inner' : ''}`;
     moveModeBtn.title = `Move Mode: ${this.moveMode ? 'ON' : 'OFF'}`;
     moveModeBtn.innerHTML = `
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5">
@@ -790,22 +798,6 @@ export class ReplicaView {
       toolbar.classList.add('border-0', 'shadow-none', 'm-0', 'bg-transparent');
     } else {
       this.container.appendChild(toolbar);
-    }
-
-    if (this.moveMode) {
-      const moveBanner = document.createElement('div');
-      moveBanner.className = 'w-full bg-blue-50 text-blue-700 text-xs font-semibold py-2 px-3.5 mb-3 rounded-xl border border-blue-200 flex items-center gap-2 shrink-0 shadow-sm transition-all duration-300';
-      moveBanner.innerHTML = `
-        <svg class="w-4 h-4 text-blue-500 animate-pulse shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-        </svg>
-        <span>Move Mode Active: Drag blocks to reposition, or drag the bottom-right handle to resize them. Click the move icon in the toolbar again to exit.</span>
-      `;
-      if (toolbarContainer) {
-        toolbarContainer.appendChild(moveBanner);
-      } else {
-        this.container.appendChild(moveBanner);
-      }
     }
 
     const page = document.createElement('div');
