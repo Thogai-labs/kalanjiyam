@@ -48,6 +48,23 @@ if (!document.getElementById('ocr-replica-styles')) {
       outline: 1.5px solid #2563eb !important;
       background-color: #eff6ff !important;
     }
+    .ocr-replica-block table {
+      border-collapse: collapse !important;
+      width: 100% !important;
+      border: 1px solid #cbd5e1 !important;
+      margin-bottom: 0.5rem !important;
+    }
+    .ocr-replica-block table th,
+    .ocr-replica-block table td {
+      border: 1px solid #cbd5e1 !important;
+      padding: 6px 8px !important;
+      text-align: left !important;
+      min-width: 30px !important;
+    }
+    .ocr-replica-block table th {
+      background-color: #f8fafc !important;
+      font-weight: bold !important;
+    }
     .ocr-replica-resize-handle {
       position: absolute;
       right: -5px;
