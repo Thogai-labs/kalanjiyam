@@ -42,6 +42,19 @@ def _run_ocr_for_page_inner(
         engine = normalize_engine(engine)
         ocr_response = run_ocr(image_path, engine_name=engine, language=language)
 
+        # Extract visual elements if blocks are returned
+        if ocr_response.blocks:
+            from kalanjiyam.utils.ocr_cropper import crop_ocr_response_elements
+            try:
+                crop_ocr_response_elements(
+                    doc_path=str(image_path),
+                    ocr_response=ocr_response,
+                    project_slug=project_slug,
+                    output_dir=str(image_path.parent)
+                )
+            except Exception as e:
+                logging.exception(f"Failed to crop visual elements: {e}")
+
         session = q.get_session()
         project = q.project(project_slug)
         if project is None:
