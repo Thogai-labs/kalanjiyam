@@ -214,7 +214,7 @@ export class ReplicaView {
     this.isRestoredFromCache = false;
     this.document = JSON.parse(JSON.stringify(this.originalDocument));
     this.selectedId = null;
-    this.triggerChange();
+    this.onChange(this.document);
     this._render();
   }
 
