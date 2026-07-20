@@ -447,6 +447,16 @@ def _add_text_and_math_to_paragraph(text, paragraph, bold=False, italic=False, u
                     run.font.strike = True
                 if font_name:
                     run.font.name = font_name
+                    try:
+                        from docx.oxml.ns import qn
+                        rPr = run._r.get_or_add_rPr()
+                        rFonts = rPr.get_or_add_rFonts()
+                        rFonts.set(qn('w:ascii'), font_name)
+                        rFonts.set(qn('w:hAnsi'), font_name)
+                        rFonts.set(qn('w:eastAsia'), font_name)
+                        rFonts.set(qn('w:cs'), font_name)
+                    except Exception:
+                        pass
                 if font_size:
                     from docx.shared import Pt
                     run.font.size = Pt(font_size)
@@ -459,6 +469,16 @@ def _add_text_and_math_to_paragraph(text, paragraph, bold=False, italic=False, u
                 run.font.strike = True
             if font_name:
                 run.font.name = font_name
+                try:
+                    from docx.oxml.ns import qn
+                    rPr = run._r.get_or_add_rPr()
+                    rFonts = rPr.get_or_add_rFonts()
+                    rFonts.set(qn('w:ascii'), font_name)
+                    rFonts.set(qn('w:hAnsi'), font_name)
+                    rFonts.set(qn('w:eastAsia'), font_name)
+                    rFonts.set(qn('w:cs'), font_name)
+                except Exception:
+                    pass
             if font_size:
                 from docx.shared import Pt
                 run.font.size = Pt(font_size)
@@ -545,6 +565,15 @@ def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=Fa
                         pass
                     if font_name:
                         new_run.font.name = font_name
+                        try:
+                            rPr = new_run._r.get_or_add_rPr()
+                            rFonts = rPr.get_or_add_rFonts()
+                            rFonts.set(qn('w:ascii'), font_name)
+                            rFonts.set(qn('w:hAnsi'), font_name)
+                            rFonts.set(qn('w:eastAsia'), font_name)
+                            rFonts.set(qn('w:cs'), font_name)
+                        except Exception:
+                            pass
                     if font_size:
                         from docx.shared import Pt
                         new_run.font.size = Pt(font_size)
@@ -559,6 +588,16 @@ def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=Fa
                         run.font.strike = True
                     if font_name:
                         run.font.name = font_name
+                        try:
+                            from docx.oxml.ns import qn
+                            rPr = run._r.get_or_add_rPr()
+                            rFonts = rPr.get_or_add_rFonts()
+                            rFonts.set(qn('w:ascii'), font_name)
+                            rFonts.set(qn('w:hAnsi'), font_name)
+                            rFonts.set(qn('w:eastAsia'), font_name)
+                            rFonts.set(qn('w:cs'), font_name)
+                        except Exception:
+                            pass
                     if font_size:
                         from docx.shared import Pt
                         run.font.size = Pt(font_size)
@@ -607,7 +646,8 @@ def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=Fa
                         
                         r_num_el = OxmlElement('w:r')
                         t_num_el = OxmlElement('w:t')
-                        t_num_el.text = f"{child.get_text().strip()} " or f"{f_id} "
+                        num_text = child.get_text().strip().strip("[]")
+                        t_num_el.text = f"{num_text} " if num_text else f"{f_id} "
                         r_num_el.append(t_num_el)
                         p_el.append(r_num_el)
                         
@@ -639,7 +679,7 @@ def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=Fa
                     import re
                     m_fam = re.search(r"font-family:\s*([^;]+)", style_str)
                     if m_fam:
-                        child_font_name = m_fam.group(1).strip()
+                        child_font_name = m_fam.group(1).strip().strip("'\"")
                     m_size = re.search(r"font-size:\s*([\d.]+)\s*pt", style_str)
                     if m_size:
                         try:
@@ -663,28 +703,28 @@ def _apply_paragraph_style(p, style_str):
     elif "text-align: justify" in style_str:
         p.alignment = 3
         
-    m_left = re.search(r"margin-left:\s*([\d.]+)\s*in", style_str)
+    m_left = re.search(r"margin-left:\s*(-?[\d.]+)\s*in", style_str)
     if m_left:
         try:
             p.paragraph_format.left_indent = Inches(float(m_left.group(1)))
         except Exception:
             pass
             
-    m_right = re.search(r"margin-right:\s*([\d.]+)\s*in", style_str)
+    m_right = re.search(r"margin-right:\s*(-?[\d.]+)\s*in", style_str)
     if m_right:
         try:
             p.paragraph_format.right_indent = Inches(float(m_right.group(1)))
         except Exception:
             pass
             
-    m_bottom = re.search(r"margin-bottom:\s*([\d.]+)\s*pt", style_str)
+    m_bottom = re.search(r"margin-bottom:\s*(-?[\d.]+)\s*pt", style_str)
     if m_bottom:
         try:
             p.paragraph_format.space_after = Pt(float(m_bottom.group(1)))
         except Exception:
             pass
             
-    m_top = re.search(r"margin-top:\s*([\d.]+)\s*pt", style_str)
+    m_top = re.search(r"margin-top:\s*(-?[\d.]+)\s*pt", style_str)
     if m_top:
         try:
             p.paragraph_format.space_before = Pt(float(m_top.group(1)))

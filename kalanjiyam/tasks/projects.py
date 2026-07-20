@@ -155,15 +155,15 @@ def _parse_run_to_html(run, child, project_slug, image_mapping) -> str:
                     cx = exts[0].get('cx')
                     cy = exts[0].get('cy')
             
+            style_dims = ""
             if cx and cy:
                 try:
                     width_in = int(cx) / 914400.0
                     height_in = int(cy) / 914400.0
-                    width_attr = f' width="{width_in:.4f}in"'
-                    height_attr = f' height="{height_in:.4f}in"'
+                    style_dims = f' style="width: {width_in:.4f}in; height: {height_in:.4f}in;"'
                 except Exception:
                     pass
-            return f'<img src="/static/uploads/{project_slug}/images/{filename}" class="inline-block align-middle max-h-16 mx-1" alt="Image"{width_attr}{height_attr} />'
+            return f'<img src="/static/uploads/{project_slug}/images/{filename}" class="inline-block align-middle max-h-16 mx-1" alt="Image"{style_dims} />'
             
         if child.xpath('.//*[local-name()="br"]'):
             return '<br/>'
@@ -172,8 +172,15 @@ def _parse_run_to_html(run, child, project_slug, image_mapping) -> str:
     run_html = html.escape(text)
     styles = []
     if run.font:
-        if run.font.name:
-            styles.append(f"font-family: {run.font.name};")
+        font_name = run.font.name
+        if not font_name:
+            rPr = child.find(qn('w:rPr'))
+            if rPr is not None:
+                rFonts = rPr.find(qn('w:rFonts'))
+                if rFonts is not None:
+                    font_name = rFonts.get(qn('w:ascii')) or rFonts.get(qn('w:hAnsi')) or rFonts.get(qn('w:cs'))
+        if font_name:
+            styles.append(f"font-family: {font_name};")
         if run.font.size:
             styles.append(f"font-size: {run.font.size.pt}pt;")
     style_str = " ".join(styles)

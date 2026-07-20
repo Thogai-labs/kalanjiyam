@@ -308,6 +308,8 @@ export function createRichEditor(elementId, options = {}) {
       }),
       Link.configure({
         openOnClick: false,
+        autolink: false,
+        linkOnPaste: false,
         HTMLAttributes: {
           class: 'text-peacock-primary underline hover:text-peacock-secondary',
         },

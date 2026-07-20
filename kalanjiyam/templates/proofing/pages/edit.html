@@ -152,6 +152,37 @@
           column-gap: 2rem;
           margin-bottom: 1rem;
         }
+        .docx-footnote {
+          color: #0f766e !important;
+          font-weight: bold;
+          vertical-align: super;
+          font-size: 0.75em;
+          cursor: help;
+          position: relative;
+          text-decoration: none !important;
+          display: inline-block;
+          padding: 0 2px;
+        }
+        .docx-footnote:hover::after {
+          content: attr(data-footnote-text);
+          position: absolute;
+          bottom: 130%;
+          left: 50%;
+          transform: translateX(-50%);
+          background-color: #334155;
+          color: #ffffff;
+          padding: 0.5rem 0.75rem;
+          border-radius: 0.375rem;
+          font-size: 0.75rem;
+          line-height: 1.4;
+          white-space: normal;
+          width: max-content;
+          max-width: 250px;
+          box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+          z-index: 50;
+          font-weight: normal;
+          pointer-events: none;
+        }
       </style>
       <div class="book-editor-image-pane overflow-y-auto p-8 text-slate-800 border-r border-slate-200 bg-[#faf8f5]">
         <div class="max-w-none text-left leading-relaxed">
