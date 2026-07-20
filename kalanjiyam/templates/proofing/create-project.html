@@ -48,6 +48,7 @@
          progress: 0,
          status: '',
          isDocx: false,
+         fileName: '',
          docxWorkflow: 'direct',
          sourceLang: 'sa',
          targetLang: 'en',
@@ -101,10 +102,13 @@
          handleFileChange(e) {
            const files = e.target.files;
            if (files && files.length > 0) {
-             const name = files[0].name.toLowerCase();
-             this.isDocx = name.endsWith('.docx') || name.endsWith('.doc');
+             const name = files[0].name;
+             this.fileName = name;
+             const nameLower = name.toLowerCase();
+             this.isDocx = nameLower.endsWith('.docx') || nameLower.endsWith('.doc');
            } else {
              this.isDocx = false;
+             this.fileName = '';
            }
          },
          submitForm() {
@@ -132,7 +136,8 @@
 
            const formData = new FormData(form);
            this.uploading = true;
-           this.status = isDirect ? '{{ _('Uploading document ...') }}' : '{{ _('Beginning upload ...') }}';
+           const docLabel = this.fileName || (isDirect ? '{{ _("document") }}' : '{{ _("PDF") }}');
+           this.status = `{{ _('Uploading') }} ${docLabel} ...`;
            
            const xhr = new XMLHttpRequest();
            xhr.open('POST', form.action, true);
@@ -141,7 +146,7 @@
              if (e.lengthComputable) {
                this.progress = Math.round((e.loaded / e.total) * 100);
                if (this.progress > 0) {
-                 this.status = isDirect ? `{{ _('Uploading Document') }} (${this.progress}%)...` : `{{ _('Uploading PDF') }} (${this.progress}%)...`;
+                 this.status = `{{ _('Uploading') }} ${docLabel} (${this.progress}%)...`;
                }
              }
            };
