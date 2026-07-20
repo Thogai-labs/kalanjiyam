@@ -256,12 +256,42 @@ def activity(slug):
     session = q.get_session()
     recent_revisions = (
         session.query(db.Revision)
-        .options(orm.defer(db.Revision.content))
         .filter_by(project_id=project_.id)
         .order_by(db.Revision.created.desc())
         .limit(100)
         .all()
     )
+
+    page_ids = {r.page_id for r in recent_revisions}
+    if page_ids:
+        all_page_revisions = (
+            session.query(db.Revision)
+            .filter(db.Revision.page_id.in_(page_ids))
+            .order_by(db.Revision.page_id, db.Revision.created.desc())
+            .all()
+        )
+    else:
+        all_page_revisions = []
+
+    revisions_by_page = {}
+    for r in all_page_revisions:
+        revisions_by_page.setdefault(r.page_id, []).append(r)
+
+    from kalanjiyam.utils.diff import revision_diff
+
+    for r in recent_revisions:
+        page_revs = revisions_by_page.get(r.page_id, [])
+        try:
+            idx = page_revs.index(r)
+        except ValueError:
+            idx = -1
+
+        if idx != -1 and idx + 1 < len(page_revs):
+            prev_r = page_revs[idx + 1]
+            r.diff = revision_diff(prev_r.content, r.content)
+        else:
+            r.diff = None
+
     recent_activity = [("revision", r.created, r) for r in recent_revisions]
     recent_activity.append(("project", project_.created_at, project_))
 
