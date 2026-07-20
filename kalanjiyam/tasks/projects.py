@@ -142,7 +142,28 @@ def _parse_run_to_html(run, child, project_slug, image_mapping) -> str:
                     
         if embed_id and embed_id in image_mapping:
             filename = image_mapping[embed_id]
-            return f'<img src="/static/uploads/{project_slug}/images/{filename}" class="inline-block align-middle max-h-16 mx-1" alt="Image" />'
+            width_attr = ""
+            height_attr = ""
+            extents = child.xpath('.//*[local-name()="extent"]')
+            cx = cy = None
+            if extents:
+                cx = extents[0].get('cx')
+                cy = extents[0].get('cy')
+            if not cx or not cy:
+                exts = child.xpath('.//*[local-name()="ext"]')
+                if exts:
+                    cx = exts[0].get('cx')
+                    cy = exts[0].get('cy')
+            
+            if cx and cy:
+                try:
+                    width_in = int(cx) / 914400.0
+                    height_in = int(cy) / 914400.0
+                    width_attr = f' width="{width_in:.4f}in"'
+                    height_attr = f' height="{height_in:.4f}in"'
+                except Exception:
+                    pass
+            return f'<img src="/static/uploads/{project_slug}/images/{filename}" class="inline-block align-middle max-h-16 mx-1" alt="Image"{width_attr}{height_attr} />'
             
         if child.xpath('.//*[local-name()="br"]'):
             return '<br/>'
