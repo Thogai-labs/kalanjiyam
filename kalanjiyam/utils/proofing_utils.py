@@ -475,11 +475,35 @@ def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=Fa
                 _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=underline, strike=True)
             elif tag == "a":
                 href = child.get("href", "")
-                text_content = child.get_text()
-                run = paragraph.add_run(f"{text_content} ({href})" if href else text_content)
-                run.bold = bold
-                run.italic = True
-                run.underline = True
+                text_content = child.get_text() or href
+                if href:
+                    import docx
+                    from docx.oxml.shared import OxmlElement, qn
+                    from docx.shared import RGBColor
+                    
+                    part = paragraph.part
+                    r_id = part.relate_to(href, docx.opc.constants.RELATIONSHIP_TYPE.HYPERLINK, is_external=True)
+                    hyperlink = OxmlElement('w:hyperlink')
+                    hyperlink.set(qn('r:id'), r_id)
+                    
+                    new_run = docx.text.run.Run(OxmlElement('w:r'), paragraph)
+                    new_run.text = text_content
+                    new_run.bold = bold
+                    new_run.italic = italic
+                    new_run.underline = True
+                    try:
+                        new_run.font.color.rgb = RGBColor(5, 99, 193)
+                    except Exception:
+                        pass
+                    hyperlink.append(new_run._element)
+                    paragraph._p.append(hyperlink)
+                else:
+                    run = paragraph.add_run(text_content)
+                    run.bold = bold
+                    run.italic = italic
+                    run.underline = underline
+                    if strike:
+                        run.font.strike = True
             elif tag == "img":
                 _add_image_to_paragraph(child, paragraph)
             elif tag == "span" and ("math-placeholder" in (child.get("class") or []) or "math-placeholder" in child.get("class", "")):

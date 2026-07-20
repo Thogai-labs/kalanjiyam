@@ -104,7 +104,7 @@ def test_docx_segmentation_and_export():
                 "blocks": [{
                     "id": "b1",
                     "type": "paragraph",
-                    "content": page1_html,
+                    "content": page1_html + '<p>Please visit <a href="https://example.com">Google</a></p>',
                     "reading_order": 1
                 }]
             }
@@ -139,6 +139,12 @@ def test_docx_segmentation_and_export():
         assert any("Sanskrit Text Project" in text for text in text_content)
         assert any("bold" in text for text in text_content)
         assert any("Item 1" in text for text in text_content)
+        assert any("Google" in text for text in text_content)
+        
+        # Check that hyperlink relationships are present
+        rels = compiled_doc.part.rels
+        hyperlink_urls = [rel.target_ref for rel in rels.values() if rel.reltype == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"]
+        assert "https://example.com" in hyperlink_urls
         
         # Check table cells
         table_cells_text = [cell.text for t in compiled_doc.tables for r in t.rows for cell in r.cells]
