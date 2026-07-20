@@ -531,7 +531,40 @@ def _parse_soup_nodes(container_el, docx_doc) -> None:
         tag = el.name
 
         if tag == "div" and ("docx-column-section" in (el.get("class") or []) or "docx-column-section" in el.get("class", "")):
+            style_str = el.get("style", "")
+            import re
+            m = re.search(r"column-count:\s*(\d+)", style_str)
+            num_cols = int(m.group(1)) if m else 1
+            
+            # Start continuous section for columns
+            sec = docx_doc.add_section(0) # 0 = CONTINUOUS
+            sec.top_margin = Inches(1)
+            sec.bottom_margin = Inches(1)
+            sec.left_margin = Inches(1)
+            sec.right_margin = Inches(1)
+            
+            from docx.oxml.ns import qn
+            from docx.oxml import OxmlElement
+            cols = sec._sectPr.find(qn('w:cols'))
+            if cols is None:
+                cols = OxmlElement('w:cols')
+                sec._sectPr.append(cols)
+            cols.set(qn('w:num'), str(num_cols))
+            
             _parse_soup_nodes(el, docx_doc)
+            
+            # Revert back to 1-column continuous section
+            end_sec = docx_doc.add_section(0)
+            end_sec.top_margin = Inches(1)
+            end_sec.bottom_margin = Inches(1)
+            end_sec.left_margin = Inches(1)
+            end_sec.right_margin = Inches(1)
+            
+            end_cols = end_sec._sectPr.find(qn('w:cols'))
+            if end_cols is None:
+                end_cols = OxmlElement('w:cols')
+                end_sec._sectPr.append(end_cols)
+            end_cols.set(qn('w:num'), '1')
             continue
 
         # Check if this element is a table or wraps a table (e.g. ocr-detected-table-wrap)

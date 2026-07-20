@@ -116,7 +116,7 @@ def test_docx_segmentation_and_export():
                 "blocks": [{
                     "id": "b2",
                     "type": "paragraph",
-                    "content": page2_html,
+                    "content": page2_html + '<div class="docx-column-section" style="column-count: 2;"><p>Col 1 Text</p><p>Col 2 Text</p></div>',
                     "reading_order": 1
                 }]
             }
@@ -140,11 +140,25 @@ def test_docx_segmentation_and_export():
         assert any("bold" in text for text in text_content)
         assert any("Item 1" in text for text in text_content)
         assert any("Google" in text for text in text_content)
+        assert any("Col 1 Text" in text for text in text_content)
+        assert any("Col 2 Text" in text for text in text_content)
         
         # Check that hyperlink relationships are present
         rels = compiled_doc.part.rels
         hyperlink_urls = [rel.target_ref for rel in rels.values() if rel.reltype == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"]
         assert "https://example.com" in hyperlink_urls
+        
+        # Check that column layouts are preserved
+        sections = compiled_doc.sections
+        assert len(sections) > 2
+        from docx.oxml.ns import qn
+        has_2_cols = False
+        for sec in sections:
+            cols_el = sec._sectPr.find(qn('w:cols'))
+            if cols_el is not None and cols_el.get(qn('w:num')) == '2':
+                has_2_cols = True
+                break
+        assert has_2_cols
         
         # Check table cells
         table_cells_text = [cell.text for t in compiled_doc.tables for r in t.rows for cell in r.cells]
