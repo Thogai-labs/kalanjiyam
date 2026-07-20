@@ -1,7 +1,7 @@
 /* Rich text editor using TipTap */
 /* global Editor, Image, Table, TableRow, TableCell, TableHeader, StarterKit, Underline, TextAlign */
 
-import { Editor, Extension, Node } from '@tiptap/core';
+import { Editor, Extension, Node, Mark } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Table from '@tiptap/extension-table';
@@ -200,6 +200,58 @@ const ResizableImage = Image.extend({
   },
 });
 
+const DocxFootnote = Mark.create({
+  name: 'docxFootnote',
+  addAttributes() {
+    return {
+      'data-footnote-id': {
+        default: null,
+        parseHTML: element => element.getAttribute('data-footnote-id'),
+        renderHTML: attributes => {
+          if (!attributes['data-footnote-id']) return {};
+          return { 'data-footnote-id': attributes['data-footnote-id'] };
+        },
+      },
+      'data-footnote-text': {
+        default: '',
+        parseHTML: element => element.getAttribute('data-footnote-text'),
+        renderHTML: attributes => {
+          if (!attributes['data-footnote-text']) return {};
+          return { 'data-footnote-text': attributes['data-footnote-text'] };
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'span.docx-footnote' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['span', { class: 'docx-footnote', ...HTMLAttributes }, 0];
+  },
+});
+
+const SpanStyle = Mark.create({
+  name: 'spanStyle',
+  addAttributes() {
+    return {
+      style: {
+        default: null,
+        parseHTML: element => element.getAttribute('style'),
+        renderHTML: attributes => {
+          if (!attributes.style) return {};
+          return { style: attributes.style };
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'span[style]' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['span', HTMLAttributes, 0];
+  },
+});
+
 export function createRichEditor(elementId, options = {}) {
   const {
     content = '',
@@ -211,6 +263,8 @@ export function createRichEditor(elementId, options = {}) {
   const editor = new Editor({
     element: document.getElementById(elementId),
     extensions: [
+      DocxFootnote,
+      SpanStyle,
       StarterKit.configure({
         // Disable default heading levels except h1-h3
         heading: {

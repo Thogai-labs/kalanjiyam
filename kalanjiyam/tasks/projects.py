@@ -170,6 +170,16 @@ def _parse_run_to_html(run, child, project_slug, image_mapping) -> str:
         return ""
         
     run_html = html.escape(text)
+    styles = []
+    if run.font:
+        if run.font.name:
+            styles.append(f"font-family: {run.font.name};")
+        if run.font.size:
+            styles.append(f"font-size: {run.font.size.pt}pt;")
+    style_str = " ".join(styles)
+    if style_str:
+        run_html = f'<span style="{style_str}">{run_html}</span>'
+        
     if run.bold:
         run_html = f'<strong>{run_html}</strong>'
     if run.italic:
@@ -181,7 +191,7 @@ def _parse_run_to_html(run, child, project_slug, image_mapping) -> str:
     return run_html
 
 
-def _parse_paragraph_to_html(p, project_slug, image_mapping) -> str | tuple:
+def _parse_paragraph_to_html(p, project_slug, image_mapping, footnotes=None) -> str | tuple:
     import html
     from docx.oxml.ns import qn
     from docx.text.run import Run
@@ -195,6 +205,15 @@ def _parse_paragraph_to_html(p, project_slug, image_mapping) -> str | tuple:
             continue
             
         elif tag.endswith('r'):
+            # Check for footnote reference
+            ft_ref = child.find(qn('w:footnoteReference'))
+            if ft_ref is not None:
+                f_id = ft_ref.get(qn('w:id'))
+                if f_id and footnotes and f_id in footnotes:
+                    text_content = f"[{f_id}]"
+                    html_runs.append(f'<span class="docx-footnote" data-footnote-id="{f_id}" data-footnote-text="{html.escape(footnotes[f_id])}">{text_content}</span>')
+                    continue
+            
             run = Run(child, p)
             run_html = _parse_run_to_html(run, child, project_slug, image_mapping)
             if run_html:
@@ -234,6 +253,27 @@ def _parse_paragraph_to_html(p, project_slug, image_mapping) -> str | tuple:
             style_attrs.append("text-align: right;")
         elif align_val == 3:
             style_attrs.append("text-align: justify;")
+            
+    # Spacing and Indentations
+    try:
+        if p.paragraph_format:
+            pf = p.paragraph_format
+            if pf.left_indent is not None:
+                style_attrs.append(f"margin-left: {pf.left_indent.inches:.4f}in;")
+            if pf.right_indent is not None:
+                style_attrs.append(f"margin-right: {pf.right_indent.inches:.4f}in;")
+            if pf.space_after is not None:
+                style_attrs.append(f"margin-bottom: {pf.space_after.pt:.2f}pt;")
+            if pf.space_before is not None:
+                style_attrs.append(f"margin-top: {pf.space_before.pt:.2f}pt;")
+            if pf.line_spacing is not None:
+                if isinstance(pf.line_spacing, float):
+                    style_attrs.append(f"line-height: {pf.line_spacing};")
+                else:
+                    style_attrs.append(f"line-height: {pf.line_spacing.pt:.2f}pt;")
+    except Exception:
+        pass
+
     style_str = " ".join(style_attrs)
 
     style_name = (p.style.name or "").lower() if p.style else ""
@@ -263,7 +303,7 @@ def _parse_paragraph_to_html(p, project_slug, image_mapping) -> str | tuple:
     return f'<p{tag_style}>{content}</p>'
 
 
-def _parse_table_to_html(table, project_slug, image_mapping) -> str:
+def _parse_table_to_html(table, project_slug, image_mapping, footnotes=None) -> str:
     from docx.oxml.ns import qn
     
     rows = table.rows
@@ -315,7 +355,7 @@ def _parse_table_to_html(table, project_slug, image_mapping) -> str:
             
             cell_html = []
             for p in cell.paragraphs:
-                res = _parse_paragraph_to_html(p, project_slug, image_mapping)
+                res = _parse_paragraph_to_html(p, project_slug, image_mapping, footnotes)
                 if isinstance(res, tuple):
                     cell_style = f' style="{res[3]}"' if res[3] else ""
                     cell_html.append(f'<p{cell_style}>{res[2]}</p>')
@@ -392,6 +432,22 @@ def _segment_docx(doc, slug, image_mapping) -> list[tuple[str, str]]:
     from docx.text.paragraph import Paragraph
     from docx.table import Table
     from docx.oxml.ns import qn
+
+    # Load all footnotes from docx package relations
+    footnotes = {}
+    try:
+        from docx.oxml import parse_xml
+        for rel_id, rel in doc.part.rels.items():
+            if "footnotes" in rel.reltype:
+                footnotes_el = parse_xml(rel.target_part.blob)
+                for footnote in footnotes_el.findall('.//w:footnote', {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}):
+                    f_id = footnote.get(qn('w:id'))
+                    if f_id:
+                        texts = [t.text for t in footnote.findall('.//w:t', {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}) if t.text]
+                        footnotes[f_id] = "".join(texts)
+    except Exception as e:
+        import logging
+        logging.warning(f"Failed to parse footnotes: {e}")
 
     pages = []
     current_page_elements = []  # list of (element_html, cols)
@@ -477,7 +533,7 @@ def _segment_docx(doc, slug, image_mapping) -> list[tuple[str, str]]:
     for child, cols in blocks_with_cols:
         if child.tag.endswith('p'):
             p = Paragraph(child, doc)
-            res = _parse_paragraph_to_html(p, slug, image_mapping)
+            res = _parse_paragraph_to_html(p, slug, image_mapping, footnotes)
             current_page_elements.append((res, cols))
             p_text = _get_paragraph_plain_text(p)
             current_page_text.append(p_text)
@@ -489,7 +545,7 @@ def _segment_docx(doc, slug, image_mapping) -> list[tuple[str, str]]:
                 
         elif child.tag.endswith('tbl'):
             table = Table(child, doc)
-            res = _parse_table_to_html(table, slug, image_mapping)
+            res = _parse_table_to_html(table, slug, image_mapping, footnotes)
             current_page_elements.append((res, cols))
             table_text = " ".join(_get_paragraph_plain_text(pt) for row in table.rows for cell in row.cells for pt in cell.paragraphs)
             current_page_text.append(table_text)

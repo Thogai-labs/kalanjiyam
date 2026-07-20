@@ -168,3 +168,72 @@ def test_docx_segmentation_and_export():
     finally:
         if tmp_path.exists():
             tmp_path.unlink()
+
+
+def test_academic_structural_elements():
+    # Test footnotes, fonts, and indents roundtrip compiling
+    html_content = (
+        '<p style="margin-left: 1.5000in; margin-right: 0.5000in; margin-top: 10.00pt; margin-bottom: 12.00pt; line-height: 1.5;">'
+        'This is a structured paragraph with '
+        '<span style="font-family: Sanskrit2003; font-size: 14.50pt;">Sanskrit script</span> '
+        'and a footnote reference '
+        '<span class="docx-footnote" data-footnote-id="999" data-footnote-text="This is the footnote details.">1</span>.'
+        '</p>'
+    )
+    
+    rev = DummyRevision(
+        content="This is plain content.",
+        document={
+            "content_format": "html",
+            "blocks": [{
+                "id": "b_acad",
+                "type": "paragraph",
+                "content": html_content,
+                "reading_order": 1
+            }]
+        }
+    )
+    
+    pages = [DummyPage(content="This is plain content.", revisions=[rev])]
+    compiled_bytes = documents_to_docx(pages)
+    assert len(compiled_bytes) > 0
+    
+    # Load document and check elements
+    doc = Document(io.BytesIO(compiled_bytes))
+    
+    # Verify paragraph format
+    p = doc.paragraphs[0]
+    assert p.paragraph_format.left_indent.inches == 1.5
+    assert p.paragraph_format.right_indent.inches == 0.5
+    assert p.paragraph_format.space_before.pt == 10.0
+    assert p.paragraph_format.space_after.pt == 12.0
+    assert p.paragraph_format.line_spacing == 1.5
+    
+    # Verify run font family and size
+    runs = p.runs
+    sanskrit_run = None
+    for r in runs:
+        if r.text == "Sanskrit script":
+            sanskrit_run = r
+            break
+    assert sanskrit_run is not None
+    assert sanskrit_run.font.name == "Sanskrit2003"
+    assert sanskrit_run.font.size.pt == 14.5
+    
+    # Verify footnote exists in the document package
+    footnotes_part = None
+    from docx.opc.packuri import PackURI
+    for part in doc.part.package.parts:
+        if part.partname == PackURI('/word/footnotes.xml'):
+            footnotes_part = part
+            break
+            
+    assert footnotes_part is not None
+    from docx.oxml import parse_xml
+    footnotes_el = parse_xml(footnotes_part.blob)
+    footnote_999 = footnotes_el.find('.//w:footnote[@w:id="999"]', {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'})
+    assert footnote_999 is not None
+    
+    footnote_text = "".join(t.text for t in footnote_999.findall('.//w:t', {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}) if t.text)
+    assert "This is the footnote details." in footnote_text
+

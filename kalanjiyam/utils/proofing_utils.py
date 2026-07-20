@@ -416,7 +416,7 @@ def auto_wrap_math(text: str) -> str:
     return "".join(processed_parts)
 
 
-def _add_text_and_math_to_paragraph(text, paragraph, bold=False, italic=False, underline=False, strike=False) -> None:
+def _add_text_and_math_to_paragraph(text, paragraph, bold=False, italic=False, underline=False, strike=False, font_name=None, font_size=None) -> None:
     import re
     from docx.oxml import parse_xml
     import latex2mathml.converter
@@ -445,6 +445,11 @@ def _add_text_and_math_to_paragraph(text, paragraph, bold=False, italic=False, u
                 run.underline = underline
                 if strike:
                     run.font.strike = True
+                if font_name:
+                    run.font.name = font_name
+                if font_size:
+                    from docx.shared import Pt
+                    run.font.size = Pt(font_size)
         else:
             run = paragraph.add_run(part)
             run.bold = bold
@@ -452,27 +457,70 @@ def _add_text_and_math_to_paragraph(text, paragraph, bold=False, italic=False, u
             run.underline = underline
             if strike:
                 run.font.strike = True
+            if font_name:
+                run.font.name = font_name
+            if font_size:
+                from docx.shared import Pt
+                run.font.size = Pt(font_size)
 
 
-def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=False, underline=False, strike=False) -> None:
+def _get_or_create_footnotes_part(doc):
+    from docx.opc.part import Part
+    from docx.opc.packuri import PackURI
+    
+    footnotes_uri = PackURI('/word/footnotes.xml')
+    footnotes_content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml'
+    
+    package = doc.part.package
+    for part in package.parts:
+        if part.partname == footnotes_uri:
+            return part
+            
+    # If not found, create empty footnotes xml boilerplate
+    empty_footnotes_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:footnote w:type="separator" w:id="-1">
+    <w:p><w:r><w:separator/></w:r></w:p>
+  </w:footnote>
+  <w:footnote w:type="continuationSeparator" w:id="0">
+    <w:p><w:r><w:continuationSeparator/></w:r></w:p>
+  </w:footnote>
+</w:footnotes>
+""".strip()
+
+    footnotes_part = Part(
+        footnotes_uri,
+        footnotes_content_type,
+        empty_footnotes_xml.encode('utf-8'),
+        package
+    )
+    package.parts.append(footnotes_part)
+    doc.part.relate_to(
+        footnotes_part,
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes"
+    )
+    return footnotes_part
+
+
+def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=False, underline=False, strike=False, font_name=None, font_size=None) -> None:
     for child in parent_el.children:
         if isinstance(child, NavigableString):
             text = str(child).replace("\r", "").replace("\n", " ")
             if text:
                 wrapped_text = auto_wrap_math(text)
-                _add_text_and_math_to_paragraph(wrapped_text, paragraph, bold, italic, underline, strike)
+                _add_text_and_math_to_paragraph(wrapped_text, paragraph, bold, italic, underline, strike, font_name, font_size)
         else:
             tag = child.name
             if tag == "br":
                 paragraph.add_run().add_break()
             elif tag in ["strong", "b"]:
-                _parse_inline_elements(child, paragraph, docx_doc, bold=True, italic=italic, underline=underline, strike=strike)
+                _parse_inline_elements(child, paragraph, docx_doc, bold=True, italic=italic, underline=underline, strike=strike, font_name=font_name, font_size=font_size)
             elif tag in ["em", "i"]:
-                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=True, underline=underline, strike=strike)
+                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=True, underline=underline, strike=strike, font_name=font_name, font_size=font_size)
             elif tag in ["u"]:
-                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=True, strike=strike)
+                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=True, strike=strike, font_name=font_name, font_size=font_size)
             elif tag in ["s", "strike", "del"]:
-                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=underline, strike=True)
+                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=underline, strike=True, font_name=font_name, font_size=font_size)
             elif tag == "a":
                 href = child.get("href", "")
                 text_content = child.get_text() or href
@@ -495,6 +543,11 @@ def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=Fa
                         new_run.font.color.rgb = RGBColor(5, 99, 193)
                     except Exception:
                         pass
+                    if font_name:
+                        new_run.font.name = font_name
+                    if font_size:
+                        from docx.shared import Pt
+                        new_run.font.size = Pt(font_size)
                     hyperlink.append(new_run._element)
                     paragraph._p.append(hyperlink)
                 else:
@@ -504,6 +557,11 @@ def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=Fa
                     run.underline = underline
                     if strike:
                         run.font.strike = True
+                    if font_name:
+                        run.font.name = font_name
+                    if font_size:
+                        from docx.shared import Pt
+                        run.font.size = Pt(font_size)
             elif tag == "img":
                 _add_image_to_paragraph(child, paragraph)
             elif tag == "span" and ("math-placeholder" in (child.get("class") or []) or "math-placeholder" in child.get("class", "")):
@@ -517,8 +575,133 @@ def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=Fa
                         paragraph.add_run(child.get_text())
                 else:
                     paragraph.add_run(child.get_text())
+            elif tag == "span" and ("docx-footnote" in (child.get("class") or []) or "docx-footnote" in child.get("class", "")):
+                f_id = child.get("data-footnote-id")
+                f_text = child.get("data-footnote-text", "")
+                if not f_id:
+                    # Generate a ID based on footnotes count + unique document tag position
+                    import random
+                    f_id = str(random.randint(100, 99999))
+                
+                try:
+                    from docx.oxml import parse_xml, OxmlElement
+                    from docx.oxml.ns import qn
+                    from lxml import etree
+                    
+                    footnotes_part = _get_or_create_footnotes_part(docx_doc)
+                    footnotes_el = parse_xml(footnotes_part.blob)
+                    
+                    # Check if this footnote ID is already in footnotes xml
+                    existing = footnotes_el.find(f'.//w:footnote[@w:id="{f_id}"]', {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'})
+                    if existing is None:
+                        new_footnote = OxmlElement('w:footnote')
+                        new_footnote.set(qn('w:id'), f_id)
+                        
+                        p_el = OxmlElement('w:p')
+                        
+                        r_el = OxmlElement('w:r')
+                        rPr = OxmlElement('w:rPr')
+                        rPr.append(OxmlElement('w:footnoteRef'))
+                        r_el.append(rPr)
+                        p_el.append(r_el)
+                        
+                        r_num_el = OxmlElement('w:r')
+                        t_num_el = OxmlElement('w:t')
+                        t_num_el.text = f"{child.get_text().strip()} " or f"{f_id} "
+                        r_num_el.append(t_num_el)
+                        p_el.append(r_num_el)
+                        
+                        r_text_el = OxmlElement('w:r')
+                        t_text_el = OxmlElement('w:t')
+                        t_text_el.text = f_text
+                        r_text_el.append(t_text_el)
+                        p_el.append(r_text_el)
+                        
+                        new_footnote.append(p_el)
+                        footnotes_el.append(new_footnote)
+                        footnotes_part._blob = etree.tostring(footnotes_el, encoding='utf-8', xml_declaration=True)
+                    
+                    # Add footnoteReference in main document paragraph run
+                    run = paragraph.add_run()
+                    ft_ref = OxmlElement('w:footnoteReference')
+                    ft_ref.set(qn('w:id'), f_id)
+                    run._r.append(ft_ref)
+                except Exception:
+                    run = paragraph.add_run(f"[{child.get_text()}]")
+                    run.font.superscript = True
+            elif tag == "span":
+                # General span font style parser
+                style_str = child.get("style", "")
+                child_font_name = font_name
+                child_font_size = font_size
+                
+                if style_str:
+                    import re
+                    m_fam = re.search(r"font-family:\s*([^;]+)", style_str)
+                    if m_fam:
+                        child_font_name = m_fam.group(1).strip()
+                    m_size = re.search(r"font-size:\s*([\d.]+)\s*pt", style_str)
+                    if m_size:
+                        try:
+                            child_font_size = float(m_size.group(1))
+                        except Exception:
+                            pass
+                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=underline, strike=strike, font_name=child_font_name, font_size=child_font_size)
             else:
                 _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=underline, strike=strike)
+
+
+def _apply_paragraph_style(p, style_str):
+    if not style_str:
+        return
+    import re
+    from docx.shared import Inches, Pt
+    if "text-align: center" in style_str:
+        p.alignment = 1
+    elif "text-align: right" in style_str:
+        p.alignment = 2
+    elif "text-align: justify" in style_str:
+        p.alignment = 3
+        
+    m_left = re.search(r"margin-left:\s*([\d.]+)\s*in", style_str)
+    if m_left:
+        try:
+            p.paragraph_format.left_indent = Inches(float(m_left.group(1)))
+        except Exception:
+            pass
+            
+    m_right = re.search(r"margin-right:\s*([\d.]+)\s*in", style_str)
+    if m_right:
+        try:
+            p.paragraph_format.right_indent = Inches(float(m_right.group(1)))
+        except Exception:
+            pass
+            
+    m_bottom = re.search(r"margin-bottom:\s*([\d.]+)\s*pt", style_str)
+    if m_bottom:
+        try:
+            p.paragraph_format.space_after = Pt(float(m_bottom.group(1)))
+        except Exception:
+            pass
+            
+    m_top = re.search(r"margin-top:\s*([\d.]+)\s*pt", style_str)
+    if m_top:
+        try:
+            p.paragraph_format.space_before = Pt(float(m_top.group(1)))
+        except Exception:
+            pass
+            
+    m_lh = re.search(r"line-height:\s*([\d.]+)\s*(pt|in|cm)?", style_str)
+    if m_lh:
+        try:
+            val = float(m_lh.group(1))
+            unit = m_lh.group(2)
+            if not unit:
+                p.paragraph_format.line_spacing = val
+            elif unit == "pt":
+                p.paragraph_format.line_spacing = Pt(val)
+        except Exception:
+            pass
 
 
 def _parse_soup_nodes(container_el, docx_doc) -> None:
@@ -624,35 +807,20 @@ def _parse_soup_nodes(container_el, docx_doc) -> None:
             if heading_text:
                 p = docx_doc.add_heading(heading_text, level=level)
                 style = el.get("style", "")
-                if "text-align: center" in style:
-                    p.alignment = 1
-                elif "text-align: right" in style:
-                    p.alignment = 2
-                elif "text-align: justify" in style:
-                    p.alignment = 3
+                _apply_paragraph_style(p, style)
 
         elif tag in ["ul", "ol"]:
             style = 'List Bullet' if tag == "ul" else 'List Number'
             for li in el.find_all("li"):
                 p = docx_doc.add_paragraph(style=style)
                 li_style = li.get("style", "")
-                if "text-align: center" in li_style:
-                    p.alignment = 1
-                elif "text-align: right" in li_style:
-                    p.alignment = 2
-                elif "text-align: justify" in li_style:
-                    p.alignment = 3
+                _apply_paragraph_style(p, li_style)
                 _parse_inline_elements(li, p, docx_doc)
 
         elif tag == "p":
             p = docx_doc.add_paragraph()
             style = el.get("style", "")
-            if "text-align: center" in style:
-                p.alignment = 1
-            elif "text-align: right" in style:
-                p.alignment = 2
-            elif "text-align: justify" in style:
-                p.alignment = 3
+            _apply_paragraph_style(p, style)
             _parse_inline_elements(el, p, docx_doc)
 
         else:
@@ -662,12 +830,7 @@ def _parse_soup_nodes(container_el, docx_doc) -> None:
             else:
                 p = docx_doc.add_paragraph()
                 style = el.get("style", "")
-                if "text-align: center" in style:
-                    p.alignment = 1
-                elif "text-align: right" in style:
-                    p.alignment = 2
-                elif "text-align: justify" in style:
-                    p.alignment = 3
+                _apply_paragraph_style(p, style)
                 _parse_inline_elements(el, p, docx_doc)
 
 
