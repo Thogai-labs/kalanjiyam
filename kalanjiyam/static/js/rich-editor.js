@@ -85,6 +85,121 @@ const DocxColumnSection = Node.create({
  * @param {Function} options.onSelectionUpdate - Callback when selection changes
  * @returns {Editor} TipTap editor instance
  */
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: null,
+        parseHTML: element => element.getAttribute('width') || element.style.width,
+        renderHTML: attributes => {
+          if (!attributes.width) return {};
+          return { width: attributes.width, style: `width: ${attributes.width}` };
+        },
+      },
+      height: {
+        default: null,
+        parseHTML: element => element.getAttribute('height') || element.style.height,
+        renderHTML: attributes => {
+          if (!attributes.height) return {};
+          return { height: attributes.height, style: `height: ${attributes.height}` };
+        },
+      },
+    };
+  },
+  addNodeView() {
+    return ({ node, HTMLAttributes, getPos, editor }) => {
+      const container = document.createElement('span');
+      container.style.position = 'relative';
+      container.style.display = 'inline-block';
+      container.style.lineHeight = '0';
+      container.className = 'resizable-image-container';
+
+      const img = document.createElement('img');
+      Object.entries(HTMLAttributes).forEach(([key, value]) => {
+        if (key !== 'style') img.setAttribute(key, value);
+      });
+      if (node.attrs.width) img.style.width = node.attrs.width;
+      if (node.attrs.height) img.style.height = node.attrs.height;
+      img.className = 'max-w-full rounded-lg';
+      container.appendChild(img);
+
+      // Create handle
+      const handle = document.createElement('div');
+      handle.style.position = 'absolute';
+      handle.style.bottom = '5px';
+      handle.style.right = '5px';
+      handle.style.width = '12px';
+      handle.style.height = '12px';
+      handle.style.cursor = 'nwse-resize';
+      handle.style.backgroundColor = '#0f766e'; // teal-700
+      handle.style.border = '2px solid white';
+      handle.style.borderRadius = '50%';
+      handle.style.zIndex = '10';
+      handle.style.opacity = '0';
+      handle.style.transition = 'opacity 0.2s';
+      handle.className = 'resize-handle';
+      container.appendChild(handle);
+
+      container.addEventListener('mouseenter', () => { handle.style.opacity = '1'; });
+      container.addEventListener('mouseleave', () => { handle.style.opacity = '0'; });
+
+      let isResizing = false;
+      let startX, startY, startWidth, startHeight;
+
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        isResizing = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startWidth = img.offsetWidth;
+        startHeight = img.offsetHeight;
+
+        const onMouseMove = (moveEvent) => {
+          if (!isResizing) return;
+          const dx = moveEvent.clientX - startX;
+          const dy = moveEvent.clientY - startY;
+          
+          const newWidth = Math.max(50, startWidth + dx);
+          const newHeight = Math.max(50, startHeight + dy);
+          
+          img.style.width = `${newWidth}px`;
+          img.style.height = `${newHeight}px`;
+        };
+
+        const onMouseUp = () => {
+          if (isResizing) {
+            isResizing = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            if (typeof getPos === 'function') {
+              editor.commands.command(({ tr }) => {
+                const pos = getPos();
+                tr.setNodeMarkup(pos, undefined, {
+                  ...node.attrs,
+                  width: img.style.width,
+                  height: img.style.height,
+                });
+                return true;
+              });
+            }
+          }
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+
+      return {
+        dom: container,
+        contentDOM: null,
+      };
+    };
+  },
+});
+
 export function createRichEditor(elementId, options = {}) {
   const {
     content = '',
@@ -105,7 +220,7 @@ export function createRichEditor(elementId, options = {}) {
         codeBlock: true,
         code: true,
       }),
-      Image.configure({
+      ResizableImage.configure({
         inline: true,
         allowBase64: true, // Allow base64 for flexibility
         HTMLAttributes: {
