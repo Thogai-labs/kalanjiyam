@@ -147,7 +147,16 @@ def resolve_version_keys(user, page) -> tuple:
     else:
         target_key = "role:p1"
 
-    # Fetch users associated with existing user: version tracks
+    existing_keys = {v.version_key for v in page.versions}
+
+    # 1. Always prefer own changes if user has edited this page
+    if getattr(user, "is_authenticated", False) and target_key in existing_keys:
+        return target_key, target_key
+
+    if not page.versions:
+        return target_key, target_key
+
+    # Fetch users associated with existing user: version tracks for tie-breaking
     user_ids = []
     for v in page.versions:
         if v.version_key.startswith("user:"):
@@ -162,107 +171,44 @@ def resolve_version_keys(user, page) -> tuple:
     users = session.query(User).filter(User.id.in_(user_ids)).all() if user_ids else []
     user_map = {u.id: u for u in users}
 
-    # Group existing version tracks
-    moderator_tracks = []
-    p2_tracks = []
-    p1_tracks = []
-    translation_tracks = []
-    ocr_tracks = []
-
-    for v in page.versions:
+    def _track_tier(v):
+        """Return tier rank (1 is highest priority) for tie-breaking when updated_at is identical."""
         if v.version_key.startswith("user:"):
             try:
                 uid = int(v.version_key.split(":", 1)[1])
                 u = user_map.get(uid)
                 if u:
                     if u.is_moderator or u.is_org_admin or u.is_super_admin:
-                        moderator_tracks.append(v)
+                        return 1
                     elif u.is_p2:
-                        p2_tracks.append(v)
-                    elif u.is_p1:
-                        p1_tracks.append(v)
+                        return 2
                     else:
-                        p1_tracks.append(v)
-                else:
-                    p1_tracks.append(v)
+                        return 3
             except ValueError:
-                p1_tracks.append(v)
+                pass
+            return 3
         elif v.version_key == "role:moderator":
-            moderator_tracks.append(v)
+            return 1
         elif v.version_key == "role:p2":
-            p2_tracks.append(v)
+            return 2
         elif v.version_key == "role:p1":
-            p1_tracks.append(v)
+            return 3
+        elif v.version_key.startswith("translation:") or v.version_key.startswith("TR:"):
+            return 4
         elif v.version_key.startswith("ocr:"):
-            ocr_tracks.append(v)
-        elif v.version_key.startswith("translation:"):
-            translation_tracks.append(v)
+            return 5
+        return 6
 
-    # Sort tracks in each tier by updated_at descending
-    moderator_tracks.sort(key=lambda x: x.updated_at, reverse=True)
-    p2_tracks.sort(key=lambda x: x.updated_at, reverse=True)
-    p1_tracks.sort(key=lambda x: x.updated_at, reverse=True)
-    translation_tracks.sort(key=lambda x: x.updated_at, reverse=True)
-    ocr_tracks.sort(key=lambda x: 0 if x.version_key == "ocr:chandra" else 1)
+    # Sort tracks by updated_at descending, then by tier rank ascending (tie-breaker)
+    sorted_tracks = sorted(
+        page.versions,
+        key=lambda v: (v.updated_at, -_track_tier(v)),
+        reverse=True
+    )
 
-    existing_keys = {v.version_key for v in page.versions}
+    if sorted_tracks:
+        return target_key, sorted_tracks[0].version_key
 
-    # Determine fallback list based on logged-in user's roles
-    if getattr(user, "is_authenticated", False):
-        # 1. Always prefer own changes
-        if target_key in existing_keys:
-            return target_key, target_key
-
-        if user.is_moderator or user.is_org_admin or user.is_super_admin:
-            # Moderator fallback order: Moderator -> P2 -> P1 -> Translation -> OCR
-            if moderator_tracks:
-                return target_key, moderator_tracks[0].version_key
-            if p2_tracks:
-                return target_key, p2_tracks[0].version_key
-            if p1_tracks:
-                return target_key, p1_tracks[0].version_key
-            if translation_tracks:
-                return target_key, translation_tracks[0].version_key
-        elif user.is_p2:
-            # P2 fallback order: Moderator -> P2 -> P1 -> Translation -> OCR
-            if moderator_tracks:
-                return target_key, moderator_tracks[0].version_key
-            if p2_tracks:
-                return target_key, p2_tracks[0].version_key
-            if p1_tracks:
-                return target_key, p1_tracks[0].version_key
-            if translation_tracks:
-                return target_key, translation_tracks[0].version_key
-        elif user.is_p1:
-            # P1 fallback order: Moderator -> P2 -> P1 -> Translation -> OCR
-            if moderator_tracks:
-                return target_key, moderator_tracks[0].version_key
-            if p2_tracks:
-                return target_key, p2_tracks[0].version_key
-            if p1_tracks:
-                return target_key, p1_tracks[0].version_key
-            if translation_tracks:
-                return target_key, translation_tracks[0].version_key
-    else:
-        # Anonymous user fallback order: Moderator -> P2 -> P1 -> Translation -> OCR
-        if moderator_tracks:
-            return target_key, moderator_tracks[0].version_key
-        if p2_tracks:
-            return target_key, p2_tracks[0].version_key
-        if p1_tracks:
-            return target_key, p1_tracks[0].version_key
-        if translation_tracks:
-            return target_key, translation_tracks[0].version_key
-
-    # Translation Fallback
-    if translation_tracks:
-        return target_key, translation_tracks[0].version_key
-
-    # OCR Fallback
-    if ocr_tracks:
-        return target_key, ocr_tracks[0].version_key
-
-    # Hard default
     return target_key, target_key
 
 
@@ -301,7 +247,7 @@ def get_version_display_name(version_key: str) -> str:
         if num.isdigit():
             return _l("OCR %(number)s", number=num)
         return _l("%(engine)s OCR", engine=num.capitalize())
-    elif version_key.startswith("translation:"):
+    elif version_key.startswith("translation:") or version_key.startswith("TR:"):
         parts = version_key.split(":", 2)
         engine_name = parts[1] if len(parts) > 1 else ""
         lang_str = parts[2] if len(parts) > 2 else ""

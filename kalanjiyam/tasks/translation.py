@@ -144,7 +144,7 @@ def _run_translation_for_page_inner(
             session.add(translation)
 
             # Create page version and revision following the OCR version track system
-            version_key = f"TR:{engine}:{source_lang}->{target_lang}"
+            version_key = f"translation:{engine}:{source_lang}->{target_lang}"
             pv = session.query(db.PageVersion).filter_by(
                 page_id=page.id,
                 version_key=version_key
@@ -154,7 +154,7 @@ def _run_translation_for_page_inner(
             from kalanjiyam.utils.revisions import add_revision
             from kalanjiyam.enums import SitePageStatus
 
-            summary = f"TR: {engine} {source_lang}->{target_lang}"
+            summary = f"Translation: {engine} {source_lang}->{target_lang}"
             add_revision(
                 page=page,
                 summary=summary,
