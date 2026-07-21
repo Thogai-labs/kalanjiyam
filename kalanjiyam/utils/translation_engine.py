@@ -217,7 +217,10 @@ class IndicTransEngine(TranslationEngine):
             raise RuntimeError("TRANSLATION_SERVICE_URL is not configured")
 
         url = f"{base_url}/translate/text"
+        api_key = current_app.config.get("TRANSLATION_SERVICE_API_KEY", "")
         timeout = float(current_app.config.get("TRANSLATION_SERVICE_TIMEOUT", 300))
+
+        headers = {"X-API-Key": api_key} if api_key else {}
 
         # Map language codes to English names
         language_map = {
@@ -272,7 +275,7 @@ class IndicTransEngine(TranslationEngine):
 
         try:
             with httpx.Client(timeout=timeout) as client:
-                response = client.post(url, json=payload)
+                response = client.post(url, json=payload, headers=headers)
 
             if response.status_code >= 400:
                 detail = response.text
@@ -424,11 +427,13 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
     if not base_url:
         return []
     url = f"{base_url}/models"
+    api_key = current_app.config.get("TRANSLATION_SERVICE_API_KEY", "")
+    headers = {"X-API-Key": api_key} if api_key else {}
     try:
         # Use a short timeout (5s) for fetching available models to avoid blocking the app
         timeout = 5.0
         with httpx.Client(timeout=timeout) as client:
-            response = client.get(url)
+            response = client.get(url, headers=headers)
         if response.status_code == 200:
             models = response.json()
             versions = set()

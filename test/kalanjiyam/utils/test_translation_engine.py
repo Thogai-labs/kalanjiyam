@@ -116,6 +116,30 @@ class TestIndicTransEngine:
             assert call_kwargs["json"]["model_name"] == "ai4bharat/indictrans2-indic-en-1B"
             assert call_kwargs["json"]["source_language"] == "Sanskrit"
             assert call_kwargs["json"]["target_language"] == "English"
+
+    @patch('httpx.Client')
+    def test_translate_with_api_key(self, mock_client_class):
+        """Test text translation sends X-API-Key header when configured."""
+        mock_client = Mock()
+        mock_client_class.return_value.__enter__.return_value = mock_client
+        
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"text": "Hello world"}
+        mock_client.post.return_value = mock_response
+        
+        from flask import Flask
+        app = Flask("test_app")
+        app.config["TRANSLATION_SERVICE_URL"] = "http://localhost:8888"
+        app.config["TRANSLATION_SERVICE_API_KEY"] = "test-secret-key"
+        
+        with app.app_context():
+            engine = IndicTransEngine("indictrans2")
+            response = engine.translate("नमस्ते दुनिया", "sa", "en")
+            
+            mock_client.post.assert_called_once()
+            call_kwargs = mock_client.post.call_args[1]
+            assert call_kwargs["headers"] == {"X-API-Key": "test-secret-key"}
     
     def test_get_supported_languages(self):
         """Test getting supported languages."""
