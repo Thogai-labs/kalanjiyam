@@ -1,6 +1,7 @@
 """Background tasks for translation services."""
 
 import logging
+import os
 from celery import group
 from celery.result import GroupResult
 
@@ -370,6 +371,30 @@ def run_docx_translation(
         estimated_pages = estimate_docx_pages(doc)
         if creator:
             ensure_translation_quota_for_user(creator, estimated_pages)
+
+        # Save original DOCX data to database if enabled in config
+        save_docx_data_enabled = (
+            flask_app.config.get("SAVE_DOCX_DIRECT_TR_DATA", False)
+            or os.getenv("SAVE_DOCX_DIRECT_TR_DATA", "").lower() in ("true", "1", "yes")
+        )
+        if save_docx_data_enabled:
+            try:
+                import json
+                import redis
+                original_filename = None
+                try:
+                    r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+                    info_raw = r_client.get(f"docx_info:{docx_id}")
+                    if info_raw:
+                        info = json.loads(info_raw)
+                        original_filename = info.get("original_filename")
+                except Exception as re_err:
+                    LOG.warning(f"Could not fetch original_filename from Redis for {docx_id}: {re_err}")
+
+                from kalanjiyam.utils.docx_db_saver import save_original_docx_data_to_db
+                save_original_docx_data_to_db(doc, docx_id, original_filename=original_filename, creator_id=creator_id)
+            except Exception as save_err:
+                LOG.error(f"Error saving original DOCX data to DB: {save_err}")
 
 
         import re

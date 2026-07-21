@@ -110,6 +110,11 @@ class BaseConfig:
         _env("ENFORCE_GROUP_ACCESS_FOR_TEXTS", "false").lower() in ("true", "1", "yes")
     )
 
+    #: If True, direct DOCX translation will save all data of the original docx in database.
+    SAVE_DOCX_DIRECT_TR_DATA = (
+        _env("SAVE_DOCX_DIRECT_TR_DATA", "false").lower() in ("true", "1", "yes")
+    )
+
     #: If True, proofing projects (public books under /books/...) are restricted
     #: by group: only users in a group that contains the project (or admins) can
     #: view it. Projects not in any group remain visible to everyone.
