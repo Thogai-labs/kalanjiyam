@@ -1150,8 +1150,11 @@ def _clean_translation_output(text: str) -> str:
 def _translate_html_content(html: str, source_lang: str, target_lang: str, engine: str, glossary: str = None) -> str:
     """Helper to translate plain text sections within HTML content, preserving HTML tags."""
 
+    from kalanjiyam.utils.translation_engine import protect_dnt_and_math, restore_dnt_and_math
+    protected_html, dnt_map = protect_dnt_and_math(html)
+
     # Split by HTML tags
-    parts = re.split(r'(<[^>]+>)', html)
+    parts = re.split(r'(<[^>]+>)', protected_html)
     for i in range(len(parts)):
         # Even indices are text content, odd indices are tags
         if i % 2 == 0:
@@ -1236,7 +1239,8 @@ def _translate_html_content(html: str, source_lang: str, target_lang: str, engin
                 except Exception as e:
                     logging.error(f"Failed to translate segment '{text}': {e}")
                     raise
-    return "".join(parts)
+    result = "".join(parts)
+    return restore_dnt_and_math(result, dnt_map)
 
 
 def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: str, glossary: str = None) -> None:
