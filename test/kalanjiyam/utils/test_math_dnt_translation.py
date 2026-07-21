@@ -74,3 +74,21 @@ def test_image_url_not_corrupted_by_math_protection():
     assert "$extracted_" not in restored
     assert ".png$" not in restored
     assert '/kalanjiyam/static/uploads/becc-116-slm-eng-version-1/images/extracted_1a6ecb26.png' in restored
+
+
+def test_restore_dnt_sanitizes_corrupted_dollar_image_urls():
+    """Verify that restore_dnt_and_math automatically cleans corrupted image URLs with $ in filenames."""
+    corrupted_text = '/kalanjiyam/static/uploads/becc-116-slm-eng-version-1/images/$extracted_cc29355e.png$'
+    sanitized = restore_dnt_and_math(corrupted_text, {})
+    assert sanitized == '/kalanjiyam/static/uploads/becc-116-slm-eng-version-1/images/extracted_cc29355e.png'
+
+
+def test_auto_wrap_math_english_ocr_document_with_images():
+    """Verify that English OCR document segments containing image filenames or URLs are never wrapped in $."""
+    from kalanjiyam.utils.proofing_utils import auto_wrap_math
+    
+    english_ocr_segment = 'extracted_cc29355e.png'
+    english_ocr_url = '/kalanjiyam/static/uploads/becc-116-slm-eng-version-1/images/extracted_cc29355e.png'
+    
+    assert auto_wrap_math(english_ocr_segment) == 'extracted_cc29355e.png'
+    assert auto_wrap_math(english_ocr_url) == '/kalanjiyam/static/uploads/becc-116-slm-eng-version-1/images/extracted_cc29355e.png'

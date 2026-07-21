@@ -347,14 +347,29 @@ def auto_wrap_math(text: str) -> str:
         return ""
     
     import re
-    parts = re.split(r'(\$\$.*?\$\$|\$.*?\$)', text)
+
+    # Step 1: Temporarily extract HTML tags (<img ...>, <a ...>, etc.) to protect them
+    html_tags = []
+    def _extract_tag(m):
+        idx = len(html_tags)
+        html_tags.append(m.group(0))
+        return f"__TEMP_HTML_TAG_{idx}__"
+
+    processed_text = re.sub(r'<[^>]+>', _extract_tag, text)
+    parts = re.split(r'(\$\$.*?\$\$|\$.*?\$)', processed_text)
     
     def wrap_segment(seg: str) -> str:
         if not seg.strip():
             return seg
             
         trimmed = seg.strip()
-        if re.search(r'\.(png|jpe?g|gif|webp|svg)(\?.*)?$', trimmed, re.I) or re.match(r'^https?://', trimmed, re.I) or trimmed.startswith('/static/'):
+        if (
+            re.search(r'\.(png|jpe?g|gif|webp|svg)(\?.*)?$', trimmed, re.I)
+            or re.match(r'^https?://', trimmed, re.I)
+            or trimmed.startswith('/static/')
+            or 'extracted_' in trimmed
+            or '__TEMP_HTML_TAG_' in trimmed
+        ):
             return seg
             
         has_devanagari = bool(re.search(r'[\u0900-\u097F]', seg))
@@ -368,6 +383,20 @@ def auto_wrap_math(text: str) -> str:
                 has_math_sub_super = bool(re.search(r'[a-zA-Z0-9]*_[a-zA-Z0-9\{\}\\\s]+|[a-zA-Z0-9]*\^[a-zA-Z0-9\{\}\\\s]+', seg))
                 has_math_equation = bool(re.search(r'[a-zA-Z0-9]+\s*[\+\*=]\s*[a-zA-Z0-9]+', seg) or re.search(r'[a-zA-Z0-9]+\s+[\-\/]\s+[a-zA-Z0-9]+', seg))
                 if has_latex or has_math_sub_super or has_math_equation:
+                    if (
+                        'extracted_' in seg
+                        or '.png' in seg
+                        or '.jpg' in seg
+                        or '.jpeg' in seg
+                        or '.svg' in seg
+                        or '/' in seg
+                        or '\\' in seg
+                        or 'http:' in seg
+                        or 'https:' in seg
+                        or 'src=' in seg
+                        or '__TEMP_HTML_TAG_' in seg
+                    ):
+                        return seg
                     if '\\begin' in seg or '\n' in seg:
                         return f"$${seg}$$"
                     return f"${seg}$"
@@ -378,7 +407,7 @@ def auto_wrap_math(text: str) -> str:
                     t = m.strip()
                     if not t:
                         return m
-                    if '/' in t or '\\Users' in t or ':\\' in t:
+                    if '/' in t or '\\Users' in t or ':\\' in t or 'extracted_' in t or '__TEMP_HTML_TAG_' in t:
                         return m
                     leading_space = re.match(r'^\s*', m).group(0)
                     trailing_space = re.search(r'\s*$', m).group(0)
@@ -394,6 +423,8 @@ def auto_wrap_math(text: str) -> str:
                 m = match.group(1)
                 t = m.strip()
                 if not t:
+                    return m
+                if '/' in t or '\\' in t or 'extracted_' in t or '__TEMP_HTML_TAG_' in t or '.png' in t or '.jpg' in t:
                     return m
                 if re.match(r'^[a-zA-Z]$', t) or re.match(r'^\d+$', t):
                     return m
@@ -413,7 +444,11 @@ def auto_wrap_math(text: str) -> str:
         else:
             processed_parts.append(wrap_segment(part))
             
-    return "".join(processed_parts)
+    result_str = "".join(processed_parts)
+    for idx, tag in enumerate(html_tags):
+        result_str = result_str.replace(f"__TEMP_HTML_TAG_{idx}__", tag)
+
+    return result_str
 
 
 def _add_text_and_math_to_paragraph(text, paragraph, bold=False, italic=False, underline=False, strike=False, font_name=None, font_size=None) -> None:

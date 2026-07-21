@@ -423,16 +423,23 @@ def restore_dnt_and_math(text: str, dnt_map: dict[str, str]) -> str:
     :param dnt_map: Mapping from placeholder to original <dnt> block
     :return: Restored text
     """
-    if not text or not dnt_map:
+    if not text:
         return text
 
     result = text
-    for placeholder, original_content in dnt_map.items():
-        if placeholder in result:
-            result = result.replace(placeholder, original_content)
-        else:
-            pattern = re.escape(placeholder)
-            result = re.sub(pattern, original_content, result, flags=re.IGNORECASE)
+    if dnt_map:
+        for placeholder, original_content in dnt_map.items():
+            if placeholder in result:
+                result = result.replace(placeholder, original_content)
+            else:
+                pattern = re.escape(placeholder)
+                result = re.sub(pattern, original_content, result, flags=re.IGNORECASE)
+
+    # Sanitize any image URLs where $ or <dnt> was inserted around extracted filenames
+    result = re.sub(r'(?i)<dnt>([^<]*extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg)[^<]*)</dnt>', r'\1', result)
+    result = re.sub(r'\$+(extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg))\$+', r'\1', result)
+    result = re.sub(r'(/images/)\$+(extracted_[a-zA-Z0-9_\-]+)\.(png|jpg|jpeg|gif|svg)\$+', r'\1\2.\3', result)
+    result = re.sub(r'/(?:images|uploads)/[^\'"\s]*?\$+(extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg))\$*', lambda m: m.group(0).replace('$', ''), result)
 
     return result
 

@@ -88,12 +88,29 @@ const BLOCK_TYPE_TO_TAG = {
 export function autoWrapMath(text) {
   if (!text) return '';
 
-  const parts = text.split(/(\$\$.*?\$\$|\$.*?\$)/g);
+  // Step 1: Temporarily extract HTML tags (<img ...>, <a ...>, etc.) to protect them
+  const htmlTags = [];
+  const processedText = text.replace(/<[^>]+>/g, (tag) => {
+    const idx = htmlTags.length;
+    htmlTags.push(tag);
+    return `__TEMP_HTML_TAG_${idx}__`;
+  });
+
+  const parts = processedText.split(/(\$\$.*?\$\$|\$.*?\$)/g);
 
   const wrapSegment = (seg) => {
     if (!seg.trim()) return seg;
 
-    if (/\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(seg.trim()) || /^https?:\/\//i.test(seg.trim()) || /^\/static\//i.test(seg.trim())) {
+    const trimmed = seg.trim();
+    if (
+      /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(trimmed) ||
+      /^https?:\/\//i.test(trimmed) ||
+      /^\/static\//i.test(trimmed) ||
+      trimmed.includes('extracted_') ||
+      trimmed.includes('__TEMP_HTML_TAG_') ||
+      trimmed.includes('/') ||
+      trimmed.includes('\\')
+    ) {
       return seg;
     }
 
@@ -108,6 +125,18 @@ export function autoWrapMath(text) {
         const hasMathSubSuper = /[a-zA-Z0-9]*_[a-zA-Z0-9\{\}\\\s]+|[a-zA-Z0-9]*\^[a-zA-Z0-9\{\}\\\s]+/.test(seg);
         const hasMathEquation = /[a-zA-Z0-9]+\s*[\+\*=]\s*[a-zA-Z0-9]+/.test(seg) || /[a-zA-Z0-9]+\s+[\-\/]\s+[a-zA-Z0-9]+/.test(seg);
         if (hasLatex || hasMathSubSuper || hasMathEquation) {
+          if (
+            seg.includes('extracted_') ||
+            /\.(png|jpe?g|gif|webp|svg)/i.test(seg) ||
+            seg.includes('/') ||
+            seg.includes('\\') ||
+            seg.includes('http:') ||
+            seg.includes('https:') ||
+            seg.includes('src=') ||
+            seg.includes('__TEMP_HTML_TAG_')
+          ) {
+            return seg;
+          }
           if (seg.includes('\\begin') || seg.includes('\n')) {
             return `$$${seg}$$`;
           }
@@ -118,7 +147,13 @@ export function autoWrapMath(text) {
         return seg.replace(/([a-zA-Z0-9]*[\^\_\\][a-zA-Z0-9\{\}\\\:\.\,\-\+\*\/]*[a-zA-Z0-9\}]+)/g, (match) => {
           const trimmed = match.trim();
           if (!trimmed) return match;
-          if (trimmed.includes('/') || trimmed.includes('\\Users') || trimmed.includes(':\\')) {
+          if (
+            trimmed.includes('/') ||
+            trimmed.includes('\\Users') ||
+            trimmed.includes(':\\') ||
+            trimmed.includes('extracted_') ||
+            trimmed.includes('__TEMP_HTML_TAG_')
+          ) {
             return match;
           }
           const leadingSpace = match.match(/^\s*/)[0];
@@ -135,6 +170,15 @@ export function autoWrapMath(text) {
       result = result.replace(mathPattern, (match) => {
         const trimmed = match.trim();
         if (!trimmed) return match;
+        if (
+          trimmed.includes('/') ||
+          trimmed.includes('\\') ||
+          trimmed.includes('extracted_') ||
+          trimmed.includes('__TEMP_HTML_TAG_') ||
+          /\.(png|jpe?g|gif|webp|svg)/i.test(trimmed)
+        ) {
+          return match;
+        }
         if (/^[a-zA-Z]$/.test(trimmed)) return match;
         if (/^\d+$/.test(trimmed)) return match;
         
@@ -153,11 +197,16 @@ export function autoWrapMath(text) {
     return wrapSegment(part);
   });
 
-  return processedParts.join('');
+  let resultStr = processedParts.join('');
+  htmlTags.forEach((tag, idx) => {
+    resultStr = resultStr.replace(`__TEMP_HTML_TAG_${idx}__`, tag);
+  });
+
+  return resultStr;
 }
 
 export function documentToFlowHtml(doc) {
-  const isRichFormat = doc.content_format === 'blocks' || doc.content_format === 'html';
+  const isRichFormat = doc.content_format === 'blocks' || doc.content_format === 'html' || doc.blocks?.some(b => /<img[\s>]/i.test(b.content || ''));
   const blocks = [...(doc.blocks || [])].sort(
     (a, b) => (a.reading_order || 0) - (b.reading_order || 0),
   );
@@ -178,7 +227,7 @@ export function documentToFlowHtml(doc) {
     }
     const tag = BLOCK_TYPE_TO_TAG[block.type] ?? 'p';
     const wrappedContent = autoWrapMath(content);
-    const text = isRichFormat
+    const text = isRichFormat || /<img[\s>]/i.test(wrappedContent)
       ? wrappedContent.replace(/\n/g, '<br>')
       : wrappedContent
           .replace(/&/g, '&amp;')
