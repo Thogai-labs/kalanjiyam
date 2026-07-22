@@ -27,6 +27,10 @@ Set-Location $RepoRoot
 # --- Helpers ----------------------------------------------------------------
 
 function Load-Env {
+    if (-not $env:HOME) {
+        $env:HOME = $env:USERPROFILE
+        [System.Environment]::SetEnvironmentVariable("HOME", $env:USERPROFILE, [System.EnvironmentVariableTarget]::Process)
+    }
     if (Test-Path .env) {
         Get-Content .env | ForEach-Object {
             $line = $_.Trim()
@@ -59,6 +63,10 @@ function Invoke-Compose {
         if ($LASTEXITCODE -eq 0) {
             $ErrorActionPreference = $oldEAP
             & podman compose @Arguments
+            if ($LASTEXITCODE -ne 0) {
+                Write-Error "ERROR: 'podman compose' failed with exit code $LASTEXITCODE"
+                Exit $LASTEXITCODE
+            }
             return
         }
     } catch {}
@@ -67,6 +75,10 @@ function Invoke-Compose {
     if (Get-Command podman-compose -ErrorAction SilentlyContinue) {
         $ErrorActionPreference = $oldEAP
         & podman-compose @Arguments
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "ERROR: 'podman-compose' failed with exit code $LASTEXITCODE"
+            Exit $LASTEXITCODE
+        }
         return
     }
 
@@ -76,6 +88,10 @@ function Invoke-Compose {
         if ($LASTEXITCODE -eq 0) {
             $ErrorActionPreference = $oldEAP
             & docker compose @Arguments
+            if ($LASTEXITCODE -ne 0) {
+                Write-Error "ERROR: 'docker compose' failed with exit code $LASTEXITCODE"
+                Exit $LASTEXITCODE
+            }
             return
         }
     } catch {}
@@ -84,6 +100,10 @@ function Invoke-Compose {
     if (Get-Command docker-compose -ErrorAction SilentlyContinue) {
         $ErrorActionPreference = $oldEAP
         & docker-compose @Arguments
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "ERROR: 'docker-compose' failed with exit code $LASTEXITCODE"
+            Exit $LASTEXITCODE
+        }
         return
     }
     
@@ -141,9 +161,17 @@ function Check-Env {
     }
 
     $dataDir = if ($env:KALANJIYAM_DATA_DIR) { $env:KALANJIYAM_DATA_DIR } else { Join-Path $env:USERPROFILE "kalanjiyam-data" }
+    $dataDirNormalized = $dataDir.Replace('\', '/')
+    $env:KALANJIYAM_DATA_DIR = $dataDirNormalized
+    [System.Environment]::SetEnvironmentVariable("KALANJIYAM_DATA_DIR", $dataDirNormalized, [System.EnvironmentVariableTarget]::Process)
+
     $uploadsDir = Join-Path $dataDir "uploads"
     if (-not (Test-Path $uploadsDir)) {
         New-Item -ItemType Directory -Force -Path $uploadsDir | Out-Null
+    }
+    $metadataDir = "${dataDir}-metadata"
+    if (-not (Test-Path $metadataDir)) {
+        New-Item -ItemType Directory -Force -Path $metadataDir | Out-Null
     }
     Write-Host "[OK] .env OK" -ForegroundColor Green
 }
@@ -163,15 +191,38 @@ function Run-Migrations {
     Write-Host "Running database migrations..."
     Load-Env
     
-    Invoke-Compose -p $PROJECT -f $ComposeFile up -d kalanjiyam-db kalanjiyam-redis
-    Start-Sleep -Seconds 5  # wait for postgres to be ready
+    $allContainers = (& podman ps -a --format "{{.Names}}") -split "`r?\n"
+    if ($allContainers -contains "kalanjiyam-db") {
+        $runningContainers = (& podman ps --format "{{.Names}}") -split "`r?\n"
+        if ($runningContainers -notcontains "kalanjiyam-db" -or $runningContainers -notcontains "kalanjiyam-redis") {
+            podman start kalanjiyam-db kalanjiyam-redis | Out-Null
+            Start-Sleep -Seconds 3
+        }
+    } else {
+        Invoke-Compose -p $PROJECT -f $ComposeFile up -d kalanjiyam-db kalanjiyam-redis
+        Start-Sleep -Seconds 5  # wait for postgres to be ready
+    }
     
     $targetImage = if ($env:KALANJIYAM_IMAGE) { $env:KALANJIYAM_IMAGE } else { "kalanjiyam-rel:latest" }
     $postgresPass = if ($env:POSTGRES_PASSWORD) { $env:POSTGRES_PASSWORD } else { "kalanjiyam" }
     
+    # Discover network attached to kalanjiyam-db container
+    $composeNet = ""
+    if ($allContainers -contains "kalanjiyam-db") {
+        $composeNet = (& podman inspect kalanjiyam-db --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' 2>$null).Trim()
+    }
+    if (-not $composeNet) {
+        $netList = & podman network ls --format "{{.Name}}"
+        $composeNet = ($netList -split "`r?\n" | Where-Object { $_ -like "*${PROJECT}*" -or $_ -like "*kalanjiyam*" -or $_ -like "*prod*" }) | Select-Object -First 1
+    }
+    if (-not $composeNet) {
+        $composeNet = "${PROJECT}_default"
+    }
+
+    Write-Host "Using Podman network: $composeNet"
     $runArgs = @(
         "run", "--rm",
-        "--network", "${PROJECT}_default",
+        "--network", $composeNet,
         "--env-file", ".env",
         "-e", "FLASK_ENV=production",
         "-e", "REDIS_URL=redis://kalanjiyam-redis:6379/0",
@@ -180,13 +231,17 @@ function Run-Migrations {
         "alembic", "upgrade", "head"
     )
     podman @runArgs
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "ERROR: Database migration failed."
+        Exit 1
+    }
         
     Write-Host "[OK] Migrations applied" -ForegroundColor Green
     
     Write-Host "Seeding default database lookup tables..."
     $seedArgs = @(
         "run", "--rm",
-        "--network", "${PROJECT}_default",
+        "--network", $composeNet,
         "--env-file", ".env",
         "-e", "FLASK_ENV=production",
         "-e", "REDIS_URL=redis://kalanjiyam-redis:6379/0",
@@ -195,6 +250,10 @@ function Run-Migrations {
         "python", "-m", "kalanjiyam.seed.lookup"
     )
     podman @seedArgs
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "ERROR: Seeding lookup tables failed."
+        Exit 1
+    }
         
     Write-Host "[OK] Lookups seeded" -ForegroundColor Green
 }
