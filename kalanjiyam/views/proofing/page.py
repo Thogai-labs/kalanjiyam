@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from flask import (
     Blueprint,
+    current_app,
     flash,
     jsonify,
     make_response,
@@ -146,7 +147,16 @@ def resolve_version_keys(user, page) -> tuple:
     else:
         target_key = "role:p1"
 
-    # Fetch users associated with existing user: version tracks
+    existing_keys = {v.version_key for v in page.versions}
+
+    # 1. Always prefer own changes if user has edited this page
+    if getattr(user, "is_authenticated", False) and target_key in existing_keys:
+        return target_key, target_key
+
+    if not page.versions:
+        return target_key, target_key
+
+    # Fetch users associated with existing user: version tracks for tie-breaking
     user_ids = []
     for v in page.versions:
         if v.version_key.startswith("user:"):
@@ -161,95 +171,44 @@ def resolve_version_keys(user, page) -> tuple:
     users = session.query(User).filter(User.id.in_(user_ids)).all() if user_ids else []
     user_map = {u.id: u for u in users}
 
-    # Group existing version tracks
-    moderator_tracks = []
-    p2_tracks = []
-    p1_tracks = []
-    translation_tracks = []
-    ocr_tracks = []
-
-    for v in page.versions:
+    def _track_tier(v):
+        """Return tier rank (1 is highest priority) for tie-breaking when updated_at is identical."""
         if v.version_key.startswith("user:"):
             try:
                 uid = int(v.version_key.split(":", 1)[1])
                 u = user_map.get(uid)
                 if u:
                     if u.is_moderator or u.is_org_admin or u.is_super_admin:
-                        moderator_tracks.append(v)
+                        return 1
                     elif u.is_p2:
-                        p2_tracks.append(v)
-                    elif u.is_p1:
-                        p1_tracks.append(v)
+                        return 2
                     else:
-                        p1_tracks.append(v)
-                else:
-                    p1_tracks.append(v)
+                        return 3
             except ValueError:
-                p1_tracks.append(v)
+                pass
+            return 3
+        elif v.version_key == "role:moderator":
+            return 1
+        elif v.version_key == "role:p2":
+            return 2
+        elif v.version_key == "role:p1":
+            return 3
+        elif v.version_key.startswith("translation:") or v.version_key.startswith("TR:"):
+            return 4
         elif v.version_key.startswith("ocr:"):
-            ocr_tracks.append(v)
-        elif v.version_key.startswith("translation:"):
-            translation_tracks.append(v)
+            return 5
+        return 6
 
-    # Sort tracks in each tier by updated_at descending
-    moderator_tracks.sort(key=lambda x: x.updated_at, reverse=True)
-    p2_tracks.sort(key=lambda x: x.updated_at, reverse=True)
-    p1_tracks.sort(key=lambda x: x.updated_at, reverse=True)
-    translation_tracks.sort(key=lambda x: x.updated_at, reverse=True)
-    ocr_tracks.sort(key=lambda x: 0 if x.version_key == "ocr:chandra" else 1)
+    # Sort tracks by updated_at descending, then by tier rank ascending (tie-breaker)
+    sorted_tracks = sorted(
+        page.versions,
+        key=lambda v: (v.updated_at, -_track_tier(v)),
+        reverse=True
+    )
 
-    existing_keys = {v.version_key for v in page.versions}
+    if sorted_tracks:
+        return target_key, sorted_tracks[0].version_key
 
-    # Determine fallback list based on logged-in user's roles
-    if getattr(user, "is_authenticated", False):
-        # 1. Always prefer own changes
-        if target_key in existing_keys:
-            return target_key, target_key
-
-        if user.is_moderator or user.is_org_admin or user.is_super_admin:
-            # Moderator fallback order: Moderator -> P2 -> P1 -> Translation -> OCR
-            if moderator_tracks:
-                return target_key, moderator_tracks[0].version_key
-            if p2_tracks:
-                return target_key, p2_tracks[0].version_key
-            if p1_tracks:
-                return target_key, p1_tracks[0].version_key
-            if translation_tracks:
-                return target_key, translation_tracks[0].version_key
-        elif user.is_p2:
-            # P2 fallback order: P2 -> P1 -> Translation -> OCR
-            if p2_tracks:
-                return target_key, p2_tracks[0].version_key
-            if p1_tracks:
-                return target_key, p1_tracks[0].version_key
-            if translation_tracks:
-                return target_key, translation_tracks[0].version_key
-        elif user.is_p1:
-            # P1 fallback order: P1 -> Translation -> OCR
-            if p1_tracks:
-                return target_key, p1_tracks[0].version_key
-            if translation_tracks:
-                return target_key, translation_tracks[0].version_key
-    else:
-        # Anonymous user fallback order: Moderator -> P2 -> P1 -> Translation -> OCR
-        if moderator_tracks:
-            return target_key, moderator_tracks[0].version_key
-        if p2_tracks:
-            return target_key, p2_tracks[0].version_key
-        if p1_tracks:
-            return target_key, p1_tracks[0].version_key
-        if translation_tracks:
-            return target_key, translation_tracks[0].version_key
-
-    # Translation Fallback
-    if translation_tracks:
-        return target_key, translation_tracks[0].version_key
-
-    # OCR Fallback
-    if ocr_tracks:
-        return target_key, ocr_tracks[0].version_key
-
-    # Hard default
     return target_key, target_key
 
 
@@ -288,7 +247,7 @@ def get_version_display_name(version_key: str) -> str:
         if num.isdigit():
             return _l("OCR %(number)s", number=num)
         return _l("%(engine)s OCR", engine=num.capitalize())
-    elif version_key.startswith("translation:"):
+    elif version_key.startswith("translation:") or version_key.startswith("TR:"):
         parts = version_key.split(":", 2)
         engine_name = parts[1] if len(parts) > 1 else ""
         lang_str = parts[2] if len(parts) > 2 else ""
@@ -353,13 +312,29 @@ def _page_document_dict_for_version(cur: db.Page, version_key: str) -> dict:
     if latest_revision:
         doc = document_for_revision(latest_revision, cur)
     else:
-        doc = PageDocument.empty()
-        if cur.page_width:
-            doc.page_width = cur.page_width
-        if cur.page_height:
-            doc.page_height = cur.page_height
-        from kalanjiyam.utils.page_document import enrich_document_from_page_ocr
-        doc = enrich_document_from_page_ocr(doc, cur)
+        from kalanjiyam.utils.storage import project_docx_key, get_storage
+        is_docx = False
+        if cur.project:
+            is_docx = get_storage().exists(project_docx_key(cur.project.slug))
+            
+        if is_docx:
+            orig_version = session.query(db.PageVersion).filter_by(
+                page_id=cur.id,
+                version_key="original"
+            ).first()
+            orig_rev = orig_version.revisions[-1] if orig_version and orig_version.revisions else None
+            if orig_rev and orig_rev.document:
+                doc = PageDocument.from_dict(orig_rev.document)
+            else:
+                doc = PageDocument.empty()
+        else:
+            doc = PageDocument.empty()
+            if cur.page_width:
+                doc.page_width = cur.page_width
+            if cur.page_height:
+                doc.page_height = cur.page_height
+            from kalanjiyam.utils.page_document import enrich_document_from_page_ocr
+            doc = enrich_document_from_page_ocr(doc, cur)
 
     if (not doc.page_width or not doc.page_height) and cur.project:
         try:
@@ -414,8 +389,6 @@ def _editor_template_kwargs(
         is_docx = storage.exists(project_docx_key(ctx.project.slug))
         
     if is_docx:
-        # Fetch the original HTML content from the document dict,
-        # NOT from revision.content (which is plain text).
         orig_version = session.query(db.PageVersion).filter_by(
             page_id=cur.id,
             version_key="original"
@@ -426,9 +399,19 @@ def _editor_template_kwargs(
             blocks = doc_data.get("blocks", [])
             if blocks and doc_data.get("content_format") == "html":
                 original_html = blocks[0].get("content", "")
-        # For the textarea, keep using plain text (the doc_obj.to_plain_text()
-        # already set above on line 407 is correct).
-        # page_plain_text is already set from doc_obj.to_plain_text().
+        page_plain_text = latest_revision.content if latest_revision else original_html
+
+    # Prepend URL prefix to image paths in HTML to serve them correctly if APPLICATION_URL_PREFIX is set
+    prefix = current_app.config.get("APPLICATION_URL_PREFIX") or ""
+    if prefix:
+        if original_html:
+            original_html = original_html.replace(f'{prefix}/static/uploads/', '/static/uploads/').replace('/static/uploads/', f'{prefix}/static/uploads/')
+        if page_plain_text:
+            page_plain_text = page_plain_text.replace(f'{prefix}/static/uploads/', '/static/uploads/').replace('/static/uploads/', f'{prefix}/static/uploads/')
+        if page_document and "blocks" in page_document:
+            for block in page_document["blocks"]:
+                if "content" in block and block["content"]:
+                    block["content"] = block["content"].replace(f'{prefix}/static/uploads/', '/static/uploads/').replace('/static/uploads/', f'{prefix}/static/uploads/')
 
     ocr_bounding_boxes = cur.ocr_bounding_boxes or ""
     has_ocr_content = bool(cur.ocr_bounding_boxes) or bool(page_document.get("blocks"))
@@ -747,9 +730,21 @@ def edit_post(project_slug, page_slug):
     conflict = None
 
     if form.validate_on_submit():
+        from flask import current_app
+        prefix = current_app.config.get("APPLICATION_URL_PREFIX") or ""
+        if prefix:
+            if form.content.data:
+                form.content.data = form.content.data.replace(f'{prefix}/static/uploads/', '/static/uploads/')
+
         from kalanjiyam.utils.storage import project_docx_key, get_storage
         is_docx = get_storage().exists(project_docx_key(ctx.project.slug))
         doc = parse_document_field(form.document.data)
+
+        if prefix and doc and "blocks" in doc:
+            for block in doc["blocks"]:
+                if "content" in block and block["content"]:
+                    block["content"] = block["content"].replace(f'{prefix}/static/uploads/', '/static/uploads/')
+
         if is_docx:
             content_format = "html"
             if not doc:
@@ -955,6 +950,19 @@ def ocr(project_slug, page_slug):
         ocr_response = run_ocr(image_path, engine_name=engine, language=language)
         consume_ocr_credit_for_project(project_)
 
+        # Extract visual elements if blocks are returned
+        if ocr_response.blocks:
+            from kalanjiyam.utils.ocr_cropper import crop_ocr_response_elements
+            try:
+                crop_ocr_response_elements(
+                    doc_path=str(image_path),
+                    ocr_response=ocr_response,
+                    project_slug=project_slug,
+                    output_dir=str(image_path.parent)
+                )
+            except Exception as e:
+                logging.exception(f"Failed to crop visual elements: {e}")
+
         # Ensure we have the target PageVersion and current version val
         version_key = f"ocr:{engine}"
         session = q.get_session()
@@ -1046,6 +1054,14 @@ def ocr(project_slug, page_slug):
             image_width=page_.page_width,
             image_height=page_.page_height,
         )
+        
+        # Prepend APPLICATION_URL_PREFIX to image paths in the returned JSON blocks
+        prefix = current_app.config.get("APPLICATION_URL_PREFIX") or ""
+        if prefix and payload.get("blocks"):
+            for block in payload["blocks"]:
+                if "content" in block and block["content"]:
+                    block["content"] = block["content"].replace(f'{prefix}/static/uploads/', '/static/uploads/').replace('/static/uploads/', f'{prefix}/static/uploads/')
+
         logging.info(
             "OCR completed successfully, returning %s blocks",
             len(payload.get("blocks") or []),
@@ -1107,11 +1123,38 @@ def _is_matching_language(text: str, lang: str) -> bool:
     return True
 
 
-def _translate_html_content(html: str, source_lang: str, target_lang: str, engine: str) -> str:
+def _clean_translation_input(text: str) -> str:
+    """Clean translation input text by replacing &nbsp; and \xa0 with normal spaces and stripping."""
+    if not text:
+        return ""
+    # Standardize &nbsp; (including variants with spaces) and unicode non-breaking space
+    cleaned = re.sub(r'&\s*nbsp\s*;*', ' ', text)
+    cleaned = cleaned.replace('\xa0', ' ')
+    # Normalize multiple consecutive spaces to a single space
+    cleaned = re.sub(r' +', ' ', cleaned)
+    return cleaned.strip()
+
+
+def _clean_translation_output(text: str) -> str:
+    """Clean translation output text to remove corrupted &nbsp; entities or trailing &nbsp;."""
+    if not text:
+        return ""
+    # Remove any stray &nbsp; or &nbsp;; or & nbsp;; or \xa0 resulting from translation
+    cleaned = re.sub(r'&\s*nbsp\s*;*', ' ', text)
+    cleaned = cleaned.replace('\xa0', ' ')
+    # Normalize multiple consecutive spaces to a single space
+    cleaned = re.sub(r' +', ' ', cleaned)
+    return cleaned.strip()
+
+
+def _translate_html_content(html: str, source_lang: str, target_lang: str, engine: str, glossary: str = None) -> str:
     """Helper to translate plain text sections within HTML content, preserving HTML tags."""
 
+    from kalanjiyam.utils.translation_engine import protect_dnt_and_math, restore_dnt_and_math
+    protected_html, dnt_map = protect_dnt_and_math(html)
+
     # Split by HTML tags
-    parts = re.split(r'(<[^>]+>)', html)
+    parts = re.split(r'(<[^>]+>)', protected_html)
     for i in range(len(parts)):
         # Even indices are text content, odd indices are tags
         if i % 2 == 0:
@@ -1132,24 +1175,35 @@ def _translate_html_content(html: str, source_lang: str, target_lang: str, engin
                             sub_text = subparts[j]
                             if sub_text and sub_text.strip() and _is_matching_language(sub_text, source_lang):
                                 indices_to_translate.append(j)
-                                texts_to_translate.append(sub_text.strip())
+                                texts_to_translate.append(_clean_translation_input(sub_text))
                                 
                     if texts_to_translate:
                         try:
                             # Batch translate all matching segments by joining them with double newlines
                             joined_text = "\n\n".join(texts_to_translate)
+                            trans_kwargs = {}
+                            if glossary:
+                                trans_kwargs["glossary"] = glossary
                             translation_response = translate_text(
                                 joined_text,
                                 source_lang,
                                 target_lang,
-                                engine
+                                engine,
+                                **trans_kwargs
                             )
                             # Split back the translated segments
-                            translated_segments = translation_response.translated_text.split("\n\n")
+                            translated_segments = [
+                                _clean_translation_output(seg)
+                                for seg in translation_response.translated_text.split("\n\n")
+                            ]
                             
                             # If count doesn't match, try splitting by single/consecutive newlines
                             if len(translated_segments) != len(texts_to_translate):
-                                translated_segments = [s.strip() for s in re.split(r'\n+', translation_response.translated_text) if s.strip()]
+                                translated_segments = [
+                                    _clean_translation_output(s)
+                                    for s in re.split(r'\n+', translation_response.translated_text)
+                                    if s.strip()
+                                ]
                                 
                             if len(translated_segments) == len(texts_to_translate):
                                 for idx, translated_segment in zip(indices_to_translate, translated_segments):
@@ -1164,27 +1218,32 @@ def _translate_html_content(html: str, source_lang: str, target_lang: str, engin
                             # Fallback: sequential translation
                             for idx in indices_to_translate:
                                 sub_text = subparts[idx]
-                                stripped = sub_text.strip()
+                                cleaned_input = _clean_translation_input(sub_text)
                                 leading_ws = sub_text[:len(sub_text) - len(sub_text.lstrip())]
                                 trailing_ws = sub_text[len(sub_text.rstrip()):]
                                 
+                                trans_kwargs = {}
+                                if glossary:
+                                    trans_kwargs["glossary"] = glossary
                                 translation_response = translate_text(
-                                    stripped,
+                                    cleaned_input,
                                     source_lang,
                                     target_lang,
-                                    engine
+                                    engine,
+                                    **trans_kwargs
                                 )
-                                translated_text = translation_response.translated_text
+                                translated_text = _clean_translation_output(translation_response.translated_text)
                                 subparts[idx] = f"{leading_ws}{translated_text}{trailing_ws}"
                                 
                     parts[i] = "".join(subparts)
                 except Exception as e:
                     logging.error(f"Failed to translate segment '{text}': {e}")
                     raise
-    return "".join(parts)
+    result = "".join(parts)
+    return restore_dnt_and_math(result, dnt_map)
 
 
-def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: str) -> None:
+def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: str, glossary: str = None) -> None:
     """Translate multiple blocks in a single batched translation request."""
     # We will gather info for all texts we want to translate across all blocks
     translation_targets = []
@@ -1212,7 +1271,7 @@ def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: 
                         if subpart_idx % 2 == 0:
                             sub_text = subparts[subpart_idx]
                             if sub_text and sub_text.strip() and _is_matching_language(sub_text, source_lang):
-                                stripped = sub_text.strip()
+                                stripped = _clean_translation_input(sub_text)
                                 leading_ws = sub_text[:len(sub_text) - len(sub_text.lstrip())]
                                 trailing_ws = sub_text[len(sub_text.rstrip()):]
                                 translation_targets.append({
@@ -1238,17 +1297,28 @@ def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: 
     # Attempt batched translation in a single call
     try:
         joined_text = "\n\n".join(texts_to_translate)
+        trans_kwargs = {}
+        if glossary:
+            trans_kwargs["glossary"] = glossary
         translation_response = translate_text(
             joined_text,
             source_lang,
             target_lang,
-            engine
+            engine,
+            **trans_kwargs
         )
-        translated_segments = translation_response.translated_text.split("\n\n")
+        translated_segments = [
+            _clean_translation_output(seg)
+            for seg in translation_response.translated_text.split("\n\n")
+        ]
 
         # Fallback to single newlines if count doesn't match
         if len(translated_segments) != len(texts_to_translate):
-            translated_segments = [s.strip() for s in re.split(r'\n+', translation_response.translated_text) if s.strip()]
+            translated_segments = [
+                _clean_translation_output(s)
+                for s in re.split(r'\n+', translation_response.translated_text)
+                if s.strip()
+            ]
 
         if len(translated_segments) != len(texts_to_translate):
             raise ValueError("Mismatched translated segments count in batch translation")
@@ -1272,7 +1342,8 @@ def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: 
                     content,
                     source_lang,
                     target_lang,
-                    engine
+                    engine,
+                    glossary=glossary
                 )
         return
 
@@ -1322,6 +1393,7 @@ def translate(project_slug, page_slug):
     target_lang = request.args.get('target_lang') or doc_data.get('target_lang') or 'en'
     engine = request.args.get('engine') or doc_data.get('engine') or 'indictrans2'
     revision_id = request.args.get('revision_id', type=int)
+    glossary = request.args.get('glossary') or doc_data.get('glossary') or None
     
     # Validate engine
     from kalanjiyam.utils.translation_engine import TranslationEngineFactory
@@ -1344,7 +1416,8 @@ def translate(project_slug, page_slug):
                     blocks,
                     source_lang,
                     target_lang,
-                    engine
+                    engine,
+                    glossary=glossary
                 )
             elif "content" in doc_data:
                 content = doc_data["content"]
@@ -1353,7 +1426,8 @@ def translate(project_slug, page_slug):
                         content,
                         source_lang,
                         target_lang,
-                        engine
+                        engine,
+                        glossary=glossary
                     )
                     
             if has_content:
@@ -1375,7 +1449,7 @@ def translate(project_slug, page_slug):
                         translated_text = PageDocument.from_dict(doc_data).to_plain_text()
                     except Exception:
                         translated_text = ""
-                    content_format = "blocks"
+                    content_format = "html" if doc_data.get("content_format") == "html" else "blocks"
                 else:
                     translated_text = doc_data.get("content", "")
                     content_format = "plain"
@@ -1393,7 +1467,7 @@ def translate(project_slug, page_slug):
                     status=SitePageStatus.R0,
                     version=current_ver,
                     author_id=author_id,
-                    document=doc_data if content_format == "blocks" else None,
+                    document=doc_data if content_format in ("blocks", "html") else None,
                     content_format=content_format,
                     version_key=version_key,
                 )
@@ -1435,7 +1509,8 @@ def translate(project_slug, page_slug):
             revision.content,
             source_lang,
             target_lang,
-            engine
+            engine,
+            glossary=glossary
         )
         consume_translation_credit_for_project(project_)
 
@@ -1551,3 +1626,24 @@ def upload_image(project_slug, page_slug):
     except Exception as e:
         logging.error(f"Image upload failed for {project_slug}/{page_slug}: {e}")
         abort(500, description=f"Image upload failed: {str(e)}")
+
+
+@api.route("/glossaries", methods=["GET"])
+def get_glossaries():
+    """Proxy available glossaries from the external translation service."""
+    import httpx
+    base_url = current_app.config.get("TRANSLATION_SERVICE_URL", "").rstrip("/")
+    if not base_url:
+        return jsonify([])
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.get(f"{base_url}/glossaries")
+        if resp.status_code == 200:
+            return jsonify(resp.json())
+        else:
+            current_app.logger.warning(f"Translation service glossaries returned status {resp.status_code}: {resp.text}")
+            return jsonify([])
+    except Exception as e:
+        current_app.logger.error(f"Failed to fetch glossaries from translation service: {e}")
+        return jsonify([])
+

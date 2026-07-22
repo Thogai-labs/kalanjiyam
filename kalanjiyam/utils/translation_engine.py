@@ -217,7 +217,10 @@ class IndicTransEngine(TranslationEngine):
             raise RuntimeError("TRANSLATION_SERVICE_URL is not configured")
 
         url = f"{base_url}/translate/text"
+        api_key = current_app.config.get("TRANSLATION_SERVICE_API_KEY", "")
         timeout = float(current_app.config.get("TRANSLATION_SERVICE_TIMEOUT", 300))
+
+        headers = {"X-API-Key": api_key} if api_key else {}
 
         # Map language codes to English names
         language_map = {
@@ -267,10 +270,12 @@ class IndicTransEngine(TranslationEngine):
             "gpu_id": 0,
             "batch_size": 8
         }
+        if kwargs.get("glossary"):
+            payload["glossary"] = kwargs["glossary"]
 
         try:
             with httpx.Client(timeout=timeout) as client:
-                response = client.post(url, json=payload)
+                response = client.post(url, json=payload, headers=headers)
 
             if response.status_code >= 400:
                 detail = response.text
@@ -333,6 +338,112 @@ class TranslationEngineFactory:
         return engine_name in cls._engines or engine_name.startswith('indictrans')
 
 
+def protect_dnt_and_math(text: str) -> tuple[str, dict[str, str]]:
+    """Detect <dnt> blocks and math equations, wrap math in <dnt> if needed, and substitute with safe placeholders.
+    
+    :param text: Input string to process
+    :return: A tuple of (protected_text, dnt_map)
+    """
+    if not text:
+        return text, {}
+
+    processed_text = text
+
+    # Step 1: Extract existing <dnt>...</dnt> blocks to prevent double-wrapping
+    existing_dnts = []
+    def _extract_existing(m):
+        idx = len(existing_dnts)
+        existing_dnts.append(m.group(0))
+        return f"__EXISTING_DNT_{idx}__"
+
+    processed_text = re.sub(r'(?i)<dnt\b[^>]*>[\s\S]*?</dnt>', _extract_existing, processed_text)
+
+    # Step 2: Temporarily protect HTML tags so math patterns do not match inside tags or attributes (src=, href=, etc.)
+    html_tags = []
+    def _extract_html_tag(m):
+        tag = m.group(0)
+        if "__EXISTING_DNT_" in tag:
+            return tag
+        idx = len(html_tags)
+        html_tags.append(tag)
+        return f"__TEMP_HTML_TAG_{idx}__"
+
+    processed_text = re.sub(r'<[^>]+>', _extract_html_tag, processed_text)
+
+    # Step 3: Wrap math patterns in <dnt>...</dnt>
+    math_patterns = [
+        r'\$\$[\s\S]*?\$\$',  # $$...$$
+        r'\\\[[\s\S]*?\\\]',  # \[...\]
+        r'\\\([\s\S]*?\\\)',  # \(...\)
+        r'<(?:math|math-field)\b[^>]*>[\s\S]*?</(?:math|math-field)>',
+        r'<(?:span|div)\b[^>]*(?:class="[^"]*\bmath\b[^"]*"|data-type="math")[^>]*>[\s\S]*?</(?:span|div)>',
+    ]
+
+    for pattern in math_patterns:
+        processed_text = re.sub(pattern, lambda m: f"<dnt>{m.group(0)}</dnt>", processed_text)
+
+    # Step 4: Wrap single-dollar math ($formula$) carefully
+    def _is_math_dollar(match):
+        full_match = match.group(0)
+        content = match.group(1).strip()
+        # Do not treat URLs, file paths (containing / or .png/.jpg), or HTTP links as math
+        if re.search(r'[/\\.]', content) or 'http:' in content or 'https:' in content:
+            return full_match
+        # Require math symbols or valid math variable expressions
+        if re.search(r'[\\+=\^_{\}]', content) or (re.search(r'[a-zA-Z]', content) and len(content) <= 50):
+            return f"<dnt>{full_match}</dnt>"
+        return full_match
+
+    processed_text = re.sub(r'(?<!\$)\$([^$\n\r<>]+?)\$(?!\$)', _is_math_dollar, processed_text)
+
+    # Step 5: Restore HTML tags
+    for idx, tag in enumerate(html_tags):
+        processed_text = processed_text.replace(f"__TEMP_HTML_TAG_{idx}__", tag)
+
+    # Step 6: Restore existing <dnt> blocks
+    for idx, dnt_content in enumerate(existing_dnts):
+        processed_text = processed_text.replace(f"__EXISTING_DNT_{idx}__", dnt_content)
+
+    # Step 7: Substitute all <dnt>...</dnt> blocks with unique placeholders
+    dnt_map = {}
+    def _replace_dnt(match):
+        idx = len(dnt_map)
+        placeholder = f"DNTBLOCK{idx}DNT"
+        dnt_map[placeholder] = match.group(0)
+        return placeholder
+
+    protected_text = re.sub(r'(?i)<dnt\b[^>]*>[\s\S]*?</dnt>', _replace_dnt, processed_text)
+    return protected_text, dnt_map
+
+
+def restore_dnt_and_math(text: str, dnt_map: dict[str, str]) -> str:
+    """Restore placeholders back to original <dnt>...</dnt> blocks.
+    
+    :param text: Translated text containing placeholders
+    :param dnt_map: Mapping from placeholder to original <dnt> block
+    :return: Restored text
+    """
+    if not text:
+        return text
+
+    result = text
+    if dnt_map:
+        for placeholder, original_content in dnt_map.items():
+            if placeholder in result:
+                result = result.replace(placeholder, original_content)
+            else:
+                pattern = re.escape(placeholder)
+                result = re.sub(pattern, original_content, result, flags=re.IGNORECASE)
+
+    # Sanitize any image URLs where $ or <dnt> was inserted around extracted filenames
+    result = re.sub(r'(?i)<dnt>([^<]*extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg)[^<]*)</dnt>', r'\1', result)
+    result = re.sub(r'\$+(extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg))\$+', r'\1', result)
+    result = re.sub(r'(/images/)\$+(extracted_[a-zA-Z0-9_\-]+)\.(png|jpg|jpeg|gif|svg)\$+', r'\1\2.\3', result)
+    result = re.sub(r'/(?:images|uploads)/[^\'"\s]*?\$+(extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg))\$*', lambda m: m.group(0).replace('$', ''), result)
+
+    return result
+
+
 def translate_text(text: str, source_lang: str, target_lang: str, engine_name: str = 'indictrans2', **kwargs) -> TranslationResponse:
     """Convenience function to translate text using the specified engine.
     
@@ -353,8 +464,17 @@ def translate_text(text: str, source_lang: str, target_lang: str, engine_name: s
         
         logging.info(f"Starting translation: {source_lang} -> {target_lang} using {engine_name}")
         
+        # Protect <dnt> blocks and math equations
+        protected_text, dnt_map = protect_dnt_and_math(text)
+
         engine = TranslationEngineFactory.create(engine_name, **kwargs)
-        return engine.translate(text, source_lang, target_lang, **kwargs)
+        response = engine.translate(protected_text, source_lang, target_lang, **kwargs)
+
+        # Restore <dnt> blocks and math equations
+        if dnt_map and response and response.translated_text:
+            response.translated_text = restore_dnt_and_math(response.translated_text, dnt_map)
+
+        return response
     except Exception as e:
         logging.error(f"Translation failed: {e}")
         raise
@@ -422,11 +542,13 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
     if not base_url:
         return []
     url = f"{base_url}/models"
+    api_key = current_app.config.get("TRANSLATION_SERVICE_API_KEY", "")
+    headers = {"X-API-Key": api_key} if api_key else {}
     try:
         # Use a short timeout (5s) for fetching available models to avoid blocking the app
         timeout = 5.0
         with httpx.Client(timeout=timeout) as client:
-            response = client.get(url)
+            response = client.get(url, headers=headers)
         if response.status_code == 200:
             models = response.json()
             versions = set()

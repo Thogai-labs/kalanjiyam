@@ -18,8 +18,11 @@ def user_organization_id(user) -> int | None:
         try:
             open_tenant = q.get_or_create_open_tenant()
             org_id = open_tenant.id
-        except Exception:
-            pass
+        except Exception as exc:
+            try:
+                current_app.logger.warning("Failed to retrieve open tenant for user: %s", exc)
+            except RuntimeError:
+                pass
     return org_id
 
 
@@ -123,8 +126,11 @@ def is_restricted_ocr_user(user) -> bool:
         open_tenant = q.get_or_create_open_tenant()
         if user_organization_id(user) == open_tenant.id:
             return True
-    except Exception:
-        pass
+    except Exception as exc:
+        try:
+            current_app.logger.warning("Failed to check restricted OCR status: %s", exc)
+        except RuntimeError:
+            pass
 
     return False
 

@@ -95,11 +95,18 @@ def test_token__set_and_check_token(client):
 def test_project__creator_mode(client):
     session = get_session()
 
+    board1 = db.Board(title="Board 1")
+    board2 = db.Board(title="Board 2")
+    board3 = db.Board(title="Board 3")
+    session.add_all([board1, board2, board3])
+    session.flush()
+
     # 1. Unregistered project (has fingerprint_id)
     project_unregistered = db.Project(
         slug="unregistered-proj",
         display_title="Unregistered Project",
         fingerprint_id="some-fingerprint",
+        board_id=board1.id,
     )
     session.add(project_unregistered)
 
@@ -108,6 +115,7 @@ def test_project__creator_mode(client):
         slug="registered-proj",
         display_title="Registered Project",
         creator_id=1,
+        board_id=board2.id,
     )
     # Give it the open-tenant group
     open_tenant = session.query(db.Group).filter_by(slug="open-tenant").first()
@@ -123,6 +131,7 @@ def test_project__creator_mode(client):
         slug="enterprise-proj",
         display_title="Enterprise Project",
         creator_id=1,
+        board_id=board3.id,
     )
     enterprise_group = db.Group(name="Enterprise Org", slug="enterprise-org")
     session.add(enterprise_group)
@@ -137,5 +146,5 @@ def test_project__creator_mode(client):
         assert project_registered.creator_mode == "registered"
         assert project_enterprise.creator_mode == "enterprise"
     finally:
-        _cleanup(session, project_unregistered, project_registered, project_enterprise, enterprise_group)
+        _cleanup(session, project_unregistered, project_registered, project_enterprise, enterprise_group, board1, board2, board3)
 

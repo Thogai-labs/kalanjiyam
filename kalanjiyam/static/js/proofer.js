@@ -102,6 +102,8 @@ export default () => ({
   targetLanguage: 'en',
   translationDropdownOpen: false,
   showTranslationInfo: false,
+  allGlossaries: [],
+  selectedGlossaries: [],
 
   // OCR dropdown state
   ocrDropdownOpen: false,
@@ -1267,7 +1269,7 @@ export default () => ({
   },
 
   // Translation controls
-  async runTranslation(engine = 'google', sourceLang = 'sa', targetLang = 'en') {
+  async runTranslation(engine = 'google', sourceLang = 'sa', targetLang = 'en', glossaries = []) {
     console.log('=== TRANSLATION DEBUG START ===');
     
     if (!this.pageDocument) {
@@ -1277,11 +1279,15 @@ export default () => ({
 
     this.isRunningTranslation = true;
 
-    console.log('Starting translation:', { engine, sourceLang, targetLang });
+    console.log('Starting translation:', { engine, sourceLang, targetLang, glossaries });
     console.log('Current pathname:', window.location.pathname);
 
     const { pathname } = window.location;
-    const url = pathname.replace('/proofing/', '/api/translate/') + `?engine=${engine}&source_lang=${sourceLang}&target_lang=${targetLang}`;
+    let url = pathname.replace('/proofing/', '/api/translate/') + `?engine=${engine}&source_lang=${sourceLang}&target_lang=${targetLang}`;
+    if (glossaries && glossaries.length > 0) {
+      const glossaryVal = glossaries.includes('all') ? 'all' : glossaries.join(',');
+      url += `&glossary=${encodeURIComponent(glossaryVal)}`;
+    }
     
     console.log('Translation URL:', url);
 
@@ -1317,6 +1323,9 @@ export default () => ({
         
         // Update flow / rich editor
         this._syncDocumentToForm();
+        if (this.editorMode === 'flow') {
+          this._applyFlowEditorContent();
+        }
         this.hasUnsavedChanges = true;
         
         // Extract plain text for reference translation panel
@@ -1347,6 +1356,57 @@ export default () => ({
     console.log('=== TRANSLATION SELECTOR INITIALIZED (Alpine.js) ===');
     // The translation selector is now handled directly by Alpine.js
     // No additional JavaScript needed
+    this.fetchGlossaries();
+  },
+
+  async fetchGlossaries() {
+    try {
+      const { pathname } = window.location;
+      const prefixMatch = pathname.match(/^(.*)\/proofing\//);
+      const prefix = prefixMatch ? prefixMatch[1] : '';
+      const response = await fetch(`${prefix}/api/glossaries`);
+      if (response.ok) {
+        this.allGlossaries = await response.json();
+      } else {
+        console.warn('Failed to fetch glossaries:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching glossaries:', error);
+    }
+  },
+
+  get filteredGlossaries() {
+    if (!this.allGlossaries) return [];
+    const filtered = this.allGlossaries.filter(g => 
+      g.source_language_code === this.sourceLanguage && 
+      g.target_language_code === this.targetLanguage
+    );
+    this.selectedGlossaries = this.selectedGlossaries.filter(name => 
+      name === 'all' || filtered.some(g => g.name === name)
+    );
+    return filtered;
+  },
+
+  get showGlossaryWarning() {
+    return this.selectedGlossaries.includes('all') || this.selectedGlossaries.length > 3;
+  },
+
+  getGlossaryDisplayName(name) {
+    const lookup = {
+      'agri': 'Agriculture',
+      'mech': 'Mechanical',
+      'bio': 'Biology',
+      'chem': 'Chemistry',
+      'comp': 'Computer Science',
+      'phy': 'Physics',
+      'math': 'Mathematics',
+      'it': 'Information Technology'
+    };
+    if (lookup[name]) {
+      return lookup[name];
+    }
+    if (!name) return '';
+    return name.charAt(0).toUpperCase() + name.slice(1);
   },
 
   // Show translation in the image box

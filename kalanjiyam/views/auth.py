@@ -157,15 +157,12 @@ class SignupForm(FlaskForm):
     # recaptcha = RecaptchaField()
 
     def validate_username(self, username):
-        # TODO: make username case insensitive
         user = q.user(username.data)
         if user:
             raise val.ValidationError("Please use a different username.")
 
     def validate_email(self, email):
-        session = q.get_session()
-        # TODO: make email case insensitive
-        user = session.query(db.User).filter_by(email=email.data).first()
+        user = q.user_by_email(email.data)
         if user:
             raise val.ValidationError("Please use a different email address.")
 
@@ -204,8 +201,8 @@ def register():
     # save username and email in lowercase
     if form.validate_on_submit():
         user = q.create_user(
-            username=form.username.data,
-            email=form.email.data,
+            username=form.username.data.strip().lower(),
+            email=form.email.data.strip().lower(),
             raw_password=form.password.data,
         )
         login_user(user, remember=True)
@@ -226,9 +223,8 @@ def sign_in():
         return redirect(url_for("site.index"))
 
     form = SignInForm()
-    # TODO: make username case insensitive
     if form.validate_on_submit():
-        user = q.user(form.username.data)
+        user = q.user(form.username.data.strip())
         if user and user.check_password(form.password.data):
             login_user(user, remember=True)
             return redirect(url_for(POST_AUTH_ROUTE))
@@ -255,20 +251,15 @@ def get_reset_password_token():
     """Email the user a password reset link."""
     form = ResetPasswordForm()
     if form.validate_on_submit():
-        email = form.email.data
-        session = q.get_session()
-        user = session.query(db.User).filter_by(email=email).first()
+        email = form.email.data.strip()
+        user = q.user_by_email(email)
         if user:
             raw_token = _create_reset_token(user.id)
             mail.send_reset_password_link(
                 username=user.username, email=user.email, raw_token=raw_token
             )
-            return render_template("auth/reset-password-post.html", email=user.email)
-        else:
-            flash(
-                "Sorry, the email address you provided is not associated with any of our acounts.",
-                "error",
-            )
+        # Always return uniform response regardless of whether the email exists to prevent enumeration.
+        return render_template("auth/reset-password-post.html", email=email)
 
     # Override the default message ("The response parameter is missing.")
     # for better UX.

@@ -56,7 +56,7 @@
   {% if projects %}
   {{ status_legend() }}
 
-  <div x-data="sortableList('title')" class="space-y-6">
+  <div x-data="sortableList('created', 'desc')" class="space-y-6">
 
     <div class="bg-slate-50 rounded-2xl p-5">
       <form class="flex flex-col md:flex-row items-center gap-4" x-cloak @submit.prevent>
@@ -88,15 +88,15 @@
           <select
             class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:border-royalblue outline-none transition-all flex-1"
             x-model="field" @change="sort">
-            <option value="title" selected>{{ _('Title') }}</option>
-            <option value="created">{{ _('Creation date') }}</option>
+            <option value="title">{{ _('Title') }}</option>
+            <option value="created" selected>{{ _('Creation date') }}</option>
             <option value="progress">{{ _('Progress') }}</option>
           </select>
           <select
             class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:border-royalblue outline-none transition-all"
             x-model="order" @change="sort">
-            <option value="asc" selected>{{ _('Asc') }}</option>
-            <option value="desc">{{ _('Desc') }}</option>
+            <option value="asc">{{ _('Asc') }}</option>
+            <option value="desc" selected>{{ _('Desc') }}</option>
           </select>
         </div>
       </form>

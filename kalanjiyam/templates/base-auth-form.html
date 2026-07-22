@@ -1,3 +1,4 @@
+{% import "macros/components.html" as components %}
 <!DOCTYPE html>
 <html lang="{{ get_locale() }}">
 <head>
@@ -176,6 +177,7 @@
       }
     </style>
     {% block extra_css %}{% endblock %}
+    <script src="https://unpkg.com/alpinejs@3.10.3/dist/cdn.min.js" defer></script>
 </head>
 <body class="">
     <div class="auth-wrapper">

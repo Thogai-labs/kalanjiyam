@@ -48,16 +48,67 @@
          progress: 0,
          status: '',
          isDocx: false,
+         fileName: '',
          docxWorkflow: 'direct',
          sourceLang: 'sa',
          targetLang: 'en',
+         allGlossaries: [],
+         selectedGlossaries: [],
+         init() {
+           this.$watch('sourceLang', () => this.selectedGlossaries = []);
+           this.$watch('targetLang', () => this.selectedGlossaries = []);
+           
+           const { pathname } = window.location;
+           const prefixMatch = pathname.match(/^(.*)\/proofing\//);
+           const prefix = prefixMatch ? prefixMatch[1] : '';
+           fetch(`${prefix}/api/glossaries`)
+             .then(response => {
+               if (response.ok) return response.json();
+               return [];
+             })
+             .then(data => {
+               this.allGlossaries = data;
+             })
+             .catch(error => {
+               console.error('Error fetching glossaries:', error);
+             });
+         },
+         get filteredGlossaries() {
+           return this.allGlossaries.filter(g => 
+             g.source_language_code === this.sourceLang && 
+             g.target_language_code === this.targetLang
+           );
+         },
+         get showGlossaryWarning() {
+           return this.selectedGlossaries.includes('all') || this.selectedGlossaries.length > 3;
+         },
+         getGlossaryDisplayName(name) {
+           const lookup = {
+             'agri': 'Agriculture',
+             'mech': 'Mechanical',
+             'bio': 'Biology',
+             'chem': 'Chemistry',
+             'comp': 'Computer Science',
+             'phy': 'Physics',
+             'math': 'Mathematics',
+             'it': 'Information Technology'
+           };
+           if (lookup[name]) {
+             return lookup[name];
+           }
+           if (!name) return '';
+           return name.charAt(0).toUpperCase() + name.slice(1);
+         },
          handleFileChange(e) {
            const files = e.target.files;
            if (files && files.length > 0) {
-             const name = files[0].name.toLowerCase();
-             this.isDocx = name.endsWith('.docx') || name.endsWith('.doc');
+             const name = files[0].name;
+             this.fileName = name;
+             const nameLower = name.toLowerCase();
+             this.isDocx = nameLower.endsWith('.docx') || nameLower.endsWith('.doc');
            } else {
              this.isDocx = false;
+             this.fileName = '';
            }
          },
          submitForm() {
@@ -85,7 +136,8 @@
 
            const formData = new FormData(form);
            this.uploading = true;
-           this.status = isDirect ? '{{ _('Uploading document ...') }}' : '{{ _('Beginning upload ...') }}';
+           const docLabel = this.fileName || (isDirect ? '{{ _("document") }}' : '{{ _("PDF") }}');
+           this.status = `{{ _('Uploading') }} ${docLabel} ...`;
            
            const xhr = new XMLHttpRequest();
            xhr.open('POST', form.action, true);
@@ -94,7 +146,7 @@
              if (e.lengthComputable) {
                this.progress = Math.round((e.loaded / e.total) * 100);
                if (this.progress > 0) {
-                 this.status = isDirect ? `{{ _('Uploading Document') }} (${this.progress}%)...` : `{{ _('Uploading PDF') }} (${this.progress}%)...`;
+                 this.status = `{{ _('Uploading') }} ${docLabel} (${this.progress}%)...`;
                }
              }
            };
@@ -171,9 +223,9 @@
                   <!-- Option A: Direct Translation -->
                   <div class="p-5 rounded-xl border-2 transition-all cursor-pointer text-left"
                     :class="docxWorkflow === 'direct' ? 'border-royalblue bg-royalblue/5' : 'border-slate-100 hover:border-slate-200 bg-white'"
-                    @click="docxWorkflow = 'direct'">
+                    @click="if (isDocx) { docxWorkflow = 'direct' }">
                     <label class="flex items-center cursor-pointer">
-                      <input type="radio" name="docx_workflow" value="direct" x-model="docxWorkflow"
+                      <input type="radio" name="docx_workflow" value="direct" x-model="docxWorkflow" :disabled="!isDocx"
                         class="w-5 h-5 text-royalblue border-slate-300 focus:ring-royalblue">
                       <span class="ml-3 font-bold text-slate-800 text-sm">{{ _("Direct Translation") }}</span>
                     </label>
@@ -182,9 +234,9 @@
                   <!-- Option B: Interactive Project -->
                   <div class="p-5 rounded-xl border-2 transition-all cursor-pointer text-left"
                     :class="docxWorkflow === 'project' ? 'border-royalblue bg-royalblue/5' : 'border-slate-100 hover:border-slate-200 bg-white'"
-                    @click="docxWorkflow = 'project'">
+                    @click="if (isDocx) { docxWorkflow = 'project' }">
                     <label class="flex items-center cursor-pointer">
-                      <input type="radio" name="docx_workflow" value="project" x-model="docxWorkflow"
+                      <input type="radio" name="docx_workflow" value="project" x-model="docxWorkflow" :disabled="!isDocx"
                         class="w-5 h-5 text-royalblue border-slate-300 focus:ring-royalblue">
                       <span class="ml-3 font-bold text-slate-800 text-sm">{{ _("Interactive Proofing Project") }}</span>
                     </label>
@@ -221,6 +273,63 @@
                         <option value="" disabled selected>No translation models available</option>
                       {% endfor %}
                     </select>
+                  </div>
+
+                    <!-- Glossary Selection List -->
+                    <div class="text-left" x-show="filteredGlossaries.length > 0" x-cloak>
+                      <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Select Glossaries (Optional)") }}</label>
+                      <input type="hidden" name="glossary" :value="selectedGlossaries.includes('all') ? 'all' : selectedGlossaries.join(', ')">
+                      
+                      <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                        <!-- Selector trigger -->
+                        <div @click.stop="open = !open" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus-within:border-royalblue focus-within:ring-4 focus-within:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[46px] select-none">
+                          <div class="flex flex-wrap gap-1.5 items-center">
+                            <template x-if="selectedGlossaries.length === 0">
+                              <span class="text-slate-400 font-medium">{{ _("Select glossaries...") }}</span>
+                            </template>
+                            <template x-if="selectedGlossaries.includes('all')">
+                              <div class="flex items-center bg-royalblue/10 text-royalblue rounded-lg px-2.5 py-1 text-xs font-bold">
+                                <span>{{ _("All Glossaries") }}</span>
+                                <button type="button" @click.stop="selectedGlossaries = []" class="ml-1.5 hover:text-royalblue/80 focus:outline-none text-sm leading-none">&times;</button>
+                              </div>
+                            </template>
+                            <template x-if="!selectedGlossaries.includes('all')">
+                              <template x-for="name in selectedGlossaries" :key="name">
+                                <div class="flex items-center bg-slate-100 text-slate-700 rounded-lg px-2.5 py-1 text-xs font-bold border border-slate-200">
+                                  <span x-text="getGlossaryDisplayName(name)"></span>
+                                  <button type="button" @click.stop="selectedGlossaries = selectedGlossaries.filter(n => n !== name)" class="ml-1.5 text-slate-400 hover:text-slate-600 focus:outline-none text-sm leading-none">&times;</button>
+                                </div>
+                              </template>
+                            </template>
+                          </div>
+                          <svg class="w-4 h-4 text-slate-400 ml-2 flex-shrink-0 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                          </svg>
+                        </div>
+
+                        <!-- Dropdown menu -->
+                        <div x-show="open" class="absolute z-[100] w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-2 space-y-1 text-left" x-cloak x-transition>
+                          <label class="flex items-center px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer text-sm font-semibold text-slate-700 select-none">
+                            <input type="checkbox" value="all" x-model="selectedGlossaries" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-3 w-4 h-4">
+                            <span>{{ _("All Glossaries") }}</span>
+                          </label>
+                          <div class="h-px bg-slate-100 my-1"></div>
+                          <template x-for="g in filteredGlossaries" :key="g.name">
+                            <label class="flex items-center px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer text-sm font-medium text-slate-600 select-none">
+                              <input type="checkbox" :value="g.name" x-model="selectedGlossaries" :disabled="selectedGlossaries.includes('all')" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-3 w-4 h-4">
+                              <span x-text="getGlossaryDisplayName(g.name)"></span>
+                            </label>
+                          </template>
+                        </div>
+                      </div>
+                      
+                      <!-- Warning Message -->
+                      <div x-show="showGlossaryWarning" x-transition class="mt-2 text-xs text-yellow-600 bg-yellow-50 border border-yellow-100 rounded-xl p-3 font-medium" x-cloak>
+                        {{ _("Adding all / more than 3 glossaries may increase translation time.") }}
+                      </div>
+                    </div>
+
+                  <div class="text-left">
                     <p class="text-sm text-red-500 font-bold mt-3 flex items-center" x-show="sourceLang === targetLang" x-cloak>
                       <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>

@@ -88,15 +88,20 @@ def test_translate_api_get(rama_client):
     import kalanjiyam.database as db
     from kalanjiyam.queries import get_session
 
+    session = get_session()
+    session.query(db.Translation).delete()
+    session.query(db.Revision).filter(db.Revision.id > 1).delete()
+    session.commit()
+
     with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
         mock_translate.return_value = TranslationResponse(
             translated_text="Translated Hello",
-            source_language="sa",
-            target_language="en",
+            source_language="en",
+            target_language="sa",
             engine="indictrans2"
         )
 
-        r = rama_client.get("/api/translate/test-project/1/?source_lang=sa&target_lang=en&engine=indictrans2")
+        r = rama_client.get("/api/translate/test-project/1/?source_lang=en&target_lang=sa&engine=indictrans2")
         assert r.status_code == 200
         assert r.text == "Translated Hello"
 
@@ -105,7 +110,7 @@ def test_translate_api_get(rama_client):
         page = session.query(db.Page).filter_by(slug="1").first()
         pv = session.query(db.PageVersion).filter_by(
             page_id=page.id,
-            version_key="translation:indictrans2:sa->en"
+            version_key="translation:indictrans2:en->sa"
         ).first()
         assert pv is not None
         assert len(pv.revisions) == 1
@@ -115,12 +120,19 @@ def test_translate_api_get(rama_client):
 def test_translate_api_post(rama_client):
     from unittest.mock import patch
     from kalanjiyam.utils.translation_engine import TranslationResponse
+    from kalanjiyam.queries import get_session
+    import kalanjiyam.database as db
+
+    session = get_session()
+    session.query(db.Translation).delete()
+    session.query(db.Revision).filter(db.Revision.id > 1).delete()
+    session.commit()
 
     with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
         mock_translate.return_value = TranslationResponse(
             translated_text="Translated Hello Block",
-            source_language="sa",
-            target_language="en",
+            source_language="en",
+            target_language="sa",
             engine="indictrans2"
         )
 
@@ -134,20 +146,20 @@ def test_translate_api_post(rama_client):
             ]
         }
         r = rama_client.post(
-            "/api/translate/test-project/1/?source_lang=sa&target_lang=en&engine=indictrans2",
+            "/api/translate/test-project/1/?source_lang=en&target_lang=sa&engine=indictrans2",
             json=payload
         )
         assert r.status_code == 200
         data = r.get_json()
         assert data["blocks"][0]["content"] == "Translated Hello Block"
-        mock_translate.assert_called_once_with("Hello Sanskrit", "sa", "en", "indictrans2")
+        mock_translate.assert_called_once_with("Hello Sanskrit", "en", "sa", "indictrans2")
 
         # Assert PageVersion and Revision records were created
         session = get_session()
         page = session.query(db.Page).filter_by(slug="1").first()
         pv = session.query(db.PageVersion).filter_by(
             page_id=page.id,
-            version_key="translation:indictrans2:sa->en"
+            version_key="translation:indictrans2:en->sa"
         ).first()
         assert pv is not None
         assert len(pv.revisions) == 1
@@ -158,6 +170,13 @@ def test_translate_api_post(rama_client):
 def test_translate_api_post_preserves_html(rama_client):
     from unittest.mock import patch
     from kalanjiyam.utils.translation_engine import TranslationResponse
+    from kalanjiyam.queries import get_session
+    import kalanjiyam.database as db
+
+    session = get_session()
+    session.query(db.Translation).delete()
+    session.query(db.Revision).filter(db.Revision.id > 1).delete()
+    session.commit()
 
     with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
         mock_translate.return_value = TranslationResponse(
@@ -189,6 +208,13 @@ def test_translate_api_post_preserves_html(rama_client):
 def test_translate_api_selective_translation_english(rama_client):
     from unittest.mock import patch
     from kalanjiyam.utils.translation_engine import TranslationResponse
+    from kalanjiyam.queries import get_session
+    import kalanjiyam.database as db
+
+    session = get_session()
+    session.query(db.Translation).delete()
+    session.query(db.Revision).filter(db.Revision.id > 1).delete()
+    session.commit()
 
     with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
         mock_translate.return_value = TranslationResponse(
@@ -220,6 +246,13 @@ def test_translate_api_selective_translation_english(rama_client):
 def test_translate_api_selective_translation_tamil(rama_client):
     from unittest.mock import patch
     from kalanjiyam.utils.translation_engine import TranslationResponse
+    from kalanjiyam.queries import get_session
+    import kalanjiyam.database as db
+
+    session = get_session()
+    session.query(db.Translation).delete()
+    session.query(db.Revision).filter(db.Revision.id > 1).delete()
+    session.commit()
 
     with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
         mock_translate.return_value = TranslationResponse(
@@ -251,6 +284,13 @@ def test_translate_api_selective_translation_tamil(rama_client):
 def test_translate_api_selective_translation_proper_nouns(rama_client):
     from unittest.mock import patch
     from kalanjiyam.utils.translation_engine import TranslationResponse
+    from kalanjiyam.queries import get_session
+    import kalanjiyam.database as db
+
+    session = get_session()
+    session.query(db.Translation).delete()
+    session.query(db.Revision).filter(db.Revision.id > 1).delete()
+    session.commit()
 
     with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
         mock_translate.return_value = TranslationResponse(
@@ -309,6 +349,56 @@ def test_translate_api_selective_translation_proper_nouns(rama_client):
             "IGNOU, New Delhi"
         )
         mock_translate.assert_called_once_with(expected_joined_text, "en", "ta", "indictrans2")
+
+
+def test_translate_api_post_docx_html(rama_client):
+    from unittest.mock import patch
+    from kalanjiyam.utils.translation_engine import TranslationResponse
+    from kalanjiyam.queries import get_session
+    import kalanjiyam.database as db
+
+    session = get_session()
+    session.query(db.Translation).delete()
+    session.query(db.Revision).filter(db.Revision.id > 1).delete()
+    session.commit()
+
+    with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
+        mock_translate.return_value = TranslationResponse(
+            translated_text="नमस्ते",
+            source_language="en",
+            target_language="hi",
+            engine="indictrans2"
+        )
+
+        payload = {
+            "content_format": "html",
+            "blocks": [
+                {
+                    "id": "b1",
+                    "type": "paragraph",
+                    "content": "<p>Hello Sanskrit</p>"
+                }
+            ]
+        }
+        r = rama_client.post(
+            "/api/translate/test-project/1/?source_lang=en&target_lang=hi&engine=indictrans2",
+            json=payload
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["content_format"] == "html"
+        assert data["blocks"][0]["content"] == "<p>नमस्ते</p>"
+
+        # Verify saved revision has content_format = "html" and document is preserved
+        pv = session.query(db.PageVersion).filter_by(
+            page_id=1,
+            version_key="translation:indictrans2:en->hi"
+        ).first()
+        assert pv is not None
+        assert pv.revisions[0].content_format == "html"
+        assert pv.revisions[0].document is not None
+        assert pv.revisions[0].document["blocks"][0]["content"] == "<p>नमस्ते</p>"
+
 
 
 

@@ -1,6 +1,7 @@
 """Background tasks for translation services."""
 
 import logging
+import os
 from celery import group
 from celery.result import GroupResult
 
@@ -23,6 +24,7 @@ def _run_translation_for_page_inner(
     target_lang: str = 'en',
     engine: str = 'google',
     revision_id: int = None,
+    glossary: str = None,
 ) -> int:
     """Must run in the application context."""
 
@@ -81,7 +83,7 @@ def _run_translation_for_page_inner(
             if blocks:
                 try:
                     from kalanjiyam.views.proofing.page import _translate_blocks
-                    _translate_blocks(blocks, source_lang, target_lang, engine)
+                    _translate_blocks(blocks, source_lang, target_lang, engine, glossary=glossary)
                 except Exception as e:
                     LOG.error(f"Structured translation failed: {e}")
                     translation_failed = True
@@ -109,7 +111,8 @@ def _run_translation_for_page_inner(
                             segment, 
                             source_lang, 
                             target_lang, 
-                            engine
+                            engine,
+                            glossary=glossary
                         )
                         translated_segments.append(translation_response.translated_text)
                     except Exception as e:
@@ -141,7 +144,7 @@ def _run_translation_for_page_inner(
             session.add(translation)
 
             # Create page version and revision following the OCR version track system
-            version_key = f"TR:{engine}:{source_lang}->{target_lang}"
+            version_key = f"translation:{engine}:{source_lang}->{target_lang}"
             pv = session.query(db.PageVersion).filter_by(
                 page_id=page.id,
                 version_key=version_key
@@ -151,7 +154,7 @@ def _run_translation_for_page_inner(
             from kalanjiyam.utils.revisions import add_revision
             from kalanjiyam.enums import SitePageStatus
 
-            summary = f"TR: {engine} {source_lang}->{target_lang}"
+            summary = f"Translation: {engine} {source_lang}->{target_lang}"
             add_revision(
                 page=page,
                 summary=summary,
@@ -185,6 +188,7 @@ def run_translation_for_page(
     target_lang: str = 'en',
     engine: str = 'google',
     revision_id: int = None,
+    glossary: str = None,
 ):
     """Run translation for a single page."""
     try:
@@ -196,6 +200,7 @@ def run_translation_for_page(
             target_lang,
             engine,
             revision_id,
+            glossary,
         )
     except Exception as e:
         LOG.error(f"Translation task failed for {project_slug}/{page_slug}: {e}")
@@ -210,6 +215,7 @@ def run_translation_for_project(
     engine: str = 'google',
     revision_id: int = None,
     queue: str | None = None,
+    glossary: str = None,
 ) -> GroupResult | None:
     """Create a `group` task to run translation on a project.
 
@@ -246,6 +252,7 @@ def run_translation_for_project(
                 target_lang=target_lang,
                 engine=engine,
                 revision_id=revision_id,
+                glossary=glossary,
             )
             for p in pages_with_revisions
         )
@@ -269,6 +276,7 @@ def run_translation_for_revision(
     source_lang: str = 'sa',
     target_lang: str = 'en',
     engine: str = 'google',
+    glossary: str = None,
 ):
     """Run translation for a specific revision across all pages in the project."""
     flask_app = create_config_only_app(app_env)
@@ -291,6 +299,7 @@ def run_translation_for_revision(
             target_lang,
             engine,
             revision_id,
+            glossary,
         )
 
 
@@ -324,6 +333,8 @@ def run_docx_translation(
     source_lang: str = 'sa',
     target_lang: str = 'en',
     engine: str = 'indictrans2',
+    glossary: str = None,
+    creator_id: int = None,
 ):
     """Run direct in-place translation for a standalone DOCX file."""
     import tempfile
@@ -331,6 +342,11 @@ def run_docx_translation(
     from docx import Document
     from kalanjiyam.utils.storage import get_storage, docx_upload_key, docx_translation_key
     from kalanjiyam.utils.translation_engine import translate_text
+    from kalanjiyam.utils.quotas import (
+        estimate_docx_pages,
+        ensure_translation_quota_for_user,
+        consume_translation_credits_for_user,
+    )
 
     flask_app = create_config_only_app(app_env)
     with flask_app.app_context():
@@ -343,6 +359,43 @@ def run_docx_translation(
             raise ValueError(f"Uploaded DOCX not found in storage: {upload_key}")
 
         doc = Document(local_path)
+
+        # Quota check
+        creator = None
+        if creator_id:
+            from kalanjiyam import database as db
+            from kalanjiyam import queries as q
+            session = q.get_session()
+            creator = session.query(db.User).filter_by(id=creator_id).first()
+
+        estimated_pages = estimate_docx_pages(doc)
+        if creator:
+            ensure_translation_quota_for_user(creator, estimated_pages)
+
+        # Save original DOCX data to database if enabled in config
+        save_docx_data_enabled = (
+            flask_app.config.get("SAVE_DOCX_DIRECT_TR_DATA", False)
+            or os.getenv("SAVE_DOCX_DIRECT_TR_DATA", "").lower() in ("true", "1", "yes")
+        )
+        if save_docx_data_enabled:
+            try:
+                import json
+                import redis
+                original_filename = None
+                try:
+                    r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+                    info_raw = r_client.get(f"docx_info:{docx_id}")
+                    if info_raw:
+                        info = json.loads(info_raw)
+                        original_filename = info.get("original_filename")
+                except Exception as re_err:
+                    LOG.warning(f"Could not fetch original_filename from Redis for {docx_id}: {re_err}")
+
+                from kalanjiyam.utils.docx_db_saver import save_original_docx_data_to_db
+                save_original_docx_data_to_db(doc, docx_id, original_filename=original_filename, creator_id=creator_id)
+            except Exception as save_err:
+                LOG.error(f"Error saving original DOCX data to DB: {save_err}")
+
 
         import re
 
@@ -382,7 +435,7 @@ def run_docx_translation(
                 return False
             return True
 
-        def translate_paragraph_in_place(p, source, target, eng):
+        def translate_paragraph_in_place(p, source, target, eng, glossary=None):
             text = p.text
             if not text or not text.strip():
                 return
@@ -396,7 +449,7 @@ def run_docx_translation(
                     if j % 2 == 0:
                         sub_text = subparts[j]
                         if sub_text and sub_text.strip() and _is_matching_language(sub_text, source):
-                            response = translate_text(sub_text, source, target, eng)
+                            response = translate_text(sub_text, source, target, eng, glossary=glossary)
                             reconstructed.append(response.translated_text)
                         else:
                             reconstructed.append(sub_text)
@@ -464,7 +517,7 @@ def run_docx_translation(
         )
 
         for idx, p in enumerate(paragraphs_to_translate):
-            translate_paragraph_in_place(p, source_lang, target_lang, engine)
+            translate_paragraph_in_place(p, source_lang, target_lang, engine, glossary=glossary)
             current_count = idx + 1
             self.update_state(
                 state='PROGRESS',
@@ -480,6 +533,10 @@ def run_docx_translation(
         try:
             doc.save(str(tmp_path))
             storage.save(trans_key, tmp_path)
+            
+            # Consume credits after saving successfully
+            if creator:
+                consume_translation_credits_for_user(creator, estimated_pages)
         finally:
             if tmp_path.exists():
                 tmp_path.unlink()

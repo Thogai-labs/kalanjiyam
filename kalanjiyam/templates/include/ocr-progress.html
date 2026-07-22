@@ -18,6 +18,15 @@
       us know</a> and we'll fix the error as soon as we can.
   </div>
 
+{% elif status == 'CANCELLED' %}
+  <div class="premium-card p-6 border-l-4 border-l-amber-500 bg-amber-50/30">
+      <h3 class="text-amber-800 font-black mb-2 flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.36 18.36A9 9 0 015.64 5.64m12.72 12.72A9 9 0 005.64 5.64m12.72 12.72L5.64 5.64"></path></svg>
+          {{ _('OCR Cancelled') }}
+      </h3>
+      <p class="text-sm text-amber-700 font-medium leading-relaxed">{{ _('The OCR task has been cancelled.') }}</p>
+  </div>
+
 {% elif status == 'PROGRESS' %}
   <div class="premium-card p-6">
       <div class="flex justify-between items-center mb-6">

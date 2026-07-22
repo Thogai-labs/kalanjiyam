@@ -1,5 +1,7 @@
 import kalanjiyam.queries as q
 from kalanjiyam.database import Project
+from unittest.mock import MagicMock, patch
+
 
 
 def test_summary(client):
@@ -264,3 +266,42 @@ def test_batch_translate_view_engines_list(rama_client):
         assert resp.status_code == 200
         assert "Test Dynamic Engine" in resp.text
         assert 'value="test-engine"' in resp.text
+
+
+@patch("redis.Redis.from_url")
+@patch("kalanjiyam.views.proofing.project.GroupResult")
+def test_batch_ocr_status_cancelled(mock_group_result, mock_redis_from_url, rama_client):
+    mock_redis = MagicMock()
+    mock_redis.scan_iter.return_value = []
+    mock_redis_from_url.return_value = mock_redis
+    
+    mock_group = MagicMock()
+    mock_group.results = [MagicMock()]
+    mock_group.results[0].state = 'REVOKED'
+    mock_group.results[0].failed.return_value = False
+    mock_group.completed_count.return_value = 0
+    mock_group_result.restore.return_value = mock_group
+    
+    resp = rama_client.get("/proofing/batch-ocr-status/task-123")
+    assert resp.status_code == 200
+    assert "OCR Cancelled" in resp.text
+
+
+@patch("redis.Redis.from_url")
+@patch("kalanjiyam.views.proofing.project.GroupResult")
+def test_batch_translate_status_cancelled(mock_group_result, mock_redis_from_url, rama_client):
+    mock_redis = MagicMock()
+    mock_redis.scan_iter.return_value = []
+    mock_redis_from_url.return_value = mock_redis
+    
+    mock_group = MagicMock()
+    mock_group.results = [MagicMock()]
+    mock_group.results[0].state = 'REVOKED'
+    mock_group.results[0].failed.return_value = False
+    mock_group.completed_count.return_value = 0
+    mock_group_result.restore.return_value = mock_group
+    
+    resp = rama_client.get("/proofing/batch-translate-status/task-123")
+    assert resp.status_code == 200
+    assert "Cancelled" in resp.text
+

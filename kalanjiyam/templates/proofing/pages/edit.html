@@ -130,8 +130,62 @@
 
     <div class="book-editor-workspace{% if conflict %} has-conflict{% endif %}">
       {% if is_docx %}
-      <div class="book-editor-image-pane overflow-y-auto p-8 text-slate-800 border-r border-slate-200">
-        <div class="prose max-w-none text-left leading-relaxed">
+      <style>
+        .book-editor-image-pane h1 { font-size: 2.25rem; font-weight: 800; margin-top: 1.5rem; margin-bottom: 0.75rem; color: #1e293b; display: block; }
+        .book-editor-image-pane h2 { font-size: 1.75rem; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.6rem; color: #334155; display: block; }
+        .book-editor-image-pane h3 { font-size: 1.5rem; font-weight: 700; margin-top: 1rem; margin-bottom: 0.5rem; color: #475569; display: block; }
+        .book-editor-image-pane p { margin-bottom: 1rem; line-height: 1.75; color: #334155; display: block; }
+        .book-editor-image-pane ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; display: block; }
+        .book-editor-image-pane ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1rem; display: block; }
+        .book-editor-image-pane li { margin-bottom: 0.5rem; line-height: 1.6; display: list-item; }
+        .book-editor-image-pane table { width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1rem; display: table; }
+        .book-editor-image-pane tr { display: table-row; }
+        .book-editor-image-pane td, .book-editor-image-pane th { border: 1px solid #cbd5e1; padding: 0.75rem 1rem; text-align: left; display: table-cell; }
+        .book-editor-image-pane th { background-color: #f1f5f9; font-weight: 700; }
+        .book-editor-image-pane s, .book-editor-image-pane del { text-decoration: line-through; color: #94a3b8; }
+        .book-editor-image-pane a { color: #2563eb; text-decoration: underline; }
+        .book-editor-image-pane img { max-width: 100%; height: auto; display: block; margin: 1rem auto; border-radius: 0.5rem; }
+        .book-editor-image-pane .docx-column-section,
+        #rich-editor .docx-column-section,
+        .ProseMirror .docx-column-section {
+          display: block;
+          column-gap: 2rem;
+          margin-bottom: 1rem;
+        }
+        .docx-footnote {
+          color: #0f766e !important;
+          font-weight: bold;
+          vertical-align: super;
+          font-size: 0.75em;
+          cursor: help;
+          position: relative;
+          text-decoration: none !important;
+          display: inline-block;
+          padding: 0 2px;
+        }
+        .docx-footnote:hover::after {
+          content: attr(data-footnote-text);
+          position: absolute;
+          bottom: 130%;
+          left: 50%;
+          transform: translateX(-50%);
+          background-color: #334155;
+          color: #ffffff;
+          padding: 0.5rem 0.75rem;
+          border-radius: 0.375rem;
+          font-size: 0.75rem;
+          line-height: 1.4;
+          white-space: normal;
+          width: max-content;
+          max-width: 250px;
+          box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+          z-index: 50;
+          font-weight: normal;
+          pointer-events: none;
+        }
+      </style>
+      <div class="book-editor-image-pane overflow-y-auto p-8 text-slate-800 border-r border-slate-200 bg-[#faf8f5]">
+        <div class="max-w-none text-left leading-relaxed">
           {{ original_html | safe }}
         </div>
       </div>
@@ -234,4 +288,7 @@ const AVAILABLE_VERSIONS = {{ available_versions|tojson }};
     }
   });
 </script>
+
+{% include 'include/math_editor_modal.html' %}
+<script src="https://unpkg.com/mathlive@0.98.6/dist/mathlive.min.js"></script>
 {% endblock %}

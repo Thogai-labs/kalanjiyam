@@ -110,6 +110,11 @@ class BaseConfig:
         _env("ENFORCE_GROUP_ACCESS_FOR_TEXTS", "false").lower() in ("true", "1", "yes")
     )
 
+    #: If True, direct DOCX translation will save all data of the original docx in database.
+    SAVE_DOCX_DIRECT_TR_DATA = (
+        _env("SAVE_DOCX_DIRECT_TR_DATA", "false").lower() in ("true", "1", "yes")
+    )
+
     #: If True, proofing projects (public books under /books/...) are restricted
     #: by group: only users in a group that contains the project (or admins) can
     #: view it. Projects not in any group remain visible to everyone.
@@ -234,6 +239,10 @@ class UnitTestConfig(BaseConfig):
 
     KALANJIYAM_ENVIRONMENT = TESTING
     TESTING = True
+    APPLICATION_URL_PREFIX = ""
+    STORAGE_BACKEND = "local"
+    MULTI_TENANT_MODE = False
+    ENFORCE_ORG_ACCESS = False
     SECRET_KEY = "insecure unit test secret"
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     UPLOAD_FOLDER = _make_path(Path(__file__).parent / "data" / "file-uploads")
