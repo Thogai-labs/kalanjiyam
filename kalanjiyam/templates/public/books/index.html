@@ -1,88 +1,247 @@
 {% extends 'base.html' %}
 
-{% block title %}Books | Kalanjiyam{% endblock %}
+{% block title %}{{ _('Digital Books Catalog | Kalanjiyam') }}{% endblock %}
 
-{% block meta_description %}Browse our collection of OCR'd and translated books. Access traditional texts with modern digital tools.{% endblock %}
+{% block meta_description %}{{ _('Browse our formal archive of OCR’d and translated traditional Siddha texts, manuscripts, and literature.') }}{% endblock %}
 
-{% block main_class %}p-4 md:p-0 max-w-6xl mx-auto my-8{% endblock %}
+{% block extra_head %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  .font-serif-title {
+    font-family: 'Cinzel', Georgia, serif;
+  }
+
+  .catalog-hero {
+    background: #0b1120;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
+      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
+      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
+    background-size: 100% 100%, 24px 24px, 24px 24px;
+  }
+
+  .book-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+  }
+
+  .book-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(65, 105, 225, 0.4);
+    box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.08), 0 10px 10px -5px rgba(65, 105, 225, 0.04);
+  }
+
+  .progress-track {
+    background: #f1f5f9;
+    border-radius: 9999px;
+    overflow: hidden;
+    height: 6px;
+  }
+
+  .progress-fill-royalblue {
+    background: linear-gradient(90deg, royalblue, #6366f1);
+    border-radius: 9999px;
+  }
+
+  .progress-fill-emerald {
+    background: linear-gradient(90deg, #10b981, #059669);
+    border-radius: 9999px;
+  }
+</style>
+{% endblock %}
+
+{% block main_class %}bg-slate-50 min-h-screen pb-16{% endblock %}
 
 {% block main %}
-<article>
-  <header class="text-center mb-12">
-    <h1 class="text-4xl font-bold text-gray-900 mb-4">Digital Books</h1>
-    <p class="text-xl text-gray-600 max-w-3xl mx-auto">
-      Browse our collection of OCR'd and translated traditional texts. 
-      Each book has been digitized and made searchable for easy access and study.
+<!-- Catalog Header Section -->
+<header class="catalog-hero text-slate-100 py-16 px-4 mb-10 border-b border-slate-800">
+  <div class="max-w-6xl mx-auto text-center">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-4">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+      </svg>
+      <span>{{ _('Digital Repository') }}</span>
+    </div>
+
+    <h1 class="text-4xl sm:text-5xl font-bold font-serif-title tracking-tight mb-4 text-white">
+      {{ _('Manuscripts & Books Catalog') }}
+    </h1>
+    <p class="text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
+      {{ _('Explore digitized palm-leaf manuscripts and traditional Siddha texts with full-text search capability and progress tracking.') }}
     </p>
-  </header>
+
+    <!-- Total Count Badge -->
+    {% if projects %}
+      <div class="mt-6 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 text-sm font-medium">
+        <span>{{ _('Available Texts:') }}</span>
+        <span class="font-bold text-white bg-royalblue px-2.5 py-0.5 rounded-full text-xs">{{ projects|length }}</span>
+      </div>
+    {% endif %}
+  </div>
+</header>
+
+<!-- Main Catalog Listing -->
+<div class="max-w-6xl mx-auto px-4" x-data="{ searchQuery: '', sortBy: 'title' }">
 
   {% if projects %}
+    <!-- Filter & Search Control Bar -->
+    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
+      <!-- Live Search Box -->
+      <div class="relative w-full md:w-96">
+        <svg class="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        </svg>
+        <input 
+          type="text" 
+          x-model="searchQuery"
+          placeholder="{{ _('Filter books by title or author...') }}"
+          class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all"
+        />
+      </div>
+
+      <div class="flex items-center gap-2 text-sm text-slate-500 w-full md:w-auto justify-end">
+        <span>{{ _('Showing digitized public books') }}</span>
+      </div>
+    </div>
+
+    <!-- Book Grid Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {% for project_data in projects %}
         {% set project = project_data.project %}
         {% set stats = project_data.stats %}
         
-        <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200">
+        <div 
+          class="book-card flex flex-col justify-between overflow-hidden"
+          x-show="!searchQuery || '{{ project.display_title|lower }}'.includes(searchQuery.lower()) || '{{ (project.author or '')|lower }}'.includes(searchQuery.lower())"
+        >
+          <!-- Card Header & Metadata -->
           <div class="p-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-2">
-              <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" 
-                 class="hover:text-blue-600 transition-colors">
-                {{ project.display_title }}
-              </a>
-            </h2>
             
-            {% if project.author %}
-              <p class="text-gray-600 mb-3">by {{ project.author }}</p>
-            {% endif %}
-            
+            <!-- Book Icon & Title Header -->
+            <div class="flex items-start gap-3 mb-3">
+              <div class="w-10 h-10 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0 mt-0.5">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                </svg>
+              </div>
+              <div class="min-w-0">
+                <h2 class="text-lg font-bold text-slate-900 leading-snug group">
+                  <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" 
+                     class="hover:text-royalblue transition-colors line-clamp-2">
+                    {{ project.display_title }}
+                  </a>
+                </h2>
+                {% if project.author %}
+                  <p class="text-xs font-semibold text-slate-500 mt-1 flex items-center gap-1">
+                    <span>{{ _('By') }}</span>
+                    <span class="text-slate-700">{{ project.author }}</span>
+                  </p>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Description -->
             {% if project.description %}
-              <p class="text-gray-700 text-sm mb-4 line-clamp-3">
-                {{ project.description[:200] }}{% if project.description|length > 200 %}...{% endif %}
+              <p class="text-slate-600 text-xs leading-relaxed mb-5 line-clamp-3 bg-slate-50/80 p-3 rounded-lg border border-slate-100">
+                {{ project.description[:180] }}{% if project.description|length > 180 %}...{% endif %}
+              </p>
+            {% else %}
+              <p class="text-slate-400 text-xs italic mb-5 p-3 bg-slate-50/50 rounded-lg border border-slate-100/60">
+                {{ _('No description available for this text.') }}
               </p>
             {% endif %}
-            
-            <div class="space-y-2">
-              <div class="flex justify-between text-sm">
-                <span class="text-gray-600">Pages:</span>
-                <span class="font-medium">{{ stats.total_pages }}</span>
-              </div>
+
+            <!-- Statistics & Progress Bars -->
+            <div class="space-y-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs">
               
-              <div class="flex justify-between text-sm">
-                <span class="text-gray-600">OCR'd:</span>
-                <span class="font-medium">{{ stats.ocr_pages }} ({{ "%.1f"|format(stats.ocr_percentage) }}%)</span>
+              <!-- Total Pages -->
+              <div class="flex items-center justify-between text-slate-600 font-medium">
+                <span class="flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                  </svg>
+                  {{ _('Total Pages') }}
+                </span>
+                <span class="font-bold text-slate-900">{{ stats.total_pages }}</span>
               </div>
-              
+
+              <!-- OCR Progress Bar -->
+              <div>
+                <div class="flex justify-between mb-1 text-slate-600">
+                  <span class="font-medium text-slate-600">{{ _('OCR Completed') }}</span>
+                  <span class="font-bold text-slate-800">{{ stats.ocr_pages }} / {{ stats.total_pages }} ({{ "%.1f"|format(stats.ocr_percentage) }}%)</span>
+                </div>
+                <div class="progress-track">
+                  <div class="progress-fill-royalblue h-full" style="width: {{ stats.ocr_percentage }}%"></div>
+                </div>
+              </div>
+
+              <!-- Translation Progress Bar (If available) -->
               {% if stats.translated_pages > 0 %}
-                <div class="flex justify-between text-sm">
-                  <span class="text-gray-600">Translated:</span>
-                  <span class="font-medium">{{ stats.translated_pages }} ({{ "%.1f"|format(stats.translation_percentage) }}%)</span>
+                <div>
+                  <div class="flex justify-between mb-1 text-slate-600">
+                    <span class="font-medium text-slate-600">{{ _('Translated') }}</span>
+                    <span class="font-bold text-emerald-700">{{ stats.translated_pages }} / {{ stats.total_pages }} ({{ "%.1f"|format(stats.translation_percentage) }}%)</span>
+                  </div>
+                  <div class="progress-track mb-2">
+                    <div class="progress-fill-emerald h-full" style="width: {{ stats.translation_percentage }}%"></div>
+                  </div>
+
+                  <!-- Language Pair Badges -->
+                  {% if stats.lang_pairs %}
+                    <div class="flex flex-wrap gap-1.5 pt-1">
+                      {% for lang_pair, pstats in stats.lang_pairs.items() %}
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">
+                          <span>{{ lang_pair }}</span>
+                          <span class="text-emerald-600 font-semibold">({{ "%.0f"|format(pstats.percentage) }}%)</span>
+                        </span>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
                 </div>
               {% endif %}
-            </div>
-            
-            <div class="mt-4 pt-4 border-t border-gray-200">
-              <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" 
-                 class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors">
-                View Book
-                <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-              </a>
+
             </div>
           </div>
+
+          <!-- Card Footer Action -->
+          <div class="px-6 py-4 bg-slate-50/60 border-t border-slate-100 flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-400">
+              {{ _('Public Digital Text') }}
+            </span>
+            <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" 
+               class="inline-flex items-center gap-1.5 px-4 py-2 bg-royalblue hover:bg-blue-600 text-white text-xs font-semibold rounded-lg transition-all shadow-sm hover:shadow">
+              <span>{{ _('Read Book') }}</span>
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+              </svg>
+            </a>
+          </div>
+
         </div>
       {% endfor %}
     </div>
+
   {% else %}
-    <div class="text-center py-12">
-      <div class="text-gray-400 mb-4">
-        <svg class="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+    <!-- Empty State -->
+    <div class="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm max-w-lg mx-auto">
+      <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400 mb-4">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
         </svg>
       </div>
-      <h3 class="text-lg font-medium text-gray-900 mb-2">No books available</h3>
-      <p class="text-gray-600">No books with OCR'd content are currently available for public viewing.</p>
+      <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('No Books Cataloged Yet') }}</h3>
+      <p class="text-sm text-slate-500 leading-relaxed mb-6">{{ _('There are currently no digitized books with public OCR content available in the library.') }}</p>
+      <a href="{{ url_for('site.index') }}" class="inline-flex items-center px-4 py-2 bg-royalblue text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition-colors">
+        {{ _('Return to Home') }}
+      </a>
     </div>
   {% endif %}
-</article>
+
+</div>
 {% endblock %}
+
