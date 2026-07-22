@@ -7,81 +7,104 @@
     <title>{% block title %}Kalanjiyam{% endblock %}</title>
     <link rel="stylesheet" href="{{ asset('gen/style.css') }}">
     <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+
       :root {
         --primary-color: royalblue;
-        --bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        --primary-hover: #3f51b5;
+        --bg-slate: #f8fafc;
       }
 
       body {
-        background: var(--bg-gradient);
+        background-color: var(--bg-slate);
+        background-image: 
+          radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.06) 0%, transparent 60%),
+          linear-gradient(to right, rgba(0, 0, 0, 0.02) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(0, 0, 0, 0.02) 1px, transparent 1px);
+        background-size: 100% 100%, 24px 24px, 24px 24px;
         min-height: 100vh;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
         margin: 0;
+        padding: 24px 16px;
         font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        color: #0f172a;
+      }
+
+      .font-serif-title {
+        font-family: 'Cinzel', Georgia, serif;
+      }
+
+      .brand-top-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin-bottom: 24px;
+        text-decoration: none;
+        transition: opacity 0.2s ease;
+      }
+
+      .brand-top-header:hover {
+        opacity: 0.9;
+      }
+
+      .brand-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background-color: royalblue;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        font-weight: 800;
+        box-shadow: 0 4px 12px rgba(65, 105, 225, 0.3);
+      }
+
+      .brand-name {
+        font-family: 'Cinzel', Georgia, serif;
+        font-size: 2rem;
+        font-weight: 700;
+        color: #0f172a;
+        letter-spacing: -0.02em;
       }
 
       .auth-wrapper {
         width: 100%;
-        max-width: 400px;
-        padding: 20px;
+        max-width: 420px;
       }
 
-      /* Premium Form Styles */
+      .form-card {
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        padding: 36px 32px;
+        border-radius: 20px;
+        box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.01);
+      }
+
       .form {
         display: flex;
         flex-direction: column;
-        gap: 15px;
-        background-color: #fff;
-        padding: 30px;
-        border-radius: 25px;
-        position: relative;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        gap: 18px;
       }
 
       .title {
-        font-size: 28px;
-        color: var(--primary-color);
+        font-size: 1.65rem;
+        color: #0f172a;
         font-weight: 700;
-        letter-spacing: -1px;
-        position: relative;
-        display: flex;
-        align-items: center;
-        padding-left: 30px;
-        margin-bottom: 5px;
-      }
-
-      .title::before, .title::after {
-        position: absolute;
-        content: "";
-        height: 16px;
-        width: 16px;
-        border-radius: 50%;
-        left: 0px;
-        background-color: var(--primary-color);
-      }
-
-      .title::before {
-        width: 18px;
-        height: 18px;
-      }
-
-      .title::after {
-        width: 18px;
-        height: 18px;
-        animation: pulse 1.5s linear infinite;
-      }
-
-      @keyframes pulse {
-        from { transform: scale(0.9); opacity: 1; }
-        to { transform: scale(2); opacity: 0; }
+        margin: 0 0 4px 0;
+        letter-spacing: -0.02em;
       }
 
       .message {
-        color: #666;
-        font-size: 14px;
-        margin-bottom: 10px;
+        color: #64748b;
+        font-size: 0.925rem;
+        margin: 0 0 12px 0;
+        line-height: 1.5;
       }
 
       .form label {
@@ -91,72 +114,73 @@
 
       .form label .input {
         width: 100%;
-        padding: 12px 12px 24px 12px;
+        padding: 14px 14px 22px 14px;
         outline: 0;
-        border: 1px solid #ddd;
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
         border-radius: 12px;
-        font-size: 16px;
-        transition: border-color 0.3s;
+        font-size: 0.95rem;
+        color: #0f172a;
+        transition: all 0.2s ease;
         box-sizing: border-box;
       }
 
       .form label .input:focus {
-        border-color: var(--primary-color);
+        border-color: royalblue;
+        box-shadow: 0 0 0 3px rgba(65, 105, 225, 0.15);
       }
 
       .form label .input + span {
         position: absolute;
-        left: 12px;
-        top: 16px;
-        color: #999;
-        font-size: 0.95em;
+        left: 14px;
+        top: 14px;
+        color: #94a3b8;
+        font-size: 0.9em;
         cursor: text;
-        transition: 0.3s ease;
+        transition: 0.2s ease;
         pointer-events: none;
       }
 
       .form label .input:focus + span,
       .form label .input:not(:placeholder-shown) + span {
         top: 32px;
-        font-size: 0.75em;
-        font-weight: 600;
-        color: var(--primary-color);
-      }
-
-      .form label .input:valid + span {
-        color: #2e7d32;
+        font-size: 0.72em;
+        font-weight: 700;
+        color: royalblue;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
       }
 
       .submit {
         border: none;
         outline: none;
-        background-color: var(--primary-color);
+        background-color: royalblue;
         padding: 14px;
         border-radius: 12px;
-        color: #fff;
-        font-size: 16px;
+        color: #ffffff;
+        font-size: 0.975rem;
         font-weight: 600;
         cursor: pointer;
-        transition: transform 0.2s, background-color 0.2s, box-shadow 0.2s;
-        margin-top: 10px;
+        transition: all 0.2s ease;
+        margin-top: 8px;
         box-shadow: 0 4px 12px rgba(65, 105, 225, 0.3);
       }
 
       .submit:hover {
-        background-color: #3f51b5;
-        transform: translateY(-2px);
-        box-shadow: 0 6px 15px rgba(65, 105, 225, 0.4);
+        background-color: #3553ce;
+        box-shadow: 0 6px 16px rgba(65, 105, 225, 0.4);
+        transform: translateY(-1px);
       }
 
       .signin, .options {
         text-align: center;
-        font-size: 14px;
-        color: #666;
-        margin-top: 10px;
+        font-size: 0.875rem;
+        color: #64748b;
+        margin-top: 12px;
       }
 
       .signin a, .options a {
-        color: var(--primary-color);
+        color: royalblue;
         text-decoration: none;
         font-weight: 600;
       }
@@ -166,20 +190,19 @@
       }
 
       .error-box {
-        margin-bottom: 15px;
-      }
-      
-      .description-text {
-        font-size: 14px;
-        color: #555;
-        line-height: 1.5;
-        margin-bottom: 15px;
+        margin-bottom: 16px;
       }
     </style>
     {% block extra_css %}{% endblock %}
     <script src="https://unpkg.com/alpinejs@3.10.3/dist/cdn.min.js" defer></script>
 </head>
-<body class="">
+<body>
+    <!-- Top Kalanjiyam Brand Header -->
+    <a href="{{ url_for('site.index') }}" class="brand-top-header" title="{{ _('Return to Kalanjiyam Home') }}">
+      <div class="brand-icon">K</div>
+      <span class="brand-name">Kalanjiyam</span>
+    </a>
+
     <div class="auth-wrapper">
         <div class="error-box">
             {% block auth_errors %}
@@ -187,8 +210,11 @@
                 {{ components.flash_messages() }}
             {% endblock %}
         </div>
-        {% block body %}{% endblock %}
-        {% block content %}{% endblock %}
+        <div class="form-card">
+          {% block body %}{% endblock %}
+          {% block content %}{% endblock %}
+        </div>
     </div>
 </body>
 </html>
+
