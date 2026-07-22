@@ -100,9 +100,12 @@ def index():
     # Sort by title
     projects_with_stats.sort(key=lambda x: x['project'].display_title)
     
+    query = request.args.get("q", "").strip()
+    
     return render_template(
         "public/books/index.html",
-        projects=projects_with_stats
+        projects=projects_with_stats,
+        query=query
     )
 
 

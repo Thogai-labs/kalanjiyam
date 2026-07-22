@@ -57,6 +57,7 @@
 {% block main_class %}bg-slate-50 min-h-screen pb-16{% endblock %}
 
 {% block main %}
+<div x-data='{ searchQuery: {{ (query or "")|tojson }}, sortBy: "title" }' class="w-full">
 <!-- Catalog Header Section -->
 <header class="catalog-hero text-slate-100 py-16 px-4 mb-10 border-b border-slate-800">
   <div class="max-w-6xl mx-auto text-center">
@@ -85,7 +86,7 @@
 </header>
 
 <!-- Main Catalog Listing -->
-<div class="max-w-6xl mx-auto px-4" x-data="{ searchQuery: '', sortBy: 'title' }">
+<div class="max-w-6xl mx-auto px-4">
 
   {% if projects %}
     <!-- Filter & Search Control Bar -->
@@ -116,7 +117,7 @@
         
         <div 
           class="book-card flex flex-col justify-between overflow-hidden"
-          x-show="!searchQuery || '{{ project.display_title|lower }}'.includes(searchQuery.lower()) || '{{ (project.author or '')|lower }}'.includes(searchQuery.lower())"
+          x-show='!searchQuery || {{ (project.display_title or "")|tojson }}.toLowerCase().includes(searchQuery.toLowerCase()) || {{ (project.author or "")|tojson }}.toLowerCase().includes(searchQuery.toLowerCase())'
         >
           <!-- Card Header & Metadata -->
           <div class="p-6">
@@ -242,6 +243,7 @@
     </div>
   {% endif %}
 
+</div>
 </div>
 {% endblock %}
 
