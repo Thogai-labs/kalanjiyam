@@ -140,6 +140,10 @@ def create_app(config_env: str):
     with app.app_context():
         _ = admin_manager.create_admin_manager(app)
 
+    # Initialize metrics middleware for latency and error tracking
+    from kalanjiyam.utils.metrics import init_metrics_middleware
+    init_metrics_middleware(app)
+
     # Route extensions
     app.url_map.converters["list"] = ListConverter
 

@@ -12,6 +12,7 @@ from flask import (
     url_for,
     send_file,
     current_app,
+    jsonify,
 )
 from flask_admin import Admin, AdminIndexView, expose, BaseView as AdminBaseView
 from flask_admin.babel import gettext
@@ -940,6 +941,85 @@ class PlatformView(AdminBaseView):
             
         return render_template("admin/platform_settings.html", form=form)
 
+    @expose("/metrics")
+    def metrics(self):
+        require_platform_super_admin()
+
+        from kalanjiyam.utils.metrics import (
+            get_active_celery_queues,
+            get_latency_metrics_summary,
+            get_error_logs_paginated,
+        )
+
+        queues_data = get_active_celery_queues()
+        latencies_data = get_latency_metrics_summary(days=7)
+        error_logs_data = get_error_logs_paginated(page=1, per_page=20)
+        groups = q.groups()
+        session = q.get_session()
+        all_users = session.query(db.User).all()
+
+        return render_template(
+            "admin/platform_metrics.html",
+            queues_data=queues_data,
+            latencies_data=latencies_data,
+            error_logs_data=error_logs_data,
+            groups=groups,
+            all_users=all_users,
+            csrf_token=generate_csrf(),
+        )
+
+    @expose("/metrics/api")
+    def metrics_api(self):
+        require_platform_super_admin()
+
+        from kalanjiyam.utils.metrics import (
+            get_active_celery_queues,
+            get_latency_metrics_summary,
+            get_error_logs_paginated,
+        )
+
+        tab = request.args.get("tab", "queues")
+        if tab == "queues":
+            data = get_active_celery_queues()
+        elif tab == "latencies":
+            days = request.args.get("days", 7, type=int)
+            data = get_latency_metrics_summary(days=days)
+        elif tab == "errors":
+            page = request.args.get("page", 1, type=int)
+            per_page = request.args.get("per_page", 20, type=int)
+            level = request.args.get("level")
+            group_id = request.args.get("group_id", type=int)
+            user_id = request.args.get("user_id", type=int)
+            search = request.args.get("search")
+            data = get_error_logs_paginated(
+                page=page,
+                per_page=per_page,
+                level=level,
+                group_id=group_id,
+                user_id=user_id,
+                search=search,
+            )
+        else:
+            data = {"error": "Invalid tab parameter"}
+
+        return jsonify(data)
+
+    @expose("/metrics/clear", methods=["POST"])
+    def metrics_clear(self):
+        require_platform_super_admin()
+        session = q.get_session()
+        category = request.form.get("category", "ALL")
+
+        query = session.query(db.SystemMetricLog)
+        if category != "ALL":
+            query = query.filter(db.SystemMetricLog.category == category)
+
+        deleted_count = query.delete(synchronize_session=False)
+        session.commit()
+
+        flash(f"Cleared {deleted_count} metric logs.", "success")
+        return redirect(url_for(".metrics"))
+
 
 class GroupsView(AdminBaseView):
     """Super-admin group management: list/create/edit/delete groups, manage users and books."""
@@ -1358,14 +1438,21 @@ class OrgAdminView(AdminBaseView):
         )
 
 
-class BaseView(sqla.ModelView):
-    """Base view for models.
-
-    By default, only platform super admins can see model data.
-    """
+class ProjectSponsorshipView(sqla.ModelView):
+    """View for ProjectSponsorship accessible to moderators and admins."""
 
     def is_accessible(self):
-        return is_platform_super_admin()
+        return current_user.is_authenticated and (current_user.is_admin or current_user.is_moderator)
+
+    def inaccessible_callback(self, name, **kw):
+        abort(404)
+
+
+class BaseView(sqla.ModelView):
+    """Base view for models."""
+
+    def is_accessible(self):
+        return current_user.is_authenticated and current_user.is_admin
 
     def inaccessible_callback(self, name, **kw):
         abort(404)
@@ -1548,5 +1635,7 @@ def create_admin_manager(app):
 
     admin.add_view(ProjectView(db.Project, session))
     admin.add_view(UserView(db.User, session))
+    admin.add_view(BaseView(db.Text, session))
+    admin.add_view(ProjectSponsorshipView(db.ProjectSponsorship, session))
 
     return admin
