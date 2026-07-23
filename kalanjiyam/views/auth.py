@@ -18,7 +18,7 @@ import secrets
 import sys
 from datetime import datetime, timedelta
 
-from flask import Blueprint, flash, redirect, render_template, url_for
+from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_babel import lazy_gettext as _l
 from flask_login import current_user, login_required, login_user, logout_user
 from flask_wtf import FlaskForm, RecaptchaField
@@ -28,6 +28,7 @@ from wtforms import validators as val
 import kalanjiyam.queries as q
 from kalanjiyam import database as db
 from kalanjiyam import mail
+from kalanjiyam.utils.rate_limit import is_rate_limited, log_usage_action
 
 bp = Blueprint("auth", __name__)
 
@@ -198,6 +199,14 @@ def register():
         return redirect(url_for("site.index"))
 
     form = SignupForm()
+    if request.method == "POST":
+        ip_address = request.remote_addr
+        fingerprint_id = request.cookies.get("device_fingerprint")
+        if is_rate_limited("register", ip_address=ip_address, fingerprint_id=fingerprint_id, limit=5, period_seconds=3600):
+            flash(_l("Too many registration attempts. Please try again later."), "error")
+            return render_template("auth/register.html", form=form)
+        log_usage_action("register", ip_address=ip_address, fingerprint_id=fingerprint_id)
+
     # save username and email in lowercase
     if form.validate_on_submit():
         user = q.create_user(
@@ -223,6 +232,14 @@ def sign_in():
         return redirect(url_for("site.index"))
 
     form = SignInForm()
+    if request.method == "POST":
+        ip_address = request.remote_addr
+        fingerprint_id = request.cookies.get("device_fingerprint")
+        if is_rate_limited("sign_in", ip_address=ip_address, fingerprint_id=fingerprint_id, limit=5, period_seconds=300):
+            flash(_l("Too many login attempts. Please try again later."), "error")
+            return render_template("auth/sign-in.html", form=form)
+        log_usage_action("sign_in", ip_address=ip_address, fingerprint_id=fingerprint_id)
+
     if form.validate_on_submit():
         user = q.user(form.username.data.strip())
         if user and user.check_password(form.password.data):

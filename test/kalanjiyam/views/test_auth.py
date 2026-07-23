@@ -239,3 +239,57 @@ def test_change_password__bad_old_password(rama_client):
         },
     )
     assert "Old password isn&#39;t valid" in r.text
+
+
+def test_sign_in__rate_limiting(client):
+    session = q.get_session()
+    session.query(db.UsageLog).filter_by(action="sign_in").delete()
+    session.commit()
+
+    for i in range(5):
+        r = client.post(
+            "/sign-in",
+            data={
+                "username": "u-basic",
+                "password": "wrong_password",
+            },
+        )
+        assert "Too many login attempts" not in r.text
+
+    # 6th attempt should be rate limited
+    r = client.post(
+        "/sign-in",
+        data={
+            "username": "u-basic",
+            "password": "wrong_password",
+        },
+    )
+    assert "Too many login attempts" in r.text
+
+
+def test_register__rate_limiting(client):
+    session = q.get_session()
+    session.query(db.UsageLog).filter_by(action="register").delete()
+    session.commit()
+
+    for i in range(5):
+        r = client.post(
+            "/register",
+            data={
+                "username": f"user{i}",
+                "password": "password123",
+                "email": f"user{i}@example.com",
+            },
+        )
+        assert "Too many registration attempts" not in r.text
+
+    # 6th attempt should be rate limited
+    r = client.post(
+        "/register",
+        data={
+            "username": "user6",
+            "password": "password123",
+            "email": "user6@example.com",
+        },
+    )
+    assert "Too many registration attempts" in r.text

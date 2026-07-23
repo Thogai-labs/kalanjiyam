@@ -40,7 +40,9 @@ def get_session_class():
     # For details, see:
     # - https://stackoverflow.com/questions/12223335
     # - https://flask.palletsprojects.com/en/2.1.x/patterns/sqlalchemy/
-    session_factory = sessionmaker(bind=get_engine(), autoflush=False, autocommit=False)
+    session_factory = sessionmaker(
+        bind=get_engine(), autoflush=False, autocommit=False, expire_on_commit=False
+    )
     return scoped_session(session_factory, scopefunc=_ident_func)
 
 
