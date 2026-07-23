@@ -24,12 +24,13 @@ def record_metric(
     group_id: Optional[int] = None,
     status: Optional[str] = None,
     latency_ms: Optional[float] = None,
+    trace_id: Optional[str] = None,
     error_level: Optional[str] = None,
     error_message: Optional[str] = None,
     traceback_str: Optional[str] = None,
     details: Optional[Dict[str, Any]] = None,
 ) -> Optional[db.SystemMetricLog]:
-    """Persist a metric log entry to the database."""
+    """Persist a metric log entry to the database, auto-capturing OpenTelemetry trace_id."""
     try:
         session = q.get_session()
         # Fallback user_id / group_id from context if available
@@ -37,6 +38,10 @@ def record_metric(
             user_id = current_user.id
         if group_id is None and current_user and hasattr(current_user, "organization_id") and current_user.is_authenticated:
             group_id = current_user.organization_id
+
+        if not trace_id:
+            from kalanjiyam.utils.otel import get_current_trace_id
+            trace_id = get_current_trace_id()
 
         details_json = json.dumps(details) if isinstance(details, dict) else details
 
@@ -47,6 +52,7 @@ def record_metric(
             group_id=group_id,
             status=status,
             latency_ms=latency_ms,
+            trace_id=trace_id,
             error_level=error_level,
             error_message=error_message,
             traceback=traceback_str,
@@ -61,8 +67,17 @@ def record_metric(
         return None
 
 
-def get_active_celery_queues() -> Dict[str, Any]:
-    """Query Celery workers for real-time task queue states."""
+_CELERY_CACHE_TIME = 0
+_CELERY_CACHE_DATA = None
+
+def get_active_celery_queues(force_refresh: bool = False) -> Dict[str, Any]:
+    """Query Celery workers for real-time task queue states with caching and ping fallback."""
+    global _CELERY_CACHE_TIME, _CELERY_CACHE_DATA
+
+    now = time.time()
+    if not force_refresh and _CELERY_CACHE_DATA and (now - _CELERY_CACHE_TIME) < 3.0:
+        return _CELERY_CACHE_DATA
+
     active_tasks = []
     reserved_tasks = []
     scheduled_tasks = []
@@ -71,7 +86,7 @@ def get_active_celery_queues() -> Dict[str, Any]:
 
     try:
         from kalanjiyam.tasks import app as celery_app
-        inspect = celery_app.control.inspect(timeout=1.5)
+        inspect = celery_app.control.inspect(timeout=0.8)
         
         active_dict = inspect.active()
         reserved_dict = inspect.reserved()
@@ -80,7 +95,8 @@ def get_active_celery_queues() -> Dict[str, Any]:
         if active_dict is not None:
             celery_online = True
             for node, tasks in active_dict.items():
-                worker_nodes.append(node)
+                if node not in worker_nodes:
+                    worker_nodes.append(node)
                 for t in tasks:
                     t_info = _decorate_celery_task(t, "RUNNING", node)
                     active_tasks.append(t_info)
@@ -88,6 +104,8 @@ def get_active_celery_queues() -> Dict[str, Any]:
         if reserved_dict is not None:
             celery_online = True
             for node, tasks in reserved_dict.items():
+                if node not in worker_nodes:
+                    worker_nodes.append(node)
                 for t in tasks:
                     t_info = _decorate_celery_task(t, "PENDING", node)
                     reserved_tasks.append(t_info)
@@ -95,9 +113,18 @@ def get_active_celery_queues() -> Dict[str, Any]:
         if scheduled_dict is not None:
             celery_online = True
             for node, tasks in scheduled_dict.items():
+                if node not in worker_nodes:
+                    worker_nodes.append(node)
                 for t in tasks:
                     t_info = _decorate_celery_task(t, "SCHEDULED", node)
                     scheduled_tasks.append(t_info)
+
+        # Fallback check: if no active tasks, ping workers to check online status
+        if not worker_nodes:
+            ping_dict = inspect.ping()
+            if ping_dict:
+                celery_online = True
+                worker_nodes = list(ping_dict.keys())
 
     except Exception as e:
         LOG.warning("Celery inspect error (workers offline or broker error): %s", e)
@@ -121,7 +148,7 @@ def get_active_celery_queues() -> Dict[str, Any]:
         q_name = task.get("queue", "default")
         queues_breakdown[q_name] = queues_breakdown.get(q_name, 0) + 1
 
-    return {
+    res = {
         "celery_online": celery_online,
         "worker_nodes": worker_nodes,
         "active_count": len(active_tasks),
@@ -132,6 +159,9 @@ def get_active_celery_queues() -> Dict[str, Any]:
         "db_tasks": db_tasks_list,
         "queues_breakdown": queues_breakdown,
     }
+    _CELERY_CACHE_DATA = res
+    _CELERY_CACHE_TIME = now
+    return res
 
 
 def _decorate_celery_task(task_dict: Dict[str, Any], status: str, worker_node: str) -> Dict[str, Any]:
@@ -189,7 +219,7 @@ def get_latency_metrics_summary(days: int = 7) -> Dict[str, Any]:
     metrics = (
         session.query(db.SystemMetricLog)
         .filter(
-            db.SystemMetricLog.category == "latency",
+            db.SystemMetricLog.category.in_(["latency", "ocr", "translation"]),
             db.SystemMetricLog.created_at >= cutoff,
             db.SystemMetricLog.latency_ms.isnot(None),
         )

@@ -26,6 +26,8 @@ class SystemMetricLog(Base):
     status = Column(String, nullable=True, index=True)
     # Latency / duration in milliseconds
     latency_ms = Column(Float, nullable=True)
+    # OpenTelemetry trace correlation ID
+    trace_id = Column(String, nullable=True, index=True)
     # 'INFO', 'WARNING', 'ERROR', 'CRITICAL'
     error_level = Column(String, nullable=True, index=True)
     error_message = Column(_Text, nullable=True)
@@ -48,6 +50,7 @@ class SystemMetricLog(Base):
             "group_name": self.group.name if self.group else None,
             "status": self.status,
             "latency_ms": self.latency_ms,
+            "trace_id": self.trace_id,
             "error_level": self.error_level,
             "error_message": self.error_message,
             "traceback": self.traceback,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from pathlib import Path
 
 import httpx
@@ -169,12 +170,43 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
     logger.info("Calling OCR service engine=%s language=%s url=%s", engine_name, language, url)
 
     service_engine = engine_for_service(engine_name)
+    start_time = time.time()
 
-    with file_path.open("rb") as image_file:
-        files = {"image": (file_path.name, image_file, "image/jpeg")}
-        data = {"engine": service_engine, "language": language}
-        with httpx.Client(timeout=timeout) as client:
-            response = client.post(url, files=files, data=data, headers=headers)
+    try:
+        with file_path.open("rb") as image_file:
+            files = {"image": (file_path.name, image_file, "image/jpeg")}
+            data = {"engine": service_engine, "language": language}
+            with httpx.Client(timeout=timeout) as client:
+                response = client.post(url, files=files, data=data, headers=headers)
+        latency_ms = round((time.time() - start_time) * 1000, 2)
+
+        try:
+            from kalanjiyam.utils.metrics import record_metric
+            record_metric(
+                category="ocr",
+                name=f"ocr.{engine_name}",
+                latency_ms=latency_ms,
+                status="SUCCESS" if response.status_code < 400 else "FAILED",
+                details={"engine": engine_name, "language": language},
+            )
+        except Exception:
+            pass
+    except Exception as ex:
+        latency_ms = round((time.time() - start_time) * 1000, 2)
+        try:
+            from kalanjiyam.utils.metrics import record_metric
+            record_metric(
+                category="ocr",
+                name=f"ocr.{engine_name}",
+                latency_ms=latency_ms,
+                status="FAILED",
+                error_level="ERROR",
+                error_message=str(ex),
+                details={"engine": engine_name, "language": language},
+            )
+        except Exception:
+            pass
+        raise ex
 
     if response.status_code >= 400:
         detail = response.text

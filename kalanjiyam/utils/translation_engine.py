@@ -2,6 +2,7 @@
 
 import logging
 import re
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
@@ -463,12 +464,26 @@ def translate_text(text: str, source_lang: str, target_lang: str, engine_name: s
             raise ValueError("Source and target language codes are required")
         
         logging.info(f"Starting translation: {source_lang} -> {target_lang} using {engine_name}")
+        start_time = time.time()
         
         # Protect <dnt> blocks and math equations
         protected_text, dnt_map = protect_dnt_and_math(text)
 
         engine = TranslationEngineFactory.create(engine_name, **kwargs)
         response = engine.translate(protected_text, source_lang, target_lang, **kwargs)
+
+        latency_ms = round((time.time() - start_time) * 1000, 2)
+        try:
+            from kalanjiyam.utils.metrics import record_metric
+            record_metric(
+                category="translation",
+                name=f"translation.{engine_name}",
+                latency_ms=latency_ms,
+                status="SUCCESS",
+                details={"engine": engine_name, "source_lang": source_lang, "target_lang": target_lang},
+            )
+        except Exception:
+            pass
 
         # Restore <dnt> blocks and math equations
         if dnt_map and response and response.translated_text:
@@ -477,6 +492,18 @@ def translate_text(text: str, source_lang: str, target_lang: str, engine_name: s
         return response
     except Exception as e:
         logging.error(f"Translation failed: {e}")
+        try:
+            from kalanjiyam.utils.metrics import record_metric
+            record_metric(
+                category="translation",
+                name=f"translation.{engine_name}",
+                status="FAILED",
+                error_level="ERROR",
+                error_message=str(e),
+                details={"engine": engine_name, "source_lang": source_lang, "target_lang": target_lang},
+            )
+        except Exception:
+            pass
         raise
 
 

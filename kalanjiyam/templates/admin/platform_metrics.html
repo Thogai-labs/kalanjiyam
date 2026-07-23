@@ -440,6 +440,7 @@
         <div><strong class="text-slate-500">User:</strong> <span id="modal-user" class="font-semibold text-slate-800"></span></div>
         <div><strong class="text-slate-500">Level:</strong> <span id="modal-level" class="font-bold"></span></div>
         <div><strong class="text-slate-500">Timestamp:</strong> <span id="modal-time" class="font-mono text-slate-700"></span></div>
+        <div class="col-span-2"><strong class="text-slate-500">OTel Trace ID:</strong> <span id="modal-trace-id" class="font-mono text-royalblue font-bold"></span> <button onclick="copyTraceId()" class="ml-2 text-[11px] text-slate-500 hover:text-slate-900 bg-slate-200/60 px-2 py-0.5 rounded transition-colors font-sans">Copy Trace ID</button></div>
       </div>
       <div>
         <h4 class="font-bold text-slate-800 mb-1">Error Message</h4>
@@ -459,6 +460,7 @@
 </div>
 
 <script>
+const metricsApiUrl = "{{ url_for('platform_view.metrics_api') }}";
 let currentTab = 'queues';
 let searchDebounceTimer = null;
 
@@ -486,7 +488,7 @@ function refreshCurrentTab() {
   const icon = document.getElementById('refresh-icon');
   if (icon) icon.classList.add('animate-spin');
 
-  fetch(`/admin/platform/metrics/api?tab=${currentTab}`)
+  fetch(`${metricsApiUrl}?tab=${currentTab}`)
     .then(r => r.json())
     .then(data => {
       if (currentTab === 'queues') {
@@ -547,7 +549,7 @@ function fetchErrorLogs(page = 1) {
   const groupId = document.getElementById('filter-group').value;
   const search = document.getElementById('filter-search').value;
 
-  const url = `/admin/platform/metrics/api?tab=errors&page=${page}&level=${encodeURIComponent(level)}&group_id=${encodeURIComponent(groupId)}&search=${encodeURIComponent(search)}`;
+  const url = `${metricsApiUrl}?tab=errors&page=${page}&level=${encodeURIComponent(level)}&group_id=${encodeURIComponent(groupId)}&search=${encodeURIComponent(search)}`;
   fetch(url)
     .then(r => r.json())
     .then(data => renderErrors(data))
@@ -599,10 +601,19 @@ function showErrorDetail(err) {
   document.getElementById('modal-user').innerText = err.username || 'System';
   document.getElementById('modal-level').innerText = err.error_level || 'ERROR';
   document.getElementById('modal-time').innerText = err.created_at || 'N/A';
+  document.getElementById('modal-trace-id').innerText = err.trace_id || '— (No active OTel span)';
   document.getElementById('modal-message').innerText = err.error_message || 'No error message recorded';
   document.getElementById('modal-traceback').innerText = err.traceback || 'No stack traceback available.';
 
   document.getElementById('error-modal').classList.remove('hidden');
+}
+
+function copyTraceId() {
+  const traceId = document.getElementById('modal-trace-id').innerText;
+  if (traceId && traceId !== '— (No active OTel span)') {
+    navigator.clipboard.writeText(traceId);
+    alert('Trace ID copied to clipboard: ' + traceId);
+  }
 }
 
 function closeErrorModal() {
