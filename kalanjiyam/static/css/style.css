@@ -7,8 +7,9 @@
     @apply text-white bg-emerald-400;
   }
   body, html {
-    /* For sticky footers. */
-    @apply h-full;
+    /* For sticky footers while allowing scrolling on tall content. */
+    min-height: 100%;
+    overflow-y: auto !important;
   }
   body {
     background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);

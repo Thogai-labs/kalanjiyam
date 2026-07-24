@@ -1,36 +1,95 @@
-{% extends 'header-main-footer.html' %}
-{% import "macros/components.html" as m %}
+{% extends 'base.html' %}
 
+{% block title %}{{ _('Contact Us | Kalanjiyam') }}{% endblock %}
 
-{% block title %}{{ m.title(_('Contact')) }}{% endblock %}
+{% block meta_description %}{{ _('Get in touch with the Kalanjiyam team. We\'d love to hear from you.') }}{% endblock %}
 
+{% block extra_head %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
 
-{% block meta_description -%}
-Get in touch with the Kalanjiyam team. We'd love to hear from you.
-{%- endblock %}
+  .font-serif-title {
+    font-family: 'Cinzel', Georgia, serif;
+  }
 
-
-{% block header %}
-{{ m.basic_header(_('Contact')) }}
+  .catalog-hero {
+    background: #0b1120;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
+      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
+      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
+    background-size: 100% 100%, 24px 24px, 24px 24px;
+  }
+</style>
 {% endblock %}
 
+{% block main_class %}bg-slate-50 min-h-screen pb-16{% endblock %}
 
 {% block main %}
-<article class="p-4 md:p-0 max-w-xl mx-auto md:my-24 md:mb-36">
-<p>{% trans %}
-We'd love to hear from you! Please use the form below to get in touch with us.
-{% endtrans %}</p>
+<!-- Hero Header Section -->
+<header class="catalog-hero text-slate-100 py-16 px-4 mb-10 border-b border-slate-800">
+  <div class="max-w-4xl mx-auto text-center">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-4">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+      </svg>
+      <span>{{ _('Get in Touch') }}</span>
+    </div>
 
-<form method="POST" class="my-8">
-  {{ form.csrf_token }}
-  
-  <label class="block mb-2 text-peacock-secondary">{{ _('Email address') }}</label>
-  <input required type="email" name="email" class="bg-white border border-teal-200 p-2 rounded w-full"/>
-  
-  <label class="block my-2 text-peacock-secondary">{{ _('Message') }}</label>
-  <textarea required name="message" class="bg-white border border-teal-200 p-2 rounded w-full h-48 mb-4"></textarea>
-  
-  <input type="submit" class="btn btn-submit" value="{{ _('Send message') }}" />
-</form>
-</article>
+    <h1 class="text-4xl sm:text-5xl font-bold font-serif-title tracking-tight mb-4 text-white">
+      {{ _('Contact Us') }}
+    </h1>
+    <p class="text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
+      {{ _('We\'d love to hear from you! Send us your inquiries, feedback, or suggestions.') }}
+    </p>
+  </div>
+</header>
+
+<!-- Main Contact Form Card -->
+<div class="max-w-xl mx-auto px-4">
+  <div class="bg-white p-8 md:p-10 rounded-2xl shadow-sm border border-slate-200">
+    <p class="text-slate-600 text-sm mb-6 leading-relaxed">
+      {{ _('Please fill out the form below and our team will get back to you as soon as possible.') }}
+    </p>
+
+    <form method="POST" class="space-y-6">
+      {{ form.csrf_token }}
+      
+      <div>
+        <label for="email" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+          {{ _('Email address') }}
+        </label>
+        <input 
+          required 
+          type="email" 
+          id="email"
+          name="email" 
+          placeholder="your.name@example.com"
+          class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all"
+        />
+      </div>
+      
+      <div>
+        <label for="message" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+          {{ _('Message') }}
+        </label>
+        <textarea 
+          required 
+          id="message"
+          name="message" 
+          rows="6"
+          placeholder="{{ _('How can we help you?') }}"
+          class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all resize-y"
+        ></textarea>
+      </div>
+      
+      <button 
+        type="submit" 
+        class="w-full py-3.5 px-6 bg-royalblue hover:bg-blue-600 text-white font-semibold text-sm rounded-xl transition-all shadow-sm hover:shadow"
+      >
+        {{ _('Send Message') }}
+      </button>
+    </form>
+  </div>
+</div>
 {% endblock %}
