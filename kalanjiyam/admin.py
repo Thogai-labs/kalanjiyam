@@ -897,6 +897,21 @@ class PlatformView(AdminBaseView):
                 default="",
                 description="The recommended OCR engine displayed with a star icon for users."
             )
+            auto_cleanup_days = SelectField(
+                "Source File Retention Period",
+                coerce=int,
+                choices=[
+                    (1, "1 Day"),
+                    (3, "3 Days"),
+                    (7, "7 Days (Default)"),
+                    (14, "14 Days"),
+                    (30, "30 Days"),
+                    (60, "60 Days"),
+                    (90, "90 Days"),
+                ],
+                default=7,
+                description="Number of days before uploaded source PDF/DOC files are automatically cleaned up.",
+            )
             
         form = PlatformSettingsForm()
         
@@ -920,12 +935,15 @@ class PlatformView(AdminBaseView):
         rec_choices = [("", "None (No recommended engine)")] + [(eng, ENGINE_LABELS.get(eng, eng.capitalize())) for eng in sorted_rec_engines]
         form.recommended_ocr_engine.choices = rec_choices
         
+        cleanup_enabled = current_app.config.get("AUTO_UPLOADED_FILES_CLEANUP", False)
+
         if form.validate_on_submit():
             system_settings.unregistered_user_ocr_limit = form.unregistered_user_ocr_limit.data if form.unregistered_user_ocr_limit.data is not None else 10
             system_settings.unregistered_user_project_limit = form.unregistered_user_project_limit.data if form.unregistered_user_project_limit.data is not None else 5
             system_settings.unregistered_user_upload_limit = form.unregistered_user_upload_limit.data if form.unregistered_user_upload_limit.data is not None else 10
             system_settings.default_ocr_engine = form.default_ocr_engine.data if form.default_ocr_engine.data else "tesseract"
             system_settings.recommended_ocr_engine = form.recommended_ocr_engine.data if form.recommended_ocr_engine.data else None
+            system_settings.auto_cleanup_days = form.auto_cleanup_days.data if form.auto_cleanup_days.data is not None else 7
             
             session.add(system_settings)
             session.commit()
@@ -938,8 +956,9 @@ class PlatformView(AdminBaseView):
             form.unregistered_user_upload_limit.data = getattr(system_settings, "unregistered_user_upload_limit", 10)
             form.default_ocr_engine.data = system_settings.default_ocr_engine
             form.recommended_ocr_engine.data = system_settings.recommended_ocr_engine or ""
+            form.auto_cleanup_days.data = getattr(system_settings, "auto_cleanup_days", 7) or 7
             
-        return render_template("admin/platform_settings.html", form=form)
+        return render_template("admin/platform_settings.html", form=form, cleanup_enabled=cleanup_enabled)
 
     @expose("/metrics")
     def metrics(self):

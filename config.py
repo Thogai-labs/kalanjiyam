@@ -115,7 +115,7 @@ class BaseConfig:
 
     #: If True, direct DOCX translation will save all data of the original docx in database.
     SAVE_DOCX_DIRECT_TR_DATA = (
-        _env("SAVE_DOCX_DIRECT_TR_DATA", "false").lower() in ("true", "1", "yes")
+        str(_env("SAVE_DOCX_DIRECT_TR_DATA", "false")).lower() in ("true", "1", "yes")
     )
 
     #: If True, uploaded source PDF and DOC/DOCX files older than 7 days will be automatically deleted.

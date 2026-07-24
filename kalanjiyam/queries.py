@@ -266,7 +266,8 @@ def get_system_settings() -> db.SystemSetting:
             unregistered_user_project_limit=5,
             unregistered_user_upload_limit=10,
             default_ocr_engine=default_eng,
-            recommended_ocr_engine=None
+            recommended_ocr_engine=None,
+            auto_cleanup_days=7,
         )
         session.add(settings)
         session.commit()

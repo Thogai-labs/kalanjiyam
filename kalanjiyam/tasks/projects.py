@@ -727,14 +727,24 @@ def cleanup_uploaded_files_task(
             return val
         return str(val).lower() in ("true", "1", "yes")
 
+    def _get_days(explicit_days):
+        try:
+            settings = q.get_system_settings()
+            if settings and settings.auto_cleanup_days:
+                return settings.auto_cleanup_days
+        except Exception:
+            pass
+        return explicit_days or 7
+
     if has_app_context():
         enabled = _is_enabled(current_app.config)
         if not enabled and not force:
             logging.info("AUTO_UPLOADED_FILES_CLEANUP is disabled. Skipping cleanup task.")
             return 0
+        target_days = _get_days(days)
         storage = get_storage()
-        deleted_count = cleanup_old_uploaded_files(storage, days=days)
-        logging.info(f"Cleaned up {deleted_count} uploaded source PDF/DOC files older than {days} days.")
+        deleted_count = cleanup_old_uploaded_files(storage, days=target_days)
+        logging.info(f"Cleaned up {deleted_count} uploaded source PDF/DOC files older than {target_days} days.")
         return deleted_count
 
     env = app_environment or os.getenv("KALANJIYAM_ENV", "testing")
@@ -744,7 +754,8 @@ def cleanup_uploaded_files_task(
         if not enabled and not force:
             logging.info("AUTO_UPLOADED_FILES_CLEANUP is disabled. Skipping cleanup task.")
             return 0
+        target_days = _get_days(days)
         storage = get_storage()
-        deleted_count = cleanup_old_uploaded_files(storage, days=days)
-        logging.info(f"Cleaned up {deleted_count} uploaded source PDF/DOC files older than {days} days.")
+        deleted_count = cleanup_old_uploaded_files(storage, days=target_days)
+        logging.info(f"Cleaned up {deleted_count} uploaded source PDF/DOC files older than {target_days} days.")
         return deleted_count

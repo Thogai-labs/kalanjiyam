@@ -70,3 +70,13 @@ def test_cleanup_uploaded_files_task_respects_config(flask_app):
             res = cleanup_uploaded_files_task(days=7, force=False)
             assert res == 1
             assert not storage.exists("projects/old/pdf/source.pdf")
+
+
+def test_system_settings_auto_cleanup_days(flask_app):
+    from kalanjiyam import queries as q
+    with flask_app.app_context():
+        settings = q.get_system_settings()
+        assert hasattr(settings, "auto_cleanup_days")
+        assert settings.auto_cleanup_days == 7
+        settings.auto_cleanup_days = 14
+        assert settings.auto_cleanup_days == 14

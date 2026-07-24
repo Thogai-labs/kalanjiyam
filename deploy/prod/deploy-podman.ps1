@@ -118,6 +118,21 @@ function Check-Podman {
         Write-Error "ERROR: Podman is not installed or not in PATH."
         Exit 1
     }
+    # Check if Podman machine is responsive
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+    & podman info > $null 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Podman machine is not responsive. Attempting 'podman machine start'..." -ForegroundColor Yellow
+        & podman machine start
+        & podman info > $null 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            $ErrorActionPreference = $oldEAP
+            Write-Error "ERROR: Unable to connect to Podman socket. Please start Podman machine using 'podman machine start'."
+            Exit 1
+        }
+    }
+    $ErrorActionPreference = $oldEAP
 }
 
 function Check-Env {
@@ -183,6 +198,10 @@ function Build-Image {
     $image = "kalanjiyam:v0.1-$gitBranch-$gitCommit"
     $imageLatest = "kalanjiyam-rel:latest"
     podman build --no-cache -t $image -t $imageLatest -f build/containers/Dockerfile.final .
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "ERROR: 'podman build' failed with exit code $LASTEXITCODE"
+        Exit $LASTEXITCODE
+    }
     $env:KALANJIYAM_IMAGE = $image
     Write-Host "[OK] Image: $image" -ForegroundColor Green
 }
