@@ -14,6 +14,7 @@ Kalanjiyam locally or contribute to Kalanjiyam's technical work.
    project-layout
    architecture
    values-and-principles
+   governance-and-rbac
    managing-the-database
    creating-data-from-the-command-line
    multi-tenant
