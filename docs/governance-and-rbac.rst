@@ -55,14 +55,18 @@ Tenant Governance Rules
 1. **Multi-Tenant Data Isolation**: Users assigned to an organization can only read/modify resources (books, OCR tasks, analytics) belonging to their tenant organization unless explicitly granted system-wide `SUPER_ADMIN` privileges.
 2. **Proofing Integrity Standard**: Pages marked as `R2` (reviewed-2) require validation from a user with at least `P2` role to ensure quality standards for published catalog items.
 3. **Resource & Quota Limits**: OCR processing jobs and cloud storage allocations per organization are governed by tenant quotas enforced at the `SUPER_ADMIN` level.
+4. **Source File Retention Policy**: Uploaded source `.pdf`, `.docx`, and `.doc` files are stored upon upload. When `AUTO_UPLOADED_FILES_CLEANUP` (or `auto_uploaded_files_cleanup`) is enabled in `.env`, uploaded source document files older than 7 days are automatically purged to optimize storage, as all extracted pages and textual data are permanently persisted in the database.
 
 Governance & Rule Change Log
 ----------------------------
 
 This section records all modifications to access control rules, role definitions, and governance policies, along with the business or technical rationale behind each change.
 
-+------------+----------------------+-----------------------------------+---------------------------------------------------+--------------+
-| Date       | Affected Role / Rule | Description of Change             | Reason / Rationale                                | Approved By  |
-+============+======================+===================================+===================================================+==============+
-| 2026-07-24 | All Roles            | Initial Governance & RBAC Document| Formalize role expectations and permission matrix| Architecture |
-+------------+----------------------+-----------------------------------+---------------------------------------------------+--------------+
++------------+----------------------+------------------------------------+---------------------------------------------------+--------------+
+| Date       | Affected Role / Rule | Description of Change              | Reason / Rationale                                | Approved By  |
++============+======================+====================================+===================================================+==============+
+| 2026-07-24 | All Roles            | Initial Governance & RBAC Document | Formalize role expectations and permission matrix | Architecture |
++------------+----------------------+------------------------------------+---------------------------------------------------+--------------+
+| 2026-07-24 | Source File Storage  | Add Auto Uploaded Files Cleanup    | Delete source PDF/DOC files > 7 days as database  | Architecture |
+|            |                      | policy (`AUTO_UPLOADED_FILES_CLEANUP`) | stores all page text & image records          |              |
++------------+----------------------+------------------------------------+---------------------------------------------------+--------------+

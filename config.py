@@ -53,7 +53,10 @@ def _env(key: str, default=None) -> str | None:
     :param key: the environment variable to fetch
     :return: a value, or ``None`` if the variable is undefined.
     """
-    return os.environ.get(key, default)
+    val = os.environ.get(key)
+    if val is None:
+        val = os.environ.get(key.lower(), default)
+    return val
 
 
 class BaseConfig:
@@ -113,6 +116,11 @@ class BaseConfig:
     #: If True, direct DOCX translation will save all data of the original docx in database.
     SAVE_DOCX_DIRECT_TR_DATA = (
         _env("SAVE_DOCX_DIRECT_TR_DATA", "false").lower() in ("true", "1", "yes")
+    )
+
+    #: If True, uploaded source PDF and DOC/DOCX files older than 7 days will be automatically deleted.
+    AUTO_UPLOADED_FILES_CLEANUP = (
+        str(_env("AUTO_UPLOADED_FILES_CLEANUP", "false")).lower() in ("true", "1", "yes")
     )
 
     #: If True, proofing projects (public books under /books/...) are restricted

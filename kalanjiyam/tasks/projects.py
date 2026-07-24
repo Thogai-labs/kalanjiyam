@@ -707,3 +707,44 @@ def create_project(
         fingerprint_id=fingerprint_id,
         task_status=task_status,
     )
+
+
+@app.task(bind=True)
+def cleanup_uploaded_files_task(
+    self, days: int = 7, force: bool = False, app_environment: str = "testing"
+) -> int:
+    """Celery task to delete uploaded source PDF and DOC/DOCX files older than `days` days.
+
+    Only runs if AUTO_UPLOADED_FILES_CLEANUP config is enabled or `force` is True.
+    """
+    import os
+    from flask import current_app, has_app_context
+    from kalanjiyam.utils.storage import cleanup_old_uploaded_files, get_storage
+
+    def _is_enabled(conf):
+        val = conf.get("AUTO_UPLOADED_FILES_CLEANUP", False)
+        if isinstance(val, bool):
+            return val
+        return str(val).lower() in ("true", "1", "yes")
+
+    if has_app_context():
+        enabled = _is_enabled(current_app.config)
+        if not enabled and not force:
+            logging.info("AUTO_UPLOADED_FILES_CLEANUP is disabled. Skipping cleanup task.")
+            return 0
+        storage = get_storage()
+        deleted_count = cleanup_old_uploaded_files(storage, days=days)
+        logging.info(f"Cleaned up {deleted_count} uploaded source PDF/DOC files older than {days} days.")
+        return deleted_count
+
+    env = app_environment or os.getenv("KALANJIYAM_ENV", "testing")
+    flask_app = create_config_only_app(env)
+    with flask_app.app_context():
+        enabled = _is_enabled(flask_app.config)
+        if not enabled and not force:
+            logging.info("AUTO_UPLOADED_FILES_CLEANUP is disabled. Skipping cleanup task.")
+            return 0
+        storage = get_storage()
+        deleted_count = cleanup_old_uploaded_files(storage, days=days)
+        logging.info(f"Cleaned up {deleted_count} uploaded source PDF/DOC files older than {days} days.")
+        return deleted_count
