@@ -2,14 +2,14 @@
 {% import "macros/proofing.html" as m %}
 
 
-{% block title %}Stats: {{ project.display_title }} | Kalanjiyam{% endblock %}
+{% block title %}{{ _('Stats: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
 
 
 {% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
 
 {% block content %}
-{{ m.project_header_nested('Stats', project) }}
+{{ m.project_header_nested(_('Stats'), project) }}
 {{ m.project_tabs(project=project, active='stats', is_mod=current_user.is_moderator) }}
 
 <div class="overflow-x-auto bg-white border border-slate-100 rounded-2xl shadow-sm mb-10">
@@ -17,28 +17,28 @@
     <thead class="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
       <tr>
         <th class="px-6 py-4">&nbsp;</th>
-        <th class="px-6 py-4">Total</th>
-        <th class="px-6 py-4">Per page</th>
+        <th class="px-6 py-4">{{ _('Total') }}</th>
+        <th class="px-6 py-4">{{ _('Per page') }}</th>
       </tr>
     </thead>
     <tbody class="divide-y divide-slate-100 font-medium">
       <tr class="hover:bg-slate-50/50 transition-colors">
-        <th class="px-6 py-4 text-slate-900 font-bold">Pages</th>
+        <th class="px-6 py-4 text-slate-900 font-bold">{{ _('Pages') }}</th>
         <td class="px-6 py-4 font-mono">{{ "{:,}".format(stats.num_pages) }}</td>
         <td class="px-6 py-4 text-slate-400">&ndash;</td>
       </tr>
       <tr class="hover:bg-slate-50/50 transition-colors">
-        <th class="px-6 py-4 text-slate-900 font-bold">Words</th>
+        <th class="px-6 py-4 text-slate-900 font-bold">{{ _('Words') }}</th>
         <td class="px-6 py-4 font-mono">{{ "{:,}".format(stats.num_words) }}</td>
         <td class="px-6 py-4 font-mono text-slate-500">{% if stats.num_pages > 0 %}{{ "{:,}".format(stats.num_words // stats.num_pages) }}{% else %}0{% endif %}</td>
       </tr>
       <tr class="hover:bg-slate-50/50 transition-colors">
-        <th class="px-6 py-4 text-slate-900 font-bold">Roman characters</th>
+        <th class="px-6 py-4 text-slate-900 font-bold">{{ _('Roman characters') }}</th>
         <td class="px-6 py-4 font-mono">{{ "{:,}".format(stats.num_roman_characters) }}</td>
         <td class="px-6 py-4 font-mono text-slate-500">{% if stats.num_pages > 0 %}{{ "{:,}".format(stats.num_roman_characters // stats.num_pages) }}{% else %}0{% endif %}</td>
       </tr>
       <tr class="hover:bg-slate-50/50 transition-colors">
-        <th class="px-6 py-4 text-slate-900 font-bold">Aksharas</th>
+        <th class="px-6 py-4 text-slate-900 font-bold">{{ _('Aksharas') }}</th>
         <td class="px-6 py-4 font-mono">{{ "{:,}".format(stats.num_aksharas) }}</td>
         <td class="px-6 py-4 font-mono text-slate-500">{% if stats.num_pages > 0 %}{{ "{:,}".format(stats.num_aksharas // stats.num_pages) }}{% else %}0{% endif %}</td>
       </tr>
@@ -47,18 +47,19 @@
 </div>
 
 <div class="border border-blue-500 rounded p-6 my-8 bg-blue-50/10">
-  <h3 class="text-blue-700 font-bold text-lg mb-2">OCR Comparison</h3>
+  <h3 class="text-blue-700 font-bold text-lg mb-2">{{ _('OCR Comparison') }}</h3>
   <p class="text-sm text-slate-600 my-2">
-    Run an OCR comparison against ground truth for this project.
+    {{ _('Run an OCR comparison against ground truth for this project.') }}
   </p>
   <form action="{{ url_for('proofing.project.run_comparison', slug=project.slug) }}" method="POST" class="mt-4">
+
     <div class="flex gap-2 items-center">
       <select name="engine" class="form-select border rounded px-3 py-2 text-sm focus:border-royalblue outline-none">
         {% for engine in supported_engines %}
         <option value="{{ engine }}">{{ engine | capitalize }}</option>
         {% endfor %}
       </select>
-      <button type="submit" class="btn bg-blue-600 hover:bg-blue-800 text-white font-semibold py-2 px-4 rounded cursor-pointer transition">Run Comparison</button>
+      <button type="submit" class="btn bg-blue-600 hover:bg-blue-800 text-white font-semibold py-2 px-4 rounded cursor-pointer transition">{{ _('Run Comparison') }}</button>
     </div>
   </form>
 </div>
@@ -68,12 +69,12 @@
     <table class="min-w-full divide-y divide-slate-100 text-left text-sm text-slate-700">
       <thead class="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
         <tr>
-          <th class="px-6 py-4">Date</th>
-          <th class="px-6 py-4">Engine</th>
-          <th class="px-6 py-4">Status</th>
+          <th class="px-6 py-4">{{ _('Date') }}</th>
+          <th class="px-6 py-4">{{ _('Engine') }}</th>
+          <th class="px-6 py-4">{{ _('Status') }}</th>
           <th class="px-6 py-4">WER</th>
           <th class="px-6 py-4">CER</th>
-          <th class="px-6 py-4">Details</th>
+          <th class="px-6 py-4">{{ _('Details') }}</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
@@ -83,11 +84,11 @@
           <td class="px-6 py-4"><span class="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold uppercase">{{ comp.engine }}</span></td>
           <td class="px-6 py-4">
             {% if comp.status == 'completed' %}
-              <span class="px-2.5 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-bold uppercase">Completed</span>
+              <span class="px-2.5 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-bold uppercase">{{ _('Completed') }}</span>
             {% elif comp.status.startswith('in_progress') %}
-              <span class="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold uppercase">In Progress</span>
+              <span class="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold uppercase">{{ _('In Progress') }}</span>
             {% elif comp.status == 'failed' %}
-              <span class="px-2.5 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-bold uppercase">Failed</span>
+              <span class="px-2.5 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-bold uppercase">{{ _('Failed') }}</span>
             {% else %}
               <span class="px-2.5 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-xs font-bold uppercase">{{ comp.status | capitalize }}</span>
             {% endif %}
@@ -107,7 +108,7 @@
             {% endif %}
           </td>
           <td class="px-6 py-4">
-            <a href="{{ url_for('proofing.project.comparison_details', slug=project.slug, comparison_id=comp.id) }}" class="text-royalblue font-bold hover:text-blue-800 transition-colors">View Details</a>
+            <a href="{{ url_for('proofing.project.comparison_details', slug=project.slug, comparison_id=comp.id) }}" class="text-royalblue font-bold hover:text-blue-800 transition-colors">{{ _('View Details') }}</a>
           </td>
         </tr>
         {% endfor %}
@@ -116,7 +117,7 @@
   </div>
   {% else %}
   <div class="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-    <p class="text-slate-500 font-medium">No comparisons run yet.</p>
+    <p class="text-slate-500 font-medium">{{ _('No comparisons run yet.') }}</p>
   </div>
   {% endif %}
 {% endblock %}

@@ -2,11 +2,12 @@
 {% import "macros/components.html" as components %}
 {% import "macros/proofing.html" as m %}
 
-{% block title %}Batch Translate: {{ project.display_title }} | Kalanjiyam{% endblock %}
+{% block title %}{{ _('Batch Translate: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
 
 {% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 {% block content %}
-{{ m.project_header_nested('Batch Translate', project) }}
+
+{{ m.project_header_nested(_('Batch Translate'), project) }}
 {{ m.project_tabs(project=project, active='batch_processes', is_mod=current_user.is_moderator) }}
 
 {% if status %}
@@ -19,8 +20,8 @@
         </svg>
       </div>
       <div class="ml-3">
-        <h3 class="text-lg font-medium text-gray-900">Batch Translation Progress</h3>
-        <p class="text-sm text-gray-500">Translating project pages...</p>
+        <h3 class="text-lg font-medium text-gray-900">{{ _('Batch Translation Progress') }}</h3>
+        <p class="text-sm text-gray-500">{{ _('Translating project pages...') }}</p>
       </div>
     </div>
 
@@ -33,25 +34,25 @@
         <div class="text-sm text-gray-600">
           <span id="status-text">
             {% if status == "PENDING" %}
-              Preparing translation tasks...
+              {{ _('Preparing translation tasks...') }}
             {% elif status == "PROGRESS" %}
-              Translation in progress...
+              {{ _('Translation in progress...') }}
             {% elif status == "SUCCESS" %}
-              Translation completed successfully!
+              {{ _('Translation completed successfully!') }}
             {% elif status == "FAILURE" %}
-              Translation failed. Please try again.
+              {{ _('Translation failed. Please try again.') }}
             {% endif %}
           </span>
         </div>
         <div class="space-x-2">
           <a href="{{ url_for('proofing.project.edit', slug=project.slug) }}" 
              class="bg-gray-300 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-400 transition-colors">
-            Back to Project
+            {{ _('Back to Project') }}
           </a>
           {% if status == "SUCCESS" %}
             <a href="{{ url_for('proofing.project.activity', slug=project.slug) }}" 
                class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors">
-              View Results
+              {{ _('View Results') }}
             </a>
           {% endif %}
         </div>
@@ -75,9 +76,9 @@
             // Update status text
             const statusText = document.getElementById('status-text');
             if (status === 'SUCCESS') {
-              statusText.textContent = 'Translation completed successfully!';
+              statusText.textContent = {{ _('Translation completed successfully!')|tojson }};
             } else if (status === 'FAILURE') {
-              statusText.textContent = 'Translation failed. Please try again.';
+              statusText.textContent = {{ _('Translation failed. Please try again.')|tojson }};
             }
             return; // Stop refreshing
           }
@@ -107,8 +108,8 @@
       </div>
       <div class="ml-3">
         <p class="text-sm text-yellow-700">
-          <strong>Note:</strong> This will translate all pages in the project that have revisions. 
-          The translation will be based on the latest revision of each page.
+          <strong>{{ _('Note:') }}</strong> {{ _('This will translate all pages in the project that have revisions.') }} 
+          {{ _('The translation will be based on the latest revision of each page.') }}
         </p>
       </div>
     </div>
@@ -149,14 +150,14 @@
     },
     getGlossaryDisplayName(name) {
       const lookup = {
-        'agri': 'Agriculture',
-        'mech': 'Mechanical',
-        'bio': 'Biology',
-        'chem': 'Chemistry',
-        'comp': 'Computer Science',
-        'phy': 'Physics',
-        'math': 'Mathematics',
-        'it': 'Information Technology'
+        'agri': {{ _('Agriculture')|tojson }},
+        'mech': {{ _('Mechanical')|tojson }},
+        'bio': {{ _('Biology')|tojson }},
+        'chem': {{ _('Chemistry')|tojson }},
+        'comp': {{ _('Computer Science')|tojson }},
+        'phy': {{ _('Physics')|tojson }},
+        'math': {{ _('Mathematics')|tojson }},
+        'it': {{ _('Information Technology')|tojson }}
       };
       if (lookup[name]) {
         return lookup[name];
@@ -166,12 +167,12 @@
     }
   }" @submit.prevent="if (sourceLang === targetLang) { alert('{{ _("Source and Target languages must be different.") }}'); } else { $el.submit(); }">
     <div class="bg-white shadow rounded-lg p-6">
-      <h3 class="text-lg font-medium text-gray-900 mb-4">Translation Settings</h3>
+      <h3 class="text-lg font-medium text-gray-900 mb-4">{{ _('Translation Settings') }}</h3>
       
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label for="source_lang" class="block text-sm font-medium text-gray-700 mb-2">
-            Source Language
+            {{ _('Source Language') }}
           </label>
           <select id="source_lang" name="source_lang" x-model="sourceLang" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
             {% for lang in languages %}
@@ -182,7 +183,7 @@
         
         <div>
           <label for="target_lang" class="block text-sm font-medium text-gray-700 mb-2">
-            Target Language
+            {{ _('Target Language') }}
           </label>
           <select id="target_lang" name="target_lang" x-model="targetLang" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
             {% for lang in languages %}
@@ -194,24 +195,24 @@
       
       <div class="mt-6">
         <label for="engine" class="block text-sm font-medium text-gray-700 mb-2">
-          Translation Engine
+          {{ _('Translation Engine') }}
         </label>
         <select id="engine" name="engine" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" {% if not engines %}disabled{% endif %}>
           {% for eng in engines %}
             <option value="{{ eng.value }}" {% if loop.first %}selected{% endif %}>{{ eng.label }}</option>
           {% else %}
-            <option value="" disabled selected>No translation models available</option>
+            <option value="" disabled selected>{{ _('No translation models available') }}</option>
           {% endfor %}
         </select>
         <p class="mt-1 text-sm text-gray-500">
-          Select the translation engine to use for batch translating this project.
+          {{ _('Select the translation engine to use for batch translating this project.') }}
         </p>
       </div>
 
       <!-- Glossary Selection List -->
       <div class="mt-6 text-left" x-show="filteredGlossaries.length > 0" x-cloak>
-        <label class="block text-sm font-medium text-gray-700 mb-2">
-          Select Glossaries (Optional)
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+          {{ _('Select Glossaries (Optional)') }}
         </label>
         <input type="hidden" name="glossary" :value="selectedGlossaries.includes('all') ? 'all' : selectedGlossaries.join(', ')">
         
@@ -273,25 +274,25 @@
       <div class="mt-6 flex justify-end space-x-3">
         <a href="{{ url_for('proofing.project.edit', slug=project.slug) }}" 
            class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors">
-          Cancel
+          {{ _('Cancel') }}
         </a>
         <button type="submit" 
                 class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="sourceLang === targetLang || {% if not engines %}true{% else %}false{% endif %}">
-          Start Translation
+          {{ _('Start Translation') }}
         </button>
       </div>
     </div>
   </form>
 
   <div class="mt-6 bg-gray-50 rounded-lg p-4">
-    <h4 class="text-sm font-medium text-gray-900 mb-2">What happens next?</h4>
+    <h4 class="text-sm font-medium text-gray-900 mb-2">{{ _('What happens next?') }}</h4>
     <ul class="text-sm text-gray-600 space-y-1">
-      <li>• The system will process each page that has revisions</li>
-      <li>• Text will be segmented into manageable chunks for translation</li>
-      <li>• Each chunk will be translated using the selected engine</li>
-      <li>• Translations will be stored and can be viewed/edited later</li>
-      <li>• You can monitor progress and navigate away from this page</li>
+      <li>• {{ _('The system will process each page that has revisions') }}</li>
+      <li>• {{ _('Text will be segmented into manageable chunks for translation') }}</li>
+      <li>• {{ _('Each chunk will be translated using the selected engine') }}</li>
+      <li>• {{ _('Translations will be stored and can be viewed/edited later') }}</li>
+      <li>• {{ _('You can monitor progress and navigate away from this page') }}</li>
     </ul>
   </div>
 {% endif %}

@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
 
-{% block title %}Page {{ page.slug }} - {{ project.display_title }} | Kalanjiyam Digital Library{% endblock %}
+{% block title %}{{ _('Page %(page)s - %(title)s | Kalanjiyam Digital Library', page=page.slug, title=project.display_title) }}{% endblock %}
 
-{% block meta_description %}View page {{ page.slug }} of {{ project.display_title }} with OCR text and translations.{% endblock %}
+{% block meta_description %}{{ _('View page %(page)s of %(title)s with OCR text and translations.', page=page.slug, title=project.display_title) }}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -118,12 +118,12 @@
         <span>/</span>
         <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" class="hover:text-royalblue transition-colors truncate max-w-xs">{{ project.display_title }}</a>
         <span>/</span>
-        <span class="text-slate-900 font-bold">Page {{ page.slug }}</span>
+        <span class="text-slate-900 font-bold">{{ _('Page') }} {{ page.slug }}</span>
       </nav>
       
       <h1 class="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-3">
         <span class="font-serif-title">{{ project.display_title }}</span>
-        <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">Page {{ page.slug }}</span>
+        <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">{{ _('Page') }} {{ page.slug }}</span>
       </h1>
     </div>
 
@@ -145,7 +145,7 @@
       {% endif %}
 
       <div class="text-right text-xs bg-slate-50 px-3.5 py-1.5 rounded-xl border border-slate-200 font-medium text-slate-600">
-        <span class="font-bold text-slate-900">{{ current_index + 1 }}</span> of <span class="font-bold text-slate-900">{{ total_pages }}</span>
+        <span class="font-bold text-slate-900">{{ current_index + 1 }}</span> {{ _('of') }} <span class="font-bold text-slate-900">{{ total_pages }}</span>
         <span class="text-slate-400 mx-1">|</span>
         <span class="text-royalblue font-bold">{{ "%.0f"|format((current_index + 1) / total_pages * 100) }}%</span>
       </div>
@@ -172,17 +172,17 @@
           </h2>
 
           <div class="flex items-center gap-1.5">
-            <button type="button" id="osd-zoom-in" class="osd-control-btn" title="{{ _('Zoom In') }}">
+            <button type="button" id="osd-zoom-in" class="osd-control-btn" title="{{ _('Zoom in') }}">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"></path>
               </svg>
             </button>
-            <button type="button" id="osd-zoom-out" class="osd-control-btn" title="{{ _('Zoom Out') }}">
+            <button type="button" id="osd-zoom-out" class="osd-control-btn" title="{{ _('Zoom out') }}">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"></path>
               </svg>
             </button>
-            <button type="button" id="osd-home" class="osd-control-btn" title="{{ _('Reset View') }}">
+            <button type="button" id="osd-home" class="osd-control-btn" title="{{ _('Reset view') }}">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
               </svg>
@@ -418,4 +418,3 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
-

@@ -260,7 +260,7 @@
   {% set log_in = url_for("auth.sign_in") %}
   <div class="p-4">
     {% call mc.div_warning() %}
-    Only registered users can save changes.
+    {{ _('Only registered users can save changes.') }}
     <a href="{{ log_in }}" class="font-semibold underline">{{ _('Sign in') }}</a>
     {% endcall %}
   </div>

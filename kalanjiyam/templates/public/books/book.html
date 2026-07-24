@@ -2,7 +2,7 @@
 
 {% block title %}{{ project.display_title }} | Kalanjiyam Digital Library{% endblock %}
 
-{% block meta_description %}{{ project.display_title }} - Browse pages and read OCR'd content with translations.{% endblock %}
+{% block meta_description %}{{ project.display_title }} - {{ _('Browse pages and read OCR\'d content with translations.') }}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -202,12 +202,12 @@
               <a href="{{ url_for('public.books.page', project_slug=project.slug, page_slug=page.slug) }}" 
                  class="page-card block p-3.5 border rounded-xl text-center bg-white transition-all {% if has_revision %}border-slate-200{% else %}border-slate-100 bg-slate-50/50{% endif %}">
                 
-                <div class="text-sm font-bold text-slate-900 mb-2">Page {{ page.slug }}</div>
+                <div class="text-sm font-bold text-slate-900 mb-2">{{ _('Page') }} {{ page.slug }}</div>
                 
                 <div class="flex flex-wrap items-center justify-center gap-1">
                   {% if has_revision %}
                     <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-royalblue/10 text-royalblue">
-                      OCR
+                      {{ _('OCR') }}
                     </span>
                   {% endif %}
                   
@@ -220,7 +220,7 @@
                       {% endfor %}
                     {% else %}
                       <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                        TRANS
+                        {{ _('TRANS') }}
                       </span>
                     {% endif %}
                   {% endif %}
@@ -239,4 +239,3 @@
   </div>
 </div>
 {% endblock %}
-

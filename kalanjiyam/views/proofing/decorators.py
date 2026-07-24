@@ -2,6 +2,7 @@ from collections.abc import Callable
 from functools import wraps
 
 from flask import current_app, flash, redirect, url_for
+from flask_babel import lazy_gettext as _l
 from flask_login import current_user
 
 
@@ -43,7 +44,7 @@ def p2_required(func: Callable):
                 if device_fp and project.fingerprint_id == device_fp:
                     return current_app.ensure_sync(func)(*args, **kwargs)
 
-        flash("Sorry, you aren't authorized to use this feature.", "error")
+        flash(_l("Sorry, you aren't authorized to use this feature."), "error")
         return redirect(url_for("proofing.index"))
 
     return decorated_view
@@ -53,7 +54,7 @@ def moderator_required(func: Callable):
     @wraps(func)
     def decorated_view(*args, **kwargs):
         if not (current_user.is_moderator or current_user.is_org_admin or current_user.is_super_admin):
-            flash("Sorry, you aren't authorized to use this feature.", "error")
+            flash(_l("Sorry, you aren't authorized to use this feature."), "error")
             return redirect(url_for("proofing.index"))
         return current_app.ensure_sync(func)(*args, **kwargs)
 

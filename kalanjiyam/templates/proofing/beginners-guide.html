@@ -42,9 +42,7 @@
     _("A five minute guide to proofing Sanskrit texts")) }}
 
 <div class="prose prose-slate max-w-none prose-lg">
-<p class="font-medium text-slate-600 leading-relaxed"><dfn class="text-royalblue font-bold">Proofing</dfn>, short for "proofreading," is when people like you create
-high-quality Sanskrit text that everyone can use and enjoy. All of our proofing
-projects are based on scans of physical books.</p>
+<p class="font-medium text-slate-600 leading-relaxed">{{ _('Proofing, short for "proofreading," is when people like you create high-quality Sanskrit text that everyone can use and enjoy. All of our proofing projects are based on scans of physical books.') }}</p>
 
 {{ _table_of_contents(contents) }}
 
@@ -86,7 +84,7 @@ domain and related to Sanskrit in some way.</p>
 <p>Once you find an interesting project, you can start proofing one of its
 pages. We recommend starting with a <span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-lg font-black">{{ _('red') }}</span> page, since these pages need the most work.</p>
 
-<p>Our page editor shows a basic side-by-side view:</p>
+<p>{{ _('Our page editor shows a basic side-by-side view:') }}</p>
 
 {% call m_guide.html_figure(_("Our page editor interface")) %}
 <div class="flex flex-col md:flex-row gap-4">
@@ -98,12 +96,9 @@ pages. We recommend starting with a <span class="px-2 py-0.5 bg-red-100 text-red
 <p>The right side has the original page, and the left side has a text box where
 you can type your changes. The left side also has an <span class="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded font-black text-xs">OCR</span> button that automatically transcribes the page.</p>
 
-<p>Your goal is to match the text in the original scan as accurately as
-possible. We strongly recommend running OCR first then fixing its mistakes by
-hand.</p>
+<p>{{ _('Your goal is to match the text in the original scan as accurately as possible. We strongly recommend running OCR first then fixing its mistakes by hand.') }}</p>
 
-<p>When you're ready to save your changes, you can use the form at the bottom
-of the page editor:</p>
+<p>{{ _('When you\'re ready to save your changes, you can use the form at the bottom of the page editor:') }}</p>
 </div>
 
 {% call m_guide.html_figure(_("The submission form")) %}
@@ -111,11 +106,9 @@ of the page editor:</p>
 {% endcall %}
 
 <div class="prose prose-slate max-w-none prose-lg mt-8">
-<p>If your change is complex, feel free to write a short message about what
-changes you made. Otherwise, you can leave this blank.</p>
+<p>{{ _('If your change is complex, feel free to write a short message about what changes you made. Otherwise, you can leave this blank.') }}</p>
 
-<p>More importantly, you can change the page's status so that other proofers
-know what work still needs to be done on the page.</p>
+<p>{{ _('More importantly, you can change the page\'s status so that other proofers know what work still needs to be done on the page.') }}</p>
 
 
 {{ _h('guidelines') }}
@@ -164,7 +157,7 @@ pixel-perfect copy of the original image.</p>
         <h3 class="text-xl font-bold text-slate-800 mb-4">{{ _('How do I write in Devanagari?') }}</h3>
         {% set baraha = "https://baraha.com/v10/index.php" %}
         {% set lipika = "https://github.com/ratreya/lipika-ime" %}
-        <p class="text-slate-600 font-medium">We recommend using the following tools for typing Sanskrit:</p>
+        <p class="text-slate-600 font-medium">{{ _('We recommend using the following tools for typing Sanskrit:') }}</p>
         <ul class="flex gap-4 mt-4">
           <li><a href="{{ baraha }}" class="btn-premium py-2 px-4 text-xs">Baraha (Windows)</a></li>
           <li><a href="{{ lipika }}" class="btn-premium py-2 px-4 text-xs">LipikaIME (macOS)</a></li>

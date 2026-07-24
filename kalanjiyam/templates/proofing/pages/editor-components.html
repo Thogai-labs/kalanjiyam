@@ -17,6 +17,21 @@ these components in our help text and documentation.
 
 {% import "macros/proofing.html" as m %}
 
+{% set language_labels = {
+  'sa': _('Sanskrit (sa)'), 'hi': _('Hindi (hi)'), 'te': _('Telugu (te)'),
+  'mr': _('Marathi (mr)'), 'bn': _('Bengali (bn)'), 'gu': _('Gujarati (gu)'),
+  'kn': _('Kannada (kn)'), 'ml': _('Malayalam (ml)'), 'ta': _('Tamil (ta)'),
+  'pa': _('Punjabi (pa)'), 'or': _('Odia (or)'), 'ur': _('Urdu (ur)'),
+  'en': _('English (en)'), 'fr': _('French (fr)'), 'de': _('German (de)'),
+  'es': _('Spanish (es)'), 'ja': _('Japanese (ja)'), 'ko': _('Korean (ko)'),
+  'zh': _('Chinese (zh)')
+} %}
+
+{% macro language_options(codes) %}
+{% for code in codes %}<option value="{{ code }}">{{ language_labels[code] }}</option>
+{% endfor %}
+{% endmacro %}
+
 
 {# Button for specific OpenSeadragon (OSD) functions. #}
 {# FIXME: migrate all of these buttons to `alpine_button`. #}
@@ -372,43 +387,13 @@ these components in our help text and documentation.
       <li class="mb-3 px-3">
         <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Source Language') }}</label>
         <select class="form-select-enhanced w-full" x-model="sourceLanguage" id="source-language-select" @change="saveSettings()" @click.stop>
-          <option value="hi">Hindi (hi)</option>
-          <option value="te">Telugu (te)</option>
-          <option value="mr">Marathi (mr)</option>
-          <option value="bn">Bengali (bn)</option>
-          <option value="gu">Gujarati (gu)</option>
-          <option value="kn">Kannada (kn)</option>
-          <option value="ml">Malayalam (ml)</option>
-          <option value="ta">Tamil (ta)</option>
-          <option value="pa">Punjabi (pa)</option>
-          <option value="or">Odia (or)</option>
-          <option value="ur">Urdu (ur)</option>
-          <option value="en">English (en)</option>
-          <option value="sa">Sanskrit (sa)</option>
+          {{ language_options(['hi', 'te', 'mr', 'bn', 'gu', 'kn', 'ml', 'ta', 'pa', 'or', 'ur', 'en', 'sa']) }}
         </select>
       </li>
       <li class="mb-3 px-3">
         <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Target Language') }}</label>
         <select class="form-select-enhanced w-full" x-model="targetLanguage" id="target-language-select" @change="saveSettings()" @click.stop>
-          <option value="en">English (en)</option>
-          <option value="sa">Sanskrit (sa)</option>
-          <option value="hi">Hindi (hi)</option>
-          <option value="te">Telugu (te)</option>
-          <option value="mr">Marathi (mr)</option>
-          <option value="bn">Bengali (bn)</option>
-          <option value="gu">Gujarati (gu)</option>
-          <option value="kn">Kannada (kn)</option>
-          <option value="ml">Malayalam (ml)</option>
-          <option value="ta">Tamil (ta)</option>
-          <option value="pa">Punjabi (pa)</option>
-          <option value="or">Odia (or)</option>
-          <option value="ur">Urdu (ur)</option>
-          <option value="fr">French (fr)</option>
-          <option value="de">German (de)</option>
-          <option value="es">Spanish (es)</option>
-          <option value="ja">Japanese (ja)</option>
-          <option value="ko">Korean (ko)</option>
-          <option value="zh">Chinese (zh)</option>
+          {{ language_options(['en', 'sa', 'hi', 'te', 'mr', 'bn', 'gu', 'kn', 'ml', 'ta', 'pa', 'or', 'ur', 'fr', 'de', 'es', 'ja', 'ko', 'zh']) }}
         </select>
       </li>
       <li class="mb-3 px-3 relative" x-show="filteredGlossaries.length > 0" x-cloak x-data="{ open: false }" @click.outside="open = false">
@@ -488,9 +473,9 @@ these components in our help text and documentation.
     <div>
       <span class="text-lg font-semibold text-peacock-primary">{{ image_number }}</span>
       <div class="text-sm text-peacock-secondary">
-        Image {{ image_number }} of {{ num_images }}
+        {{ _('Image %(current)s of %(total)s', current=image_number, total=num_images) }}
         {% if image_title != page_number %}
-          (Page {{ page_number }})
+          ({{ _('Page %(page)s', page=page_number) }})
         {% endif %}
       </div>
     </div>
@@ -808,18 +793,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                       id="source-language-select"
                       @change="saveSettings()"
                       @click.stop>
-                <option value="hi">Hindi (hi)</option>
-                <option value="te">Telugu (te)</option>
-                <option value="mr">Marathi (mr)</option>
-                <option value="bn">Bengali (bn)</option>
-                <option value="gu">Gujarati (gu)</option>
-                <option value="kn">Kannada (kn)</option>
-                <option value="ml">Malayalam (ml)</option>
-                <option value="ta">Tamil (ta)</option>
-                <option value="pa">Punjabi (pa)</option>
-                <option value="or">Odia (or)</option>
-                <option value="ur">Urdu (ur)</option>
-                <option value="en">English (en)</option>
+                {{ language_options(['hi', 'te', 'mr', 'bn', 'gu', 'kn', 'ml', 'ta', 'pa', 'or', 'ur', 'en']) }}
               </select>
             </div>
           </li>
@@ -833,25 +807,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                       id="target-language-select"
                       @change="saveSettings()"
                       @click.stop>
-                <option value="en">English (en)</option>
-                <option value="sa">Sanskrit (sa)</option>
-                <option value="hi">Hindi (hi)</option>
-                <option value="te">Telugu (te)</option>
-                <option value="mr">Marathi (mr)</option>
-                <option value="bn">Bengali (bn)</option>
-                <option value="gu">Gujarati (gu)</option>
-                <option value="kn">Kannada (kn)</option>
-                <option value="ml">Malayalam (ml)</option>
-                <option value="ta">Tamil (ta)</option>
-                <option value="pa">Punjabi (pa)</option>
-                <option value="or">Odia (or)</option>
-                <option value="ur">Urdu (ur)</option>
-                <option value="fr">French (fr)</option>
-                <option value="de">German (de)</option>
-                <option value="es">Spanish (es)</option>
-                <option value="ja">Japanese (ja)</option>
-                <option value="ko">Korean (ko)</option>
-                <option value="zh">Chinese (zh)</option>
+                {{ language_options(['en', 'sa', 'hi', 'te', 'mr', 'bn', 'gu', 'kn', 'ml', 'ta', 'pa', 'or', 'ur', 'fr', 'de', 'es', 'ja', 'ko', 'zh']) }}
               </select>
             </div>
           </li>

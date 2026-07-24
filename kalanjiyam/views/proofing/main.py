@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import Blueprint, current_app, flash, render_template, request, redirect, url_for
+from flask_babel import lazy_gettext as _l
 from flask_login import current_user
 from flask_wtf import FlaskForm
 from slugify import slugify
@@ -48,45 +49,45 @@ def _required_if_local(message: str):
 
 class CreateProjectForm(FlaskForm):
     pdf_source = RadioField(
-        "Source",
+        _l("Source"),
         choices=[
-            ("archive.org", "From archive.org"),
-            ("local", "From my computer"),
+            ("archive.org", _l("From archive.org")),
+            ("local", _l("From my computer")),
         ],
         validators=[DataRequired()],
     )
     archive_identifier = StringField(
-        "archive.org identifier",
+        _l("archive.org identifier"),
         validators=[
-            _required_if_archive("Please provide a valid archive.org identifier.")
+            _required_if_archive(_l("Please provide a valid archive.org identifier."))
         ],
     )
     local_file = FileField(
-        "PDF file", validators=[_required_if_local("Please provide a PDF file.")]
+        _l("PDF file"), validators=[_required_if_local(_l("Please provide a PDF file."))]
     )
     local_title = StringField(
-        "Title of the book (you can change this later)",
+        _l("Title of the book (you can change this later)"),
         validators=[
             _required_if_local(
-                "Please provide a title for your PDF.",
+                _l("Please provide a title for your PDF."),
             )
         ],
     )
 
     license = RadioField(
-        "License",
+        _l("License"),
         choices=[
-            ("public", "Public domain"),
-            ("copyrighted", "Copyrighted"),
-            ("other", "Other"),
+            ("public", _l("Public domain")),
+            ("copyrighted", _l("Copyrighted")),
+            ("other", _l("Other")),
         ],
         validators=[DataRequired()],
     )
     custom_license = StringField(
-        "License",
+        _l("License"),
         widget=TextArea(),
         render_kw={
-            "placeholder": "Please tell us about this book's license.",
+            "placeholder": _l("Please tell us about this book's license."),
         },
     )
 
@@ -200,7 +201,7 @@ def create_project():
         or is_p2_or_admin  # Enterprise P2 or Admin
     )
     if not allowed:
-        flash("Sorry, you aren't authorized to use this feature.", "error")
+        flash(_l("Sorry, you aren't authorized to use this feature."), "error")
         return redirect(url_for("proofing.index"))
 
     # Rate limiting for guest users
@@ -210,7 +211,13 @@ def create_project():
         fingerprint_id = request.cookies.get("device_fingerprint")
         limit = settings.unregistered_user_project_limit
         if is_rate_limited("create_project", ip_address, fingerprint_id, limit=limit):
-            flash(f"Rate limit exceeded. Guests can only create {limit} projects per 24 hours.", "error")
+            flash(
+                _l(
+                    "Rate limit exceeded. Guests can only create %(limit)s projects per 24 hours.",
+                    limit=limit,
+                ),
+                "error",
+            )
             return redirect(url_for("proofing.index"))
 
     from kalanjiyam.utils.translation_engine import get_available_translation_engines, get_supported_languages_list
@@ -228,12 +235,12 @@ def create_project():
 
         file = request.files.get("local_file")
         if not file or not file.filename:
-            flash("Please upload a file.", "error")
+            flash(_l("Please upload a file."), "error")
             return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
 
         filename = file.filename
         if Path(filename).suffix not in (".docx", ".doc"):
-            flash("Please upload a Word document (.docx).", "error")
+            flash(_l("Please upload a Word document (.docx)."), "error")
             return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
 
         source_lang = request.form.get("source_lang", "sa")
@@ -244,7 +251,7 @@ def create_project():
         # Validate engine
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
         if not TranslationEngineFactory.is_supported(engine):
-            flash("Unsupported translation engine selected.", "error")
+            flash(_l("Unsupported translation engine selected."), "error")
             return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
 
         docx_id = str(uuid.uuid4())
@@ -303,7 +310,7 @@ def create_project():
             if current_app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True) and not getattr(
                 current_user, "organization_id", None
             ):
-                flash("Your account is not assigned to an organization.", "error")
+                flash(_l("Your account is not assigned to an organization."), "error")
                 return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
         title = form.local_title.data
 
@@ -312,7 +319,7 @@ def create_project():
 
         filename = form.local_file.raw_data[0].filename
         if not _is_allowed_document_file(filename):
-            flash("Please upload a PDF or DOCX.", "error")
+            flash(_l("Please upload a PDF or DOCX."), "error")
             return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
         upload_size = 0
         if form.local_file.data and hasattr(form.local_file.data, "stream"):
@@ -325,7 +332,13 @@ def create_project():
             ensure_storage_quota_for_user(current_user, upload_size)
         else:
             if upload_size > guest_upload_limit * 1024 * 1024:
-                flash(f"PDF size exceeds the allowed limit of {guest_upload_limit}MB for guest users.", "error")
+                flash(
+                    _l(
+                        "PDF size exceeds the allowed limit of %(limit)sMB for guest users.",
+                        limit=guest_upload_limit,
+                    ),
+                    "error",
+                )
                 return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
 
         # Save the original file so that it can be processed/downloaded later.
@@ -576,12 +589,12 @@ def docx_translate():
         # Check if file uploaded
         file = request.files.get("file")
         if not file or not file.filename:
-            flash("Please upload a file.", "error")
+            flash(_l("Please upload a file."), "error")
             return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
 
         filename = file.filename
         if Path(filename).suffix not in (".docx", ".doc"):
-            flash("Please upload a Word document (.docx).", "error")
+            flash(_l("Please upload a Word document (.docx)."), "error")
             return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
 
         source_lang = request.form.get("source_lang", "sa")
@@ -592,7 +605,7 @@ def docx_translate():
         # Validate engine
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
         if not TranslationEngineFactory.is_supported(engine):
-            flash("Unsupported translation engine selected.", "error")
+            flash(_l("Unsupported translation engine selected."), "error")
             return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
 
         docx_id = str(uuid.uuid4())
@@ -689,7 +702,7 @@ def docx_translate_download(docx_id):
     trans_key = docx_translation_key(docx_id)
     
     if not storage.exists(trans_key):
-        abort(404, description="Translated file not found.")
+        abort(404, description=_l("Translated file not found."))
 
     r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     info_json = r_client.get(f"docx_info:{docx_id}")
