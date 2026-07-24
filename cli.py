@@ -279,5 +279,25 @@ def set_org_quota(org_slug, storage_mb, ocr_credits):
     click.echo(f'Updated quotas for "{org_slug}".')
 
 
+@cli.command()
+@click.option("--days", type=int, default=7, help="Delete files older than N days (default: 7)")
+@click.option("--force", is_flag=True, help="Force cleanup even if AUTO_UPLOADED_FILES_CLEANUP is false")
+@click.option("--env", "app_env", default="development", help="Application environment (default: development)")
+def cleanup_uploads(days, force, app_env):
+    """Delete uploaded source PDF and DOC/DOCX files older than specified days."""
+    from config import create_config_only_app
+    from kalanjiyam.utils.storage import cleanup_old_uploaded_files, get_storage
+
+    app = create_config_only_app(app_env)
+    with app.app_context():
+        enabled = app.config.get("AUTO_UPLOADED_FILES_CLEANUP", False)
+        if not enabled and not force:
+            click.echo("AUTO_UPLOADED_FILES_CLEANUP is disabled. Pass --force to override.")
+            return
+        storage = get_storage()
+        deleted = cleanup_old_uploaded_files(storage, days=days)
+        click.echo(f"Cleaned up {deleted} uploaded source PDF/DOC files older than {days} days.")
+
+
 if __name__ == "__main__":
     cli()

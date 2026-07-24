@@ -256,12 +256,42 @@ def activity(slug):
     session = q.get_session()
     recent_revisions = (
         session.query(db.Revision)
-        .options(orm.defer(db.Revision.content))
         .filter_by(project_id=project_.id)
         .order_by(db.Revision.created.desc())
         .limit(100)
         .all()
     )
+
+    page_ids = {r.page_id for r in recent_revisions}
+    if page_ids:
+        all_page_revisions = (
+            session.query(db.Revision)
+            .filter(db.Revision.page_id.in_(page_ids))
+            .order_by(db.Revision.page_id, db.Revision.created.desc())
+            .all()
+        )
+    else:
+        all_page_revisions = []
+
+    revisions_by_page = {}
+    for r in all_page_revisions:
+        revisions_by_page.setdefault(r.page_id, []).append(r)
+
+    from kalanjiyam.utils.diff import revision_diff
+
+    for r in recent_revisions:
+        page_revs = revisions_by_page.get(r.page_id, [])
+        try:
+            idx = page_revs.index(r)
+        except ValueError:
+            idx = -1
+
+        if idx != -1 and idx + 1 < len(page_revs):
+            prev_r = page_revs[idx + 1]
+            r.diff = revision_diff(prev_r.content, r.content)
+        else:
+            r.diff = None
+
     recent_activity = [("revision", r.created, r) for r in recent_revisions]
     recent_activity.append(("project", project_.created_at, project_))
 
@@ -300,6 +330,7 @@ def edit(slug):
         project=project_,
         form=form,
         delete_form=delete_form,
+        supported_engines=SUPPORTED_ENGINES,
     )
 
 
@@ -521,12 +552,10 @@ def download_as_pdf(slug):
 
 
 @bp.route("/<slug>/stats")
-@moderator_required
 def stats(slug):
     """Show basic statistics about this project.
 
-    Currently, these stats don't show any sensitive information. But since that
-    might change in the future, limit this page to moderators only.
+    Currently, these stats don't show any sensitive information.
     """
     project_ = q.project(slug)
     if project_ is None:
@@ -550,7 +579,6 @@ def stats(slug):
 
 
 @bp.route("/<slug>/stats/compare", methods=["POST"])
-@moderator_required
 def run_comparison(slug):
     """Run an OCR comparison against ground truth."""
     project_ = q.project(slug)
@@ -580,7 +608,6 @@ def run_comparison(slug):
 
 
 @bp.route("/<slug>/stats/compare/<int:comparison_id>")
-@moderator_required
 def comparison_details(slug, comparison_id):
     """Show detailed results for a comparison."""
     project_ = q.project(slug)
@@ -591,6 +618,19 @@ def comparison_details(slug, comparison_id):
     comparison = session.query(OCRComparison).get(comparison_id)
     if not comparison or comparison.project_id != project_.id:
         abort(404)
+
+    # Ensure JSON columns are deserialized if they are returned as string (SQLite fallback)
+    import json
+    if isinstance(comparison.page_results, str):
+        try:
+            comparison.page_results = json.loads(comparison.page_results)
+        except Exception as e:
+            LOG.warning(f"Failed to deserialize page_results: {e}")
+    if isinstance(comparison.summary_metrics, str):
+        try:
+            comparison.summary_metrics = json.loads(comparison.summary_metrics)
+        except Exception as e:
+            LOG.warning(f"Failed to deserialize summary_metrics: {e}")
 
     return render_template(
         "proofing/projects/comparison_details.html",
@@ -1141,6 +1181,7 @@ def batch_ocr_status(task_id):
         active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
         pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
         failed_tasks = sum(1 for result in r.results if result.failed())
+        revoked_tasks = sum(1 for result in r.results if result.state == 'REVOKED')
 
         status = None
         if total:
@@ -1151,6 +1192,9 @@ def batch_ocr_status(task_id):
             elif failed_tasks > 0:
                 status = "FAILURE"
                 # Clear the task from Redis when failed
+                _clear_ocr_task_from_redis(task_id)
+            elif revoked_tasks > 0:
+                status = "CANCELLED"
                 _clear_ocr_task_from_redis(task_id)
             else:
                 status = "PROGRESS"
@@ -1346,6 +1390,7 @@ def batch_translate_status(task_id):
         active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
         pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
         failed_tasks = sum(1 for result in r.results if result.failed())
+        revoked_tasks = sum(1 for result in r.results if result.state == 'REVOKED')
 
         status = None
         if total:
@@ -1357,6 +1402,10 @@ def batch_translate_status(task_id):
             elif failed_tasks > 0:
                 status = "FAILURE"
                 # Clear the task from Redis when failed
+                from kalanjiyam.tasks.translation import _clear_translation_task_from_redis
+                _clear_translation_task_from_redis(task_id)
+            elif revoked_tasks > 0:
+                status = "CANCELLED"
                 from kalanjiyam.tasks.translation import _clear_translation_task_from_redis
                 _clear_translation_task_from_redis(task_id)
             else:

@@ -139,7 +139,7 @@ def index():
         statuses_per_project[project.id] = project_counts
         pages_per_project[project.id] = num_pages
 
-    projects.sort(key=lambda x: x.display_title)
+    projects.sort(key=lambda x: x.created_at, reverse=True)
     return render_template(
         "proofing/index.html",
         projects=projects,
@@ -280,6 +280,7 @@ def create_project():
             target_lang=target_lang,
             engine=engine,
             glossary=glossary,
+            creator_id=current_user.id if current_user.is_authenticated else None,
         )
 
         from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
@@ -553,6 +554,24 @@ def get_tasks_api():
         return {"tasks": []}, 500
 
 
+@bp.route("/api/tasks/<task_id>/cancel", methods=["POST"])
+def cancel_task_api(task_id):
+    """Cancel a background task for the current user."""
+    from kalanjiyam.utils.user_tasks import cancel_user_task, get_user_identifier
+    user_id = get_user_identifier(current_user, request)
+    if not user_id:
+        return {"error": "Unauthorized"}, 401
+        
+    try:
+        success = cancel_user_task(user_id, task_id)
+        if success:
+            return {"success": True}
+        return {"error": "Task not found or not in active state"}, 400
+    except Exception as e:
+        current_app.logger.warning(f"Error cancelling task: {e}")
+        return {"error": "Internal server error"}, 500
+
+
 @bp.route("/translate/docx", methods=["GET", "POST"])
 def docx_translate():
     import uuid
@@ -615,6 +634,7 @@ def docx_translate():
             target_lang=target_lang,
             engine=engine,
             glossary=glossary,
+            creator_id=current_user.id if current_user.is_authenticated else None,
         )
 
         from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier

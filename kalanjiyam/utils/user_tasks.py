@@ -118,12 +118,29 @@ def get_user_tasks(user_identifier):
                             info['total_count'] = total
                             updated_entries[task_id] = json.dumps(info)
                         else:
-                            info['status'] = 'running'
-                            info['progress'] = current / total if total > 0 else 0
-                            info['completed_count'] = current
-                            info['total_count'] = total
-                            if failed > 0:
-                                info['failed_count'] = failed
+                            started_at_str = info.get('started_at')
+                            is_stale = False
+                            if started_at_str:
+                                try:
+                                    started_at = datetime.fromisoformat(started_at_str)
+                                    if (datetime.utcnow() - started_at).total_seconds() > 3600:
+                                        is_stale = True
+                                except Exception:
+                                    pass
+                            
+                            if is_stale or r.ready():
+                                info['status'] = 'completed' if current > 0 else 'failed'
+                                info['progress'] = 1.0
+                                info['completed_count'] = current
+                                info['total_count'] = total
+                                updated_entries[task_id] = json.dumps(info)
+                            else:
+                                info['status'] = 'running'
+                                info['progress'] = current / total if total > 0 else 0
+                                info['completed_count'] = current
+                                info['total_count'] = total
+                                if failed > 0:
+                                    info['failed_count'] = failed
                     else:
                         # Fallback for old/unrestorable task groups
                         started_at_str = info.get('started_at')
@@ -190,3 +207,45 @@ def get_user_tasks(user_identifier):
 
     tasks.sort(key=get_started_at_key, reverse=True)
     return tasks
+
+
+def cancel_user_task(user_identifier, task_id):
+    """
+    Revokes the Celery task and updates its status in Redis to 'cancelled'.
+    """
+    if not user_identifier or not task_id:
+        return False
+        
+    key = f"user_tasks:{user_identifier}"
+    try:
+        task_data = redis_client.hget(key, task_id)
+        if not task_data:
+            return False
+            
+        info = json.loads(safe_decode(task_data))
+        status = info.get('status', 'pending')
+        task_type = info.get('type')
+        
+        if status in ['pending', 'running']:
+            # Revoke the task in Celery
+            try:
+                if task_type in ['ocr', 'translation']:
+                    r = GroupResult.restore(task_id, app=celery_app)
+                    if r:
+                        r.revoke(terminate=True)
+                else:
+                    r = AsyncResult(task_id, app=celery_app)
+                    r.revoke(terminate=True)
+            except Exception as e:
+                LOG.warning(f"Error revoking Celery task {task_id}: {e}")
+                
+            # Update status to cancelled
+            info['status'] = 'cancelled'
+            redis_client.hset(key, task_id, json.dumps(info))
+            return True
+            
+    except Exception as e:
+        LOG.warning(f"Error cancelling user task: {e}")
+        
+    return False
+

@@ -1,0 +1,21 @@
+[4/5] STEP 6/10: RUN python /app/kalanjiyam/scripts/fetch_i18n_files.py &&     pybabel compile -d /app/kalanjiyam/translations -f ||     echo "WARNING: i18n fetch failed, running in English only"
+Cloning into '/app/data/kalanjiyam-i18n'...
+fatal: could not read Username for 'https://github.com': No such device or address
+WARNING: could not clone https://github.com/AnaadiAI/kalanjiyam-i18n.git (private repo or network). App will run in English only.
+Traceback (most recent call last):
+  File "/app/.venv/bin/pybabel", line 10, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/app/.venv/lib/python3.11/site-packages/babel/messages/frontend.py", line 1050, in main
+    return CommandLineInterface().run(sys.argv)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.11/site-packages/babel/messages/frontend.py", line 976, in run
+    return cmdinst.run()
+           ^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.11/site-packages/babel/messages/frontend.py", line 199, in run
+    for errors in self._run_domain(domain).values():
+                  ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.11/site-packages/babel/messages/frontend.py", line 230, in _run_domain
+    raise OptionError(f'no message catalogs found for domain {domain!r}')
+babel.messages.frontend.OptionError: no message catalogs found for domain 'messages'
+WARNING: i18n fetch failed, running in English only

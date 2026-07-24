@@ -157,6 +157,28 @@
                     this.fetchTasks();
                 }
             },
+            cancelTask(taskId) {
+                if (!confirm('{{ _('Are you sure you want to cancel this task?') }}')) {
+                    return;
+                }
+                const url = '{{ url_for('proofing.cancel_task_api', task_id='TASK_ID_HOLDER') }}'.replace('TASK_ID_HOLDER', taskId);
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    }
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        this.fetchTasks();
+                    } else {
+                        alert(data.error || '{{ _('Failed to cancel task') }}');
+                    }
+                })
+                .catch(err => console.error('Error cancelling task:', err));
+            },
             init() {
                 this.fetchTasks();
                 // Check status every 30 seconds even when closed if we have active tasks
@@ -205,7 +227,7 @@
                                       'bg-blue-50 text-blue-600': task.status === 'running',
                                       'bg-slate-100 text-slate-500': task.status === 'pending',
                                       'bg-emerald-50 text-emerald-600': task.status === 'completed',
-                                      'bg-rose-50 text-rose-600': task.status === 'failed'
+                                      'bg-rose-50 text-rose-600': task.status === 'failed' || task.status === 'cancelled'
                                   }"
                                   x-text="task.status">
                             </span>
@@ -227,6 +249,12 @@
                         
                         <div class="flex justify-between items-center text-xs">
                             <span class="text-slate-500 text-[10px]" x-show="task.status === 'running'" x-text="`${Math.round((task.progress || 0) * 100)}% (${task.completed_count}/${task.total_count})`" x-cloak></span>
+                            <button x-show="task.status === 'running' || task.status === 'pending'"
+                                    @click="cancelTask(task.task_id)"
+                                    class="text-rose-500 hover:text-rose-700 text-[10px] font-bold flex items-center gap-0.5"
+                                    x-cloak>
+                                {{ _('Cancel') }}
+                            </button>
                             <a x-show="task.project_slug" :href="'{{ url_for('proofing.project.summary', slug='SLUG_HOLDER') }}'.replace('SLUG_HOLDER', task.project_slug)" class="text-royalblue hover:underline text-[10px] font-bold ml-auto flex items-center gap-0.5" x-cloak>
                                 {{ _('View Project') }}
                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

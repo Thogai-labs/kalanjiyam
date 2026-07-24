@@ -23,6 +23,7 @@ serves the historical uploads as-is, with no data migration.
 
 import shutil
 import tempfile
+import time
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
@@ -90,8 +91,16 @@ class Storage(ABC):
         """Return True if the object exists."""
 
     @abstractmethod
+    def delete(self, key: str) -> bool:
+        """Delete a single object by key. Returns True if deleted."""
+
+    @abstractmethod
     def list_keys(self, prefix: str) -> Iterator[tuple[str, int]]:
         """Yield ``(key, size_in_bytes)`` for every object under `prefix`."""
+
+    @abstractmethod
+    def list_keys_with_mtime(self, prefix: str = "") -> Iterator[tuple[str, int, float]]:
+        """Yield ``(key, size_in_bytes, mtime_timestamp)`` for objects under `prefix`."""
 
     @abstractmethod
     def delete_prefix(self, prefix: str) -> int:
@@ -146,6 +155,13 @@ class LocalStorage(Storage):
     def exists(self, key: str) -> bool:
         return self._path(key).is_file()
 
+    def delete(self, key: str) -> bool:
+        path = self._path(key)
+        if path.is_file():
+            path.unlink()
+            return True
+        return False
+
     def list_keys(self, prefix: str) -> Iterator[tuple[str, int]]:
         base = self._path(prefix)
         if not base.is_dir():
@@ -153,6 +169,15 @@ class LocalStorage(Storage):
         for path in base.rglob("*"):
             if path.is_file():
                 yield path.relative_to(self.root).as_posix(), path.stat().st_size
+
+    def list_keys_with_mtime(self, prefix: str = "") -> Iterator[tuple[str, int, float]]:
+        base = self._path(prefix) if prefix else self.root
+        if not base.is_dir():
+            return
+        for path in base.rglob("*"):
+            if path.is_file():
+                st = path.stat()
+                yield path.relative_to(self.root).as_posix(), st.st_size, st.st_mtime
 
     def delete_prefix(self, prefix: str) -> int:
         base = self._path(prefix)
@@ -256,11 +281,25 @@ class S3Storage(Storage):
         except botocore.exceptions.ClientError:
             return False
 
+    def delete(self, key: str) -> bool:
+        if self.exists(key):
+            self.client.delete_object(Bucket=self.bucket, Key=key)
+            return True
+        return False
+
     def list_keys(self, prefix: str) -> Iterator[tuple[str, int]]:
         paginator = self.client.get_paginator("list_objects_v2")
         for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
             for obj in page.get("Contents", []):
                 yield obj["Key"], obj["Size"]
+
+    def list_keys_with_mtime(self, prefix: str = "") -> Iterator[tuple[str, int, float]]:
+        paginator = self.client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                lm = obj.get("LastModified")
+                mtime = lm.timestamp() if lm else time.time()
+                yield obj["Key"], obj["Size"], mtime
 
     def delete_prefix(self, prefix: str) -> int:
         keys = [key for key, _ in self.list_keys(prefix)]
@@ -311,14 +350,16 @@ class MemoryStorage(Storage):
 
     def __init__(self):
         self.files = {}
+        self.mtimes = {}
 
-    def save(self, key: str, source: Path | str | bytes | BinaryIO) -> None:
+    def save(self, key: str, source: Path | str | bytes | BinaryIO, mtime: float | None = None) -> None:
         if isinstance(source, (Path, str)):
             self.files[key] = Path(source).read_bytes()
         elif isinstance(source, bytes):
             self.files[key] = source
         else:
             self.files[key] = source.read()
+        self.mtimes[key] = mtime or time.time()
 
     def read_bytes(self, key: str) -> bytes:
         if key not in self.files:
@@ -328,15 +369,28 @@ class MemoryStorage(Storage):
     def exists(self, key: str) -> bool:
         return key in self.files
 
+    def delete(self, key: str) -> bool:
+        if key in self.files:
+            del self.files[key]
+            self.mtimes.pop(key, None)
+            return True
+        return False
+
     def list_keys(self, prefix: str) -> Iterator[tuple[str, int]]:
-        for key, data in self.files.items():
+        for key, data in list(self.files.items()):
             if key.startswith(prefix):
                 yield key, len(data)
+
+    def list_keys_with_mtime(self, prefix: str = "") -> Iterator[tuple[str, int, float]]:
+        for key, data in list(self.files.items()):
+            if key.startswith(prefix):
+                yield key, len(data), self.mtimes.get(key, time.time())
 
     def delete_prefix(self, prefix: str) -> int:
         to_delete = [k for k in self.files if k.startswith(prefix)]
         for k in to_delete:
             del self.files[k]
+            self.mtimes.pop(k, None)
         return len(to_delete)
 
     def local_copy(self, key: str) -> Path:
@@ -375,3 +429,26 @@ def get_storage() -> Storage:
     if "kalanjiyam_storage" not in extensions:
         extensions["kalanjiyam_storage"] = _build_storage(current_app.config)
     return extensions["kalanjiyam_storage"]
+
+
+def cleanup_old_uploaded_files(
+    storage: Storage,
+    days: int = 7,
+    extensions: tuple[str, ...] = (".pdf", ".docx", ".doc"),
+) -> int:
+    """Delete uploaded files matching `extensions` older than `days` days.
+
+    :param storage: Storage backend instance.
+    :param days: Age threshold in days (default: 7).
+    :param extensions: Target file extensions to clean up.
+    :return: Number of files deleted.
+    """
+    cutoff = time.time() - (days * 86400)
+    deleted_count = 0
+    for key, _size, mtime in storage.list_keys_with_mtime(""):
+        lower_key = key.lower()
+        if any(lower_key.endswith(ext) for ext in extensions):
+            if mtime <= cutoff:
+                if storage.delete(key):
+                    deleted_count += 1
+    return deleted_count

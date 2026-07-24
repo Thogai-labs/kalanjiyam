@@ -217,6 +217,9 @@ def documents_to_html(pages, *, replica: bool = False) -> str:
         '<!DOCTYPE html><html><head><meta charset="utf-8">',
         "<title>Export</title>",
         '<link rel="stylesheet" href="/static/css/style.css">',
+        '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.css">',
+        '<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.js"></script>',
+        '<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body, {delimiters:[{left:\'$$\',right:\'$$\',display:true},{left:\'$\',right:\'$\',display:false},{left:\'\\\\(\',right:\'\\\\)\',display:false},{left:\'\\\\[\',right:\'\\\\]\',display:true}],throwOnError:false});"></script>',
         "</head><body class='p-8'>",
     ]
     for page in pages:
@@ -339,36 +342,300 @@ def _add_image_to_paragraph(img_tag, paragraph) -> bool:
     return False
 
 
-def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=False, underline=False, strike=False) -> None:
-    for child in parent_el.children:
-        if isinstance(child, NavigableString):
-            text = str(child).replace("\r", "").replace("\n", " ")
-            if text:
-                run = paragraph.add_run(text)
+def auto_wrap_math(text: str) -> str:
+    if not text:
+        return ""
+    
+    import re
+
+    # Step 1: Temporarily extract HTML tags (<img ...>, <a ...>, etc.) to protect them
+    html_tags = []
+    def _extract_tag(m):
+        idx = len(html_tags)
+        html_tags.append(m.group(0))
+        return f"__TEMP_HTML_TAG_{idx}__"
+
+    processed_text = re.sub(r'<[^>]+>', _extract_tag, text)
+    parts = re.split(r'(\$\$.*?\$\$|\$.*?\$)', processed_text)
+    
+    def wrap_segment(seg: str) -> str:
+        if not seg.strip():
+            return seg
+            
+        trimmed = seg.strip()
+        if (
+            re.search(r'\.(png|jpe?g|gif|webp|svg)(\?.*)?$', trimmed, re.I)
+            or re.match(r'^https?://', trimmed, re.I)
+            or trimmed.startswith('/static/')
+            or 'extracted_' in trimmed
+            or '__TEMP_HTML_TAG_' in trimmed
+        ):
+            return seg
+            
+        has_devanagari = bool(re.search(r'[\u0900-\u097F]', seg))
+        
+        if not has_devanagari:
+            has_latex = bool(re.search(r'\\(begin|end|Delta|times|therefore|vmatrix|frac|alpha|beta|gamma|theta|approx|neq|pm|lambda|sigma|pi|phi|omega|sqrt|partial|nabla|int|sum|prod|cup|cap|in|subset|infty|left|right|vmatrix|matrix|align|circ|text|deg)', seg))
+            words = re.findall(r'[a-z]{4,}', seg)
+            is_standalone_equation = len(words) == 0 or '\\begin' in seg or ' ' not in seg
+            
+            if is_standalone_equation:
+                has_math_sub_super = bool(re.search(r'[a-zA-Z0-9]*_[a-zA-Z0-9\{\}\\\s]+|[a-zA-Z0-9]*\^[a-zA-Z0-9\{\}\\\s]+', seg))
+                has_math_equation = bool(re.search(r'[a-zA-Z0-9]+\s*[\+\*=]\s*[a-zA-Z0-9]+', seg) or re.search(r'[a-zA-Z0-9]+\s+[\-\/]\s+[a-zA-Z0-9]+', seg))
+                if has_latex or has_math_sub_super or has_math_equation:
+                    if (
+                        'extracted_' in seg
+                        or '.png' in seg
+                        or '.jpg' in seg
+                        or '.jpeg' in seg
+                        or '.svg' in seg
+                        or '/' in seg
+                        or '\\' in seg
+                        or 'http:' in seg
+                        or 'https:' in seg
+                        or 'src=' in seg
+                        or '__TEMP_HTML_TAG_' in seg
+                    ):
+                        return seg
+                    if '\\begin' in seg or '\n' in seg:
+                        return f"$${seg}$$"
+                    return f"${seg}$"
+                return seg
+            else:
+                def token_replacer(match):
+                    m = match.group(1)
+                    t = m.strip()
+                    if not t:
+                        return m
+                    if '/' in t or '\\Users' in t or ':\\' in t or 'extracted_' in t or '__TEMP_HTML_TAG_' in t:
+                        return m
+                    leading_space = re.match(r'^\s*', m).group(0)
+                    trailing_space = re.search(r'\s*$', m).group(0)
+                    return f"{leading_space}${t}${trailing_space}"
+                
+                pattern = r'([a-zA-Z0-9]*[\^\_\\][a-zA-Z0-9\{\}\\\:\.\,\-\+\*\/]*[a-zA-Z0-9\}]+)'
+                return re.sub(pattern, token_replacer, seg)
+        else:
+            result = seg
+            result = re.sub(r'(\\begin\{[a-zA-Z]+\}[\s\S]*?\\end\{[a-zA-Z]+\})', r'$$\1$$', result)
+            
+            def devanagari_replacer(match):
+                m = match.group(1)
+                t = m.strip()
+                if not t:
+                    return m
+                if '/' in t or '\\' in t or 'extracted_' in t or '__TEMP_HTML_TAG_' in t or '.png' in t or '.jpg' in t:
+                    return m
+                if re.match(r'^[a-zA-Z]$', t) or re.match(r'^\d+$', t):
+                    return m
+                leading_space = re.match(r'^\s*', m).group(0)
+                trailing_space = re.search(r'\s*$', m).group(0)
+                return f"{leading_space}${t}${trailing_space}"
+                
+            math_pattern = r'((?:[a-zA-Z0-9\(\)\[\]\s=\+\-\*\/]*?)(?:(?:\\[a-zA-Z]+)|(?:[a-zA-Z0-9]+(?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)))(?:[a-zA-Z0-9\+\-\*\/=\(\)\[\]_\^\\\{\}\:\.,\s\times\therefore]|(?:\\[a-zA-Z]+)|(?:[a-zA-Z0-9]+(?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)))*)'
+            return re.sub(math_pattern, devanagari_replacer, result)
+            
+    processed_parts = []
+    for part in parts:
+        if not part:
+            continue
+        if (part.startswith('$$') and part.endswith('$$')) or (part.startswith('$') and part.endswith('$')):
+            processed_parts.append(part)
+        else:
+            processed_parts.append(wrap_segment(part))
+            
+    result_str = "".join(processed_parts)
+    for idx, tag in enumerate(html_tags):
+        result_str = result_str.replace(f"__TEMP_HTML_TAG_{idx}__", tag)
+
+    return result_str
+
+
+def _add_text_and_math_to_paragraph(text, paragraph, bold=False, italic=False, underline=False, strike=False, font_name=None, font_size=None) -> None:
+    import re
+    from docx.oxml import parse_xml
+    import latex2mathml.converter
+    import mathml2omml
+
+    parts = re.split(r'(\$\$.*?\$\$|\$.*?\$)', text)
+    for part in parts:
+        if not part:
+            continue
+        if (part.startswith('$$') and part.endswith('$$')) or (part.startswith('$') and part.endswith('$')):
+            is_display = part.startswith('$$')
+            latex_formula = part[2:-2] if is_display else part[1:-1]
+            latex_formula = latex_formula.strip()
+            if not latex_formula:
+                continue
+            try:
+                mathml = latex2mathml.converter.convert(latex_formula)
+                omml = mathml2omml.convert(mathml)
+                xml_str = f'<m:oMathPara xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">{omml}</m:oMathPara>'
+                omathpara_el = parse_xml(xml_str.encode("utf-8"))
+                paragraph._element.append(omathpara_el)
+            except Exception:
+                run = paragraph.add_run(part)
                 run.bold = bold
                 run.italic = italic
                 run.underline = underline
                 if strike:
                     run.font.strike = True
+                if font_name:
+                    run.font.name = font_name
+                    try:
+                        from docx.oxml.ns import qn
+                        rPr = run._r.get_or_add_rPr()
+                        rFonts = rPr.get_or_add_rFonts()
+                        rFonts.set(qn('w:ascii'), font_name)
+                        rFonts.set(qn('w:hAnsi'), font_name)
+                        rFonts.set(qn('w:eastAsia'), font_name)
+                        rFonts.set(qn('w:cs'), font_name)
+                    except Exception:
+                        pass
+                if font_size:
+                    from docx.shared import Pt
+                    run.font.size = Pt(font_size)
+        else:
+            run = paragraph.add_run(part)
+            run.bold = bold
+            run.italic = italic
+            run.underline = underline
+            if strike:
+                run.font.strike = True
+            if font_name:
+                run.font.name = font_name
+                try:
+                    from docx.oxml.ns import qn
+                    rPr = run._r.get_or_add_rPr()
+                    rFonts = rPr.get_or_add_rFonts()
+                    rFonts.set(qn('w:ascii'), font_name)
+                    rFonts.set(qn('w:hAnsi'), font_name)
+                    rFonts.set(qn('w:eastAsia'), font_name)
+                    rFonts.set(qn('w:cs'), font_name)
+                except Exception:
+                    pass
+            if font_size:
+                from docx.shared import Pt
+                run.font.size = Pt(font_size)
+
+
+def _get_or_create_footnotes_part(doc):
+    from docx.opc.part import Part
+    from docx.opc.packuri import PackURI
+    
+    footnotes_uri = PackURI('/word/footnotes.xml')
+    footnotes_content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml'
+    
+    package = doc.part.package
+    for part in package.parts:
+        if part.partname == footnotes_uri:
+            return part
+            
+    # If not found, create empty footnotes xml boilerplate
+    empty_footnotes_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:footnote w:type="separator" w:id="-1">
+    <w:p><w:r><w:separator/></w:r></w:p>
+  </w:footnote>
+  <w:footnote w:type="continuationSeparator" w:id="0">
+    <w:p><w:r><w:continuationSeparator/></w:r></w:p>
+  </w:footnote>
+</w:footnotes>
+""".strip()
+
+    footnotes_part = Part(
+        footnotes_uri,
+        footnotes_content_type,
+        empty_footnotes_xml.encode('utf-8'),
+        package
+    )
+    package.parts.append(footnotes_part)
+    doc.part.relate_to(
+        footnotes_part,
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes"
+    )
+    return footnotes_part
+
+
+def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=False, underline=False, strike=False, font_name=None, font_size=None) -> None:
+    for child in parent_el.children:
+        if isinstance(child, NavigableString):
+            text = str(child).replace("\r", "").replace("\n", " ")
+            if text:
+                wrapped_text = auto_wrap_math(text)
+                _add_text_and_math_to_paragraph(wrapped_text, paragraph, bold, italic, underline, strike, font_name, font_size)
         else:
             tag = child.name
             if tag == "br":
                 paragraph.add_run().add_break()
             elif tag in ["strong", "b"]:
-                _parse_inline_elements(child, paragraph, docx_doc, bold=True, italic=italic, underline=underline, strike=strike)
+                _parse_inline_elements(child, paragraph, docx_doc, bold=True, italic=italic, underline=underline, strike=strike, font_name=font_name, font_size=font_size)
             elif tag in ["em", "i"]:
-                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=True, underline=underline, strike=strike)
+                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=True, underline=underline, strike=strike, font_name=font_name, font_size=font_size)
             elif tag in ["u"]:
-                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=True, strike=strike)
+                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=True, strike=strike, font_name=font_name, font_size=font_size)
             elif tag in ["s", "strike", "del"]:
-                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=underline, strike=True)
+                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=underline, strike=True, font_name=font_name, font_size=font_size)
             elif tag == "a":
                 href = child.get("href", "")
-                text_content = child.get_text()
-                run = paragraph.add_run(f"{text_content} ({href})" if href else text_content)
-                run.bold = bold
-                run.italic = True
-                run.underline = True
+                text_content = child.get_text() or href
+                if href:
+                    import docx
+                    from docx.oxml.shared import OxmlElement, qn
+                    from docx.shared import RGBColor
+                    
+                    part = paragraph.part
+                    r_id = part.relate_to(href, docx.opc.constants.RELATIONSHIP_TYPE.HYPERLINK, is_external=True)
+                    hyperlink = OxmlElement('w:hyperlink')
+                    hyperlink.set(qn('r:id'), r_id)
+                    
+                    new_run = docx.text.run.Run(OxmlElement('w:r'), paragraph)
+                    new_run.text = text_content
+                    new_run.bold = bold
+                    new_run.italic = italic
+                    new_run.underline = True
+                    try:
+                        new_run.font.color.rgb = RGBColor(5, 99, 193)
+                    except Exception:
+                        pass
+                    if font_name:
+                        new_run.font.name = font_name
+                        try:
+                            rPr = new_run._r.get_or_add_rPr()
+                            rFonts = rPr.get_or_add_rFonts()
+                            rFonts.set(qn('w:ascii'), font_name)
+                            rFonts.set(qn('w:hAnsi'), font_name)
+                            rFonts.set(qn('w:eastAsia'), font_name)
+                            rFonts.set(qn('w:cs'), font_name)
+                        except Exception:
+                            pass
+                    if font_size:
+                        from docx.shared import Pt
+                        new_run.font.size = Pt(font_size)
+                    hyperlink.append(new_run._element)
+                    paragraph._p.append(hyperlink)
+                else:
+                    run = paragraph.add_run(text_content)
+                    run.bold = bold
+                    run.italic = italic
+                    run.underline = underline
+                    if strike:
+                        run.font.strike = True
+                    if font_name:
+                        run.font.name = font_name
+                        try:
+                            from docx.oxml.ns import qn
+                            rPr = run._r.get_or_add_rPr()
+                            rFonts = rPr.get_or_add_rFonts()
+                            rFonts.set(qn('w:ascii'), font_name)
+                            rFonts.set(qn('w:hAnsi'), font_name)
+                            rFonts.set(qn('w:eastAsia'), font_name)
+                            rFonts.set(qn('w:cs'), font_name)
+                        except Exception:
+                            pass
+                    if font_size:
+                        from docx.shared import Pt
+                        run.font.size = Pt(font_size)
             elif tag == "img":
                 _add_image_to_paragraph(child, paragraph)
             elif tag == "span" and ("math-placeholder" in (child.get("class") or []) or "math-placeholder" in child.get("class", "")):
@@ -382,8 +649,134 @@ def _parse_inline_elements(parent_el, paragraph, docx_doc, bold=False, italic=Fa
                         paragraph.add_run(child.get_text())
                 else:
                     paragraph.add_run(child.get_text())
+            elif tag == "span" and ("docx-footnote" in (child.get("class") or []) or "docx-footnote" in child.get("class", "")):
+                f_id = child.get("data-footnote-id")
+                f_text = child.get("data-footnote-text", "")
+                if not f_id:
+                    # Generate a ID based on footnotes count + unique document tag position
+                    import random
+                    f_id = str(random.randint(100, 99999))
+                
+                try:
+                    from docx.oxml import parse_xml, OxmlElement
+                    from docx.oxml.ns import qn
+                    from lxml import etree
+                    
+                    footnotes_part = _get_or_create_footnotes_part(docx_doc)
+                    footnotes_el = parse_xml(footnotes_part.blob)
+                    
+                    # Check if this footnote ID is already in footnotes xml
+                    existing = footnotes_el.find(f'.//w:footnote[@w:id="{f_id}"]', {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'})
+                    if existing is None:
+                        new_footnote = OxmlElement('w:footnote')
+                        new_footnote.set(qn('w:id'), f_id)
+                        
+                        p_el = OxmlElement('w:p')
+                        
+                        r_el = OxmlElement('w:r')
+                        rPr = OxmlElement('w:rPr')
+                        rPr.append(OxmlElement('w:footnoteRef'))
+                        r_el.append(rPr)
+                        p_el.append(r_el)
+                        
+                        r_num_el = OxmlElement('w:r')
+                        t_num_el = OxmlElement('w:t')
+                        num_text = child.get_text().strip().strip("[]")
+                        t_num_el.text = f"{num_text} " if num_text else f"{f_id} "
+                        r_num_el.append(t_num_el)
+                        p_el.append(r_num_el)
+                        
+                        r_text_el = OxmlElement('w:r')
+                        t_text_el = OxmlElement('w:t')
+                        t_text_el.text = f_text
+                        r_text_el.append(t_text_el)
+                        p_el.append(r_text_el)
+                        
+                        new_footnote.append(p_el)
+                        footnotes_el.append(new_footnote)
+                        footnotes_part._blob = etree.tostring(footnotes_el, encoding='utf-8', xml_declaration=True)
+                    
+                    # Add footnoteReference in main document paragraph run
+                    run = paragraph.add_run()
+                    ft_ref = OxmlElement('w:footnoteReference')
+                    ft_ref.set(qn('w:id'), f_id)
+                    run._r.append(ft_ref)
+                except Exception:
+                    run = paragraph.add_run(f"[{child.get_text()}]")
+                    run.font.superscript = True
+            elif tag == "span":
+                # General span font style parser
+                style_str = child.get("style", "")
+                child_font_name = font_name
+                child_font_size = font_size
+                
+                if style_str:
+                    import re
+                    m_fam = re.search(r"font-family:\s*([^;]+)", style_str)
+                    if m_fam:
+                        child_font_name = m_fam.group(1).strip().strip("'\"")
+                    m_size = re.search(r"font-size:\s*([\d.]+)\s*pt", style_str)
+                    if m_size:
+                        try:
+                            child_font_size = float(m_size.group(1))
+                        except Exception:
+                            pass
+                _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=underline, strike=strike, font_name=child_font_name, font_size=child_font_size)
             else:
                 _parse_inline_elements(child, paragraph, docx_doc, bold=bold, italic=italic, underline=underline, strike=strike)
+
+
+def _apply_paragraph_style(p, style_str):
+    if not style_str:
+        return
+    import re
+    from docx.shared import Inches, Pt
+    if "text-align: center" in style_str:
+        p.alignment = 1
+    elif "text-align: right" in style_str:
+        p.alignment = 2
+    elif "text-align: justify" in style_str:
+        p.alignment = 3
+        
+    m_left = re.search(r"margin-left:\s*(-?[\d.]+)\s*in", style_str)
+    if m_left:
+        try:
+            p.paragraph_format.left_indent = Inches(float(m_left.group(1)))
+        except Exception:
+            pass
+            
+    m_right = re.search(r"margin-right:\s*(-?[\d.]+)\s*in", style_str)
+    if m_right:
+        try:
+            p.paragraph_format.right_indent = Inches(float(m_right.group(1)))
+        except Exception:
+            pass
+            
+    m_bottom = re.search(r"margin-bottom:\s*(-?[\d.]+)\s*pt", style_str)
+    if m_bottom:
+        try:
+            p.paragraph_format.space_after = Pt(float(m_bottom.group(1)))
+        except Exception:
+            pass
+            
+    m_top = re.search(r"margin-top:\s*(-?[\d.]+)\s*pt", style_str)
+    if m_top:
+        try:
+            p.paragraph_format.space_before = Pt(float(m_top.group(1)))
+        except Exception:
+            pass
+            
+    m_lh = re.search(r"line-height:\s*([\d.]+)\s*(pt|in|cm)?", style_str)
+    if m_lh:
+        try:
+            val = float(m_lh.group(1))
+            unit = m_lh.group(2)
+            if not unit:
+                p.paragraph_format.line_spacing = val
+            elif unit == "pt":
+                p.paragraph_format.line_spacing = Pt(val)
+        except Exception:
+            pass
 
 
 def _parse_soup_nodes(container_el, docx_doc) -> None:
@@ -396,7 +789,40 @@ def _parse_soup_nodes(container_el, docx_doc) -> None:
         tag = el.name
 
         if tag == "div" and ("docx-column-section" in (el.get("class") or []) or "docx-column-section" in el.get("class", "")):
+            style_str = el.get("style", "")
+            import re
+            m = re.search(r"column-count:\s*(\d+)", style_str)
+            num_cols = int(m.group(1)) if m else 1
+            
+            # Start continuous section for columns
+            sec = docx_doc.add_section(0) # 0 = CONTINUOUS
+            sec.top_margin = Inches(1)
+            sec.bottom_margin = Inches(1)
+            sec.left_margin = Inches(1)
+            sec.right_margin = Inches(1)
+            
+            from docx.oxml.ns import qn
+            from docx.oxml import OxmlElement
+            cols = sec._sectPr.find(qn('w:cols'))
+            if cols is None:
+                cols = OxmlElement('w:cols')
+                sec._sectPr.append(cols)
+            cols.set(qn('w:num'), str(num_cols))
+            
             _parse_soup_nodes(el, docx_doc)
+            
+            # Revert back to 1-column continuous section
+            end_sec = docx_doc.add_section(0)
+            end_sec.top_margin = Inches(1)
+            end_sec.bottom_margin = Inches(1)
+            end_sec.left_margin = Inches(1)
+            end_sec.right_margin = Inches(1)
+            
+            end_cols = end_sec._sectPr.find(qn('w:cols'))
+            if end_cols is None:
+                end_cols = OxmlElement('w:cols')
+                end_sec._sectPr.append(end_cols)
+            end_cols.set(qn('w:num'), '1')
             continue
 
         # Check if this element is a table or wraps a table (e.g. ocr-detected-table-wrap)
@@ -434,10 +860,14 @@ def _parse_soup_nodes(container_el, docx_doc) -> None:
                     docx_cell = table.cell(row_idx, col_idx)
                     
                     if colspan > 1 or rowspan > 1:
-                        target_row = min(row_idx + rowspan - 1, len(rows) - 1)
-                        target_col = min(col_idx + colspan - 1, max_cols - 1)
-                        target_cell = table.cell(target_row, target_col)
-                        docx_cell.merge(target_cell)
+                        try:
+                            target_row = min(row_idx + rowspan - 1, len(rows) - 1)
+                            target_col = min(col_idx + colspan - 1, max_cols - 1)
+                            target_cell = table.cell(target_row, target_col)
+                            docx_cell.merge(target_cell)
+                        except Exception:
+                            # Ignore merge errors due to complex/non-rectangular HTML table structures
+                            pass
 
                     if docx_cell.paragraphs:
                         p = docx_cell.paragraphs[0]
@@ -452,35 +882,20 @@ def _parse_soup_nodes(container_el, docx_doc) -> None:
             if heading_text:
                 p = docx_doc.add_heading(heading_text, level=level)
                 style = el.get("style", "")
-                if "text-align: center" in style:
-                    p.alignment = 1
-                elif "text-align: right" in style:
-                    p.alignment = 2
-                elif "text-align: justify" in style:
-                    p.alignment = 3
+                _apply_paragraph_style(p, style)
 
         elif tag in ["ul", "ol"]:
             style = 'List Bullet' if tag == "ul" else 'List Number'
             for li in el.find_all("li"):
                 p = docx_doc.add_paragraph(style=style)
                 li_style = li.get("style", "")
-                if "text-align: center" in li_style:
-                    p.alignment = 1
-                elif "text-align: right" in li_style:
-                    p.alignment = 2
-                elif "text-align: justify" in li_style:
-                    p.alignment = 3
+                _apply_paragraph_style(p, li_style)
                 _parse_inline_elements(li, p, docx_doc)
 
         elif tag == "p":
             p = docx_doc.add_paragraph()
             style = el.get("style", "")
-            if "text-align: center" in style:
-                p.alignment = 1
-            elif "text-align: right" in style:
-                p.alignment = 2
-            elif "text-align: justify" in style:
-                p.alignment = 3
+            _apply_paragraph_style(p, style)
             _parse_inline_elements(el, p, docx_doc)
 
         else:
@@ -490,12 +905,7 @@ def _parse_soup_nodes(container_el, docx_doc) -> None:
             else:
                 p = docx_doc.add_paragraph()
                 style = el.get("style", "")
-                if "text-align: center" in style:
-                    p.alignment = 1
-                elif "text-align: right" in style:
-                    p.alignment = 2
-                elif "text-align: justify" in style:
-                    p.alignment = 3
+                _apply_paragraph_style(p, style)
                 _parse_inline_elements(el, p, docx_doc)
 
 
@@ -533,7 +943,9 @@ def documents_to_docx(pages) -> bytes:
             lines = (rev.content or "").strip().split("\n\n")
             for paragraph_text in lines:
                 if paragraph_text.strip():
-                    doc.add_paragraph(paragraph_text.strip())
+                    p = doc.add_paragraph()
+                    wrapped_text = auto_wrap_math(paragraph_text.strip())
+                    _add_text_and_math_to_paragraph(wrapped_text, p)
 
     file_stream = io.BytesIO()
     doc.save(file_stream)

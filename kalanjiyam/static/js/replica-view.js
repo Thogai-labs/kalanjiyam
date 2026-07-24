@@ -1,7 +1,8 @@
 /* Bbox-scaled replica canvas for page layout editing. */
 
 import { scaleBoxesToImage } from './osd-overlay.js';
-import { blockReplicaInnerHtml, normalizeUnicodeText } from './page-document.js';
+import { blockReplicaInnerHtml, normalizeUnicodeText, autoWrapMath } from './page-document.js';
+import renderMathInElement from 'katex/dist/contrib/auto-render.js';
 
 /* Inject styles for selection, move/resize, and toolbar custom tokens */
 if (!document.getElementById('ocr-replica-styles')) {
@@ -47,6 +48,23 @@ if (!document.getElementById('ocr-replica-styles')) {
       outline: 1.5px solid #2563eb !important;
       background-color: #eff6ff !important;
     }
+    .ocr-replica-block table {
+      border-collapse: collapse !important;
+      width: 100% !important;
+      border: 1px solid #cbd5e1 !important;
+      margin-bottom: 0.5rem !important;
+    }
+    .ocr-replica-block table th,
+    .ocr-replica-block table td {
+      border: 1px solid #cbd5e1 !important;
+      padding: 6px 8px !important;
+      text-align: left !important;
+      min-width: 30px !important;
+    }
+    .ocr-replica-block table th {
+      background-color: #f8fafc !important;
+      font-weight: bold !important;
+    }
     .ocr-replica-resize-handle {
       position: absolute;
       right: -5px;
@@ -79,6 +97,14 @@ if (!document.getElementById('ocr-replica-styles')) {
     .ocr-replica-toolbar-btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
+    }
+    .ocr-replica-toolbar-btn.active {
+      color: #ffffff !important;
+      background-color: #2563eb !important;
+      border-color: #1d4ed8 !important;
+    }
+    .ocr-replica-toolbar-btn.active:hover {
+      background-color: #1d4ed8 !important;
     }
     .ocr-replica-page.move-mode-active .ocr-replica-block {
       cursor: move !important;
@@ -188,7 +214,7 @@ export class ReplicaView {
     this.isRestoredFromCache = false;
     this.document = JSON.parse(JSON.stringify(this.originalDocument));
     this.selectedId = null;
-    this.triggerChange();
+    this.onChange(this.document);
     this._render();
   }
 
@@ -489,11 +515,11 @@ export class ReplicaView {
     const addTextBtn = document.createElement('button');
     addTextBtn.type = 'button';
     addTextBtn.className = 'ocr-replica-toolbar-btn';
+    addTextBtn.title = 'Add Text';
     addTextBtn.innerHTML = `
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path>
       </svg>
-      <span>Add Text</span>
     `;
     addTextBtn.addEventListener('click', () => this.addTextBlock());
     toolbar.appendChild(addTextBtn);
@@ -502,11 +528,11 @@ export class ReplicaView {
     const addImageBtn = document.createElement('button');
     addImageBtn.type = 'button';
     addImageBtn.className = 'ocr-replica-toolbar-btn';
+    addImageBtn.title = 'Add Image';
     addImageBtn.innerHTML = `
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
       </svg>
-      <span>Add Image</span>
     `;
     addImageBtn.addEventListener('click', () => this.triggerImageUpload());
     toolbar.appendChild(addImageBtn);
@@ -515,11 +541,11 @@ export class ReplicaView {
     const addTableBtn = document.createElement('button');
     addTableBtn.type = 'button';
     addTableBtn.className = 'ocr-replica-toolbar-btn';
+    addTableBtn.title = 'Add Table';
     addTableBtn.innerHTML = `
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
       </svg>
-      <span>Add Table</span>
     `;
     addTableBtn.addEventListener('click', () => this.addTableBlock());
     toolbar.appendChild(addTableBtn);
@@ -529,11 +555,11 @@ export class ReplicaView {
     copyBtn.type = 'button';
     copyBtn.className = 'ocr-replica-toolbar-btn';
     copyBtn.disabled = !this.selectedId;
+    copyBtn.title = 'Copy';
     copyBtn.innerHTML = `
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path>
       </svg>
-      <span>Copy</span>
     `;
     copyBtn.addEventListener('click', () => this.copySelectedBlock());
     toolbar.appendChild(copyBtn);
@@ -543,11 +569,11 @@ export class ReplicaView {
     pasteBtn.type = 'button';
     pasteBtn.className = 'ocr-replica-toolbar-btn';
     pasteBtn.disabled = !this.copiedBlock;
+    pasteBtn.title = 'Paste';
     pasteBtn.innerHTML = `
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
       </svg>
-      <span>Paste</span>
     `;
     pasteBtn.addEventListener('click', () => this.pasteBlock());
     toolbar.appendChild(pasteBtn);
@@ -563,9 +589,10 @@ export class ReplicaView {
     toolbar.appendChild(createSeparator());
 
     // Text formatting function helper
-    const createFormatBtn = (labelOrHtml, command, value = null, isItalic = false) => {
+    const createFormatBtn = (labelOrHtml, command, value = null, isItalic = false, title = '') => {
       const btn = document.createElement('button');
       btn.type = 'button';
+      if (title) btn.title = title;
       btn.className = `ocr-replica-toolbar-btn px-2.5 min-w-[28px] text-center justify-center font-bold ${isItalic ? 'italic' : ''}`;
       btn.disabled = !this.selectedId;
       
@@ -591,12 +618,12 @@ export class ReplicaView {
     };
 
     // Add format buttons
-    toolbar.appendChild(createFormatBtn('B', 'bold'));
-    toolbar.appendChild(createFormatBtn('I', 'italic', null, true));
-    toolbar.appendChild(createFormatBtn('H1', 'formatBlock', '<h1>'));
-    toolbar.appendChild(createFormatBtn('H2', 'formatBlock', '<h2>'));
-    toolbar.appendChild(createFormatBtn('H3', 'formatBlock', '<h3>'));
-    toolbar.appendChild(createFormatBtn('P', 'formatBlock', '<p>'));
+    toolbar.appendChild(createFormatBtn('B', 'bold', null, false, 'Bold'));
+    toolbar.appendChild(createFormatBtn('I', 'italic', null, true, 'Italic'));
+    toolbar.appendChild(createFormatBtn('H1', 'formatBlock', '<h1>', false, 'Heading 1'));
+    toolbar.appendChild(createFormatBtn('H2', 'formatBlock', '<h2>', false, 'Heading 2'));
+    toolbar.appendChild(createFormatBtn('H3', 'formatBlock', '<h3>', false, 'Heading 3'));
+    toolbar.appendChild(createFormatBtn('P', 'formatBlock', '<p>', false, 'Paragraph'));
 
     // Add Separator
     toolbar.appendChild(createSeparator());
@@ -607,9 +634,9 @@ export class ReplicaView {
     const svgRight = `<svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M10 12h10M6 18h14"></path></svg>`;
 
     // Add Alignment buttons (Left, Center, Right) using SVGs
-    toolbar.appendChild(createFormatBtn(svgLeft, 'justifyLeft'));
-    toolbar.appendChild(createFormatBtn(svgCenter, 'justifyCenter'));
-    toolbar.appendChild(createFormatBtn(svgRight, 'justifyRight'));
+    toolbar.appendChild(createFormatBtn(svgLeft, 'justifyLeft', null, false, 'Align Left'));
+    toolbar.appendChild(createFormatBtn(svgCenter, 'justifyCenter', null, false, 'Align Center'));
+    toolbar.appendChild(createFormatBtn(svgRight, 'justifyRight', null, false, 'Align Right'));
 
     // Add Separator
     toolbar.appendChild(createSeparator());
@@ -617,12 +644,17 @@ export class ReplicaView {
     // Toggle Move Mode button
     const moveModeBtn = document.createElement('button');
     moveModeBtn.type = 'button';
-    moveModeBtn.className = `ocr-replica-toolbar-btn ${this.moveMode ? 'bg-blue-100 text-blue-700 border-blue-300 font-semibold shadow-inner' : ''}`;
+    moveModeBtn.className = `ocr-replica-toolbar-btn ${this.moveMode ? 'active font-semibold shadow-inner' : ''}`;
+    moveModeBtn.title = `Move Mode: ${this.moveMode ? 'ON' : 'OFF'}`;
     moveModeBtn.innerHTML = `
-      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5">
+        <path d="M12 2v20"/>
+        <path d="m15 19-3 3-3-3"/>
+        <path d="m19 9 3 3-3 3"/>
+        <path d="M2 12h20"/>
+        <path d="m5 9-3 3 3 3"/>
+        <path d="m9 5 3-3 3 3"/>
       </svg>
-      <span>Move Mode: ${this.moveMode ? 'ON' : 'OFF'}</span>
     `;
     moveModeBtn.addEventListener('click', () => {
       this.moveMode = !this.moveMode;
@@ -630,16 +662,71 @@ export class ReplicaView {
     });
     toolbar.appendChild(moveModeBtn);
 
+    // Math/Formula Editor button
+    const mathEditorBtn = document.createElement('button');
+    mathEditorBtn.type = 'button';
+    mathEditorBtn.className = 'ocr-replica-toolbar-btn';
+    mathEditorBtn.disabled = !this.selectedId;
+    mathEditorBtn.title = 'Math Editor';
+    mathEditorBtn.innerHTML = `
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+      </svg>
+    `;
+    mathEditorBtn.addEventListener('click', () => {
+      if (!this.selectedId) return;
+      const el = this.container.querySelector(`[data-block-id="${this.selectedId}"]`);
+      if (el) {
+        let selText = '';
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0 && el.contains(selection.anchorNode)) {
+          selText = selection.toString();
+        }
+        if (!selText) {
+          selText = el.innerText || el.textContent || '';
+        }
+        
+        const initialMathText = selText.replace(/^\$\$?|\$\$?$/g, '').trim();
+        
+        if (window.openMathEditorModal) {
+          window.openMathEditorModal(initialMathText, (latex) => {
+            if (latex && latex.trim()) {
+              const mathString = `$${latex.trim()}$`;
+              
+              if (selection.rangeCount > 0 && el.contains(selection.anchorNode) && selection.toString()) {
+                const range = selection.getRangeAt(0);
+                range.deleteContents();
+                range.insertNode(document.createTextNode(mathString));
+              } else {
+                el.innerText = mathString;
+              }
+              
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              
+              const originalBlock = this.document.blocks.find(b => b.id === this.selectedId);
+              if (originalBlock) {
+                originalBlock.content = el.innerHTML;
+                originalBlock.manually_edited = true;
+              }
+              this.triggerChange();
+              this._render();
+            }
+          });
+        }
+      }
+    });
+    toolbar.appendChild(mathEditorBtn);
+
     // Delete Block button
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'ocr-replica-toolbar-btn text-rose-600 border-rose-200 hover:bg-rose-50';
     deleteBtn.disabled = !this.selectedId;
+    deleteBtn.title = 'Delete';
     deleteBtn.innerHTML = `
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
       </svg>
-      <span>Delete</span>
     `;
     deleteBtn.addEventListener('click', () => this.deleteSelectedBlock());
     toolbar.appendChild(deleteBtn);
@@ -813,7 +900,8 @@ export class ReplicaView {
         el.contentEditable = (this.moveMode || isImageBlock) ? 'false' : 'true';
         
         // Render block content as HTML always to preserve bold/italic/headings formattings from user or OCR engine
-        el.innerHTML = block.content || '';
+        // Render raw LaTeX in edit/focused mode to prevent KaTeX HTML corruption, and compiled KaTeX in view mode.
+        el.innerHTML = (isSelected || isImageBlock) ? (block.content || '') : autoWrapMath(block.content || '');
         el.addEventListener('input', () => {
           const originalBlock = this.document.blocks.find(b => b.id === block.id);
           if (originalBlock) {
@@ -845,6 +933,9 @@ export class ReplicaView {
         const isResizeHandle = e.target.classList.contains('ocr-replica-resize-handle');
         
         if (this.selectedId !== block.id) {
+          this.selectedId = block.id;
+          this.onSelect(block);
+          this._render();
           return;
         }
 
@@ -935,6 +1026,21 @@ export class ReplicaView {
     }
 
     this.container.appendChild(page);
+
+    try {
+      renderMathInElement(page, {
+        delimiters: [
+          { left: '$$', right: '$$', display: true },
+          { left: '$', right: '$', display: false },
+          { left: '\\(', right: '\\)', display: false },
+          { left: '\\[', right: '\\[', display: true },
+        ],
+        ignoredClasses: ['is-selected'],
+        throwOnError: false,
+      });
+    } catch (e) {
+      console.warn('KaTeX render failed:', e);
+    }
 
     // Automatically expand heights for text boxes on initial load if text exceeds default OCR dimensions
     requestAnimationFrame(() => {

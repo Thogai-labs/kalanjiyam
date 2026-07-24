@@ -12,6 +12,7 @@ from flask import (
     url_for,
     send_file,
     current_app,
+    jsonify,
 )
 from flask_admin import Admin, AdminIndexView, expose, BaseView as AdminBaseView
 from flask_admin.babel import gettext
@@ -896,6 +897,21 @@ class PlatformView(AdminBaseView):
                 default="",
                 description="The recommended OCR engine displayed with a star icon for users."
             )
+            auto_cleanup_days = SelectField(
+                "Source File Retention Period",
+                coerce=int,
+                choices=[
+                    (1, "1 Day"),
+                    (3, "3 Days"),
+                    (7, "7 Days (Default)"),
+                    (14, "14 Days"),
+                    (30, "30 Days"),
+                    (60, "60 Days"),
+                    (90, "90 Days"),
+                ],
+                default=7,
+                description="Number of days before uploaded source PDF/DOC files are automatically cleaned up.",
+            )
             
         form = PlatformSettingsForm()
         
@@ -919,12 +935,15 @@ class PlatformView(AdminBaseView):
         rec_choices = [("", "None (No recommended engine)")] + [(eng, ENGINE_LABELS.get(eng, eng.capitalize())) for eng in sorted_rec_engines]
         form.recommended_ocr_engine.choices = rec_choices
         
+        cleanup_enabled = current_app.config.get("AUTO_UPLOADED_FILES_CLEANUP", False)
+
         if form.validate_on_submit():
             system_settings.unregistered_user_ocr_limit = form.unregistered_user_ocr_limit.data if form.unregistered_user_ocr_limit.data is not None else 10
             system_settings.unregistered_user_project_limit = form.unregistered_user_project_limit.data if form.unregistered_user_project_limit.data is not None else 5
             system_settings.unregistered_user_upload_limit = form.unregistered_user_upload_limit.data if form.unregistered_user_upload_limit.data is not None else 10
             system_settings.default_ocr_engine = form.default_ocr_engine.data if form.default_ocr_engine.data else "tesseract"
             system_settings.recommended_ocr_engine = form.recommended_ocr_engine.data if form.recommended_ocr_engine.data else None
+            system_settings.auto_cleanup_days = form.auto_cleanup_days.data if form.auto_cleanup_days.data is not None else 7
             
             session.add(system_settings)
             session.commit()
@@ -937,8 +956,88 @@ class PlatformView(AdminBaseView):
             form.unregistered_user_upload_limit.data = getattr(system_settings, "unregistered_user_upload_limit", 10)
             form.default_ocr_engine.data = system_settings.default_ocr_engine
             form.recommended_ocr_engine.data = system_settings.recommended_ocr_engine or ""
+            form.auto_cleanup_days.data = getattr(system_settings, "auto_cleanup_days", 7) or 7
             
-        return render_template("admin/platform_settings.html", form=form)
+        return render_template("admin/platform_settings.html", form=form, cleanup_enabled=cleanup_enabled)
+
+    @expose("/metrics")
+    def metrics(self):
+        require_platform_super_admin()
+
+        from kalanjiyam.utils.metrics import (
+            get_active_celery_queues,
+            get_latency_metrics_summary,
+            get_error_logs_paginated,
+        )
+
+        queues_data = get_active_celery_queues()
+        latencies_data = get_latency_metrics_summary(days=7)
+        error_logs_data = get_error_logs_paginated(page=1, per_page=20)
+        groups = q.groups()
+        session = q.get_session()
+        all_users = session.query(db.User).all()
+
+        return render_template(
+            "admin/platform_metrics.html",
+            queues_data=queues_data,
+            latencies_data=latencies_data,
+            error_logs_data=error_logs_data,
+            groups=groups,
+            all_users=all_users,
+            csrf_token=generate_csrf(),
+        )
+
+    @expose("/metrics/api")
+    def metrics_api(self):
+        require_platform_super_admin()
+
+        from kalanjiyam.utils.metrics import (
+            get_active_celery_queues,
+            get_latency_metrics_summary,
+            get_error_logs_paginated,
+        )
+
+        tab = request.args.get("tab", "queues")
+        if tab == "queues":
+            data = get_active_celery_queues()
+        elif tab == "latencies":
+            days = request.args.get("days", 7, type=int)
+            data = get_latency_metrics_summary(days=days)
+        elif tab == "errors":
+            page = request.args.get("page", 1, type=int)
+            per_page = request.args.get("per_page", 20, type=int)
+            level = request.args.get("level")
+            group_id = request.args.get("group_id", type=int)
+            user_id = request.args.get("user_id", type=int)
+            search = request.args.get("search")
+            data = get_error_logs_paginated(
+                page=page,
+                per_page=per_page,
+                level=level,
+                group_id=group_id,
+                user_id=user_id,
+                search=search,
+            )
+        else:
+            data = {"error": "Invalid tab parameter"}
+
+        return jsonify(data)
+
+    @expose("/metrics/clear", methods=["POST"])
+    def metrics_clear(self):
+        require_platform_super_admin()
+        session = q.get_session()
+        category = request.form.get("category", "ALL")
+
+        query = session.query(db.SystemMetricLog)
+        if category != "ALL":
+            query = query.filter(db.SystemMetricLog.category == category)
+
+        deleted_count = query.delete(synchronize_session=False)
+        session.commit()
+
+        flash(f"Cleared {deleted_count} metric logs.", "success")
+        return redirect(url_for(".metrics"))
 
 
 class GroupsView(AdminBaseView):
@@ -1358,14 +1457,21 @@ class OrgAdminView(AdminBaseView):
         )
 
 
-class BaseView(sqla.ModelView):
-    """Base view for models.
-
-    By default, only platform super admins can see model data.
-    """
+class ProjectSponsorshipView(sqla.ModelView):
+    """View for ProjectSponsorship accessible to moderators and admins."""
 
     def is_accessible(self):
-        return is_platform_super_admin()
+        return current_user.is_authenticated and (current_user.is_admin or current_user.is_moderator)
+
+    def inaccessible_callback(self, name, **kw):
+        abort(404)
+
+
+class BaseView(sqla.ModelView):
+    """Base view for models."""
+
+    def is_accessible(self):
+        return current_user.is_authenticated and current_user.is_admin
 
     def inaccessible_callback(self, name, **kw):
         abort(404)
@@ -1548,5 +1654,7 @@ def create_admin_manager(app):
 
     admin.add_view(ProjectView(db.Project, session))
     admin.add_view(UserView(db.User, session))
+    admin.add_view(BaseView(db.Text, session))
+    admin.add_view(ProjectSponsorshipView(db.ProjectSponsorship, session))
 
     return admin

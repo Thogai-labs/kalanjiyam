@@ -7,7 +7,7 @@ For simple or adhoc queries, you can just write them in their corresponding view
 import functools
 
 from flask import current_app
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import load_only, scoped_session, selectinload, sessionmaker
 
 import kalanjiyam.database as db
@@ -40,7 +40,9 @@ def get_session_class():
     # For details, see:
     # - https://stackoverflow.com/questions/12223335
     # - https://flask.palletsprojects.com/en/2.1.x/patterns/sqlalchemy/
-    session_factory = sessionmaker(bind=get_engine(), autoflush=False, autocommit=False)
+    session_factory = sessionmaker(
+        bind=get_engine(), autoflush=False, autocommit=False, expire_on_commit=False
+    )
     return scoped_session(session_factory, scopefunc=_ident_func)
 
 
@@ -207,9 +209,30 @@ def page(project_id, page_slug: str) -> db.Page | None:
 
 def user(username: str) -> db.User | None:
     session = get_session()
+    if not username:
+        return None
     return (
         session.query(db.User)
-        .filter_by(username=username, is_deleted=False, is_banned=False)
+        .filter(
+            func.lower(db.User.username) == username.lower(),
+            db.User.is_deleted == False,
+            db.User.is_banned == False,
+        )
+        .first()
+    )
+
+
+def user_by_email(email: str) -> db.User | None:
+    session = get_session()
+    if not email:
+        return None
+    return (
+        session.query(db.User)
+        .filter(
+            func.lower(db.User.email) == email.lower(),
+            db.User.is_deleted == False,
+            db.User.is_banned == False,
+        )
         .first()
     )
 
@@ -243,7 +266,8 @@ def get_system_settings() -> db.SystemSetting:
             unregistered_user_project_limit=5,
             unregistered_user_upload_limit=10,
             default_ocr_engine=default_eng,
-            recommended_ocr_engine=None
+            recommended_ocr_engine=None,
+            auto_cleanup_days=7,
         )
         session.add(settings)
         session.commit()
