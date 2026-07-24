@@ -1,0 +1,175 @@
+{% extends 'admin/master.html' %}
+{% import 'macros/admin.html' as admin %}
+
+{% block title %}{{ _('Reported Issues') }} | {{ _('Admin') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('reported_issues', current_user) }}
+{% endblock %}
+
+{% block content %}
+{{ admin.page_header(_('Reported Issues'), _('View and manage user-submitted bug reports and feature requests.')) }}
+
+<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100" x-data="{ selectedIssue: null }">
+  <div class="flex items-center justify-between mb-6">
+    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+      <span>{{ _('All Submitted Issues') }}</span>
+      <span class="bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full text-xs font-semibold">{{ issues|length }}</span>
+    </h2>
+  </div>
+
+  {% if issues %}
+  <div class="overflow-x-auto rounded-xl border border-slate-100">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+        <tr>
+          <th class="px-4 py-3.5">{{ _('Reporter Name') }}</th>
+          <th class="px-4 py-3.5">{{ _('Issue Category') }}</th>
+          <th class="px-4 py-3.5">{{ _('Date Submitted') }}</th>
+          <th class="px-4 py-3.5">{{ _('Status') }}</th>
+          <th class="px-4 py-3.5 text-right">{{ _('Action') }}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for issue in issues %}
+        <tr class="hover:bg-slate-50/80 transition-colors">
+          <!-- Reporter Name & Email -->
+          <td class="px-4 py-4">
+            <div class="font-semibold text-slate-900">{{ issue.name }}</div>
+            <div class="text-xs text-slate-400 font-medium">{{ issue.email }}</div>
+          </td>
+
+          <!-- Issue Category Badge -->
+          <td class="px-4 py-4">
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-royalblue border border-blue-100">
+              {% if issue.category == 'pdf_proofing_editor' %}PDF Proofing Editor
+              {% elif issue.category == 'docx_proofing_editor' %}DOCX Proofing Editor
+              {% elif issue.category == 'ocr' %}OCR Processing
+              {% elif issue.category == 'translation' %}Translation Engine
+              {% elif issue.category == 'dictionary_glossaries' %}Dictionary / Glossaries
+              {% elif issue.category == 'authentication' %}Authentication (Login / Signup)
+              {% else %}Other / General Inquiry{% endif %}
+            </span>
+          </td>
+
+          <!-- Date -->
+          <td class="px-4 py-4 text-xs font-medium text-slate-500">
+            {{ issue.created_at.strftime('%b %d, %Y - %H:%M UTC') }}
+          </td>
+
+          <!-- Status Dropdown Select -->
+          <td class="px-4 py-4">
+            <form method="POST" action="{{ url_for('platform_view.update_issue_status') }}" class="inline-block">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+              <input type="hidden" name="issue_id" value="{{ issue.id }}"/>
+              <select 
+                name="status" 
+                onchange="this.form.submit()"
+                class="text-xs font-semibold px-3 py-1.5 rounded-lg border outline-none cursor-pointer transition-all
+                  {% if issue.status == 'resolved' %}bg-emerald-50 text-emerald-700 border-emerald-200
+                  {% elif issue.status == 'not_applicable' %}bg-slate-100 text-slate-600 border-slate-200
+                  {% else %}bg-amber-50 text-amber-700 border-amber-200{% endif %}"
+              >
+                <option value="pending" {% if issue.status == 'pending' or issue.status == 'open' %}selected{% endif %}>Pending</option>
+                <option value="resolved" {% if issue.status == 'resolved' %}selected{% endif %}>Resolved</option>
+                <option value="not_applicable" {% if issue.status == 'not_applicable' %}selected{% endif %}>Not Applicable</option>
+              </select>
+            </form>
+          </td>
+
+          <!-- Action Button to View Details -->
+          <td class="px-4 py-4 text-right">
+            <script type="application/json" id="issue-data-{{ issue.id }}">
+              {
+                "id": {{ issue.id }},
+                "name": {{ issue.name|tojson }},
+                "email": {{ issue.email|tojson }},
+                "category": "{% if issue.category == 'pdf_proofing_editor' %}PDF Proofing Editor{% elif issue.category == 'docx_proofing_editor' %}DOCX Proofing Editor{% elif issue.category == 'ocr' %}OCR Processing{% elif issue.category == 'translation' %}Translation Engine{% elif issue.category == 'dictionary_glossaries' %}Dictionary / Glossaries{% elif issue.category == 'authentication' %}Authentication (Login / Signup){% else %}Other / General Inquiry{% endif %}",
+                "date": "{{ issue.created_at.strftime('%b %d, %Y - %H:%M UTC') }}",
+                "status": "{{ issue.status }}",
+                "message": {{ issue.message|tojson }}
+              }
+            </script>
+            <button 
+              type="button" 
+              @click="selectedIssue = JSON.parse(document.getElementById('issue-data-{{ issue.id }}').textContent)"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-royalblue hover:text-white text-slate-700 text-xs font-semibold transition-all"
+            >
+              {{ admin.icon('eye', class='w-3.5 h-3.5') }}
+              <span>{{ _('View Message') }}</span>
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+    <div class="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+      {{ admin.icon('help-circle', class='w-6 h-6') }}
+    </div>
+    <h3 class="text-slate-800 font-bold text-sm">{{ _('No reported issues found') }}</h3>
+    <p class="text-slate-400 text-xs mt-1">{{ _('When users submit issue reports from the contact page, they will appear here.') }}</p>
+  </div>
+  {% endif %}
+
+  <!-- Details Modal Popup -->
+  <div 
+    x-show="selectedIssue" 
+    x-cloak 
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+  >
+    <div 
+      @click.away="selectedIssue = null"
+      class="bg-white rounded-2xl shadow-xl max-w-xl w-full p-6 border border-slate-100 transform transition-all"
+    >
+      <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+        <div>
+          <span class="text-xs font-bold text-royalblue uppercase tracking-wider" x-text="selectedIssue?.category"></span>
+          <h3 class="text-lg font-extrabold text-slate-900" x-text="selectedIssue?.name"></h3>
+          <p class="text-xs text-slate-400 font-medium" x-text="selectedIssue?.email"></p>
+        </div>
+        <button @click="selectedIssue = null" class="text-slate-400 hover:text-slate-600 text-xl font-bold p-1">
+          &times;
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <div class="flex items-center justify-between text-xs text-slate-500 bg-slate-50 p-3 rounded-xl">
+          <div>
+            <span class="font-bold text-slate-700">{{ _('Submitted Date:') }}</span>
+            <span x-text="selectedIssue?.date"></span>
+          </div>
+          <div>
+            <span class="font-bold text-slate-700">{{ _('Status:') }}</span>
+            <span class="font-bold uppercase tracking-wider text-xs px-2 py-0.5 rounded-md"
+                  :class="{
+                    'bg-amber-100 text-amber-800': selectedIssue?.status === 'pending' || selectedIssue?.status === 'open',
+                    'bg-emerald-100 text-emerald-800': selectedIssue?.status === 'resolved',
+                    'bg-slate-200 text-slate-700': selectedIssue?.status === 'not_applicable'
+                  }" 
+                  x-text="selectedIssue?.status">
+            </span>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">{{ _('Issue Description & Message') }}</label>
+          <div class="bg-slate-50 p-4 rounded-xl text-slate-800 text-sm whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto border border-slate-100" x-text="selectedIssue?.message"></div>
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-end">
+        <button 
+          @click="selectedIssue = null"
+          class="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-all"
+        >
+          {{ _('Close') }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

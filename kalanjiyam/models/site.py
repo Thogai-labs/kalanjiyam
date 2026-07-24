@@ -66,3 +66,21 @@ class UsageLog(Base):
 
     user = relationship("User")
 
+
+class ReportedIssue(Base):
+    """User-submitted issues and bug reports from the Contact page."""
+
+    __tablename__ = "reported_issues"
+
+    id = pk()
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    category = Column(String, nullable=False)
+    message = Column(Text_, nullable=False)
+    status = Column(String, nullable=False, default="pending")  # pending, resolved, not_applicable
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User")
+
+

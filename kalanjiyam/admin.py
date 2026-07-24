@@ -1039,6 +1039,38 @@ class PlatformView(AdminBaseView):
         flash(f"Cleared {deleted_count} metric logs.", "success")
         return redirect(url_for(".metrics"))
 
+    @expose("/reported-issues")
+    def reported_issues(self):
+        require_platform_super_admin()
+        session = q.get_session()
+        issues = session.query(db.ReportedIssue).order_by(db.ReportedIssue.created_at.desc()).all()
+        return render_template(
+            "admin/reported_issues.html",
+            issues=issues,
+            csrf_token=generate_csrf(),
+        )
+
+    @expose("/reported-issues/update-status", methods=["POST"])
+    def update_issue_status(self):
+        require_platform_super_admin()
+        issue_id = request.form.get("issue_id", type=int)
+        status = request.form.get("status", "").strip()
+
+        valid_statuses = ["pending", "resolved", "not_applicable"]
+        if issue_id and status in valid_statuses:
+            session = q.get_session()
+            issue = session.query(db.ReportedIssue).filter_by(id=issue_id).first()
+            if issue:
+                issue.status = status
+                session.commit()
+                flash("Issue status updated successfully.", "success")
+            else:
+                flash("Issue not found.", "error")
+        else:
+            flash("Invalid status or issue ID.", "error")
+
+        return redirect(url_for(".reported_issues"))
+
 
 class GroupsView(AdminBaseView):
     """Super-admin group management: list/create/edit/delete groups, manage users and books."""
@@ -1617,6 +1649,17 @@ class ProjectView(BaseView):
     form_excluded_columns = ["creator", "board", "pages", "created_at", "updated_at"]
 
 
+class ReportedIssueView(BaseView):
+    """Super-admin view for user-reported issues."""
+
+    column_list = ["id", "name", "email", "category", "message", "status", "created_at"]
+    column_searchable_list = ["name", "email", "category", "message"]
+    column_filters = ["category", "status", "created_at"]
+    column_editable_list = ["status"]
+    column_default_sort = ("created_at", True)
+    form_columns = ["name", "email", "category", "message", "status"]
+
+
 def create_admin_manager(app):
     session = q.get_session_class()
     url_prefix = app.config.get("APPLICATION_URL_PREFIX", "")
@@ -1656,5 +1699,6 @@ def create_admin_manager(app):
     admin.add_view(UserView(db.User, session))
     admin.add_view(BaseView(db.Text, session))
     admin.add_view(ProjectSponsorshipView(db.ProjectSponsorship, session))
+    admin.add_view(ReportedIssueView(db.ReportedIssue, session, name="Reported Issues"))
 
     return admin
