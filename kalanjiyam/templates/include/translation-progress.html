@@ -17,15 +17,15 @@
     <div class="grid grid-cols-3 gap-6 mt-8 pt-8 border-t border-slate-50">
       <div class="text-center">
         <div class="text-2xl font-black text-royalblue">{{ active_tasks }}</div>
-        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Active</div>
+        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{{ _('Active') }}</div>
       </div>
       <div class="text-center">
         <div class="text-2xl font-black text-amber-500">{{ pending_tasks }}</div>
-        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Pending</div>
+        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{{ _('Pending') }}</div>
       </div>
       <div class="text-center">
         <div class="text-2xl font-black text-red-500">{{ failed_tasks }}</div>
-        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Failed</div>
+        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{{ _('Failed') }}</div>
       </div>
     </div>
 

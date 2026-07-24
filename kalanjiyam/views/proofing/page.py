@@ -59,7 +59,7 @@ SENTENCE_SPLIT_REGEX = re.compile(
 @bp.before_request
 def _enforce_project_access():
     if current_user.is_authenticated and current_user.is_super_admin:
-        abort(403, description="Superadmins are not allowed to view project data.")
+        abort(403, description=_l("Superadmins are not allowed to view project data."))
     project_slug = request.view_args.get("project_slug") if request.view_args else None
     if not project_slug:
         return None
@@ -823,11 +823,11 @@ def edit_post(project_slug, page_slug):
                 version_key=target_key,
             )
             form.version.data = new_version
-            flash("Saved changes.", "success")
+            flash(_l("Saved changes."), "success")
             # Since changes saved successfully, our active key can now become target_key
             active_key = target_key
         except EditError:
-            flash("Edit conflict. Please incorporate the changes below:", "error")
+            flash(_l("Edit conflict. Please incorporate the changes below:"), "error")
             # Get latest revision of target_key to display as conflict
             session = q.get_session()
             target_version_record = session.query(db.PageVersion).filter_by(
@@ -838,7 +838,14 @@ def edit_post(project_slug, page_slug):
             form.version.data = target_version_record.version if target_version_record else 0
     else:
         for field, errors in form.errors.items():
-            flash(f"Validation error in {field}: {', '.join(errors)}", "error")
+            flash(
+                _l(
+                    "Validation error in %(field)s: %(errors)s",
+                    field=field,
+                    errors=", ".join(errors),
+                ),
+                "error",
+            )
 
     # Get target version counter
     session = q.get_session()
@@ -944,7 +951,7 @@ def revision(project_slug, page_slug, revision_id):
 def ocr(project_slug, page_slug):
     """Apply OCR to the given page using the specified engine."""
     if current_user.is_authenticated and current_user.is_super_admin:
-        abort(403, description="Superadmins are not allowed to access project data.")
+        abort(403, description=_l("Superadmins are not allowed to access project data."))
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
@@ -963,7 +970,13 @@ def ocr(project_slug, page_slug):
         settings = q.get_system_settings()
         limit = settings.unregistered_user_ocr_limit
         if is_rate_limited("run_ocr", ip_address, fingerprint_id, limit=limit):
-            abort(429, description=f"Rate limit exceeded. Guests can only run OCR {limit} times per 24 hours.")
+            abort(
+                429,
+                description=_l(
+                    "Rate limit exceeded. Guests can only run OCR %(limit)s times per 24 hours.",
+                    limit=limit,
+                ),
+            )
 
     engine = request.args.get('engine', 'google')
     language = request.args.get('language', 'sa')
@@ -989,7 +1002,7 @@ def ocr(project_slug, page_slug):
     )
 
     if engine not in SUPPORTED_ENGINES:
-        abort(400, description=f"Unsupported OCR engine: {engine}")
+        abort(400, description=_l("Unsupported OCR engine: %(engine)s", engine=engine))
 
     image_path = get_page_image_filepath(project_slug, page_slug)
 
@@ -1104,7 +1117,7 @@ def ocr(project_slug, page_slug):
             e,
             exc_info=True,
         )
-        abort(500, description=f"OCR failed: {str(e)}")
+        abort(500, description=_l("OCR failed: %(error)s", error=str(e)))
 
 
 def _is_matching_language(text: str, lang: str) -> bool:
@@ -1394,7 +1407,7 @@ def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: 
 def translate(project_slug, page_slug):
     """Apply translation to the given page using the specified engine."""
     if current_user.is_authenticated and current_user.is_super_admin:
-        abort(403, description="Superadmins are not allowed to access project data.")
+        abort(403, description=_l("Superadmins are not allowed to access project data."))
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
@@ -1409,7 +1422,7 @@ def translate(project_slug, page_slug):
     doc_data = {}
     if request.method == "POST":
         if not request.is_json:
-            abort(400, description="Expected JSON payload")
+            abort(400, description=_l("Expected JSON payload"))
         doc_data = request.get_json() or {}
 
     source_lang = request.args.get('source_lang') or doc_data.get('source_lang') or 'sa'
@@ -1421,10 +1434,10 @@ def translate(project_slug, page_slug):
     # Validate engine
     from kalanjiyam.utils.translation_engine import TranslationEngineFactory
     if not TranslationEngineFactory.is_supported(engine):
-        abort(400, description=f"Unsupported translation engine: {engine}")
+        abort(400, description=_l("Unsupported translation engine: %(engine)s", engine=engine))
 
     if source_lang == target_lang:
-        abort(400, description="Source and Target languages must be different.")
+        abort(400, description=_l("Source and Target languages must be different."))
 
     if request.method == "POST":
         try:
@@ -1498,18 +1511,18 @@ def translate(project_slug, page_slug):
             return jsonify(doc_data)
         except Exception as e:
             logging.error(f"Translation failed for {project_slug}/{page_slug} with engine {engine}: {e}")
-            abort(500, description=f"Translation failed: {str(e)}")
+            abort(500, description=_l("Translation failed: %(error)s", error=str(e)))
 
     # Get the revision to translate
     if revision_id is None:
         # Use the latest revision
         if not page_.revisions:
-            abort(400, description="No revisions found for this page")
+            abort(400, description=_l("No revisions found for this page"))
         revision = page_.revisions[-1]  # Latest revision
     else:
         revision = q.get_session().query(db.Revision).filter_by(id=revision_id).first()
         if not revision or revision.page_id != page_.id:
-            abort(400, description=f"Revision {revision_id} not found for this page")
+            abort(400, description=_l("Revision %(revision_id)s not found for this page", revision_id=revision_id))
     
     try:
         # Check if translation already exists
@@ -1541,7 +1554,7 @@ def translate(project_slug, page_slug):
         from kalanjiyam import consts
         bot_user = q.user(consts.BOT_USERNAME)
         if bot_user is None:
-            abort(500, description="Bot user not found")
+            abort(500, description=_l("Bot user not found"))
 
         new_translation = db.Translation(
             page_id=page_.id,
@@ -1578,7 +1591,7 @@ def translate(project_slug, page_slug):
         return translated_text
     except Exception as e:
         logging.error(f"Translation failed for {project_slug}/{page_slug} with engine {engine}: {e}")
-        abort(500, description=f"Translation failed: {str(e)}")
+        abort(500, description=_l("Translation failed: %(error)s", error=str(e)))
 
 
 @api.route("/upload-image/<project_slug>/<page_slug>/", methods=["POST"])
@@ -1586,7 +1599,7 @@ def translate(project_slug, page_slug):
 def upload_image(project_slug, page_slug):
     """Upload an image for the rich text editor."""
     if current_user.is_authenticated and current_user.is_super_admin:
-        abort(403, description="Superadmins are not allowed to access project data.")
+        abort(403, description=_l("Superadmins are not allowed to access project data."))
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
@@ -1599,21 +1612,28 @@ def upload_image(project_slug, page_slug):
 
     # Check if file was uploaded
     if 'image' not in request.files:
-        abort(400, description="No image file provided")
+        abort(400, description=_l("No image file provided"))
     
     file = request.files['image']
     if file.filename == '':
-        abort(400, description="No image file selected")
+        abort(400, description=_l("No image file selected"))
     
     # Validate file type
     allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
     filename = secure_filename(file.filename)
     if '.' not in filename:
-        abort(400, description="File must have an extension")
+        abort(400, description=_l("File must have an extension"))
     
     file_ext = filename.rsplit('.', 1)[1].lower()
     if file_ext not in allowed_extensions:
-        abort(400, description=f"File type '{file_ext}' not allowed. Allowed types: {', '.join(allowed_extensions)}")
+        abort(
+            400,
+            description=_l(
+                "File type '%(file_ext)s' not allowed. Allowed types: %(allowed_types)s",
+                file_ext=file_ext,
+                allowed_types=", ".join(sorted(allowed_extensions)),
+            ),
+        )
     
     # Validate file size (max 10MB)
     file.seek(0, 2)  # Seek to end
@@ -1621,7 +1641,13 @@ def upload_image(project_slug, page_slug):
     file.seek(0)  # Reset to beginning
     max_size = 10 * 1024 * 1024  # 10MB
     if file_size > max_size:
-        abort(400, description=f"File size ({file_size / 1024 / 1024:.2f}MB) exceeds maximum allowed size (10MB)")
+        abort(
+            400,
+            description=_l(
+                "File size (%(size).2fMB) exceeds maximum allowed size (10MB)",
+                size=file_size / 1024 / 1024,
+            ),
+        )
     ensure_storage_quota_for_user(current_user, file_size)
     
     try:
@@ -1648,7 +1674,7 @@ def upload_image(project_slug, page_slug):
         })
     except Exception as e:
         logging.error(f"Image upload failed for {project_slug}/{page_slug}: {e}")
-        abort(500, description=f"Image upload failed: {str(e)}")
+        abort(500, description=_l("Image upload failed: %(error)s", error=str(e)))
 
 
 @api.route("/glossaries", methods=["GET"])

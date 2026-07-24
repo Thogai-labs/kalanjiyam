@@ -4,14 +4,14 @@
 {% import "macros/proofing.html" as m %}
 
 
-{% block title %}Edit: {{ project.display_title }} | Ambuda{% endblock %}
+{% block title %}{{ _('Edit: %(title)s | Ambuda', title=project.display_title) }}{% endblock %}
 
 
 {% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
 
 {% block content %}
-{{ m.project_header_nested('Edit', project) }}
+{{ m.project_header_nested(_('Edit'), project) }}
 {{ m.project_tabs(project=project, active='edit', is_mod=current_user.is_moderator) }}
 
 {{ mf.show_errors_if_any(form.errors) }}
@@ -20,7 +20,7 @@
   {{ form.csrf_token }}
 
   <fieldset>
-    <legend class="text-lg font-bold mt-8 mb-4">Basic information</legend>
+    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Basic information') }}</legend>
     <div class="bg-slate-100 p-4">
       {{ mf.field(form.display_title) }}
       {{ mf.field(form.genre) }}
@@ -30,7 +30,7 @@
         {{ form.is_publicly_viewable(class_="h-5 w-5 mt-1 rounded border-slate-300 text-royalblue focus:ring-royalblue cursor-pointer") }}
         <div>
           {{ form.is_publicly_viewable.label(class_="font-semibold text-slate-700 block cursor-pointer") }}
-          <span class="text-sm text-slate-500">When checked, anyone (including guests) can read this book at /books/.</span>
+          <span class="text-sm text-slate-500">{{ _('When checked, anyone (including guests) can read this book at /books/.') }}</span>
         </div>
       </div>
 
@@ -39,7 +39,7 @@
   </fieldset>
 
   <fieldset>
-    <legend class="text-lg font-bold mt-8 mb-4">Book metadata</legend>
+    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Book metadata') }}</legend>
     <div class="bg-slate-100 p-4">
       {{ mf.field(form.print_title) }}
       {{ mf.field(form.author) }}
@@ -51,7 +51,7 @@
   </fieldset>
 
   <fieldset>
-    <legend class="text-lg font-bold mt-8 mb-4">Internal notes</legend>
+    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Internal notes') }}</legend>
     <div class="bg-slate-100 p-4">
       {{ mf.field(form.notes) }}
     </div>
@@ -63,21 +63,21 @@
 <hr class="my-8 border-slate-200">
 
 <div class="border border-red-500 rounded p-6 my-8 bg-red-50/10">
-  <h3 class="text-red-700 font-bold text-lg mb-2">Danger zone</h3>
+  <h3 class="text-red-700 font-bold text-lg mb-2">{{ _('Danger zone') }}</h3>
   
   <form method="POST" action="{{ url_for('proofing.project.delete_project', slug=project.slug) }}">
     {{ delete_form.csrf_token }}
-    <p class="font-bold text-slate-800">Delete this project</p>
+    <p class="font-bold text-slate-800">{{ _('Delete this project') }}</p>
     <p class="text-sm text-slate-600 my-2">
-      Once you delete a project, there is no going back. This will permanently delete all of its pages, revisions, and discussion threads.
+      {{ _('Once you delete a project, there is no going back. This will permanently delete all of its pages, revisions, and discussion threads.') }}
     </p>
     <p class="text-sm text-slate-700 font-medium my-2">
-      Please type <kbd class="px-2 py-1 bg-slate-200 rounded font-mono text-sm text-slate-800">{{ project.slug }}</kbd> to confirm:
+      {{ _('Please type') }} <kbd class="px-2 py-1 bg-slate-200 rounded font-mono text-sm text-slate-800">{{ project.slug }}</kbd> {{ _('to confirm:') }}
     </p>
     
     {{ delete_form.slug(class_="modern-input block w-full my-4", placeholder=project.slug) }}
     
-    <input class="btn bg-red-700 hover:bg-red-900 transition text-white font-semibold py-2 px-4 rounded cursor-pointer" type="submit" value="Permanently delete this project and its data">
+    <input class="btn bg-red-700 hover:bg-red-900 transition text-white font-semibold py-2 px-4 rounded cursor-pointer" type="submit" value="{{ _('Permanently delete this project and its data') }}">
   </form>
 </div>
 

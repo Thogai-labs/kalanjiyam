@@ -1,12 +1,12 @@
 {% extends 'proofing/base.html' %}
 {% import "macros/proofing.html" as m %}
 
-{% block title %}Revision: {{ project.display_title }}/{{ cur.slug }} | Ambuda{% endblock %}
+{% block title %}{{ _('Revision: %(title)s/%(page)s | Ambuda', title=project.display_title, page=cur.slug) }}{% endblock %}
 
 {% block content %}
 <div class="mb-4">
   {{ m.page_header(project, cur, prev=prev, next=next) }}
-  {{ revision.created.strftime("%Y-%m-%d %H:%M:%S") }} by {{ revision.author.username if revision.author else _('Guest') }}
+  {{ _('%(created)s by %(author)s', created=revision.created.strftime("%Y-%m-%d %H:%M:%S"), author=revision.author.username if revision.author else _('Guest')) }}
 </div>
 
 {{ m.page_status(revision.status.name) }}

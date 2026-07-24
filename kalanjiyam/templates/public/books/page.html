@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
 
-{% block title %}Page {{ page.slug }} - {{ project.display_title }} | Kalanjiyam{% endblock %}
+{% block title %}{{ _('Page %(page)s - %(title)s | Kalanjiyam', page=page.slug, title=project.display_title) }}{% endblock %}
 
-{% block meta_description %}View page {{ page.slug }} of {{ project.display_title }} with OCR text and translations.{% endblock %}
+{% block meta_description %}{{ _('View page %(page)s of %(title)s with OCR text and translations.', page=page.slug, title=project.display_title) }}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -144,9 +144,9 @@
 {% if translations %}
 <div class="translation-toggle">
   <div class="flex items-center space-x-2">
-    <label class="text-sm font-medium text-gray-700">Translation:</label>
+    <label class="text-sm font-medium text-gray-700">{{ _('Translation:') }}</label>
     <select id="translation-select" class="text-sm border border-gray-300 rounded px-2 py-1">
-      <option value="none">Original</option>
+      <option value="none">{{ _('Original') }}</option>
       {% for translation in translations %}
         <option value="{{ translation.target_language }}" 
                 {% if selected_translation and selected_translation.id == translation.id %}selected{% endif %}>
@@ -164,19 +164,19 @@
     <nav class="mb-4">
       <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" 
          class="text-blue-600 hover:text-blue-800 transition-colors">
-        ← Back to {{ project.display_title }}
+        ← {{ _('Back to %(title)s', title=project.display_title) }}
       </a>
     </nav>
     
     <div class="flex justify-between items-center">
       <div>
         <h1 class="text-2xl font-bold text-gray-900">{{ project.display_title }}</h1>
-        <p class="text-gray-600">Page {{ page.slug }}</p>
+        <p class="text-gray-600">{{ _('Page %(page)s', page=page.slug) }}</p>
       </div>
       
       <div class="text-right">
-        <p class="text-sm text-gray-500">{{ current_index + 1 }} of {{ total_pages }}</p>
-        <p class="text-sm text-gray-500">{{ "%.1f"|format((current_index + 1) / total_pages * 100) }}% complete</p>
+        <p class="text-sm text-gray-500">{{ _('%(current)s of %(total)s', current=current_index + 1, total=total_pages) }}</p>
+        <p class="text-sm text-gray-500">{{ _('%(percent).1f%% complete', percent=((current_index + 1) / total_pages * 100)) }}</p>
       </div>
     </div>
   </header>
@@ -187,24 +187,24 @@
     <div class="lg:col-span-2">
       <div class="content-container">
         <div class="content-header">
-          <h2 class="text-lg font-semibold text-gray-900">Original Page</h2>
+          <h2 class="text-lg font-semibold text-gray-900">{{ _('Original Page') }}</h2>
         </div>
         <div class="content-body">
           <div class="scrollable-content">
             <div class="image-container">
               <div id="osd-image" class="w-full h-full"></div>
               <div class="image-controls">
-                <button type="button" id="osd-zoom-in" title="Zoom in">
+                <button type="button" id="osd-zoom-in" title="{{ _('Zoom in') }}">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                   </svg>
                 </button>
-                <button type="button" id="osd-zoom-out" title="Zoom out">
+                <button type="button" id="osd-zoom-out" title="{{ _('Zoom out') }}">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 12H6"></path>
                   </svg>
                 </button>
-                <button type="button" id="osd-home" title="Reset view">
+                <button type="button" id="osd-home" title="{{ _('Reset view') }}">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
                   </svg>
@@ -215,7 +215,7 @@
               <svg class="mx-auto h-12 w-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
               </svg>
-              <p>Page image not available</p>
+              <p>{{ _('Page image not available') }}</p>
             </div>
           </div>
         </div>
@@ -226,7 +226,7 @@
     <div class="lg:col-span-3">
       <div class="content-container">
         <div class="content-header">
-          <h2 class="text-lg font-semibold text-gray-900">Text Content</h2>
+          <h2 class="text-lg font-semibold text-gray-900">{{ _('Text Content') }}</h2>
         </div>
         <div class="content-body">
           <div class="scrollable-content">
@@ -247,7 +247,7 @@
                 <svg class="w-12 h-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
-                <p class="font-medium">This page has not been transcribed yet.</p>
+                <p class="font-medium">{{ _('This page has not been transcribed yet.') }}</p>
               </div>
             {% endif %}
           </div>
@@ -265,8 +265,8 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
           </svg>
           <div>
-            <h3 class="text-sm font-medium text-yellow-800">No Translation Available</h3>
-            <p class="text-sm text-yellow-700 mt-1">Translation has not been generated for this page yet.</p>
+            <h3 class="text-sm font-medium text-yellow-800">{{ _('No Translation Available') }}</h3>
+            <p class="text-sm text-yellow-700 mt-1">{{ _('Translation has not been generated for this page yet.') }}</p>
           </div>
         </div>
       </div>
@@ -285,25 +285,25 @@
           <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
           </svg>
-          Previous
+          {{ _('Previous') }}
         </a>
       {% endif %}
       
       <span class="text-sm text-gray-600">
-        Page {{ current_index + 1 }} of {{ total_pages }}
+        {{ _('Page %(current)s of %(total)s', current=current_index + 1, total=total_pages) }}
       </span>
     </div>
     
     <div class="flex items-center space-x-4">
       <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" 
          class="text-sm text-gray-600 hover:text-gray-800 transition-colors">
-        Book Overview
+        {{ _('Book Overview') }}
       </a>
       
       {% if next_page %}
         <a href="{{ url_for('public.books.page', project_slug=project.slug, page_slug=next_page.slug) }}" 
            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors">
-          Next
+          {{ _('Next') }}
           <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
           </svg>

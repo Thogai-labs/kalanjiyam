@@ -15,8 +15,8 @@
     </label>
     <div>
       <p class="prose text-sm mb-2">
-        <a href="{{ page_url }}">{{ project.display_title }}, page {{ page.slug }}</a>,
-        line {{ match.line_num }}
+        <a href="{{ page_url }}">{{ _('Page %(page)s', page=page.slug) }}</a>,
+        {{ _('line %(line)s', line=match.line_num) }}
       </p>
 
       <p class="p-1 bg-slate-50 rounded mb-2" for="{{ match_name }}">{{ match.query|safe }}</p>
@@ -29,34 +29,34 @@
 {% endmacro %}
 
 
-{% block title %}Search and Replace {{ project.display_title }} | Ambuda{% endblock %}
+{% block title %}{{ _('Search and Replace %(title)s | Ambuda', title=project.display_title) }}{% endblock %}
 
 
 {% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
 
 {% block content %}
-{{ m.project_header_nested('Search and Replace', project) }}
+{{ m.project_header_nested(_('Search and Replace'), project) }}
 {{ m.project_tabs(project=project, active='edit') }}
 
 <div class="prose">
-  <p>Use this simple search and replace form to make edits across this project. The search supports regular expressions.</p>
+  <p>{{ _('Use this simple search and replace form to make edits across this project. The search supports regular expressions.') }}</p>
   <form method="POST" class="bg-slate-100 p-4 my-4">
 
     {{ field(form.query) }}
     {{ field(form.replace) }}
-    <input class="btn btn-submit" type="submit" name="search" value="Show matches">
+    <input class="btn btn-submit" type="submit" name="search" value="{{ _('Show matches') }}">
   </form>
 </div>
 
 {% if results %}
 <div class="prose">
-  <h2>Matches</h2>
+  <h2>{{ _('Matches') }}</h2>
 
   {% if num_matches == 1 %}
-  <p>Found {{ num_matches }} matching lines for query <kbd>{{ query }}</kbd>.</p>
+  <p>{{ ngettext('Found %(count)s matching line for query', 'Found %(count)s matching lines for query', num_matches, count=num_matches) }} <kbd>{{ query }}</kbd>.</p>
   {% else %}
-  <p>Found {{ num_matches }} matching lines for query <kbd>{{ query }}</kbd>.</p>
+  <p>{{ ngettext('Found %(count)s matching line for query', 'Found %(count)s matching lines for query', num_matches, count=num_matches) }} <kbd>{{ query }}</kbd>.</p>
   {% endif %}
 </div>
 
@@ -69,7 +69,7 @@
     <label class="px-4">
       <input type="checkbox" name="select-all" id="select-all">
     </label>
-    <label for="select-all">Select all {{ num_matches }} matches.</label>
+    <label for="select-all">{{ _('Select all %(count)s matches.', count=num_matches) }}</label>
   </div>
 
   <ul>
@@ -81,7 +81,7 @@
   {% if submit_changes_form %}
     {{ submit_changes_form.submit(class="btn btn-submit") }}
   {% else %}
-    <input class="btn btn-submit" type="submit" name="submit" value="Review changes">
+    <input class="btn btn-submit" type="submit" name="submit" value="{{ _('Review changes') }}">
   {% endif %}
 </form>
 

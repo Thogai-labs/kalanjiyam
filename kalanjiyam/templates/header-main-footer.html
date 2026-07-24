@@ -6,10 +6,10 @@
 {% include "include/header.html" %}
 {% endblock %}
 
-<div class="flex-1 min-h-0 flex flex-col">
+<div class="flex-1 flex flex-col">
 {% block main %}{% endblock %}
 </div>
-
+{% include "include/footer.html" %}
 {% block scripts %}
     <script async defer data-domain="siddhasagaram.in" src="https://plausible.io/js/plausible.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@indic-transliteration/sanscript@1.2.7/sanscript.min.js"></script>

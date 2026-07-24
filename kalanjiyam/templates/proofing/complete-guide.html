@@ -44,11 +44,11 @@
 {% macro _compare(wrong, right) %}
 <div class="grid md:grid-cols-2 gap-4 my-6">
     <div class="p-4 bg-red-50 border border-red-100 rounded-xl">
-        <span class="text-[10px] font-black uppercase tracking-widest text-red-400 block mb-1">Wrong</span>
+        <span class="text-[10px] font-black uppercase tracking-widest text-red-400 block mb-1">{{ _('Wrong') }}</span>
         <code class="text-sm text-red-700 font-mono">{{ wrong }}</code>
     </div>
     <div class="p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
-        <span class="text-[10px] font-black uppercase tracking-widest text-emerald-400 block mb-1">Right</span>
+        <span class="text-[10px] font-black uppercase tracking-widest text-emerald-400 block mb-1">{{ _('Right') }}</span>
         <code class="text-sm text-emerald-700 font-mono">{{ right }}</code>
     </div>
 </div>
@@ -100,16 +100,14 @@
     _("Comprehensive guidelines for proofing a text. When in doubt: don't change what the page says!")) }}
 
 <div class="prose prose-slate max-w-none prose-lg">
-<p class="text-slate-600 font-medium leading-relaxed">This document defines the proofreading guidelines we use on <span class="text-royalblue font-bold">Kalanjiyam</span>.
-Generally, these guidelines apply to all of the projects we proof.</p>
+<p class="text-slate-600 font-medium leading-relaxed">{{ _('This document defines the proofreading guidelines we use on Kalanjiyam. Generally, these guidelines apply to all of the projects we proof.') }}</p>
 
 {{ _table_of_contents(contents) }}
 
 
 {{ _h('what-is-our-goal') }}
 
-<p>We want to create machine-readable texts that we can display on Kalanjiyam and
-share with others.</p>
+<p>{{ _('We want to create machine-readable texts that we can display on Kalanjiyam and share with others.') }}</p>
 
 <p>We should create these texts at the highest quality we are capable of. We
 should establish credibility by making clear where these texts come from (which
@@ -156,21 +154,21 @@ Rules that start with <span class="font-black">[auto]</span> can be fixed with s
 
 {{ _h2('characters', 'eol-hyphens') }}
 
-<p>If the printed line ends with a hyphen, we keep the hyphen. Our program uses these hyphens to stitch together different lines:</p>
+<p>{{ _('If the printed line ends with a hyphen, we keep the hyphen. Our program uses these hyphens to stitch together different lines:') }}</p>
 
 {% call _example() -%}
 sa bhagavAnsRSTvedaM jagattasya ca sthitiM cikI-
 rSuH ...
 {%- endcall %}
 
-<p><strong>Exception:</strong> If the hyphen is part of a word that would otherwise have a hyphen (e.g. "front-end"), join the words together so that our program preserves the hyphen.</p>
+<p><strong>{{ _('Exception:') }}</strong> {{ _('If the hyphen is part of a word that would otherwise have a hyphen (e.g. "front-end"), join the words together so that our program preserves the hyphen.') }}</p>
 
 
 {{ _h2('characters', 'eol-dashes') }}
 
 <div class="grid md:grid-cols-2 gap-6 my-8">
     <div class="premium-card p-6 border-l-4 border-l-royalblue">
-        <p class="font-black text-slate-900 mb-1">Hyphens (-)</p>
+        <p class="font-black text-slate-900 mb-1">{{ _('Hyphens (-)') }}</p>
         <p class="text-sm text-slate-500">{{ _('Use for end of lines or compounds. Write with a single dash.') }}</p>
     </div>
     <div class="premium-card p-6 border-l-4 border-l-emerald-400">
@@ -182,14 +180,14 @@ rSuH ...
 
 {{ _h2('characters', 'auto-spaces') }}
 
-<p>We don't leave any space between a dash and the words around it:</p>
+<p>{{ _('We don\'t leave any space between a dash and the words around it:') }}</p>
 
 {{ _compare('arthaH -- eka'|d, 'arthaH--eka'|d) }}
 
 
 {{ _h2('characters', 'auto-quotes') }}
 
-<p>We use "straight quotes" without any special formatting.</p>
+<p>{{ _('We use "straight quotes" without any special formatting.') }}</p>
 
 {{ _compare('“naraH”'|d, '"naraH"'|d) }}
 
@@ -198,12 +196,12 @@ rSuH ...
 
 {{ _h2('paragraphs', 'para-breaks') }}
 
-<p>Keep line breaks and line-ending hyphens. Proofing is easier when we can quickly compare our digitized text to the original image.</p>
+<p>{{ _('Keep line breaks and line-ending hyphens. Proofing is easier when we can quickly compare our digitized text to the original image.') }}</p>
 
 
 {{ _h2('paragraphs', 'para-blank-lines') }}
 
-<p>Separate paragraphs and verses with blank lines to maintain structural clarity.</p>
+<p>{{ _('Separate paragraphs and verses with blank lines to maintain structural clarity.') }}</p>
 
 
 {{ _h2('paragraphs', 'para-headers') }}
@@ -215,21 +213,21 @@ rSuH ...
 
 {{ _h2('paragraphs', 'para-footnotes') }}
 
-<p>In the main text, mark the character that indicates the footnote by wrapping it in brackets and placing a <kbd class="px-2 py-0.5 bg-slate-100 rounded border border-slate-200">^</kbd> character after the first bracket.</p>
+<p>{{ _('In the main text, mark the character that indicates the footnote by wrapping it in brackets and placing a') }} <kbd class="px-2 py-0.5 bg-slate-100 rounded border border-slate-200">^</kbd> {{ _('character after the first bracket.') }}</p>
 
 {{ _compare('naraH1'|d, 'naraH[^1]'|d) }}
 
 
 {{ _h('pages') }}
 
-<p>Skip any content that is not part of the original book. This includes handwritten notes, stamps, watermarks, dirt, stains, etc.</p>
+<p>{{ _('Skip any content that is not part of the original book. This includes handwritten notes, stamps, watermarks, dirt, stains, etc.') }}</p>
 
 
 {{ _h('annotations') }}
 
 {{ _h2('annotations', 'errors') }}
 
-<p>If the text has a typographical error, wrap the error in the <kbd class="px-2 py-0.5 bg-slate-100 rounded text-xs">&lt;error&gt;</kbd> tag. If needed, add a fix with the <kbd class="px-2 py-0.5 bg-slate-100 rounded text-xs">&lt;fix&gt;</kbd> tag.</p>
+<p>{{ _('If the text has a typographical error, wrap the error in the') }} <kbd class="px-2 py-0.5 bg-slate-100 rounded text-xs">&lt;error&gt;</kbd> {{ _('tag. If needed, add a fix with the') }} <kbd class="px-2 py-0.5 bg-slate-100 rounded text-xs">&lt;fix&gt;</kbd> {{ _('tag.') }}</p>
 
 
 {{ _h('unanswered') }}

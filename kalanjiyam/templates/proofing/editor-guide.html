@@ -5,10 +5,10 @@
 
 
 {% set contents = {
-  'menu-bar': 'Menu bar',
-  'text-editor': 'Text editor',
-  'image-viewer': 'Image viewer',
-  'status-form': 'Status form',
+  'menu-bar': _('Menu bar'),
+  'text-editor': _('Text editor'),
+  'image-viewer': _('Image viewer'),
+  'status-form': _('Status form'),
 } %}
 
 {% macro _h(anchor) %}
@@ -28,11 +28,11 @@
     _("A detailed guide to our proofing interface")) }}
 
 <div class="prose prose-slate max-w-none prose-lg">
-<p class="text-slate-600 font-medium">The Kalanjiyam editor is a powerful tool designed for high-precision Sanskrit transcription. This manual explains each component of the interface.</p>
+<p class="text-slate-600 font-medium">{{ _('The Kalanjiyam editor is a powerful tool designed for high-precision Sanskrit transcription. This manual explains each component of the interface.') }}</p>
 
 {{ _h('menu-bar') }}
 
-<p>The menu bar at the top of the editor provides access to advanced tools and formatting options.</p>
+<p>{{ _('The menu bar at the top of the editor provides access to advanced tools and formatting options.') }}</p>
 
 <div class="grid md:grid-cols-2 gap-6 my-10">
     <div class="premium-card p-8">
@@ -53,7 +53,7 @@
 
 {{ _h('text-editor') }}
 
-<p>The text editor on the left is where you transcribe the text. It supports basic Sanskrit input and maintains the structural integrity of the document.</p>
+<p>{{ _('The text editor on the left is where you transcribe the text. It supports basic Sanskrit input and maintains the structural integrity of the document.') }}</p>
 
 {% call m_guide.html_figure(_("The Text Editor Area")) %}
 {{ m_guide.text_box() }}
@@ -72,7 +72,7 @@
 
 {{ _h('image-viewer') }}
 
-<p>The image viewer on the right displays the original scan. You can zoom, rotate, and pan to get a better view of difficult passages.</p>
+<p>{{ _('The image viewer on the right displays the original scan. You can zoom, rotate, and pan to get a better view of difficult passages.') }}</p>
 
 {% call m_guide.html_figure(_("The Image Viewer")) %}
 {{ m_guide.image_viewer() }}
@@ -80,7 +80,7 @@
 
 {{ _h('status-form') }}
 
-<p>Before publishing, use the status form to indicate the page's current state. This helps other volunteers know which pages still need attention.</p>
+<p>{{ _('Before publishing, use the status form to indicate the page's current state. This helps other volunteers know which pages still need attention.') }}</p>
 
 {% call m_guide.html_figure(_("The Status and Submission Form")) %}
 {{ m_guide.submission_form() }}

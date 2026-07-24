@@ -126,9 +126,9 @@
           <input type="hidden" name="user_id" value="{{ u.id }}">
           <label class="{{ admin.label_class() }}">{{ _('Role') }}</label>
           <select name="role_name" class="{{ admin.select_class() }}">
-            <option value="p1">P1 — Basic proofer</option>
-            <option value="p2">P2 — Advanced proofer</option>
-            <option value="moderator">Moderator</option>
+            <option value="p1">{{ _('P1 — Basic proofer') }}</option>
+            <option value="p2">{{ _('P2 — Advanced proofer') }}</option>
+            <option value="moderator">{{ _('Moderator') }}</option>
           </select>
           {{ admin.btn_primary(_('Change role'), type='submit') }}
         </form>

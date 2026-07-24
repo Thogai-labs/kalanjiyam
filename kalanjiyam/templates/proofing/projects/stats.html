@@ -2,36 +2,36 @@
 {% import "macros/proofing.html" as m %}
 
 
-{% block title %}Stats: {{ project.display_title }} | Ambuda{% endblock %}
+{% block title %}{{ _('Stats: %(title)s | Ambuda', title=project.display_title) }}{% endblock %}
 
 
 {% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
 
 {% block content %}
-{{ m.project_header_nested('Stats', project) }}
+{{ m.project_header_nested(_('Stats'), project) }}
 {{ m.project_tabs(project=project, active='stats', is_mod=current_user.is_moderator) }}
 
 <div class="prose">
   <table>
-    <tr><th>&nbsp;</th><th>Total</th><th>Per page</th></tr>
+    <tr><th>&nbsp;</th><th>{{ _('Total') }}</th><th>{{ _('Per page') }}</th></tr>
     <tr>
-        <th>Pages</th>
+        <th>{{ _('Pages') }}</th>
         <td>{{ "{:,}".format(stats.num_pages) }}</td>
         <td>&ndash;</td>
     </tr>
     <tr>
-        <th>Words</th>
+        <th>{{ _('Words') }}</th>
         <td>{{ "{:,}".format(stats.num_words) }}</td>
         <td>{{ "{:,}".format(stats.num_words // stats.num_pages) }}</td>
     </tr>
     <tr>
-        <th>Roman characters</th>
+        <th>{{ _('Roman characters') }}</th>
         <td>{{ "{:,}".format(stats.num_roman_characters) }}</td>
         <td>{{ "{:,}".format(stats.num_roman_characters // stats.num_pages) }}</td></tr>
     </tr>
     <tr>
-        <th>Aksharas</th>
+        <th>{{ _('Aksharas') }}</th>
         <td>{{ "{:,}".format(stats.num_aksharas) }}</td>
         <td>{{ "{:,}".format(stats.num_aksharas // stats.num_pages) }}</td>
     </tr>
@@ -39,7 +39,7 @@
 </div>
 
 <div class="prose mt-8">
-  <h3>OCR Comparisons</h3>
+  <h3>{{ _('OCR Comparisons') }}</h3>
 
   <form action="{{ url_for('proofing.project.run_comparison', slug=project.slug) }}" method="POST" class="mb-4">
     <div class="flex gap-2 items-center">
@@ -48,7 +48,7 @@
         <option value="{{ engine }}">{{ engine | capitalize }}</option>
         {% endfor %}
       </select>
-      <button type="submit" class="btn btn-primary px-3 py-1 bg-blue-600 text-white rounded">Run Comparison</button>
+      <button type="submit" class="btn btn-primary px-3 py-1 bg-blue-600 text-white rounded">{{ _('Run Comparison') }}</button>
     </div>
   </form>
 
@@ -56,12 +56,12 @@
   <table>
     <thead>
       <tr>
-        <th>Date</th>
-        <th>Engine</th>
-        <th>Status</th>
+        <th>{{ _('Date') }}</th>
+        <th>{{ _('Engine') }}</th>
+        <th>{{ _('Status') }}</th>
         <th>WER</th>
         <th>CER</th>
-        <th>Details</th>
+        <th>{{ _('Details') }}</th>
       </tr>
     </thead>
     <tbody>
@@ -72,13 +72,13 @@
         <td>{{ comp.status }}</td>
         <td>{% if comp.summary_metrics and comp.summary_metrics.avg_wer is defined %}{{ "%.2f"|format(comp.summary_metrics.avg_wer * 100) }}%{% else %}-{% endif %}</td>
         <td>{% if comp.summary_metrics and comp.summary_metrics.avg_cer is defined %}{{ "%.2f"|format(comp.summary_metrics.avg_cer * 100) }}%{% else %}-{% endif %}</td>
-        <td><a href="{{ url_for('proofing.project.comparison_details', slug=project.slug, comparison_id=comp.id) }}">View</a></td>
+        <td><a href="{{ url_for('proofing.project.comparison_details', slug=project.slug, comparison_id=comp.id) }}">{{ _('View') }}</a></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   {% else %}
-  <p>No comparisons run yet.</p>
+  <p>{{ _('No comparisons run yet.') }}</p>
   {% endif %}
 </div>
 {% endblock %}

@@ -71,7 +71,7 @@ def _enforce_project_access():
             "proofing.project.confirm_changes",
         }
         if request.endpoint in restricted_endpoints:
-            flask_abort(403, description="Superadmins are not allowed to view project data.")
+                flask_abort(403, description=_l("Superadmins are not allowed to view project data."))
 
     slug = request.view_args.get("slug") if request.view_args else None
     if not slug:
@@ -88,7 +88,7 @@ def _is_valid_page_number_spec(_, field):
     try:
         _ = project_utils.parse_page_number_spec(field.data)
     except Exception as e:
-        raise ValidationError("The page number spec isn't valid.") from e
+        raise ValidationError(_l("The page number spec isn't valid.")) from e
 
 
 class EditMetadataForm(FlaskForm):
@@ -116,7 +116,7 @@ class EditMetadataForm(FlaskForm):
         widget=TextArea(),
         validators=[_is_valid_page_number_spec],
         render_kw={
-            "placeholder": "Coming soon.",
+            "placeholder": _l("Coming soon."),
         },
     )
     genre = QuerySelectField(
@@ -188,7 +188,7 @@ class SearchForm(FlaskForm):
 
 
 class DeleteProjectForm(FlaskForm):
-    slug = StringField("Slug", validators=[DataRequired()])
+    slug = StringField(_l("Slug"), validators=[DataRequired()])
 
 
 class ReplaceForm(SearchForm):
@@ -201,7 +201,7 @@ class ReplaceForm(SearchForm):
 def validate_matches(form, field):
     for match_form in field:
         if match_form.errors:
-            raise ValidationError("Invalid match form values.")
+            raise ValidationError(_l("Invalid match form values."))
 
 
 class PreviewChangesForm(ReplaceForm):
@@ -209,15 +209,15 @@ class PreviewChangesForm(ReplaceForm):
         csrf = False
 
     matches = FieldList(FormField(MatchForm), validators=[validate_matches])
-    submit = SubmitField("Preview changes")
+    submit = SubmitField(_l("Preview changes"))
 
 
 class ConfirmChangesForm(ReplaceForm):
     class Meta:
         csrf = False
 
-    confirm = SubmitField("Confirm")
-    cancel = SubmitField("Cancel")
+    confirm = SubmitField(_l("Confirm"))
+    cancel = SubmitField(_l("Cancel"))
 
 
 @bp.route("/<slug>/")
@@ -377,12 +377,12 @@ def delete_project(slug):
             from kalanjiyam.utils.storage import get_storage, project_prefix
             get_storage().delete_prefix(project_prefix(slug))
 
-            flash(f"Deleted project {slug}", "success")
+            flash(_l("Deleted project %(slug)s", slug=slug), "success")
             return redirect(url_for("proofing.index"))
         else:
-            flash("Deletion failed (incorrect slug typed).", "error")
+            flash(_l("Deletion failed (incorrect slug typed)."), "error")
     else:
-        flash("Deletion failed (validation error).", "error")
+        flash(_l("Deletion failed (validation error)."), "error")
 
     return redirect(url_for("proofing.project.edit", slug=slug))
 
@@ -559,11 +559,11 @@ def run_comparison(slug):
 
     engine = request.form.get("engine")
     if not engine:
-        flash("Please select an engine.", "danger")
+        flash(_l("Please select an engine."), "danger")
         return redirect(url_for("proofing.project.stats", slug=slug))
 
     if engine not in SUPPORTED_ENGINES:
-        flash(f"Unsupported OCR engine: {engine}", "danger")
+        flash(_l("Unsupported OCR engine: %(engine)s", engine=engine), "danger")
         return redirect(url_for("proofing.project.stats", slug=slug))
 
     session = q.get_session()
@@ -575,7 +575,7 @@ def run_comparison(slug):
         comparison.id, current_app.config["KALANJIYAM_ENVIRONMENT"]
     )
 
-    flash(f"Comparison started with {engine}.", "success")
+    flash(_l("Comparison started with %(engine)s.", engine=engine), "success")
     return redirect(url_for("proofing.project.stats", slug=slug))
 
 
@@ -847,7 +847,7 @@ def confirm_changes(slug):
     )
     form = ConfirmChangesForm(request.form)
     if not form.validate():
-        flash("Invalid input.", "danger")
+        flash(_l("Invalid input."), "danger")
         invalid_keys = list(form.errors.keys())
         LOG.error(
             f"{__name__}: Invalid form - {request.method}, invalid keys: {invalid_keys}"
@@ -918,7 +918,7 @@ def confirm_changes(slug):
                 )
                 LOG.debug(f"{__name__}: New reviion > {page_slug}: {new_revision}")
 
-        flash("Changes applied.", "success")
+        flash(_l("Changes applied."), "success")
         return redirect(url_for("proofing.project.activity", slug=slug))
     elif form.cancel.data:
         LOG.debug(f"{__name__}: confirm_changes Cancelled")
@@ -1415,10 +1415,10 @@ def admin(slug):
 
             get_storage().delete_prefix(project_prefix(slug))
 
-            flash(f"Deleted project {slug}", "success")
+            flash(_l("Deleted project %(slug)s", slug=slug), "success")
             return redirect(url_for("proofing.index"))
         else:
-            form.slug.errors.append("Deletion failed (incorrect field value).")
+            form.slug.errors.append(_l("Deletion failed (incorrect field value)."))
 
     return render_template(
         "proofing/projects/admin.html",
