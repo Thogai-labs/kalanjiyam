@@ -26,6 +26,8 @@
 
 {% block body_class %}flex flex-col {% if conflict %}min-h-screen overflow-y-auto{% else %}h-screen overflow-hidden{% endif %}{% endblock %}
 
+{% block footer %}{% endblock %}
+
 {% block extra_css %}
 {{ super() }}
 <link rel="preconnect" href="https://fonts.googleapis.com">

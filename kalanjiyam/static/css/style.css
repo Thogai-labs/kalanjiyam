@@ -6,10 +6,14 @@
   ::selection {
     @apply text-white bg-emerald-400;
   }
-  body, html {
-    /* For sticky footers while allowing scrolling on tall content. */
+  html, body {
+    @apply h-full;
+  }
+  /* Non-editor pages that need vertical scrolling */
+  body.page-scrollable {
+    height: auto;
     min-height: 100%;
-    overflow-y: auto !important;
+    overflow-y: auto;
   }
   body {
     background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
@@ -555,7 +559,7 @@
 
   /* Book editor — image + text focused layout */
   .book-editor-page {
-    @apply flex flex-col flex-1 min-h-0;
+    @apply flex flex-col flex-1 min-h-0 overflow-hidden;
     background: #e8e4dc;
   }
 
@@ -613,7 +617,7 @@
   }
 
   .book-editor-workspace {
-    @apply grid grid-cols-1 lg:grid-cols-2 flex-1 min-h-0;
+    @apply grid grid-cols-1 lg:grid-cols-2 flex-1 min-h-0 overflow-hidden;
   }
 
   .book-editor-workspace.has-conflict {
@@ -621,7 +625,7 @@
   }
 
   .book-editor-image-pane {
-    @apply relative min-h-[40vh] lg:min-h-0 bg-gray-800 border-b lg:border-r border-slate-300;
+    @apply relative min-h-[40vh] lg:min-h-0 bg-gray-800 border-b lg:border-r border-slate-300 overflow-hidden;
   }
 
   .book-editor-image-viewport {
