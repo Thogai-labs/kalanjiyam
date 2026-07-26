@@ -237,10 +237,14 @@ def user_by_email(email: str) -> db.User | None:
     )
 
 
-def get_or_create_open_tenant() -> db.Group:
+def get_or_create_open_tenant() -> db.Group | None:
     session = get_session()
     tenant = session.query(db.Group).filter_by(slug="open-tenant").first()
     if not tenant:
+        from flask import current_app
+        if current_app and not current_app.config.get("ENABLE_REGISTERED_ACCESS", True):
+            return None
+
         tenant = db.Group(
             name="Open Tenant",
             slug="open-tenant",

@@ -175,6 +175,10 @@ def editor_guide():
 
 @bp.route("/create-project", methods=["GET", "POST"])
 def create_project():
+    if not current_app.config.get("ENABLE_GUEST_ACCESS", True) and not current_user.is_authenticated:
+        flash(_l("Guest project creation is disabled. Please log in to create a project."), "warning")
+        return redirect(url_for("auth.login"))
+
     settings = q.get_system_settings()
     guest_upload_limit = getattr(settings, "unregistered_user_upload_limit", 10)
 

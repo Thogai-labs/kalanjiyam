@@ -27,7 +27,9 @@
     </p>
 
     <nav class="flex flex-col sm:flex-row items-center justify-center gap-4">
+      {% if config.ENABLE_REGISTERED_ACCESS %}
       <a class="btn-premium" href="{{ url_for('auth.register') }}">{{ _('Register') }}</a>
+      {% endif %}
       <a class="text-sm font-semibold text-slate-600 hover:text-royalblue transition-colors"
         href="{{ url_for('auth.sign_in') }}">{{ _('Already have an account? Sign in') }}</a>
     </nav>

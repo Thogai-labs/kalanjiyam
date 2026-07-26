@@ -144,6 +144,17 @@ class BaseConfig:
         _env("DEFAULT_PROJECT_REQUIRES_ORG", "true").lower() in ("true", "1", "yes")
     )
 
+    #: If True, allow guest (unregistered) users to create projects and access features.
+    ENABLE_GUEST_ACCESS = (
+        _env("ENABLE_GUEST_ACCESS", "true").lower() in ("true", "1", "yes")
+    )
+
+    #: If True, allow new users to register.
+    ENABLE_REGISTERED_ACCESS = (
+        _env("ENABLE_REGISTERED_ACCESS", "true").lower() in ("true", "1", "yes")
+    )
+
+
     #: Guest daily rate limits (creations and OCR runs)
     GUEST_DAILY_PROJECT_LIMIT = int(_env("GUEST_DAILY_PROJECT_LIMIT", "5") or "5")
     GUEST_DAILY_OCR_LIMIT = int(_env("GUEST_DAILY_OCR_LIMIT", "10") or "10")

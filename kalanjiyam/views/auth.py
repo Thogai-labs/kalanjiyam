@@ -203,6 +203,10 @@ class ResetPasswordFromTokenForm(FlaskForm):
 
 @bp.route("/register", methods=["GET", "POST"])
 def register():
+    from flask import current_app, abort
+    if not current_app.config.get("ENABLE_REGISTERED_ACCESS", True):
+        abort(404)
+
     if current_user.is_authenticated:
         logout_if_not_ok()
         return redirect(url_for("site.index"))
