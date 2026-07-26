@@ -24,6 +24,7 @@
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="stylesheet" href="{{ asset('gen/style.css') }}">
+    <link rel="stylesheet" href="{{ asset('gen/main.css') }}">
     {% block extra_css %}{% endblock %}
     {% block extra_head %}{% endblock %}
     <script>
@@ -44,14 +45,14 @@
       })();
     </script>
 </head>
-<body class="{% block body_class %}flex flex-col min-h-full{% endblock %}">
+<body class="{% block body_class %}flex flex-col min-h-screen page-scrollable{% endblock %}">
     {% block body %}
     {% include 'include/header.html' %}
     
-    <main class="{% block main_class %}{% endblock %}">
+    <main class="flex-1 {% block main_class %}{% endblock %}">
         {% block main %}{% endblock %}
       </main>
-    
+    {% include 'include/footer.html' %}
     <script src="{{ asset('gen/main.js') }}"></script>
     <script src="https://unpkg.com/alpinejs@3.10.3/dist/cdn.min.js" defer></script>
     {% block extra_scripts %}{% endblock %}

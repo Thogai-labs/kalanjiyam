@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import Blueprint, current_app, flash, render_template, request, redirect, url_for
+from flask_babel import lazy_gettext as _l
 from flask_login import current_user
 from flask_wtf import FlaskForm
 from slugify import slugify
@@ -25,7 +26,7 @@ bp = Blueprint("proofing", __name__)
 
 def _is_allowed_document_file(filename: str) -> bool:
     """True iff we accept this type of document upload."""
-    return Path(filename).suffix == ".pdf"
+    return Path(filename).suffix in (".pdf", ".docx", ".doc")
 
 
 def _required_if_archive(message: str):
@@ -48,45 +49,45 @@ def _required_if_local(message: str):
 
 class CreateProjectForm(FlaskForm):
     pdf_source = RadioField(
-        "Source",
+        _l("Source"),
         choices=[
-            ("archive.org", "From archive.org"),
-            ("local", "From my computer"),
+            ("archive.org", _l("From archive.org")),
+            ("local", _l("From my computer")),
         ],
         validators=[DataRequired()],
     )
     archive_identifier = StringField(
-        "archive.org identifier",
+        _l("archive.org identifier"),
         validators=[
-            _required_if_archive("Please provide a valid archive.org identifier.")
+            _required_if_archive(_l("Please provide a valid archive.org identifier."))
         ],
     )
     local_file = FileField(
-        "PDF file", validators=[_required_if_local("Please provide a PDF file.")]
+        _l("PDF file"), validators=[_required_if_local(_l("Please provide a PDF file."))]
     )
     local_title = StringField(
-        "Title of the book (you can change this later)",
+        _l("Title of the book (you can change this later)"),
         validators=[
             _required_if_local(
-                "Please provide a title for your PDF.",
+                _l("Please provide a title for your PDF."),
             )
         ],
     )
 
     license = RadioField(
-        "License",
+        _l("License"),
         choices=[
-            ("public", "Public domain"),
-            ("copyrighted", "Copyrighted"),
-            ("other", "Other"),
+            ("public", _l("Public domain")),
+            ("copyrighted", _l("Copyrighted")),
+            ("other", _l("Other")),
         ],
         validators=[DataRequired()],
     )
     custom_license = StringField(
-        "License",
+        _l("License"),
         widget=TextArea(),
         render_kw={
-            "placeholder": "Please tell us about this book's license.",
+            "placeholder": _l("Please tell us about this book's license."),
         },
     )
 
@@ -138,7 +139,7 @@ def index():
         statuses_per_project[project.id] = project_counts
         pages_per_project[project.id] = num_pages
 
-    projects.sort(key=lambda x: x.display_title)
+    projects.sort(key=lambda x: x.created_at, reverse=True)
     return render_template(
         "proofing/index.html",
         projects=projects,
@@ -174,6 +175,10 @@ def editor_guide():
 
 @bp.route("/create-project", methods=["GET", "POST"])
 def create_project():
+    if not current_app.config.get("ENABLE_GUEST_ACCESS", True) and not current_user.is_authenticated:
+        flash(_l("Guest project creation is disabled. Please log in to create a project."), "warning")
+        return redirect(url_for("auth.login"))
+
     settings = q.get_system_settings()
     guest_upload_limit = getattr(settings, "unregistered_user_upload_limit", 10)
 
@@ -200,7 +205,7 @@ def create_project():
         or is_p2_or_admin  # Enterprise P2 or Admin
     )
     if not allowed:
-        flash("Sorry, you aren't authorized to use this feature.", "error")
+        flash(_l("Sorry, you aren't authorized to use this feature."), "error")
         return redirect(url_for("proofing.index"))
 
     # Rate limiting for guest users
@@ -210,28 +215,116 @@ def create_project():
         fingerprint_id = request.cookies.get("device_fingerprint")
         limit = settings.unregistered_user_project_limit
         if is_rate_limited("create_project", ip_address, fingerprint_id, limit=limit):
-            flash(f"Rate limit exceeded. Guests can only create {limit} projects per 24 hours.", "error")
+            flash(
+                _l(
+                    "Rate limit exceeded. Guests can only create %(limit)s projects per 24 hours.",
+                    limit=limit,
+                ),
+                "error",
+            )
             return redirect(url_for("proofing.index"))
 
+    from kalanjiyam.utils.translation_engine import get_available_translation_engines, get_supported_languages_list
+    engines = get_available_translation_engines()
+    languages = get_supported_languages_list()
+
     form = CreateProjectForm()
+
+    if request.method == "POST" and request.form.get("docx_workflow") == "direct":
+        import uuid
+        import json
+        import redis
+        import os
+        from kalanjiyam.tasks.translation import run_docx_translation
+
+        file = request.files.get("local_file")
+        if not file or not file.filename:
+            flash(_l("Please upload a file."), "error")
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
+
+        filename = file.filename
+        if Path(filename).suffix not in (".docx", ".doc"):
+            flash(_l("Please upload a Word document (.docx)."), "error")
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
+
+        source_lang = request.form.get("source_lang", "sa")
+        target_lang = request.form.get("target_lang", "en")
+        engine = request.form.get("engine", "indictrans2")
+        glossary = request.form.get("glossary") or None
+
+        # Validate engine
+        from kalanjiyam.utils.translation_engine import TranslationEngineFactory
+        if not TranslationEngineFactory.is_supported(engine):
+            flash(_l("Unsupported translation engine selected."), "error")
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
+
+        docx_id = str(uuid.uuid4())
+        from kalanjiyam.utils.storage import get_storage, docx_upload_key
+        storage = get_storage()
+        storage.save(docx_upload_key(docx_id), file.stream)
+
+        # Store docx original filename and parameters in Redis
+        r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+        r_client.setex(
+            f"docx_info:{docx_id}",
+            86400,
+            json.dumps({
+                "original_filename": filename,
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+                "engine": engine,
+                "glossary": glossary
+            })
+        )
+
+        task = run_docx_translation.delay(
+            app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
+            docx_id=docx_id,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            engine=engine,
+            glossary=glossary,
+            creator_id=current_user.id if current_user.is_authenticated else None,
+        )
+
+        from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+        user_id = get_user_identifier(current_user, request)
+        if user_id:
+            add_user_task(
+                user_identifier=user_id,
+                task_id=task.id,
+                task_type="docx_translation",
+                project_slug="",
+                project_title=filename,
+                extra_info={"docx_id": docx_id, "glossary": glossary}
+            )
+
+        return render_template(
+            "proofing/docx-translate-post.html",
+            task_id=task.id,
+            docx_id=docx_id,
+            status="PENDING",
+            percent=0,
+            current=0,
+            total=0,
+        )
+
     if form.validate_on_submit():
         if current_user.is_authenticated:
             if current_app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True) and not getattr(
                 current_user, "organization_id", None
             ):
-                flash("Your account is not assigned to an organization.", "error")
-                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit)
+                flash(_l("Your account is not assigned to an organization."), "error")
+                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
         title = form.local_title.data
 
         # TODO: add timestamp to slug for extra uniqueness?
         slug = slugify(title)
 
-        # We accept only PDFs, so validate that the user hasn't uploaded some
-        # other kind of document format.
         filename = form.local_file.raw_data[0].filename
         if not _is_allowed_document_file(filename):
-            flash("Please upload a PDF.", "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit)
+            flash(_l("Please upload a PDF or DOCX."), "error")
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
         upload_size = 0
         if form.local_file.data and hasattr(form.local_file.data, "stream"):
             cur_pos = form.local_file.data.stream.tell()
@@ -243,18 +336,32 @@ def create_project():
             ensure_storage_quota_for_user(current_user, upload_size)
         else:
             if upload_size > guest_upload_limit * 1024 * 1024:
-                flash(f"PDF size exceeds the allowed limit of {guest_upload_limit}MB for guest users.", "error")
-                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit)
+                flash(
+                    _l(
+                        "PDF size exceeds the allowed limit of %(limit)sMB for guest users.",
+                        limit=guest_upload_limit,
+                    ),
+                    "error",
+                )
+                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
 
-        # Save the original PDF so that it can be downloaded later or reused
-        # for future tasks (thumbnails, better image formats, etc.). The
-        # Celery worker fetches it from storage by key, so web and worker
+        # Save the original file so that it can be processed/downloaded later.
+        # The Celery worker fetches it from storage by key, so web and worker
         # don't need a shared filesystem.
-        from kalanjiyam.utils.storage import get_storage, pdf_key
+        from kalanjiyam.utils.storage import get_storage, pdf_key, project_docx_key
 
-        source_pdf_key = pdf_key(slug)
-        form.local_file.data.stream.seek(0)
-        get_storage().save(source_pdf_key, form.local_file.data.stream)
+        is_uploaded_docx = filename.lower().endswith((".docx", ".doc"))
+        source_pdf_key = None
+        source_docx_key = None
+
+        if is_uploaded_docx:
+            source_docx_key = project_docx_key(slug)
+            form.local_file.data.stream.seek(0)
+            get_storage().save(source_docx_key, form.local_file.data.stream)
+        else:
+            source_pdf_key = pdf_key(slug)
+            form.local_file.data.stream.seek(0)
+            get_storage().save(source_pdf_key, form.local_file.data.stream)
 
         # Log usage action for guests
         if not current_user.is_authenticated:
@@ -272,6 +379,7 @@ def create_project():
                 kwargs={
                     "display_title": title,
                     "pdf_key": source_pdf_key,
+                    "docx_key": source_docx_key,
                     "app_environment": current_app.config["KALANJIYAM_ENVIRONMENT"],
                     "creator_id": None,
                     "fingerprint_id": request.cookies.get("device_fingerprint"),
@@ -282,9 +390,22 @@ def create_project():
             task = project_tasks.create_project.delay(
                 display_title=title,
                 pdf_key=source_pdf_key,
+                docx_key=source_docx_key,
                 app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
                 creator_id=current_user.id,
             )
+
+        from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+        user_id = get_user_identifier(current_user, request)
+        if user_id:
+            add_user_task(
+                user_identifier=user_id,
+                task_id=task.id,
+                task_type="create_project",
+                project_slug=slug,
+                project_title=title,
+            )
+
         return render_template(
             "proofing/create-project-post.html",
             status=task.status,
@@ -294,7 +415,7 @@ def create_project():
             task_id=task.id,
         )
 
-    return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit)
+    return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
 
 
 @bp.route("/status/<task_id>")
@@ -418,3 +539,185 @@ def dashboard():
         num_contributors_7d=num_contributors_7d,
         num_contributors_1d=num_contributors_1d,
     )
+
+
+@bp.route("/api/tasks")
+def get_tasks_api():
+    """Retrieve background tasks for the current user."""
+    from kalanjiyam.utils.user_tasks import get_user_tasks, get_user_identifier
+    user_id = get_user_identifier(current_user, request)
+    if not user_id:
+        return {"tasks": []}
+    
+    try:
+        tasks = get_user_tasks(user_id)
+        # Limit to the most recent 10 tasks to keep UI clean and fast
+        return {"tasks": tasks[:10]}
+    except Exception as e:
+        current_app.logger.warning(f"Error fetching tasks: {e}")
+        return {"tasks": []}, 500
+
+
+@bp.route("/api/tasks/<task_id>/cancel", methods=["POST"])
+def cancel_task_api(task_id):
+    """Cancel a background task for the current user."""
+    from kalanjiyam.utils.user_tasks import cancel_user_task, get_user_identifier
+    user_id = get_user_identifier(current_user, request)
+    if not user_id:
+        return {"error": "Unauthorized"}, 401
+        
+    try:
+        success = cancel_user_task(user_id, task_id)
+        if success:
+            return {"success": True}
+        return {"error": "Task not found or not in active state"}, 400
+    except Exception as e:
+        current_app.logger.warning(f"Error cancelling task: {e}")
+        return {"error": "Internal server error"}, 500
+
+
+@bp.route("/translate/docx", methods=["GET", "POST"])
+def docx_translate():
+    import uuid
+    import json
+    import redis
+    import os
+    from flask import abort
+    from kalanjiyam.utils.translation_engine import get_available_translation_engines, get_supported_languages_list
+    from kalanjiyam.tasks.translation import run_docx_translation
+
+    engines = get_available_translation_engines()
+    languages = get_supported_languages_list()
+
+    if request.method == "POST":
+        # Check if file uploaded
+        file = request.files.get("file")
+        if not file or not file.filename:
+            flash(_l("Please upload a file."), "error")
+            return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
+
+        filename = file.filename
+        if Path(filename).suffix not in (".docx", ".doc"):
+            flash(_l("Please upload a Word document (.docx)."), "error")
+            return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
+
+        source_lang = request.form.get("source_lang", "sa")
+        target_lang = request.form.get("target_lang", "en")
+        engine = request.form.get("engine", "indictrans2")
+        glossary = request.form.get("glossary") or None
+
+        # Validate engine
+        from kalanjiyam.utils.translation_engine import TranslationEngineFactory
+        if not TranslationEngineFactory.is_supported(engine):
+            flash(_l("Unsupported translation engine selected."), "error")
+            return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
+
+        docx_id = str(uuid.uuid4())
+        from kalanjiyam.utils.storage import get_storage, docx_upload_key
+        storage = get_storage()
+        storage.save(docx_upload_key(docx_id), file.stream)
+
+        # Store docx original filename and parameters in Redis
+        r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+        r_client.setex(
+            f"docx_info:{docx_id}",
+            86400,
+            json.dumps({
+                "original_filename": filename,
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+                "engine": engine,
+                "glossary": glossary
+            })
+        )
+
+        task = run_docx_translation.delay(
+            app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
+            docx_id=docx_id,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            engine=engine,
+            glossary=glossary,
+            creator_id=current_user.id if current_user.is_authenticated else None,
+        )
+
+        from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+        user_id = get_user_identifier(current_user, request)
+        if user_id:
+            add_user_task(
+                user_identifier=user_id,
+                task_id=task.id,
+                task_type="docx_translation",
+                project_slug="",
+                project_title=filename,
+                extra_info={"docx_id": docx_id, "glossary": glossary}
+            )
+
+        return render_template(
+            "proofing/docx-translate-post.html",
+            task_id=task.id,
+            docx_id=docx_id,
+            status="PENDING",
+            percent=0,
+            current=0,
+            total=0,
+        )
+
+    return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
+
+
+@bp.route("/translate/docx/status/<task_id>")
+def docx_translate_status(task_id):
+    from celery.result import AsyncResult
+    from kalanjiyam.tasks import app as celery_app
+    
+    r = AsyncResult(task_id, app=celery_app)
+    info = r.info or {}
+    
+    error = None
+    if isinstance(info, Exception):
+        current = total = percent = 0
+        error = str(info)
+    elif r.status == 'FAILURE':
+        current = total = percent = 0
+        error = str(info) if info else "An error occurred during translation."
+    else:
+        current = info.get("current", 0)
+        total = info.get("total", 0)
+        percent = info.get("percent", 0)
+        
+    return {
+        "status": r.status,
+        "current": current,
+        "total": total,
+        "percent": percent,
+        "error": error
+    }
+
+
+@bp.route("/translate/docx/download/<docx_id>")
+def docx_translate_download(docx_id):
+    import redis
+    import os
+    import json
+    from flask import abort
+    from kalanjiyam.utils.storage import get_storage, docx_translation_key
+    storage = get_storage()
+    trans_key = docx_translation_key(docx_id)
+    
+    if not storage.exists(trans_key):
+        abort(404, description=_l("Translated file not found."))
+
+    r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+    info_json = r_client.get(f"docx_info:{docx_id}")
+    if info_json:
+        info = json.loads(info_json)
+        original_filename = info.get("original_filename", "translated_document.docx")
+        base_name = Path(original_filename).stem
+        download_name = f"{base_name}_translated.docx"
+    else:
+        download_name = "translated_document.docx"
+
+    return storage.serve(trans_key, as_attachment=True, download_name=download_name)
+
+

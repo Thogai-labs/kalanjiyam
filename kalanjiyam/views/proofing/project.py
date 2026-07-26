@@ -71,7 +71,7 @@ def _enforce_project_access():
             "proofing.project.confirm_changes",
         }
         if request.endpoint in restricted_endpoints:
-            flask_abort(403, description="Superadmins are not allowed to view project data.")
+                flask_abort(403, description=_l("Superadmins are not allowed to view project data."))
 
     slug = request.view_args.get("slug") if request.view_args else None
     if not slug:
@@ -88,7 +88,7 @@ def _is_valid_page_number_spec(_, field):
     try:
         _ = project_utils.parse_page_number_spec(field.data)
     except Exception as e:
-        raise ValidationError("The page number spec isn't valid.") from e
+        raise ValidationError(_l("The page number spec isn't valid.")) from e
 
 
 class EditMetadataForm(FlaskForm):
@@ -116,7 +116,7 @@ class EditMetadataForm(FlaskForm):
         widget=TextArea(),
         validators=[_is_valid_page_number_spec],
         render_kw={
-            "placeholder": "Coming soon.",
+            "placeholder": _l("Coming soon."),
         },
     )
     genre = QuerySelectField(
@@ -188,7 +188,7 @@ class SearchForm(FlaskForm):
 
 
 class DeleteProjectForm(FlaskForm):
-    slug = StringField("Slug", validators=[DataRequired()])
+    slug = StringField(_l("Slug"), validators=[DataRequired()])
 
 
 class ReplaceForm(SearchForm):
@@ -201,7 +201,7 @@ class ReplaceForm(SearchForm):
 def validate_matches(form, field):
     for match_form in field:
         if match_form.errors:
-            raise ValidationError("Invalid match form values.")
+            raise ValidationError(_l("Invalid match form values."))
 
 
 class PreviewChangesForm(ReplaceForm):
@@ -209,15 +209,15 @@ class PreviewChangesForm(ReplaceForm):
         csrf = False
 
     matches = FieldList(FormField(MatchForm), validators=[validate_matches])
-    submit = SubmitField("Preview changes")
+    submit = SubmitField(_l("Preview changes"))
 
 
 class ConfirmChangesForm(ReplaceForm):
     class Meta:
         csrf = False
 
-    confirm = SubmitField("Confirm")
-    cancel = SubmitField("Cancel")
+    confirm = SubmitField(_l("Confirm"))
+    cancel = SubmitField(_l("Cancel"))
 
 
 @bp.route("/<slug>/")
@@ -256,12 +256,42 @@ def activity(slug):
     session = q.get_session()
     recent_revisions = (
         session.query(db.Revision)
-        .options(orm.defer(db.Revision.content))
         .filter_by(project_id=project_.id)
         .order_by(db.Revision.created.desc())
         .limit(100)
         .all()
     )
+
+    page_ids = {r.page_id for r in recent_revisions}
+    if page_ids:
+        all_page_revisions = (
+            session.query(db.Revision)
+            .filter(db.Revision.page_id.in_(page_ids))
+            .order_by(db.Revision.page_id, db.Revision.created.desc())
+            .all()
+        )
+    else:
+        all_page_revisions = []
+
+    revisions_by_page = {}
+    for r in all_page_revisions:
+        revisions_by_page.setdefault(r.page_id, []).append(r)
+
+    from kalanjiyam.utils.diff import revision_diff
+
+    for r in recent_revisions:
+        page_revs = revisions_by_page.get(r.page_id, [])
+        try:
+            idx = page_revs.index(r)
+        except ValueError:
+            idx = -1
+
+        if idx != -1 and idx + 1 < len(page_revs):
+            prev_r = page_revs[idx + 1]
+            r.diff = revision_diff(prev_r.content, r.content)
+        else:
+            r.diff = None
+
     recent_activity = [("revision", r.created, r) for r in recent_revisions]
     recent_activity.append(("project", project_.created_at, project_))
 
@@ -300,6 +330,7 @@ def edit(slug):
         project=project_,
         form=form,
         delete_form=delete_form,
+        supported_engines=SUPPORTED_ENGINES,
     )
 
 
@@ -377,12 +408,12 @@ def delete_project(slug):
             from kalanjiyam.utils.storage import get_storage, project_prefix
             get_storage().delete_prefix(project_prefix(slug))
 
-            flash(f"Deleted project {slug}", "success")
+            flash(_l("Deleted project %(slug)s", slug=slug), "success")
             return redirect(url_for("proofing.index"))
         else:
-            flash("Deletion failed (incorrect slug typed).", "error")
+            flash(_l("Deletion failed (incorrect slug typed)."), "error")
     else:
-        flash("Deletion failed (validation error).", "error")
+        flash(_l("Deletion failed (validation error)."), "error")
 
     return redirect(url_for("proofing.project.edit", slug=slug))
 
@@ -394,7 +425,10 @@ def download(slug):
     if project_ is None:
         abort(404)
 
-    return render_template("proofing/projects/download.html", project=project_)
+    from kalanjiyam.utils.storage import project_docx_key, get_storage
+    is_docx = get_storage().exists(project_docx_key(slug))
+
+    return render_template("proofing/projects/download.html", project=project_, is_docx=is_docx)
 
 
 @bp.route("/<slug>/download/text")
@@ -500,13 +534,28 @@ def download_as_docx(slug):
     return response
 
 
+@bp.route("/<slug>/download/pdf")
+def download_as_pdf(slug):
+    """Download project pages compiled into a single PDF document in replica layout."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    blob = proofing_utils.documents_to_pdf(project_, project_.pages)
+    response = make_response(blob, 200)
+    response.mimetype = "application/pdf"
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="{slug}-replica.pdf"'
+    )
+    return response
+
+
+
 @bp.route("/<slug>/stats")
-@moderator_required
 def stats(slug):
     """Show basic statistics about this project.
 
-    Currently, these stats don't show any sensitive information. But since that
-    might change in the future, limit this page to moderators only.
+    Currently, these stats don't show any sensitive information.
     """
     project_ = q.project(slug)
     if project_ is None:
@@ -530,7 +579,6 @@ def stats(slug):
 
 
 @bp.route("/<slug>/stats/compare", methods=["POST"])
-@moderator_required
 def run_comparison(slug):
     """Run an OCR comparison against ground truth."""
     project_ = q.project(slug)
@@ -539,11 +587,11 @@ def run_comparison(slug):
 
     engine = request.form.get("engine")
     if not engine:
-        flash("Please select an engine.", "danger")
+        flash(_l("Please select an engine."), "danger")
         return redirect(url_for("proofing.project.stats", slug=slug))
 
     if engine not in SUPPORTED_ENGINES:
-        flash(f"Unsupported OCR engine: {engine}", "danger")
+        flash(_l("Unsupported OCR engine: %(engine)s", engine=engine), "danger")
         return redirect(url_for("proofing.project.stats", slug=slug))
 
     session = q.get_session()
@@ -555,12 +603,11 @@ def run_comparison(slug):
         comparison.id, current_app.config["KALANJIYAM_ENVIRONMENT"]
     )
 
-    flash(f"Comparison started with {engine}.", "success")
+    flash(_l("Comparison started with %(engine)s.", engine=engine), "success")
     return redirect(url_for("proofing.project.stats", slug=slug))
 
 
 @bp.route("/<slug>/stats/compare/<int:comparison_id>")
-@moderator_required
 def comparison_details(slug, comparison_id):
     """Show detailed results for a comparison."""
     project_ = q.project(slug)
@@ -571,6 +618,19 @@ def comparison_details(slug, comparison_id):
     comparison = session.query(OCRComparison).get(comparison_id)
     if not comparison or comparison.project_id != project_.id:
         abort(404)
+
+    # Ensure JSON columns are deserialized if they are returned as string (SQLite fallback)
+    import json
+    if isinstance(comparison.page_results, str):
+        try:
+            comparison.page_results = json.loads(comparison.page_results)
+        except Exception as e:
+            LOG.warning(f"Failed to deserialize page_results: {e}")
+    if isinstance(comparison.summary_metrics, str):
+        try:
+            comparison.summary_metrics = json.loads(comparison.summary_metrics)
+        except Exception as e:
+            LOG.warning(f"Failed to deserialize summary_metrics: {e}")
 
     return render_template(
         "proofing/projects/comparison_details.html",
@@ -827,7 +887,7 @@ def confirm_changes(slug):
     )
     form = ConfirmChangesForm(request.form)
     if not form.validate():
-        flash("Invalid input.", "danger")
+        flash(_l("Invalid input."), "danger")
         invalid_keys = list(form.errors.keys())
         LOG.error(
             f"{__name__}: Invalid form - {request.method}, invalid keys: {invalid_keys}"
@@ -898,7 +958,7 @@ def confirm_changes(slug):
                 )
                 LOG.debug(f"{__name__}: New reviion > {page_slug}: {new_revision}")
 
-        flash("Changes applied.", "success")
+        flash(_l("Changes applied."), "success")
         return redirect(url_for("proofing.project.activity", slug=slug))
     elif form.cancel.data:
         LOG.debug(f"{__name__}: confirm_changes Cancelled")
@@ -1025,6 +1085,18 @@ def batch_ocr(slug):
                     'project_slug': slug,
                 }
                 redis_client.setex(task_key, 86400, json.dumps(task_info))
+
+                from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+                user_id = get_user_identifier(current_user, request)
+                if user_id:
+                    add_user_task(
+                        user_identifier=user_id,
+                        task_id=task.id,
+                        task_type="ocr",
+                        project_slug=slug,
+                        project_title=project_.display_title,
+                        extra_info={"engine": engine, "language": language}
+                    )
                 from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
                 numeric_value = REVERSE_ENGINE_MAP.get(engine, "1")
                 engine_label = f"OCR {numeric_value}"
@@ -1109,6 +1181,7 @@ def batch_ocr_status(task_id):
         active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
         pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
         failed_tasks = sum(1 for result in r.results if result.failed())
+        revoked_tasks = sum(1 for result in r.results if result.state == 'REVOKED')
 
         status = None
         if total:
@@ -1119,6 +1192,9 @@ def batch_ocr_status(task_id):
             elif failed_tasks > 0:
                 status = "FAILURE"
                 # Clear the task from Redis when failed
+                _clear_ocr_task_from_redis(task_id)
+            elif revoked_tasks > 0:
+                status = "CANCELLED"
                 _clear_ocr_task_from_redis(task_id)
             else:
                 status = "PROGRESS"
@@ -1162,6 +1238,10 @@ def batch_translate(slug):
     if project_ is None:
         abort(404)
 
+    from kalanjiyam.utils.translation_engine import get_available_translation_engines, get_supported_languages_list
+    engines = get_available_translation_engines()
+    languages = get_supported_languages_list()
+
     # Check if there's an ongoing translation task using Redis
     task_key = f"translation_task:{slug}"
     task_info = redis_client.get(task_key)
@@ -1196,6 +1276,8 @@ def batch_translate(slug):
                         active_tasks=active_tasks,
                         pending_tasks=pending_tasks,
                         failed_tasks=failed_tasks,
+                        engines=engines,
+                        languages=languages,
                     )
                 else:
                     # Task is complete, remove from Redis
@@ -1213,6 +1295,16 @@ def batch_translate(slug):
         source_lang = request.form.get('source_lang', 'sa')
         target_lang = request.form.get('target_lang', 'en')
         engine = request.form.get('engine', 'google')
+        glossary = request.form.get('glossary') or None
+
+        if source_lang == target_lang:
+            flash(_l("Source and Target languages must be different."), "error")
+            return render_template(
+                "proofing/projects/batch-translate.html",
+                project=project_,
+                engines=engines,
+                languages=languages,
+            )
         
         # Validate engine
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
@@ -1221,14 +1313,19 @@ def batch_translate(slug):
             return render_template(
                 "proofing/projects/batch-translate.html",
                 project=project_,
+                engines=engines,
+                languages=languages,
             )
         
+        queue_name = "low_priority" if not current_user.is_authenticated else None
         task = translation_tasks.run_translation_for_project(
             app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
             project=project_,
             source_lang=source_lang,
             target_lang=target_lang,
             engine=engine,
+            glossary=glossary,
+            queue=queue_name,
         )
         if task:
             # Store task info in Redis with expiration (24 hours)
@@ -1241,6 +1338,18 @@ def batch_translate(slug):
                 'project_slug': slug
             }
             redis_client.setex(task_key, 86400, json.dumps(task_info))
+
+            from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+            user_id = get_user_identifier(current_user, request)
+            if user_id:
+                add_user_task(
+                    user_identifier=user_id,
+                    task_id=task.id,
+                    task_type="translation",
+                    project_slug=slug,
+                    project_title=project_.display_title,
+                    extra_info={"engine": engine, "source_lang": source_lang, "target_lang": target_lang, "glossary": glossary}
+                )
             
             return render_template(
                 "proofing/projects/batch-translate.html",
@@ -1253,6 +1362,8 @@ def batch_translate(slug):
                 active_tasks=0,
                 pending_tasks=0,
                 failed_tasks=0,
+                engines=engines,
+                languages=languages,
             )
         else:
             flash(_l("No pages with revisions found in this project."), "error")
@@ -1260,6 +1371,8 @@ def batch_translate(slug):
     return render_template(
         "proofing/projects/batch-translate.html",
         project=project_,
+        engines=engines,
+        languages=languages,
     )
 
 
@@ -1277,6 +1390,7 @@ def batch_translate_status(task_id):
         active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
         pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
         failed_tasks = sum(1 for result in r.results if result.failed())
+        revoked_tasks = sum(1 for result in r.results if result.state == 'REVOKED')
 
         status = None
         if total:
@@ -1288,6 +1402,10 @@ def batch_translate_status(task_id):
             elif failed_tasks > 0:
                 status = "FAILURE"
                 # Clear the task from Redis when failed
+                from kalanjiyam.tasks.translation import _clear_translation_task_from_redis
+                _clear_translation_task_from_redis(task_id)
+            elif revoked_tasks > 0:
+                status = "CANCELLED"
                 from kalanjiyam.tasks.translation import _clear_translation_task_from_redis
                 _clear_translation_task_from_redis(task_id)
             else:
@@ -1346,10 +1464,10 @@ def admin(slug):
 
             get_storage().delete_prefix(project_prefix(slug))
 
-            flash(f"Deleted project {slug}", "success")
+            flash(_l("Deleted project %(slug)s", slug=slug), "success")
             return redirect(url_for("proofing.index"))
         else:
-            form.slug.errors.append("Deletion failed (incorrect field value).")
+            form.slug.errors.append(_l("Deletion failed (incorrect field value)."))
 
     return render_template(
         "proofing/projects/admin.html",

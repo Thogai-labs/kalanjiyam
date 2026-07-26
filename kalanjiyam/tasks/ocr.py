@@ -42,6 +42,19 @@ def _run_ocr_for_page_inner(
         engine = normalize_engine(engine)
         ocr_response = run_ocr(image_path, engine_name=engine, language=language)
 
+        # Extract visual elements if blocks are returned
+        if ocr_response.blocks:
+            from kalanjiyam.utils.ocr_cropper import crop_ocr_response_elements
+            try:
+                crop_ocr_response_elements(
+                    doc_path=str(image_path),
+                    ocr_response=ocr_response,
+                    project_slug=project_slug,
+                    output_dir=str(image_path.parent)
+                )
+            except Exception as e:
+                logging.exception(f"Failed to crop visual elements: {e}")
+
         session = q.get_session()
         project = q.project(project_slug)
         if project is None:
@@ -130,7 +143,25 @@ def run_ocr_for_project(
     """
     flask_app = create_config_only_app(app_env)
     with flask_app.app_context():
-        unedited_pages = [p for p in project.pages if p.version == 0]
+        from sqlalchemy import or_
+        session = q.get_session()
+        bot_user = q.user(consts.BOT_USERNAME)
+        bot_user_id = bot_user.id if bot_user else None
+
+        db_project = session.query(db.Project).get(project.id)
+        if not db_project:
+            return None
+
+        # Fetch IDs of all pages in the project that have user-authored revisions
+        # (meaning author_id is None for anonymous edits, or is not the bot user)
+        edited_page_ids = {
+            row[0]
+            for row in session.query(db.Revision.page_id)
+            .filter(db.Revision.project_id == db_project.id)
+            .filter(or_(db.Revision.author_id == None, db.Revision.author_id != bot_user_id))
+            .all()
+        }
+        unedited_pages = [p for p in db_project.pages if p.id not in edited_page_ids]
 
     if unedited_pages:
         tasks = group(

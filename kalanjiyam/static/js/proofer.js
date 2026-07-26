@@ -81,7 +81,8 @@ export default () => ({
   content: '',
 
   // Editor mode: replica | flow
-  editorMode: 'replica',
+  editorMode: (typeof window.IS_DOCX !== 'undefined' && window.IS_DOCX) ? 'flow' : 'replica',
+  isDocx: (typeof window.IS_DOCX !== 'undefined') ? window.IS_DOCX : false,
   showMetaPanel: false,
   activeVersion: (typeof ACTIVE_VERSION !== 'undefined') ? ACTIVE_VERSION : 'role:p1',
   targetVersion: (typeof TARGET_VERSION !== 'undefined') ? TARGET_VERSION : 'role:p1',
@@ -96,9 +97,13 @@ export default () => ({
   selectedLanguage: 'sa',
 
   // Translation settings
-  selectedTranslationEngine: 'google',
+  selectedTranslationEngine: 'indictrans2',
   sourceLanguage: 'hi',
   targetLanguage: 'en',
+  translationDropdownOpen: false,
+  showTranslationInfo: false,
+  allGlossaries: [],
+  selectedGlossaries: [],
 
   // OCR dropdown state
   ocrDropdownOpen: false,
@@ -469,8 +474,26 @@ export default () => ({
   },
 
   init() {
+    this.isDocx = (typeof window.IS_DOCX !== 'undefined') ? window.IS_DOCX : false;
+    if (this.isDocx) {
+      this.editorMode = 'flow';
+    }
     this.loadSettings();
+    if (this.isDocx) {
+      this.editorMode = 'flow';
+    }
     this.layoutClasses = this.getLayoutClasses();
+
+    // For DOCX projects, eagerly parse pageDocument *before* the flow editor
+    // so that _flowHtmlFromDocument() returns the real HTML, not empty/plain.
+    if (this.isDocx) {
+      const raw = typeof PAGE_DOCUMENT_JSON !== 'undefined' ? PAGE_DOCUMENT_JSON : null;
+      if (raw) {
+        this.pageDocument = parseDocument(raw);
+        // Do NOT recluster DOCX blocks — they are a single HTML blob,
+        // not OCR word-level boxes.
+      }
+    }
 
     // Initialize content from the textarea if it exists
     const textarea = document.getElementById('content');
@@ -479,12 +502,14 @@ export default () => ({
       this._flowPlainCache = textarea.value;
     }
 
-    // Set `imageZoom` only after the viewer is fully initialized.
-    this.imageViewer = initializeImageViewer(IMAGE_URL);
-    this.imageViewer.addHandler('open', () => {
-      this.imageZoom = this.imageZoom || this.imageViewer.viewport.getHomeZoom();
-      this.imageViewer.viewport.zoomTo(this.imageZoom);
-    });
+    // Set `imageViewer` only if not a DOCX project
+    if (!this.isDocx) {
+      this.imageViewer = initializeImageViewer(IMAGE_URL);
+      this.imageViewer.addHandler('open', () => {
+        this.imageZoom = this.imageZoom || this.imageViewer.viewport.getHomeZoom();
+        this.imageViewer.viewport.zoomTo(this.imageZoom);
+      });
+    }
 
     // Use `.bind(this)` so that `this` in the function refers to this app and
     // not `window`.
@@ -494,7 +519,9 @@ export default () => ({
     this.updateLanguageOptions();
     
     // Add event listeners for rotation buttons
-    this.setupRotationButtons();
+    if (!this.isDocx) {
+      this.setupRotationButtons();
+    }
     
     // Initialize translation selector
     this.initTranslationSelector();
@@ -504,7 +531,9 @@ export default () => ({
     if (this.editorMode === 'flow') {
       setTimeout(() => this.ensureFlowEditor(), 0);
     }
-    this.setupZoomButtons();
+    if (!this.isDocx) {
+      this.setupZoomButtons();
+    }
   },
 
   getVersionDisplayName(versionKey) {
@@ -594,7 +623,7 @@ export default () => ({
         if (contentTextarea) contentTextarea.value = html;
         // Rebuild pageDocument blocks from flow HTML so replica stays in sync.
         // Pass the current blocks so ids/geometry/provenance survive the trip.
-        const newBlocks = blocksFromFlowHtml(html, this.pageDocument?.blocks || []);
+        const newBlocks = blocksFromFlowHtml(html, this.pageDocument?.blocks || [], this.pageDocument?.content_format || 'blocks');
         if (newBlocks.length && this.pageDocument) {
           this.pageDocument = { ...this.pageDocument, blocks: newBlocks };
           const docField = document.getElementById('document');
@@ -738,6 +767,16 @@ export default () => ({
 
   initPageDocumentEditor() {
     setTimeout(() => {
+      // For DOCX projects, pageDocument was already parsed eagerly in init().
+      // Skip re-parsing and the destructive _syncDocumentToForm that blanks
+      // the flow editor.
+      if (this.isDocx && this.pageDocument) {
+        // Just sync the hidden form field so Publish works.
+        const docField = document.getElementById('document');
+        if (docField) docField.value = JSON.stringify(this.pageDocument);
+        return;
+      }
+
       const raw = typeof PAGE_DOCUMENT_JSON !== 'undefined' ? PAGE_DOCUMENT_JSON : null;
       this.pageDocument = reclusterDocumentBlocks(parseDocument(raw));
       if (typeof PAGE_WIDTH !== 'undefined' && PAGE_WIDTH && !this.pageDocument.page_width) {
@@ -748,7 +787,7 @@ export default () => ({
       }
       this._applyPageDimensionsFromImage();
       const replicaRoot = document.getElementById('ocr-replica-root');
-      if (replicaRoot) {
+      if (replicaRoot && !this.isDocx) {
         this._replicaView = new ReplicaView(replicaRoot, {
           onChange: (doc) => {
             this.pageDocument = doc;
@@ -813,6 +852,13 @@ export default () => ({
     if (!this.pageDocument) return;
     this._updateUncertainCount();
 
+    // For html-format documents (DOCX), documentToPlainText returns the raw
+    // HTML string.  Writing that into the textarea is fine (it is the
+    // canonical content), but we must NOT feed it back into
+    // _applyFlowEditorContent because that would cause TipTap to re-parse
+    // and normalize the HTML, losing content on every round-trip.
+    const isHtmlFormat = this.pageDocument.content_format === 'html';
+
     const plain = documentToPlainText(this.pageDocument);
     this._flowPlainCache = plain;
 
@@ -825,7 +871,9 @@ export default () => ({
       textarea.value = plain;
       this.content = plain;
     }
-    if (this.editorMode === 'flow') {
+    // Skip _applyFlowEditorContent for DOCX/html-format documents:
+    // the flow editor is authoritative and should not be overwritten.
+    if (this.editorMode === 'flow' && !isHtmlFormat) {
       this._applyFlowEditorContent();
     }
   },
@@ -1221,62 +1269,74 @@ export default () => ({
   },
 
   // Translation controls
-  async runTranslation(engine = 'google', sourceLang = 'sa', targetLang = 'en') {
+  async runTranslation(engine = 'google', sourceLang = 'sa', targetLang = 'en', glossaries = []) {
     console.log('=== TRANSLATION DEBUG START ===');
     
-    // Get content from rich editor if available, otherwise use content property
-    let contentToTranslate = this.content;
-    const editor = window.richEditorInstance;
-    if (editor) {
-      // Get plain text from editor for translation
-      contentToTranslate = editor.getText();
-    }
-    
-    // Check if there's content to translate
-    if (!contentToTranslate || contentToTranslate.trim() === '') {
-      console.log('No content to translate');
-      this.showNotification('No content to translate. Please add some text to the editor first.', 'error');
+    if (!this.pageDocument) {
+      this.showNotification('No document content found to translate.', 'error');
       return;
     }
 
     this.isRunningTranslation = true;
 
-    console.log('Starting translation:', { engine, sourceLang, targetLang });
-    console.log('Content to translate:', contentToTranslate);
+    console.log('Starting translation:', { engine, sourceLang, targetLang, glossaries });
     console.log('Current pathname:', window.location.pathname);
 
     const { pathname } = window.location;
-    // Send content as POST body for translation
-    const url = pathname.replace('/proofing/', '/api/translate/') + `?engine=${engine}&source_lang=${sourceLang}&target_lang=${targetLang}`;
+    let url = pathname.replace('/proofing/', '/api/translate/') + `?engine=${engine}&source_lang=${sourceLang}&target_lang=${targetLang}`;
+    if (glossaries && glossaries.length > 0) {
+      const glossaryVal = glossaries.includes('all') ? 'all' : glossaries.join(',');
+      url += `&glossary=${encodeURIComponent(glossaryVal)}`;
+    }
     
     console.log('Translation URL:', url);
 
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    const csrfInput = document.querySelector('input[name="csrf_token"]');
+    if (csrfInput) {
+      headers['X-CSRFToken'] = csrfInput.value;
+    }
+
     try {
-      console.log('Making fetch request...');
-      const response = await fetch(url);
+      console.log('Making POST fetch request...');
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(this.pageDocument),
+      });
       console.log('Translation response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
       
       if (response.ok) {
-        const translation = await response.text();
-        console.log('Translation result:', translation);
-        console.log('Translation result length:', translation.length);
+        const translatedDoc = await response.json();
+        console.log('Translation result document:', translatedDoc);
         
-        // Check if translation is empty or just whitespace
-        if (!translation || translation.trim() === '') {
-          console.warn('Translation result is empty');
-          this.showNotification('Translation result is empty. Please ensure there is content to translate.', 'error');
-          return;
+        // Update pageDocument
+        this.pageDocument = translatedDoc;
+        this._flowPlainCache = documentToPlainText(this.pageDocument);
+        
+        // Update replica view
+        if (this._replicaView) {
+          this._replicaView.setDocument(this.pageDocument);
         }
         
-        // Show success feedback
-        this.showNotification('Translation completed successfully!', 'success');
+        // Update flow / rich editor
+        this._syncDocumentToForm();
+        if (this.editorMode === 'flow') {
+          this._applyFlowEditorContent();
+        }
+        this.hasUnsavedChanges = true;
         
-        // Store translation in a variable that can be accessed by the image box
+        // Extract plain text for reference translation panel
+        const translation = this._flowPlainCache;
         this.currentTranslation = translation;
         
         // Trigger translation display in the image box
         this.showTranslationInImageBox(translation, sourceLang, targetLang, engine);
+        
+        // Show success feedback
+        this.showNotification('Translation completed successfully!', 'success');
       } else {
         const errorText = await this.getErrorMessage(response);
         console.error('Translation API error:', errorText);
@@ -1296,6 +1356,57 @@ export default () => ({
     console.log('=== TRANSLATION SELECTOR INITIALIZED (Alpine.js) ===');
     // The translation selector is now handled directly by Alpine.js
     // No additional JavaScript needed
+    this.fetchGlossaries();
+  },
+
+  async fetchGlossaries() {
+    try {
+      const { pathname } = window.location;
+      const prefixMatch = pathname.match(/^(.*)\/proofing\//);
+      const prefix = prefixMatch ? prefixMatch[1] : '';
+      const response = await fetch(`${prefix}/api/glossaries`);
+      if (response.ok) {
+        this.allGlossaries = await response.json();
+      } else {
+        console.warn('Failed to fetch glossaries:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching glossaries:', error);
+    }
+  },
+
+  get filteredGlossaries() {
+    if (!this.allGlossaries) return [];
+    const filtered = this.allGlossaries.filter(g => 
+      g.source_language_code === this.sourceLanguage && 
+      g.target_language_code === this.targetLanguage
+    );
+    this.selectedGlossaries = this.selectedGlossaries.filter(name => 
+      name === 'all' || filtered.some(g => g.name === name)
+    );
+    return filtered;
+  },
+
+  get showGlossaryWarning() {
+    return this.selectedGlossaries.includes('all') || this.selectedGlossaries.length > 3;
+  },
+
+  getGlossaryDisplayName(name) {
+    const lookup = {
+      'agri': 'Agriculture',
+      'mech': 'Mechanical',
+      'bio': 'Biology',
+      'chem': 'Chemistry',
+      'comp': 'Computer Science',
+      'phy': 'Physics',
+      'math': 'Mathematics',
+      'it': 'Information Technology'
+    };
+    if (lookup[name]) {
+      return lookup[name];
+    }
+    if (!name) return '';
+    return name.charAt(0).toUpperCase() + name.slice(1);
   },
 
   // Show translation in the image box
@@ -1606,7 +1717,10 @@ export default () => ({
   },
   
   // Sync editor content to textarea before form submission
-  syncContentBeforeSubmit() {
+  syncContentBeforeSubmit(event) {
+    if (event) {
+      event.preventDefault();
+    }
     if (this.editorMode === 'flow') {
       const editor = window.richEditorInstance;
       if (editor) {
@@ -1632,5 +1746,18 @@ export default () => ({
       }
     }
     this.hasUnsavedChanges = false;
+
+    // Clear local storage cache right before programmatically submitting
+    const pathMatch = window.location.pathname.match(/\/proofing\/([^\/]+)\/([^\/]+)/);
+    if (pathMatch) {
+      const key = `kalanjiyam-replica-doc-${pathMatch[1]}-${pathMatch[2]}`;
+      localStorage.removeItem(key);
+    }
+
+    // Submit the form programmatically to ensure DOM fields are saved first
+    const form = document.querySelector('form.book-editor-shell');
+    if (form) {
+      form.submit();
+    }
   },
 });

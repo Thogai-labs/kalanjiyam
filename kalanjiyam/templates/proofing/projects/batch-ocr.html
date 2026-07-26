@@ -4,16 +4,16 @@
 {% import "macros/proofing.html" as m %}
 
 
-{% block title %}OCR {{ project.display_title }} | Ambuda{% endblock %}
+{% block title %}{{ _('OCR %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
 
 
 {% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 {% block content %}
-{{ m.project_header_nested('OCR', project) }}
-{{ m.project_tabs(project=project, active='edit') }}
+{{ m.project_header_nested(_('OCR'), project) }}
+{{ m.project_tabs(project=project, active='batch_processes', is_mod=current_user.is_moderator) }}
 
 <div class="prose">
-  <p>Click the button below to run OCR on every unedited page.</p>
+  <p>{{ _('Click the button below to run OCR on every unedited page.') }}</p>
 
   {% if ocr_status == "unavailable" %}
   <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 text-red-700 font-medium">
@@ -27,7 +27,7 @@
   {% set is_restricted_ocr = is_restricted_ocr_user(current_user) %}
   <form method="POST">
     <div class="bg-white shadow rounded-lg p-6">
-      <h3 class="text-lg font-medium text-gray-900 mb-4">OCR Settings</h3>
+      <h3 class="text-lg font-medium text-gray-900 mb-4">{{ _('OCR Settings') }}</h3>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         {% if is_restricted_ocr %}
@@ -50,19 +50,19 @@
             {{ _('Language:') }}
           </label>
           <select name="language" id="language" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="sa" selected>Sanskrit (sa)</option>
-            <option value="hi">Hindi (hi)</option>
-            <option value="te">Telugu (te)</option>
-            <option value="mr">Marathi (mr)</option>
-            <option value="bn">Bengali (bn)</option>
-            <option value="gu">Gujarati (gu)</option>
-            <option value="kn">Kannada (kn)</option>
-            <option value="ml">Malayalam (ml)</option>
-            <option value="ta">Tamil (ta)</option>
-            <option value="pa">Punjabi (pa)</option>
-            <option value="or">Odia (or)</option>
-            <option value="ur">Urdu (ur)</option>
-            <option value="en">English (en)</option>
+            <option value="sa" selected>{{ _('Sanskrit (sa)') }}</option>
+            <option value="hi">{{ _('Hindi (hi)') }}</option>
+            <option value="te">{{ _('Telugu (te)') }}</option>
+            <option value="mr">{{ _('Marathi (mr)') }}</option>
+            <option value="bn">{{ _('Bengali (bn)') }}</option>
+            <option value="gu">{{ _('Gujarati (gu)') }}</option>
+            <option value="kn">{{ _('Kannada (kn)') }}</option>
+            <option value="ml">{{ _('Malayalam (ml)') }}</option>
+            <option value="ta">{{ _('Tamil (ta)') }}</option>
+            <option value="pa">{{ _('Punjabi (pa)') }}</option>
+            <option value="or">{{ _('Odia (or)') }}</option>
+            <option value="ur">{{ _('Urdu (ur)') }}</option>
+            <option value="en">{{ _('English (en)') }}</option>
           </select>
         </div>
       </div>
@@ -143,6 +143,24 @@ const languageOptions = {
   ]
 };
 
+const localizedLanguageLabels = {
+  sa: {{ _('Sanskrit (sa)')|tojson }}, hi: {{ _('Hindi (hi)')|tojson }}, te: {{ _('Telugu (te)')|tojson }},
+  mr: {{ _('Marathi (mr)')|tojson }}, bn: {{ _('Bengali (bn)')|tojson }}, gu: {{ _('Gujarati (gu)')|tojson }},
+  kn: {{ _('Kannada (kn)')|tojson }}, ml: {{ _('Malayalam (ml)')|tojson }}, ta: {{ _('Tamil (ta)')|tojson }},
+  pa: {{ _('Punjabi (pa)')|tojson }}, or: {{ _('Odia (or)')|tojson }}, ur: {{ _('Urdu (ur)')|tojson }},
+  en: {{ _('English (en)')|tojson }}, san: {{ _('Sanskrit (san)')|tojson }}, eng: {{ _('English (eng)')|tojson }},
+  hin: {{ _('Hindi (hin)')|tojson }}, tel: {{ _('Telugu (tel)')|tojson }}, mar: {{ _('Marathi (mar)')|tojson }},
+  ben: {{ _('Bengali (ben)')|tojson }}, guj: {{ _('Gujarati (guj)')|tojson }}, kan: {{ _('Kannada (kan)')|tojson }},
+  mal: {{ _('Malayalam (mal)')|tojson }}, tam: {{ _('Tamil (tam)')|tojson }}, pan: {{ _('Punjabi (pan)')|tojson }},
+  ori: {{ _('Odia (ori)')|tojson }}, urd: {{ _('Urdu (urd)')|tojson }}, ar: {{ _('Arabic (ar)')|tojson }},
+  fa: {{ _('Persian (fa)')|tojson }}, th: {{ _('Thai (th)')|tojson }}, ko: {{ _('Korean (ko)')|tojson }},
+  ja: {{ _('Japanese (ja)')|tojson }}, zh: {{ _('Chinese (zh)')|tojson }}, ru: {{ _('Russian (ru)')|tojson }},
+  es: {{ _('Spanish (es)')|tojson }}, fr: {{ _('French (fr)')|tojson }}, de: {{ _('German (de)')|tojson }},
+  it: {{ _('Italian (it)')|tojson }}, pt: {{ _('Portuguese (pt)')|tojson }}, nl: {{ _('Dutch (nl)')|tojson }},
+  pl: {{ _('Polish (pl)')|tojson }}, tr: {{ _('Turkish (tr)')|tojson }}, vi: {{ _('Vietnamese (vi)')|tojson }},
+  id: {{ _('Indonesian (id)')|tojson }}, ms: {{ _('Malay (ms)')|tojson }}
+};
+
 // Function to update language options based on selected engine
 function updateLanguageOptions() {
   const engineSelect = document.getElementById('engine');
@@ -157,7 +175,7 @@ function updateLanguageOptions() {
   options.forEach(option => {
     const optionElement = document.createElement('option');
     optionElement.value = option.value;
-    optionElement.textContent = option.text;
+    optionElement.textContent = localizedLanguageLabels[option.value] || option.text;
     // Set Sanskrit as default for both engines
     if (option.value === 'sa' || option.value === 'san') {
       optionElement.selected = true;

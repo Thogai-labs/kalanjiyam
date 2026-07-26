@@ -62,6 +62,9 @@ function stripHtml(html) {
 }
 
 export function documentToPlainText(doc) {
+  if (doc.content_format === 'html') {
+    return (doc.blocks && doc.blocks[0]?.content) || '';
+  }
   const blocks = [...(doc.blocks || [])].sort(
     (a, b) => (a.reading_order || 0) - (b.reading_order || 0),
   );
@@ -82,8 +85,128 @@ const BLOCK_TYPE_TO_TAG = {
   paragraph: 'p',
 };
 
+export function autoWrapMath(text) {
+  if (!text) return '';
+
+  // Step 1: Temporarily extract HTML tags (<img ...>, <a ...>, etc.) to protect them
+  const htmlTags = [];
+  const processedText = text.replace(/<[^>]+>/g, (tag) => {
+    const idx = htmlTags.length;
+    htmlTags.push(tag);
+    return `__TEMP_HTML_TAG_${idx}__`;
+  });
+
+  const parts = processedText.split(/(\$\$.*?\$\$|\$.*?\$)/g);
+
+  const wrapSegment = (seg) => {
+    if (!seg.trim()) return seg;
+
+    const trimmed = seg.trim();
+    if (
+      /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(trimmed) ||
+      /^https?:\/\//i.test(trimmed) ||
+      /^\/static\//i.test(trimmed) ||
+      trimmed.includes('extracted_') ||
+      trimmed.includes('__TEMP_HTML_TAG_') ||
+      trimmed.includes('/') ||
+      trimmed.includes('\\')
+    ) {
+      return seg;
+    }
+
+    const hasDevanagari = /[\u0900-\u097F]/.test(seg);
+
+    if (!hasDevanagari) {
+      const hasLatex = /\\(begin|end|Delta|times|therefore|vmatrix|frac|alpha|beta|gamma|theta|approx|neq|pm|lambda|sigma|pi|phi|omega|sqrt|partial|nabla|int|sum|prod|cup|cap|in|subset|infty|left|right|vmatrix|matrix|align|circ|text|deg)/.test(seg);
+      const words = seg.match(/[a-z]{4,}/g) || [];
+      const isStandaloneEquation = words.length === 0 || seg.includes('\\begin') || !seg.includes(' ');
+
+      if (isStandaloneEquation) {
+        const hasMathSubSuper = /[a-zA-Z0-9]*_[a-zA-Z0-9\{\}\\\s]+|[a-zA-Z0-9]*\^[a-zA-Z0-9\{\}\\\s]+/.test(seg);
+        const hasMathEquation = /[a-zA-Z0-9]+\s*[\+\*=]\s*[a-zA-Z0-9]+/.test(seg) || /[a-zA-Z0-9]+\s+[\-\/]\s+[a-zA-Z0-9]+/.test(seg);
+        if (hasLatex || hasMathSubSuper || hasMathEquation) {
+          if (
+            seg.includes('extracted_') ||
+            /\.(png|jpe?g|gif|webp|svg)/i.test(seg) ||
+            seg.includes('/') ||
+            seg.includes('\\') ||
+            seg.includes('http:') ||
+            seg.includes('https:') ||
+            seg.includes('src=') ||
+            seg.includes('__TEMP_HTML_TAG_')
+          ) {
+            return seg;
+          }
+          if (seg.includes('\\begin') || seg.includes('\n')) {
+            return `$$${seg}$$`;
+          }
+          return `$${seg}$`;
+        }
+        return seg;
+      } else {
+        return seg.replace(/([a-zA-Z0-9]*[\^\_\\][a-zA-Z0-9\{\}\\\:\.\,\-\+\*\/]*[a-zA-Z0-9\}]+)/g, (match) => {
+          const trimmed = match.trim();
+          if (!trimmed) return match;
+          if (
+            trimmed.includes('/') ||
+            trimmed.includes('\\Users') ||
+            trimmed.includes(':\\') ||
+            trimmed.includes('extracted_') ||
+            trimmed.includes('__TEMP_HTML_TAG_')
+          ) {
+            return match;
+          }
+          const leadingSpace = match.match(/^\s*/)[0];
+          const trailingSpace = match.match(/\s*$/)[0];
+          return `${leadingSpace}$${trimmed}$${trailingSpace}`;
+        });
+      }
+    } else {
+      let result = seg;
+      const envPattern = /(\\begin\{[a-zA-Z]+\}[\s\S]*?\\end\{[a-zA-Z]+\})/g;
+      result = result.replace(envPattern, '$$$1$$');
+
+      const mathPattern = /((?:[a-zA-Z0-9\(\)\[\]\s=\+\-\*\/]*?)(?:(?:\\[a-zA-Z]+)|(?:[a-zA-Z0-9]+(?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)))(?:[a-zA-Z0-9\+\-\*\/=\(\)\[\]_\^\\\{\}\:\.,\s\times\therefore]|(?:\\[a-zA-Z]+)|(?:[a-zA-Z0-9]+(?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)))*)/g;
+      result = result.replace(mathPattern, (match) => {
+        const trimmed = match.trim();
+        if (!trimmed) return match;
+        if (
+          trimmed.includes('/') ||
+          trimmed.includes('\\') ||
+          trimmed.includes('extracted_') ||
+          trimmed.includes('__TEMP_HTML_TAG_') ||
+          /\.(png|jpe?g|gif|webp|svg)/i.test(trimmed)
+        ) {
+          return match;
+        }
+        if (/^[a-zA-Z]$/.test(trimmed)) return match;
+        if (/^\d+$/.test(trimmed)) return match;
+        
+        const leadingSpace = match.match(/^\s*/)[0];
+        const trailingSpace = match.match(/\s*$/)[0];
+        return `${leadingSpace}$${trimmed}$${trailingSpace}`;
+      });
+      return result;
+    }
+  };
+
+  const processedParts = parts.map((part) => {
+    if ((part.startsWith('$$') && part.endsWith('$$')) || (part.startsWith('$') && part.endsWith('$'))) {
+      return part;
+    }
+    return wrapSegment(part);
+  });
+
+  let resultStr = processedParts.join('');
+  htmlTags.forEach((tag, idx) => {
+    resultStr = resultStr.replace(`__TEMP_HTML_TAG_${idx}__`, tag);
+  });
+
+  return resultStr;
+}
+
 export function documentToFlowHtml(doc) {
-  const isRichFormat = doc.content_format === 'blocks';
+  const isRichFormat = doc.content_format === 'blocks' || doc.content_format === 'html' || doc.blocks?.some(b => /<img[\s>]/i.test(b.content || ''));
   const blocks = [...(doc.blocks || [])].sort(
     (a, b) => (a.reading_order || 0) - (b.reading_order || 0),
   );
@@ -92,6 +215,10 @@ export function documentToFlowHtml(doc) {
     if (SKIP_BLOCK_TYPES.has(block.type)) return;
     const content = String(block.content || '').trim();
     if (!content && block.type !== 'table') return;
+    if (doc.content_format === 'html') {
+      parts.push(content);
+      return;
+    }
     if (block.type === 'table' || /<table[\s>]/i.test(content)) {
       parts.push(
         `<div class="ocr-detected-table-wrap" data-block-id="${block.id}">${blockReplicaInnerHtml(block)}</div>`,
@@ -99,9 +226,10 @@ export function documentToFlowHtml(doc) {
       return;
     }
     const tag = BLOCK_TYPE_TO_TAG[block.type] ?? 'p';
-    const text = isRichFormat
-      ? content.replace(/\n/g, '<br>')
-      : content
+    const wrappedContent = autoWrapMath(content);
+    const text = isRichFormat || /<img[\s>]/i.test(wrappedContent)
+      ? wrappedContent.replace(/\n/g, '<br>')
+      : wrappedContent
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
@@ -136,8 +264,19 @@ function inheritBlock(prev, content, type, order) {
   };
 }
 
-export function blocksFromFlowHtml(html, previousBlocks = []) {
+export function blocksFromFlowHtml(html, previousBlocks = [], format = 'blocks') {
   if (!html) return [];
+  if (format === 'html') {
+    return [{
+      id: (previousBlocks && previousBlocks[0]?.id) || 'b1',
+      type: 'paragraph',
+      bbox: [0, 0, 0, 0],
+      content: html,
+      reading_order: 1,
+      manually_edited: true,
+      children: []
+    }];
+  }
   const container = document.createElement('div');
   container.innerHTML = html;
   const prevById = new Map((previousBlocks || []).map((b) => [b.id, b]));
@@ -506,7 +645,8 @@ export function blockReplicaInnerHtml(block) {
     if (/<table[\s>]/i.test(content)) return content;
     return plainTextToHtmlTable(content);
   }
-  return content
+  const wrapped = autoWrapMath(content);
+  return wrapped
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

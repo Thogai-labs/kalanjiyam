@@ -122,6 +122,7 @@ def create_app(config_env: str):
         return session.get("locale", config_spec.BABEL_DEFAULT_LOCALE)
 
     # Extensions
+    app.config["BABEL_TRANSLATION_DIRECTORIES"] = "translations"
     Babel(app, locale_selector=get_locale)
 
     @app.context_processor
@@ -130,6 +131,7 @@ def create_app(config_env: str):
         return dict(
             csrf_token=generate_csrf(),
             is_restricted_ocr_user=is_restricted_ocr_user,
+             kalanjiyam_locales=LOCALES,
         )
 
     login_manager = auth_manager.create_login_manager()
@@ -139,6 +141,12 @@ def create_app(config_env: str):
 
     with app.app_context():
         _ = admin_manager.create_admin_manager(app)
+
+    # Initialize OpenTelemetry instrumentation & metrics middleware
+    from kalanjiyam.utils.otel import init_opentelemetry
+    from kalanjiyam.utils.metrics import init_metrics_middleware
+    init_opentelemetry(app)
+    init_metrics_middleware(app)
 
     # Route extensions
     app.url_map.converters["list"] = ListConverter

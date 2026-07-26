@@ -29,6 +29,15 @@ _BLOCK_TYPE_ALIASES: dict[str, str] = {
 }
 
 
+def _sanitize_image_content(content: str) -> str:
+    if not content or "extracted_" not in content:
+        return content
+    content = re.sub(r'(?i)<dnt>([^<]*extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg)[^<]*)</dnt>', r'\1', content)
+    content = re.sub(r'\$+(extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg))\$+', r'\1', content)
+    content = re.sub(r'(/images/)\$+(extracted_[a-zA-Z0-9_\-]+)\.(png|jpg|jpeg|gif|svg)\$+', r'\1\2.\3', content)
+    return content
+
+
 @dataclass
 class Block:
     id: str
@@ -84,11 +93,12 @@ class Block:
         source = data.get("source")
         if not isinstance(source, dict):
             source = None
+        raw_content = str(normalize_unicode_text(data.get("content") or ""))
         return cls(
             id=str(data.get("id") or _new_block_id()),
             type=block_type,
             bbox=[int(x) for x in bbox],
-            content=str(normalize_unicode_text(data.get("content") or "")),
+            content=_sanitize_image_content(raw_content),
             reading_order=int(data.get("reading_order") or 0),
             children=list(data.get("children") or []),
             confidence=conf,
@@ -654,6 +664,9 @@ def _blocks_to_flow_html(blocks: list[Block], content_format: str = "plain") -> 
             continue
         if not block.content.strip() and block.type != "table":
             continue
+        if content_format == "html":
+            parts.append(block.content)
+            continue
         if block.type == "table" or "<table" in block.content.lower():
             inner = _block_replica_inner_html(block)
             parts.append(
@@ -661,7 +674,7 @@ def _blocks_to_flow_html(blocks: list[Block], content_format: str = "plain") -> 
                 f"{inner}</div>"
             )
             continue
-        if content_format == "blocks":
+        if content_format in ("blocks", "html") or "<img" in block.content.lower():
             text = block.content.replace("\n", "<br>")
         else:
             text = html.escape(block.content).replace("\n", "<br>")
@@ -689,7 +702,7 @@ def _blocks_to_replica_html(
             f'data-block-id="{block.id}" '
             f'data-block-type="{block.type}" '
             f'style="position: absolute; left:{left:.2f}%;top:{top:.2f}%;width:{width:.2f}%;'
-            f'min-height:{height:.2f}%;">{inner_html}</div>'
+            f'height:{height:.2f}%;">{inner_html}</div>'
         )
     return (
         f'<div class="ocr-replica-page" '

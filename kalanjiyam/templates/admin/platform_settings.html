@@ -18,12 +18,16 @@
     <!-- Section: Unregistered Users -->
     <div class="pb-4">
       <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('Unregistered Users (Guests)') }}</h3>
-      <p class="text-sm font-medium text-slate-500 mb-4">{{ _('Define daily action limits for guest users. Set to 0 to disable.') }}</p>
-      
+      {% if config.ENABLE_GUEST_ACCESS %}
+      <p class="text-sm font-medium text-slate-500 mb-4">{{ _('Define daily action limits for guest users. Set to 0 to
+        disable.') }}</p>
+
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
           {{ mf.label(form.unregistered_user_ocr_limit.label) }}
-          {{ form.unregistered_user_ocr_limit(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white", placeholder="e.g. 10") }}
+          {{ form.unregistered_user_ocr_limit(class="w-full px-4 py-3 rounded-xl border border-slate-200
+          focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900
+          bg-white", placeholder="e.g. 10") }}
           {% if form.unregistered_user_ocr_limit.description %}
           <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.unregistered_user_ocr_limit.description }}</p>
           {% endif %}
@@ -31,12 +35,15 @@
           <p class="text-xs text-red-600 mt-1 font-semibold">{{ error }}</p>
           {% endfor %}
         </div>
-        
+
         <div>
           {{ mf.label(form.unregistered_user_project_limit.label) }}
-          {{ form.unregistered_user_project_limit(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white", placeholder="e.g. 5") }}
+          {{ form.unregistered_user_project_limit(class="w-full px-4 py-3 rounded-xl border border-slate-200
+          focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900
+          bg-white", placeholder="e.g. 5") }}
           {% if form.unregistered_user_project_limit.description %}
-          <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.unregistered_user_project_limit.description }}</p>
+          <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.unregistered_user_project_limit.description }}
+          </p>
           {% endif %}
           {% for error in form.unregistered_user_project_limit.errors %}
           <p class="text-xs text-red-600 mt-1 font-semibold">{{ error }}</p>
@@ -45,7 +52,9 @@
 
         <div>
           {{ mf.label(form.unregistered_user_upload_limit.label) }}
-          {{ form.unregistered_user_upload_limit(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white", placeholder="e.g. 10") }}
+          {{ form.unregistered_user_upload_limit(class="w-full px-4 py-3 rounded-xl border border-slate-200
+          focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900
+          bg-white", placeholder="e.g. 10") }}
           {% if form.unregistered_user_upload_limit.description %}
           <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.unregistered_user_upload_limit.description }}</p>
           {% endif %}
@@ -54,17 +63,29 @@
           {% endfor %}
         </div>
       </div>
+      {% else %}
+      <div class="p-4 rounded-xl bg-amber-50 border border-amber-200/60 text-amber-800 text-sm flex items-center gap-3">
+        <svg class="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span>{{ _('GUEST ACCESS is disabled.') }}</span>
+      </div>
+      {% endif %}
     </div>
 
     <!-- Section: OCR Settings -->
     <div class="pb-4 border-t border-slate-100 pt-6">
       <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('OCR Configuration') }}</h3>
-      <p class="text-sm font-medium text-slate-500 mb-4">{{ _('Configure platform-wide default OCR engine/model selection.') }}</p>
-      
+      <p class="text-sm font-medium text-slate-500 mb-4">{{ _('Configure platform-wide default OCR engine/model
+        selection.') }}</p>
+
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {% if config.ENABLE_REGISTERED_ACCESS %}
         <div>
           {{ mf.label(form.default_ocr_engine.label) }}
-          {{ form.default_ocr_engine(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white") }}
+          {{ form.default_ocr_engine(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue
+          focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white") }}
           {% if form.default_ocr_engine.description %}
           <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.default_ocr_engine.description }}</p>
           {% endif %}
@@ -72,10 +93,22 @@
           <p class="text-xs text-red-600 mt-1 font-semibold">{{ error }}</p>
           {% endfor %}
         </div>
+        {% else %}
+        <div>
+          <div class="p-4 rounded-xl bg-amber-50 border border-amber-200/60 text-amber-800 text-sm flex items-center gap-3">
+            <svg class="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>{{ _('REGISTERED USER ACCESS is disabled.') }}</span>
+          </div>
+        </div>
+        {% endif %}
 
         <div>
           {{ mf.label(form.recommended_ocr_engine.label) }}
-          {{ form.recommended_ocr_engine(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white") }}
+          {{ form.recommended_ocr_engine(class="w-full px-4 py-3 rounded-xl border border-slate-200
+          focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900
+          bg-white") }}
           {% if form.recommended_ocr_engine.description %}
           <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.recommended_ocr_engine.description }}</p>
           {% endif %}
@@ -84,6 +117,38 @@
           {% endfor %}
         </div>
       </div>
+    </div>
+
+    <!-- Section: Storage & Cleanup Settings -->
+    <div class="pb-4 border-t border-slate-100 pt-6">
+      <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('Source File Auto-Cleanup') }}</h3>
+      <p class="text-sm font-medium text-slate-500 mb-4">{{ _('Configure automatic deletion of uploaded source PDF and
+        DOC/DOCX files.') }}</p>
+
+      {% if cleanup_enabled %}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          {{ mf.label(form.auto_cleanup_days.label) }}
+          {{ form.auto_cleanup_days(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue
+          focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white") }}
+          {% if form.auto_cleanup_days.description %}
+          <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.auto_cleanup_days.description }}</p>
+          {% endif %}
+          {% for error in form.auto_cleanup_days.errors %}
+          <p class="text-xs text-red-600 mt-1 font-semibold">{{ error }}</p>
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
+      <div class="p-4 rounded-xl bg-amber-50 border border-amber-200/60 text-amber-800 text-sm flex items-center gap-3">
+        <svg class="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span>{{ _('Automated file cleanup is currently disabled in environment configuration. Set
+          `AUTO_UPLOADED_FILES_CLEANUP=true` in `.env` to enable cleanup options.') }}</span>
+      </div>
+      {% endif %}
     </div>
 
     <!-- Action Buttons -->

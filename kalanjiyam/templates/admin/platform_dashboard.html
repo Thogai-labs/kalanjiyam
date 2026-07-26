@@ -10,10 +10,11 @@
 {% block content %}
 {{ admin.page_header(_('Platform overview'), _('Organizations, quotas, and global export/import.')) }}
 
-<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+<div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
   {{ admin.stat_card(_('Organizations'), org_count) }}
   {{ admin.stat_card(_('Storage used (all orgs)'), (total_storage_used // (1024 * 1024)) ~ ' MB') }}
   {{ admin.stat_card(_('OCR credits used'), total_ocr_used) }}
+  {{ admin.stat_card(_('Translation credits used'), total_translation_used) }}
 </div>
 
 <div class="flex flex-wrap gap-3 mb-8">
@@ -31,6 +32,7 @@
           <th class="px-4 py-3">{{ _('Slug') }}</th>
           <th class="px-4 py-3">{{ _('Storage') }}</th>
           <th class="px-4 py-3">{{ _('OCR credits') }}</th>
+          <th class="px-4 py-3">{{ _('Translation credits') }}</th>
           <th class="px-4 py-3">{{ _('Active') }}</th>
           <th class="px-4 py-3"></th>
         </tr>
@@ -47,6 +49,10 @@
           <td class="px-4 py-3 text-slate-600">
             {{ org.ocr_credits_used or 0 }} /
             {{ org.ocr_credit_limit if org.ocr_credit_limit is not none else "∞" }}
+          </td>
+          <td class="px-4 py-3 text-slate-600">
+            {{ org.translation_credits_used or 0 }} /
+            {{ org.translation_credit_limit if org.translation_credit_limit is not none else "∞" }}
           </td>
           <td class="px-4 py-3">
             {% if org.is_active %}

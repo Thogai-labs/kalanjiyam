@@ -206,6 +206,14 @@ lint-check: js-lint
 test: py-venv-check
 	pytest .
 
+# Run tests inside a clean Docker container.
+# Usage:
+#   make docker-test
+#   make docker-test TEST_PATH=test/kalanjiyam/views/proofing/test_user_tasks.py
+TEST_PATH ?= .
+docker-test:
+	docker run --rm -it -v $(PWD):/app python:3.11-slim-bookworm bash -c "cd /app && pip install --quiet uv && uv sync --frozen && uv run pytest $(TEST_PATH)"
+
 # Run all Python unit tests with a coverage report.
 # After the command completes, open "htmlcov/index.html".
 coverage:

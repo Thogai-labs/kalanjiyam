@@ -19,3 +19,6 @@ class SystemSetting(Base):
 
     default_ocr_engine = Column(String, nullable=False, default="tesseract")
     recommended_ocr_engine = Column(String, nullable=True)
+
+    # File storage cleanup
+    auto_cleanup_days = Column(Integer, nullable=False, default=7)
