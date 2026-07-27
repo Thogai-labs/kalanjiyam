@@ -389,8 +389,8 @@ def auto_wrap_math(text: str) -> str:
                         or '.jpg' in seg
                         or '.jpeg' in seg
                         or '.svg' in seg
-                        or '/' in seg
-                        or '\\' in seg
+                        or bool(re.search(r'/[a-zA-Z0-9_-]+/', seg))
+                        or bool(re.search(r'\b[a-zA-Z]:\\|\\Users\\', seg))
                         or 'http:' in seg
                         or 'https:' in seg
                         or 'src=' in seg
@@ -407,7 +407,7 @@ def auto_wrap_math(text: str) -> str:
                     t = m.strip()
                     if not t:
                         return m
-                    if '/' in t or '\\Users' in t or ':\\' in t or 'extracted_' in t or '__TEMP_HTML_TAG_' in t:
+                    if bool(re.search(r'/[a-zA-Z0-9_-]+/', t)) or '\\Users' in t or ':\\' in t or 'extracted_' in t or '__TEMP_HTML_TAG_' in t:
                         return m
                     leading_space = re.match(r'^\s*', m).group(0)
                     trailing_space = re.search(r'\s*$', m).group(0)
@@ -424,7 +424,7 @@ def auto_wrap_math(text: str) -> str:
                 t = m.strip()
                 if not t:
                     return m
-                if '/' in t or '\\' in t or 'extracted_' in t or '__TEMP_HTML_TAG_' in t or '.png' in t or '.jpg' in t:
+                if bool(re.search(r'/[a-zA-Z0-9_-]+/', t)) or bool(re.search(r'\b[a-zA-Z]:\\|\\Users\\', t)) or 'extracted_' in t or '__TEMP_HTML_TAG_' in t or '.png' in t or '.jpg' in t:
                     return m
                 if re.match(r'^[a-zA-Z]$', t) or re.match(r'^\d+$', t):
                     return m
