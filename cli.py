@@ -299,5 +299,147 @@ def cleanup_uploads(days, force, app_env):
         click.echo(f"Cleaned up {deleted} uploaded source PDF/DOC files older than {days} days.")
 
 
+@cli.command()
+@click.option("--s3-uri", required=False, help="S3 URI target (e.g., s3://bucket/test/)")
+@click.option("--local-uri", required=False, help="Local path target (e.g., /home/user/test/)")
+@click.option("--pdf", is_flag=True, help="Process PDF files only")
+@click.option("--image", is_flag=True, help="Process image directories only")
+def batch_ocr(s3_uri, local_uri, pdf, image):
+    """Start a Batch OCR process for PDFs and Image folders from S3 or Local."""
+    import boto3
+    import os
+    from urllib.parse import urlparse
+    from kalanjiyam.models.batch import BatchJob, BatchItem
+    from kalanjiyam.tasks.s3_batch import process_s3_batch_item
+    import mimetypes
+    
+    if not s3_uri and not local_uri:
+        raise click.UsageError("You must provide either --s3-uri or --local-uri")
+        
+    if s3_uri and local_uri:
+        raise click.UsageError("You cannot provide both --s3-uri and --local-uri")
+    
+    # Logic for filtering
+    process_pdfs = pdf or (not pdf and not image)
+    process_images = image or (not pdf and not image)
+    
+    items_to_process = []
+    image_groups = {}
+    
+    target_uri = s3_uri or local_uri
+    
+    if s3_uri:
+        parsed_uri = urlparse(s3_uri)
+        if parsed_uri.scheme != 's3':
+            raise click.ClickException("Target must be an S3 URI (s3://...)")
+            
+        bucket_name = parsed_uri.netloc
+        prefix = parsed_uri.path.lstrip('/')
+        
+        click.echo(f"Scanning S3 s3://{bucket_name}/{prefix} recursively...")
+        
+        s3_client = boto3.client('s3')
+        paginator = s3_client.get_paginator('list_objects_v2')
+        
+        for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                # Skip folders
+                if key.endswith('/'):
+                    continue
+                    
+                mime_type, _ = mimetypes.guess_type(key)
+                if not mime_type:
+                    continue
+                    
+                if mime_type == 'application/pdf' and process_pdfs:
+                    items_to_process.append({
+                        'path': f"s3://{bucket_name}/{key}",
+                        'mime_type': mime_type,
+                        'type': 'pdf'
+                    })
+                elif mime_type.startswith('image/') and process_images:
+                    parent_path = key.rsplit('/', 1)[0] if '/' in key else ''
+                    if parent_path not in image_groups:
+                        image_groups[parent_path] = []
+                    image_groups[parent_path].append(key)
+                    
+        if process_images:
+            for parent_path, image_keys in image_groups.items():
+                items_to_process.append({
+                    'path': f"s3://{bucket_name}/{parent_path}/",
+                    'mime_type': 'image_folder',
+                    'type': 'image_folder',
+                    'count': len(image_keys)
+                })
+                
+    elif local_uri:
+        click.echo(f"Scanning Local Directory {local_uri} recursively...")
+        
+        if not os.path.isdir(local_uri):
+             raise click.ClickException(f"Local path does not exist or is not a directory: {local_uri}")
+             
+        for root, dirs, files in os.walk(local_uri):
+            for file in files:
+                file_path = os.path.join(root, file)
+                # Convert Windows paths to forward slashes for consistency if needed, but not strictly necessary for file://
+                file_path_clean = file_path.replace('\\', '/')
+                mime_type, _ = mimetypes.guess_type(file_path_clean)
+                
+                if not mime_type:
+                    continue
+                    
+                if mime_type == 'application/pdf' and process_pdfs:
+                    items_to_process.append({
+                        'path': f"file://{file_path_clean}",
+                        'mime_type': mime_type,
+                        'type': 'pdf'
+                    })
+                elif mime_type.startswith('image/') and process_images:
+                    parent_path = root.replace('\\', '/')
+                    if parent_path not in image_groups:
+                        image_groups[parent_path] = []
+                    image_groups[parent_path].append(file_path_clean)
+                    
+        if process_images:
+            for parent_path, image_keys in image_groups.items():
+                items_to_process.append({
+                    'path': f"file://{parent_path}",
+                    'mime_type': 'image_folder',
+                    'type': 'image_folder',
+                    'count': len(image_keys)
+                })
+            
+    if not items_to_process:
+        click.echo("No matching files found. Exiting.")
+        return
+        
+    with Session(engine) as session:
+        job = BatchJob(target_uri=target_uri, status='PENDING')
+        session.add(job)
+        session.flush()
+        
+        click.echo(f"Created BatchJob ID: {job.id}. Dispatching items...")
+        
+        for item_data in items_to_process:
+            item = BatchItem(
+                job_id=job.id,
+                file_path=item_data['path'],
+                mime_type=item_data['mime_type'],
+                status='PENDING'
+            )
+            session.add(item)
+            session.flush()
+            
+            # Dispatch to Celery
+            process_s3_batch_item.apply_async(
+                args=[item.id], 
+                queue='s3_batch'
+            )
+            
+        session.commit()
+        click.echo(f"Dispatched {len(items_to_process)} items to the s3_batch Celery queue successfully!")
+
+
 if __name__ == "__main__":
     cli()

@@ -38,6 +38,7 @@ app = Celery(
         "kalanjiyam.tasks.ocr",
         "kalanjiyam.tasks.translation",
         "kalanjiyam.tasks.comparison",
+        "kalanjiyam.tasks.s3_batch",
     ],
 )
 app.conf.update(
@@ -55,6 +56,7 @@ app.conf.update(
     task_routes={
         'kalanjiyam.tasks.ocr.*': {'queue': 'ocr', 'routing_key': 'ocr'},
         'kalanjiyam.tasks.comparison.*': {'queue': 'ocr', 'routing_key': 'ocr'},
+        'kalanjiyam.tasks.s3_batch.*': {'queue': 's3_batch', 'routing_key': 's3_batch'},
     },
     # Queue configuration
     task_default_queue='default',
