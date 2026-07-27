@@ -1,0 +1,138 @@
+{% extends 'admin/base.html' %}
+{% import 'macros/admin.html' as admin %}
+
+{% block title %}{{ _('Organization Analytics') }} | {{ _('Admin') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('user_analytics', current_user) }}
+{% endblock %}
+
+{% block content %}
+{% if is_platform %}
+{{ admin.page_header(_('Platform Organization Analytics'), _('Overview of all enterprises and organizations, including total usage metrics.')) }}
+
+<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
+  <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Enterprises & Organizations') }}</h2>
+  <div class="overflow-x-auto rounded-xl border border-slate-100">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+        <tr>
+          <th class="px-4 py-3">{{ _('Name') }}</th>
+          <th class="px-4 py-3">{{ _('Slug') }}</th>
+          <th class="px-4 py-3">{{ _('Members') }}</th>
+          <th class="px-4 py-3">{{ _('Projects') }}</th>
+          <th class="px-4 py-3">{{ _('Page Revisions') }}</th>
+          <th class="px-4 py-3">{{ _('OCR Credits Used') }}</th>
+          <th class="px-4 py-3">{{ _('Translation Credits Used') }}</th>
+          <th class="px-4 py-3">{{ _('Storage Used') }}</th>
+          <th class="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for stat in org_stats %}
+        <tr class="hover:bg-slate-50/80 transition-colors">
+          <td class="px-4 py-3 font-semibold text-slate-900">{{ stat.org.name }}</td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-500">{{ stat.org.slug }}</td>
+          <td class="px-4 py-3 text-slate-600 font-bold">{{ stat.users_count }}</td>
+          <td class="px-4 py-3 text-slate-600">{{ stat.projects_count }}</td>
+          <td class="px-4 py-3 text-slate-600">{{ stat.revisions_count }}</td>
+          <td class="px-4 py-3 text-slate-600">{{ stat.ocr_count }}</td>
+          <td class="px-4 py-3 text-slate-600">{{ stat.translation_count }}</td>
+          <td class="px-4 py-3 text-slate-600">{{ ((stat.storage_used or 0) // (1024 * 1024)) }} MB</td>
+          <td class="px-4 py-3 text-right">
+            {{ admin.link_action(_('View Details'), url_for('platform_view.org_user_analytics', org_id=stat.org.id)) }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+{{ admin.page_header(org_stat.org.name ~ _(' Analytics'), _('Total usage and quota statistics for your organization.')) }}
+
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+  {{ admin.stat_card(_('Members'), org_stat.users_count) }}
+  {{ admin.stat_card(_('Projects'), org_stat.projects_count) }}
+  {{ admin.stat_card(_('Page Revisions'), org_stat.revisions_count) }}
+  {{ admin.stat_card(_('OCR Credits Used'), org_stat.ocr_count) }}
+  {{ admin.stat_card(_('Translation Credits Used'), org_stat.translation_count) }}
+</div>
+
+<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 mb-8">
+  <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Organization Quota Summary') }}</h2>
+  <div class="overflow-x-auto rounded-xl border border-slate-100">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+        <tr>
+          <th class="px-4 py-3">{{ _('Resource') }}</th>
+          <th class="px-4 py-3">{{ _('Used') }}</th>
+          <th class="px-4 py-3">{{ _('Limit') }}</th>
+          <th class="px-4 py-3">{{ _('Status') }}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        <tr>
+          <td class="px-4 py-3 font-semibold text-slate-900">{{ _('Storage Space') }}</td>
+          <td class="px-4 py-3 text-slate-600">{{ ((org_stat.storage_used or 0) // (1024 * 1024)) }} MB</td>
+          <td class="px-4 py-3 text-slate-600">
+            {% if org_stat.org.storage_quota_bytes is not none %}
+              {{ (org_stat.org.storage_quota_bytes // (1024 * 1024)) }} MB
+            {% else %}
+              {{ _('unlimited') }}
+            {% endif %}
+          </td>
+          <td class="px-4 py-3">
+            {% if org_stat.org.storage_quota_bytes is not none and org_stat.storage_used >= org_stat.org.storage_quota_bytes %}
+              <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700">{{ _('Quota Exceeded') }}</span>
+            {% else %}
+              <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">{{ _('OK') }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td class="px-4 py-3 font-semibold text-slate-900">{{ _('OCR Credits') }}</td>
+          <td class="px-4 py-3 text-slate-600">{{ org_stat.org.ocr_credits_used or 0 }}</td>
+          <td class="px-4 py-3 text-slate-600">
+            {% if org_stat.org.ocr_credit_limit is not none %}
+              {{ org_stat.org.ocr_credit_limit }}
+            {% else %}
+              {{ _('unlimited') }}
+            {% endif %}
+          </td>
+          <td class="px-4 py-3">
+            {% if org_stat.org.ocr_credit_limit is not none and (org_stat.org.ocr_credits_used or 0) >= org_stat.org.ocr_credit_limit %}
+              <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700">{{ _('Exhausted') }}</span>
+            {% else %}
+              <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">{{ _('OK') }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td class="px-4 py-3 font-semibold text-slate-900">{{ _('Translation Credits') }}</td>
+          <td class="px-4 py-3 text-slate-600">{{ org_stat.org.translation_credits_used or 0 }}</td>
+          <td class="px-4 py-3 text-slate-600">
+            {% if org_stat.org.translation_credit_limit is not none %}
+              {{ org_stat.org.translation_credit_limit }}
+            {% else %}
+              {{ _('unlimited') }}
+            {% endif %}
+          </td>
+          <td class="px-4 py-3">
+            {% if org_stat.org.translation_credit_limit is not none and (org_stat.org.translation_credits_used or 0) >= org_stat.org.translation_credit_limit %}
+              <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700">{{ _('Exhausted') }}</span>
+            {% else %}
+              <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">{{ _('OK') }}</span>
+            {% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="flex justify-start">
+  {{ admin.btn_primary(_('View Member Breakdown'), href=url_for('org_admin_view.org_user_analytics'), icon_name='users') }}
+</div>
+{% endif %}
+{% endblock %}

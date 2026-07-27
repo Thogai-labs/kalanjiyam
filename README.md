@@ -23,12 +23,36 @@ To install and run Kalanjiyam locally, please run the commands below:
 ```
 $ git clone https://github.com/kalanjiyam-org/kalanjiyam.git
 $ cd kalanjiyam
+$ cp .env.example .env   # edit as needed
 $ make devserver
 ```
 
 Then, navigate to `http://localhost:5000` in your web browser.
 
 [docker]: https://docs.docker.com/get-docker/
+
+
+Deployment environments
+-----------------------
+
+| Environment | How to start | Notes |
+|-------------|-------------|-------|
+| **Local** | `make devserver` (bare-metal) or `make docker-start` | SQLite or PostgreSQL; S3 via bundled Versity Gateway in Docker |
+| **Staging** | `deploy/staging/kalanjiyam-runner` | Local filesystem storage; CI use |
+| **Production** | `./deploy/prod/deploy.sh` | PostgreSQL, S3 via Versity Gateway, nginx TLS |
+
+Copy `.env.example` to `.env` and fill in values before starting any environment.
+See [`deploy/README.md`](deploy/README.md) for per-environment details and
+[`docs/production-deploy.rst`](docs/production-deploy.rst) for the full production guide.
+
+
+OCR service
+-----------
+
+Kalanjiyam calls an external OCR service over HTTP (`OCR_BACKEND=remote`). Set
+`OCR_SERVICE_URL` and `OCR_SERVICE_API_KEY` in `.env` to point at a running
+[kalanjiyam-ocr-service](https://github.com/Thogai-labs/kalanjiyam-ocr-service) instance.
+Without this, OCR features will be unavailable but the rest of the app runs normally.
 
 
 Documentation

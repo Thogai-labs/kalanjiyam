@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import getpass
-from pathlib import Path
 
 import click
 from slugify import slugify
@@ -132,15 +131,14 @@ def create_project(title, pdf_path):
                 "Please create a user first with `create-user`."
             )
 
+        from kalanjiyam.utils.storage import get_storage, pdf_key
+
         slug = slugify(title)
-        page_image_dir = (
-            Path(current_app.config["UPLOAD_FOLDER"]) / "projects" / slug / "pages"
-        )
-        page_image_dir.mkdir(parents=True, exist_ok=True)
+        source_pdf_key = pdf_key(slug)
+        get_storage().save(source_pdf_key, pdf_path)
         create_project_inner(
             display_title=title,
-            pdf_path=pdf_path,
-            output_dir=str(page_image_dir),
+            pdf_key=source_pdf_key,
             app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
             creator_id=arbitrary_user.id,
             task_status=LocalTaskStatus(),
@@ -279,6 +277,26 @@ def set_org_quota(org_slug, storage_mb, ocr_credits):
         session.add(org)
         session.commit()
     click.echo(f'Updated quotas for "{org_slug}".')
+
+
+@cli.command()
+@click.option("--days", type=int, default=7, help="Delete files older than N days (default: 7)")
+@click.option("--force", is_flag=True, help="Force cleanup even if AUTO_UPLOADED_FILES_CLEANUP is false")
+@click.option("--env", "app_env", default="development", help="Application environment (default: development)")
+def cleanup_uploads(days, force, app_env):
+    """Delete uploaded source PDF and DOC/DOCX files older than specified days."""
+    from config import create_config_only_app
+    from kalanjiyam.utils.storage import cleanup_old_uploaded_files, get_storage
+
+    app = create_config_only_app(app_env)
+    with app.app_context():
+        enabled = app.config.get("AUTO_UPLOADED_FILES_CLEANUP", False)
+        if not enabled and not force:
+            click.echo("AUTO_UPLOADED_FILES_CLEANUP is disabled. Pass --force to override.")
+            return
+        storage = get_storage()
+        deleted = cleanup_old_uploaded_files(storage, days=days)
+        click.echo(f"Cleaned up {deleted} uploaded source PDF/DOC files older than {days} days.")
 
 
 if __name__ == "__main__":

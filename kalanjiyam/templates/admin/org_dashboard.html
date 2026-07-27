@@ -10,7 +10,7 @@
 {% block content %}
 {{ admin.page_header(org.name, _('Manage users and books for your organization.')) }}
 
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
   <div class="premium-card p-6">
     <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ _('Storage') }}</p>
     <p class="text-2xl font-extrabold text-slate-900">
@@ -23,6 +23,13 @@
     <p class="text-2xl font-extrabold text-slate-900">
       {{ org.ocr_credits_used or 0 }}
       <span class="text-base font-semibold text-slate-400">/ {{ org.ocr_credit_limit if org.ocr_credit_limit is not none else _('unlimited') }}</span>
+    </p>
+  </div>
+  <div class="premium-card p-6">
+    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ _('Translation credits') }}</p>
+    <p class="text-2xl font-extrabold text-slate-900">
+      {{ org.translation_credits_used or 0 }}
+      <span class="text-base font-semibold text-slate-400">/ {{ org.translation_credit_limit if org.translation_credit_limit is not none else _('unlimited') }}</span>
     </p>
   </div>
 </div>
@@ -49,9 +56,10 @@
     </form>
   </div>
 
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 flex flex-col justify-center">
-    <h2 class="text-lg font-bold text-slate-900 mb-3">{{ _('Quick actions') }}</h2>
-    {{ admin.btn_primary(_('Upload a new book'), href=url_for('proofing.create_project')) }}
+  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 flex flex-col justify-center gap-3">
+    <h2 class="text-lg font-bold text-slate-900 mb-1">{{ _('Quick actions') }}</h2>
+    {{ admin.btn_primary(_('Upload a new book'), href=url_for('proofing.create_project'), icon_name='upload') }}
+    {{ admin.btn_secondary(_('View Analytics'), href=url_for('org_admin_view.user_analytics'), icon_name='bar-chart-3') }}
   </div>
 </div>
 
@@ -118,9 +126,9 @@
           <input type="hidden" name="user_id" value="{{ u.id }}">
           <label class="{{ admin.label_class() }}">{{ _('Role') }}</label>
           <select name="role_name" class="{{ admin.select_class() }}">
-            <option value="p1">P1 — Basic proofer</option>
-            <option value="p2">P2 — Advanced proofer</option>
-            <option value="moderator">Moderator</option>
+            <option value="p1">{{ _('P1 — Basic proofer') }}</option>
+            <option value="p2">{{ _('P2 — Advanced proofer') }}</option>
+            <option value="moderator">{{ _('Moderator') }}</option>
           </select>
           {{ admin.btn_primary(_('Change role'), type='submit') }}
         </form>

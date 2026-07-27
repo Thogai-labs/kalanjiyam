@@ -3,23 +3,23 @@
 {% import "macros/proofing.html" as m %}
 
 
-{% block title %}Search: {{ project.display_title }} | Ambuda{% endblock %}
+{% block title %}{{ _('Search: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
 
 
 {% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
 
 {% block content %}
-{{ m.project_header_nested('Search', project) }}
+{{ m.project_header_nested(_('Search'), project) }}
 {{ m.project_tabs(project=project, active='edit') }}
 
 <div class="prose">
-  <p>Use this simple search form to find typos across this project.</p>
+  <p>{{ _('Use this simple search form to find typos across this project.') }}</p>
 </div>
 
 <form method="GET" class="bg-slate-100 p-4 my-4">
   {{ field(form.query) }}
-  <input class="btn btn-submit" type="submit" value="Search project">
+  <input class="btn btn-submit" type="submit" value="{{ _('Search project') }}">
 </form>
 
 {% if query %}
@@ -28,7 +28,7 @@
 {% macro sp(s, p, n) %}{% if n == 1 %}{{ s }}{% else %}{{ p }}{% endif %}{% endmacro %}
 
 {% set nr = results|length %}
-<p>Found {{ nr }} {{ sp("page", "pages", nr) }} that {{ sp("contains", "contain", nr) }} <kbd>{{ query }}</kbd>.</p>
+<p>{{ ngettext('Found %(count)s page containing', 'Found %(count)s pages containing', nr, count=nr) }} <kbd>{{ query }}</kbd>.</p>
 
 <ul>
 {% for page in results %}

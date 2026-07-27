@@ -73,3 +73,37 @@ def test_user_can_access_project_scoped_by_org(app):
         session.commit()
         assert user_can_access_project(other, project) is True
         assert user_can_access_project(KalanjiyamAnonymousUser(), project) is True
+
+
+def test_user_can_view_proofing_project(app):
+    from kalanjiyam.utils.org_access import user_can_view_proofing_project
+    app.config["MULTI_TENANT_MODE"] = True
+    app.config["ENFORCE_ORG_ACCESS"] = True
+
+    with app.app_context():
+        session = q.get_session()
+        org_a = _make_org(session, "org-a-view")
+        org_b = _make_org(session, "org-b-view")
+        
+        creator = _make_user(session, "creator-view", org_a, roles=[SiteRole.P1.value])
+        member = _make_user(session, "member-view", org_a, roles=[SiteRole.P1.value])
+        other = _make_user(session, "other-view", org_b, roles=[SiteRole.P1.value])
+        super_admin = _make_user(session, "superadmin-view", org_b, roles=[SiteRole.SUPER_ADMIN.value])
+        
+        project = _make_project(session, "book-view", org_a, creator_id=creator.id)
+        project.is_publicly_viewable = True
+        session.add(project)
+        session.commit()
+
+        # Under user_can_view_proofing_project:
+        # 1. Super admin can see
+        assert user_can_view_proofing_project(super_admin, project) is True
+        # 2. Creator can see
+        assert user_can_view_proofing_project(creator, project) is True
+        # 3. Same organization user (member) can see
+        assert user_can_view_proofing_project(member, project) is True
+        # 4. Other user cannot see in proofing (even though project is public)
+        assert user_can_view_proofing_project(other, project) is False
+        # 5. Anonymous user cannot see
+        assert user_can_view_proofing_project(KalanjiyamAnonymousUser(), project) is False
+

@@ -53,7 +53,10 @@ def _env(key: str, default=None) -> str | None:
     :param key: the environment variable to fetch
     :return: a value, or ``None`` if the variable is undefined.
     """
-    return os.environ.get(key, default)
+    val = os.environ.get(key)
+    if val is None:
+        val = os.environ.get(key.lower(), default)
+    return val
 
 
 class BaseConfig:
@@ -83,12 +86,41 @@ class BaseConfig:
     #: Where to store user uploads (PDFs, images, etc.).
     UPLOAD_FOLDER = _env("FLASK_UPLOAD_FOLDER")
 
+    #: File storage backend for user uploads: ``local`` (files under
+    #: UPLOAD_FOLDER) or ``s3`` (any S3-compatible store: versitygw, MinIO,
+    #: SeaweedFS, AWS S3, ...).
+    STORAGE_BACKEND = _env("STORAGE_BACKEND", "local")
+    #: S3 endpoint URL. Leave unset for AWS S3; set for self-hosted gateways,
+    #: e.g. ``http://kalanjiyam-versitygw:7070``.
+    S3_ENDPOINT_URL = _env("S3_ENDPOINT_URL")
+    #: Bucket that holds all uploads.
+    S3_BUCKET = _env("S3_BUCKET")
+    #: Credentials for the S3-compatible store.
+    S3_ACCESS_KEY_ID = _env("S3_ACCESS_KEY_ID")
+    S3_SECRET_ACCESS_KEY = _env("S3_SECRET_ACCESS_KEY")
+    #: Region; self-hosted gateways generally accept the default.
+    S3_REGION = _env("S3_REGION")
+    #: Optional browser-reachable endpoint. If set, page images are served
+    #: as redirects to presigned URLs on this endpoint instead of being
+    #: streamed through the app.
+    S3_PUBLIC_ENDPOINT_URL = _env("S3_PUBLIC_ENDPOINT_URL")
+
     #: If True, library texts (books) are restricted by group: only users in a
     #: group that contains the text (or admins) can view it. Texts not in any
     #: group remain visible to everyone. Set ENFORCE_GROUP_ACCESS_FOR_TEXTS=true
     #: in .env to enable.
     ENFORCE_GROUP_ACCESS_FOR_TEXTS = (
         _env("ENFORCE_GROUP_ACCESS_FOR_TEXTS", "false").lower() in ("true", "1", "yes")
+    )
+
+    #: If True, direct DOCX translation will save all data of the original docx in database.
+    SAVE_DOCX_DIRECT_TR_DATA = (
+        str(_env("SAVE_DOCX_DIRECT_TR_DATA", "false")).lower() in ("true", "1", "yes")
+    )
+
+    #: If True, uploaded source PDF and DOC/DOCX files older than 7 days will be automatically deleted.
+    AUTO_UPLOADED_FILES_CLEANUP = (
+        str(_env("AUTO_UPLOADED_FILES_CLEANUP", "false")).lower() in ("true", "1", "yes")
     )
 
     #: If True, proofing projects (public books under /books/...) are restricted
@@ -111,6 +143,21 @@ class BaseConfig:
     DEFAULT_PROJECT_REQUIRES_ORG = (
         _env("DEFAULT_PROJECT_REQUIRES_ORG", "true").lower() in ("true", "1", "yes")
     )
+
+    #: If True, allow guest (unregistered) users to create projects and access features.
+    ENABLE_GUEST_ACCESS = (
+        _env("ENABLE_GUEST_ACCESS", "true").lower() in ("true", "1", "yes")
+    )
+
+    #: If True, allow new users to register.
+    ENABLE_REGISTERED_ACCESS = (
+        _env("ENABLE_REGISTERED_ACCESS", "true").lower() in ("true", "1", "yes")
+    )
+
+
+    #: Guest daily rate limits (creations and OCR runs)
+    GUEST_DAILY_PROJECT_LIMIT = int(_env("GUEST_DAILY_PROJECT_LIMIT", "5") or "5")
+    GUEST_DAILY_OCR_LIMIT = int(_env("GUEST_DAILY_OCR_LIMIT", "10") or "10")
 
     #: Logger setup
     LOG_LEVEL = logging.ERROR
@@ -173,6 +220,18 @@ class BaseConfig:
     #: Timeout in seconds for OCR service HTTP requests.
     OCR_SERVICE_TIMEOUT = int(_env("OCR_SERVICE_TIMEOUT", "300") or "300")
 
+    #: Base URL of the standalone translation service.
+    TRANSLATION_SERVICE_URL = _env("TRANSLATION_SERVICE_URL", "http://10.129.6.170:8888")
+
+    #: API key for service-to-service translation requests.
+    TRANSLATION_SERVICE_API_KEY = _env("TRANSLATION_SERVICE_API_KEY", "")
+
+    #: Timeout in seconds for translation service HTTP requests.
+    TRANSLATION_SERVICE_TIMEOUT = int(_env("TRANSLATION_SERVICE_TIMEOUT", "300") or "300")
+
+    #: Default OCR engine/model.
+    DEFAULT_OCR_ENGINE = _env("DEFAULT_OCR_ENGINE", "tesseract")
+
     # Test-only
     # ---------
 
@@ -199,6 +258,10 @@ class UnitTestConfig(BaseConfig):
 
     KALANJIYAM_ENVIRONMENT = TESTING
     TESTING = True
+    APPLICATION_URL_PREFIX = ""
+    STORAGE_BACKEND = "local"
+    MULTI_TENANT_MODE = False
+    ENFORCE_ORG_ACCESS = False
     SECRET_KEY = "insecure unit test secret"
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     UPLOAD_FOLDER = _make_path(Path(__file__).parent / "data" / "file-uploads")
@@ -296,6 +359,14 @@ def _validate_config(config: BaseConfig):
 
     if not config.SECRET_KEY:
         raise ValueError("This config does not define SECRET_KEY.")
+
+    if config.STORAGE_BACKEND not in ("local", "s3"):
+        raise ValueError(f"Unknown STORAGE_BACKEND: {config.STORAGE_BACKEND!r}")
+
+    if config.STORAGE_BACKEND == "s3":
+        for key in ("S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"):
+            if not getattr(config, key):
+                raise ValueError(f"STORAGE_BACKEND=s3 requires {key}.")
 
     if config.KALANJIYAM_ENVIRONMENT == PRODUCTION:
         if not config.SENTRY_DSN:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -28,6 +29,15 @@ _BLOCK_TYPE_ALIASES: dict[str, str] = {
 }
 
 
+def _sanitize_image_content(content: str) -> str:
+    if not content or "extracted_" not in content:
+        return content
+    content = re.sub(r'(?i)<dnt>([^<]*extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg)[^<]*)</dnt>', r'\1', content)
+    content = re.sub(r'\$+(extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg))\$+', r'\1', content)
+    content = re.sub(r'(/images/)\$+(extracted_[a-zA-Z0-9_\-]+)\.(png|jpg|jpeg|gif|svg)\$+', r'\1\2.\3', content)
+    return content
+
+
 @dataclass
 class Block:
     id: str
@@ -38,6 +48,13 @@ class Block:
     children: list[dict[str, Any]] = field(default_factory=list)
     confidence: float | None = None
     language: str | None = None
+    #: Word/line-level spans: [{"text", "confidence", "bbox"?}, ...].
+    #: See docs/ocr-service-contract.rst.
+    words: list[dict[str, Any]] | None = None
+    #: True once a human has changed this block's content.
+    manually_edited: bool = False
+    #: Provenance stamped at ingestion: {"engine", "model"?, "ocr_at"}.
+    source: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -52,6 +69,12 @@ class Block:
             d["confidence"] = self.confidence
         if self.language is not None:
             d["language"] = self.language
+        if self.words:
+            d["words"] = self.words
+        if self.manually_edited:
+            d["manually_edited"] = True
+        if self.source is not None:
+            d["source"] = self.source
         return d
 
     @classmethod
@@ -63,16 +86,26 @@ class Block:
         bbox = data.get("bbox") or [0, 0, 0, 0]
         if len(bbox) != 4:
             bbox = [0, 0, 0, 0]
-        conf = data.get("confidence")
+        conf = _clamp_confidence(data.get("confidence"))
+        words = data.get("words")
+        if not isinstance(words, list) or not words:
+            words = None
+        source = data.get("source")
+        if not isinstance(source, dict):
+            source = None
+        raw_content = str(normalize_unicode_text(data.get("content") or ""))
         return cls(
             id=str(data.get("id") or _new_block_id()),
             type=block_type,
             bbox=[int(x) for x in bbox],
-            content=str(normalize_unicode_text(data.get("content") or "")),
+            content=_sanitize_image_content(raw_content),
             reading_order=int(data.get("reading_order") or 0),
             children=list(data.get("children") or []),
-            confidence=float(conf) if conf is not None else None,
+            confidence=conf,
             language=str(data["language"]) if data.get("language") else None,
+            words=words,
+            manually_edited=bool(data.get("manually_edited")),
+            source=source,
         )
 
 
@@ -126,7 +159,7 @@ class PageDocument:
             return ""
         parts = []
         for block in sorted(self.blocks, key=lambda b: b.reading_order):
-            text = block.content.strip()
+            text = _strip_html_tags(block.content).strip()
             if text:
                 parts.append(text)
         return "\n\n".join(parts)
@@ -137,8 +170,8 @@ class PageDocument:
         if not self.blocks:
             return ""
         if replica and self.page_width and self.page_height:
-            return _blocks_to_replica_html(self.blocks, self.page_width, self.page_height)
-        return _blocks_to_flow_html(self.blocks)
+            return _blocks_to_replica_html(self.blocks, self.page_width, self.page_height, content_format=self.content_format)
+        return _blocks_to_flow_html(self.blocks, content_format=self.content_format)
 
     def to_tei_fragment(self) -> str:
         parts = []
@@ -184,6 +217,7 @@ class PageDocument:
             ocr_height=ocr.page_height,
             image_width=image_width,
             image_height=image_height,
+            coordinate_space=ocr.coordinate_space,
         )
         if blocks_data:
             blocks = [Block.from_dict(b) for b in blocks_data]
@@ -192,10 +226,12 @@ class PageDocument:
                 if not block.reading_order:
                     block.reading_order = i + 1
             blocks.sort(key=lambda b: b.reading_order)
-            if boxes and _blocks_look_like_lines(blocks, ph):
-                rebuilt = _blocks_from_bounding_boxes(boxes)
-                if rebuilt:
-                    blocks = rebuilt
+            if _blocks_look_like_lines(blocks, ph):
+                line_boxes = boxes or _boxes_from_blocks(blocks)
+                if line_boxes:
+                    rebuilt = _blocks_from_bounding_boxes(line_boxes)
+                    if rebuilt:
+                        blocks = rebuilt
             return cls(
                 page_width=pw,
                 page_height=ph,
@@ -266,20 +302,50 @@ def _new_block_id() -> str:
     return f"b{uuid.uuid4().hex[:8]}"
 
 
+def _strip_html_tags(text: str) -> str:
+    if not text:
+        return ""
+    return re.sub(r"<[^>]*>", "", text)
+
+
+def _clamp_confidence(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return None
+    return min(1.0, max(0.0, score))
+
+
+def _coords_are_normalized(
+    bbox: list[float] | list[int],
+    *,
+    coordinate_space: str = "pixel",
+) -> bool:
+    if coordinate_space == "normalized":
+        return True
+    if not bbox or len(bbox) != 4:
+        return False
+    max_coord = max(float(x) for x in bbox)
+    return max_coord > 0 and max_coord <= 1.5
+
+
 def _scale_boxes_to_image(
     boxes: list[tuple[float, float, float, float, str]],
     width: int | None,
     height: int | None,
+    *,
+    coordinate_space: str = "pixel",
 ) -> list[tuple[float, float, float, float, str]]:
     if not boxes or not width or not height:
         return boxes
-    max_coord = max(max(b[0], b[1], b[2], b[3]) for b in boxes)
-    if max_coord > 0 and max_coord <= 1.5:
-        return [
-            (b[0] * width, b[1] * height, b[2] * width, b[3] * height, b[4])
-            for b in boxes
-        ]
-    return boxes
+    if not _coords_are_normalized(list(boxes[0][:4]), coordinate_space=coordinate_space):
+        return boxes
+    return [
+        (b[0] * width, b[1] * height, b[2] * width, b[3] * height, b[4])
+        for b in boxes
+    ]
 
 
 def _scale_bbox(
@@ -292,6 +358,21 @@ def _scale_bbox(
     return [int(bbox[0] * sx), int(bbox[1] * sy), int(bbox[2] * sx), int(bbox[3] * sy)]
 
 
+def _boxes_from_blocks(
+    blocks: list[Block],
+) -> list[tuple[float, float, float, float, str]]:
+    """Derive line boxes from block bboxes when the service omits bounding_boxes."""
+    derived: list[tuple[float, float, float, float, str]] = []
+    for block in blocks:
+        if not block.bbox or block.bbox == [0, 0, 0, 0]:
+            continue
+        x1, y1, x2, y2 = block.bbox
+        if x2 <= x1 or y2 <= y1:
+            continue
+        derived.append((float(x1), float(y1), float(x2), float(y2), block.content or ""))
+    return derived
+
+
 def normalize_geometry(
     boxes: list[tuple[float, float, float, float, str]],
     blocks: list[dict[str, Any]] | None,
@@ -300,6 +381,7 @@ def normalize_geometry(
     ocr_height: int | None,
     image_width: int | None,
     image_height: int | None,
+    coordinate_space: str = "pixel",
 ) -> tuple[
     list[tuple[float, float, float, float, str]],
     list[dict[str, Any]] | None,
@@ -312,11 +394,9 @@ def normalize_geometry(
     out_w = image_width or ocr_width
     out_h = image_height or ocr_height
 
-    scaled = _scale_boxes_to_image(list(boxes), ref_w, ref_h)
-    if scaled and ref_w and ref_h:
-        max_coord = max(max(b[0], b[1], b[2], b[3]) for b in scaled)
-        if max_coord > 0 and max_coord <= 1.5:
-            scaled = _scale_boxes_to_image(scaled, ref_w, ref_h)
+    scaled = _scale_boxes_to_image(
+        list(boxes), ref_w, ref_h, coordinate_space=coordinate_space
+    )
 
     sx = sy = 1.0
     if ref_w and out_w and ref_w > 0:
@@ -338,13 +418,42 @@ def normalize_geometry(
         ]
 
     normalized_blocks = blocks
-    if blocks and (sx != 1.0 or sy != 1.0):
+    if blocks:
         normalized_blocks = []
         for block in blocks:
             item = dict(block)
             bbox = item.get("bbox")
             if bbox and len(bbox) == 4:
-                item["bbox"] = _scale_bbox(bbox, sx, sy)
+                if _coords_are_normalized(bbox, coordinate_space=coordinate_space):
+                    if ref_w and ref_h:
+                        bbox = [
+                            bbox[0] * ref_w,
+                            bbox[1] * ref_h,
+                            bbox[2] * ref_w,
+                            bbox[3] * ref_h,
+                        ]
+                if sx != 1.0 or sy != 1.0:
+                    bbox = _scale_bbox(bbox, sx, sy)
+                item["bbox"] = [int(x) for x in bbox]
+            words = item.get("words")
+            if isinstance(words, list):
+                scaled_words = []
+                for word in words:
+                    if isinstance(word, dict) and word.get("bbox"):
+                        wb = word["bbox"]
+                        if _coords_are_normalized(wb, coordinate_space=coordinate_space):
+                            if ref_w and ref_h:
+                                wb = [
+                                    wb[0] * ref_w,
+                                    wb[1] * ref_h,
+                                    wb[2] * ref_w,
+                                    wb[3] * ref_h,
+                                ]
+                        if sx != 1.0 or sy != 1.0:
+                            wb = _scale_bbox(wb, sx, sy)
+                        word = {**word, "bbox": [int(x) for x in wb]}
+                    scaled_words.append(word)
+                item["words"] = scaled_words
             normalized_blocks.append(item)
 
     return scaled, normalized_blocks, out_w, out_h
@@ -496,13 +605,15 @@ def _blocks_from_bounding_boxes(
     return blocks
 
 
-def _block_replica_inner_html(block: Block) -> str:
+def _block_replica_inner_html(block: Block, content_format: str = "plain") -> str:
     """HTML inside a replica block (tables as grids, not escaped plain text)."""
     content = (block.content or "").strip()
     if block.type == "table" or "<table" in content.lower():
         if "<table" in content.lower():
             return content
         return _plain_text_to_html_table(content)
+    if content_format == "blocks":
+        return block.content.replace("\n", "<br>")
     return html.escape(block.content).replace("\n", "<br>")
 
 
@@ -546,12 +657,15 @@ _BLOCK_TYPE_TO_HTML_TAG: dict[str, str] = {
 }
 
 
-def _blocks_to_flow_html(blocks: list[Block]) -> str:
+def _blocks_to_flow_html(blocks: list[Block], content_format: str = "plain") -> str:
     parts = []
     for block in sorted(blocks, key=lambda b: b.reading_order):
         if block.type in DECORATIVE_BLOCK_TYPES:
             continue
         if not block.content.strip() and block.type != "table":
+            continue
+        if content_format == "html":
+            parts.append(block.content)
             continue
         if block.type == "table" or "<table" in block.content.lower():
             inner = _block_replica_inner_html(block)
@@ -560,14 +674,17 @@ def _blocks_to_flow_html(blocks: list[Block]) -> str:
                 f"{inner}</div>"
             )
             continue
-        text = html.escape(block.content).replace("\n", "<br>")
+        if content_format in ("blocks", "html") or "<img" in block.content.lower():
+            text = block.content.replace("\n", "<br>")
+        else:
+            text = html.escape(block.content).replace("\n", "<br>")
         tag = _BLOCK_TYPE_TO_HTML_TAG.get(block.type, "p")
         parts.append(f'<{tag} data-block-id="{block.id}">{text}</{tag}>')
     return "\n".join(parts)
 
 
 def _blocks_to_replica_html(
-    blocks: list[Block], page_width: int, page_height: int
+    blocks: list[Block], page_width: int, page_height: int, content_format: str = "plain"
 ) -> str:
     inner = []
     for block in sorted(blocks, key=lambda b: b.reading_order):
@@ -579,17 +696,17 @@ def _blocks_to_replica_html(
             top = 100 * y1 / page_height
             width = 100 * (x2 - x1) / page_width
             height = 100 * (y2 - y1) / page_height
-        inner_html = _block_replica_inner_html(block)
+        inner_html = _block_replica_inner_html(block, content_format=content_format)
         inner.append(
             f'<div class="ocr-replica-block ocr-replica-block--{block.type}" '
             f'data-block-id="{block.id}" '
             f'data-block-type="{block.type}" '
-            f'style="left:{left:.2f}%;top:{top:.2f}%;width:{width:.2f}%;'
-            f'min-height:{height:.2f}%;">{inner_html}</div>'
+            f'style="position: absolute; left:{left:.2f}%;top:{top:.2f}%;width:{width:.2f}%;'
+            f'height:{height:.2f}%;">{inner_html}</div>'
         )
     return (
         f'<div class="ocr-replica-page" '
-        f'style="aspect-ratio:{page_width}/{page_height};">'
+        f'style="position: relative; aspect-ratio:{page_width}/{page_height};">'
         f'{"".join(inner)}</div>'
     )
 
@@ -641,6 +758,7 @@ def enrich_document_from_page_ocr(
         ocr_height=ocr_h,
         image_width=image_w,
         image_height=image_h,
+        coordinate_space="pixel",
     )
     if pw:
         doc.page_width = int(pw)

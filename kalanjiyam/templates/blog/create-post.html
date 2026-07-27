@@ -3,12 +3,12 @@
 {% import 'macros/forms.html' as mf %}
 
 
-{% block title %}{{ mc.title('Create blog post') }}{% endblock %}
+{% block title %}{{ mc.title(_('Create blog post')) }}{% endblock %}
 
 
 {% block content %}
 <div class="prose">
-  <h1>Create post</h1>
+  <h1>{{ _('Create post') }}</h1>
 </div>
 
 <form method="POST" class="bg-slate-100 p-4">
@@ -17,7 +17,7 @@
 {{ mf.field(form.title) }}
 {{ mf.markdown_field(form.content) }}
 
-<input class="btn btn-submit" type="submit" value="Create post">
+<input class="btn btn-submit" type="submit" value="{{ _('Create post') }}">
 </form>
 {% endblock %}
 

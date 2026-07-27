@@ -15,7 +15,9 @@ services:
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
-      - OCR_SERVICE_URL=${OCR_SERVICE_URL:-http://host.docker.internal:5001}
+      - FLASK_UPLOAD_FOLDER=/data/uploads
+    volumes:
+      - ${HOME}/kalanjiyam-data/uploads:/data/uploads
     depends_on:
       - kalanjiyam-db
       - kalanjiyam-redis
@@ -36,9 +38,10 @@ services:
 
   kalanjiyam-celery:
     image: ${KALANJIYAM_IMAGE}
+    container_name: kalanjiyam-celery
     command: >
       celery -A kalanjiyam.tasks worker
-      -Q default,ocr
+      -Q default,ocr,low_priority
       --loglevel=INFO
       --concurrency=2
       --prefetch-multiplier=1
@@ -49,7 +52,9 @@ services:
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
-      - OCR_SERVICE_URL=${OCR_SERVICE_URL:-http://host.docker.internal:5001}
+      - FLASK_UPLOAD_FOLDER=/data/uploads
+    volumes:
+      - ${HOME}/kalanjiyam-data/uploads:/data/uploads
     depends_on:
       - kalanjiyam-db
       - kalanjiyam-redis

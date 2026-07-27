@@ -1,0 +1,115 @@
+{% extends 'proofing/base-sidebar.html' %}
+{% import "macros/components.html" as components %}
+{% import "macros/proofing.html" as m %}
+
+{% block title %}{{ _('Translation Progress') }} | Kalanjiyam{% endblock %}
+
+{% block sidebar %}{{ m.main_nav('docx_translate', current_user=current_user) }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto py-8">
+  <div class="mb-12">
+    <h1 class="text-5xl font-black text-slate-900 mb-4 flex items-center">
+      <span class="pulse-indicator"></span>
+      {{ _("Translating Document") }}
+    </h1>
+    <p class="text-xl text-slate-500 font-medium">{{ _("Please wait while our backend translates your document.") }}</p>
+  </div>
+
+  <div class="bg-white rounded-3xl p-12 shadow-sm border border-slate-50 text-center"
+       x-data="{
+         status: 'PENDING',
+         percent: 0,
+         current: 0,
+         total: 0,
+         error: '',
+         downloadUrl: '{{ url_for('proofing.docx_translate_download', docx_id=docx_id) }}',
+         
+         updateProgress() {
+           fetch('{{ url_for('proofing.docx_translate_status', task_id=task_id) }}')
+             .then(res => res.json())
+             .then(data => {
+               this.status = data.status;
+               this.percent = data.percent || 0;
+               this.current = data.current || 0;
+               this.total = data.total || 0;
+               this.error = data.error || '';
+               
+               if (this.status !== 'SUCCESS' && this.status !== 'FAILURE') {
+                 setTimeout(() => this.updateProgress(), 1500);
+               }
+             })
+             .catch(err => {
+               console.error('Error fetching task status:', err);
+               setTimeout(() => this.updateProgress(), 3000);
+             });
+         },
+         init() {
+           setTimeout(() => this.updateProgress(), 1000);
+         }
+       }">
+
+    <!-- Pending / Progress Screen -->
+    <template x-if="status !== 'SUCCESS' && status !== 'FAILURE'">
+      <div>
+        <div class="inline-flex p-6 rounded-[32px] bg-royalblue/5 mb-8">
+          <svg class="w-16 h-16 text-royalblue animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          </svg>
+        </div>
+        <h3 class="text-3xl font-black text-slate-900 mb-4" x-text="status === 'PENDING' ? '{{ _("Queueing Task...") }}' : '{{ _("Translating Document...") }}'"></h3>
+        <p class="text-slate-500 font-medium text-lg mb-8">{{ _("We are translating paragraphs and preserving styles.") }}</p>
+
+        <!-- Progress Bar -->
+        <div class="my-8 max-w-lg mx-auto h-4 bg-slate-100 rounded-full overflow-hidden border border-slate-50">
+          <div class="h-full bg-royalblue rounded-full transition-all duration-700 ease-out shadow-sm shadow-royalblue/20"
+               :style="{ width: percent + '%' }">
+          </div>
+        </div>
+        <div class="text-4xl font-black text-royalblue mb-4" x-text="Math.round(percent) + '%'"></div>
+        <p class="text-slate-400 font-bold text-sm tracking-widest uppercase" x-show="total > 0">
+          {{ _("Processed") }} <span class="text-slate-900" x-text="current"></span> {{ _("of") }} <span class="text-slate-900" x-text="total"></span> {{ _("paragraphs") }}
+        </p>
+      </div>
+    </template>
+
+    <!-- Success Screen -->
+    <template x-if="status === 'SUCCESS'">
+      <div class="p-10 bg-emerald-50 rounded-[32px] border border-emerald-100 animate-fadeIn">
+        <div class="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 mx-auto mb-6 shadow-sm shadow-emerald-200">
+          <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+          </svg>
+        </div>
+        <h3 class="text-3xl font-black text-slate-900 mb-2">{{ _('Translation Complete!') }}</h3>
+        <p class="text-slate-500 font-medium text-lg mb-8">{{ _('Your document has been translated in-place, preserving all layout, styles, and tables.') }}</p>
+        
+        <a :href="downloadUrl" class="btn-premium px-12 py-5 text-xl rounded-2xl shadow-xl hover:scale-102 transition-transform inline-block">
+          {{ _('Download Translated DOCX') }}
+        </a>
+      </div>
+    </template>
+
+    <!-- Failure Screen -->
+    <template x-if="status === 'FAILURE'">
+      <div class="p-10 bg-red-50 rounded-[32px] border border-red-100">
+        <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center text-red-600 mx-auto mb-6">
+          <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 15c-.77 1.333.192 3 1.732 3z"></path>
+          </svg>
+        </div>
+        <h3 class="text-3xl font-black text-red-900 mb-4">{{ _('Translation Failed') }}</h3>
+        <p class="text-red-700 font-bold mb-6 text-lg bg-white/50 py-2 px-4 rounded-xl inline-block" x-text="error ? error : '{{ _("An unexpected error occurred during translation.") }}'"></p>
+        <p class="text-red-700/60 font-medium max-w-md mx-auto">{{ _('Please try again or contact support if the issue persists.') }}</p>
+        
+        <div class="mt-8">
+          <a href="{{ url_for('proofing.docx_translate') }}" class="bg-slate-800 text-white font-bold px-8 py-3 rounded-xl hover:bg-slate-700 transition-colors">
+            {{ _('Back to Upload') }}
+          </a>
+        </div>
+      </div>
+    </template>
+
+  </div>
+</div>
+{% endblock %}

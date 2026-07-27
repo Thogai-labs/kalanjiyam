@@ -13,3 +13,7 @@ from kalanjiyam.models.site import *  # NOQA F401,F403
 from kalanjiyam.models.talk import *  # NOQA F401,F403
 from kalanjiyam.models.texts import *  # NOQA F401,F403
 from kalanjiyam.models.group import *  # NOQA F401,F403
+from kalanjiyam.models.settings import *  # NOQA F401,F403
+from kalanjiyam.models.metrics import *  # NOQA F401,F403
+
+

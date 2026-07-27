@@ -7,7 +7,7 @@ For simple or adhoc queries, you can just write them in their corresponding view
 import functools
 
 from flask import current_app
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import load_only, scoped_session, selectinload, sessionmaker
 
 import kalanjiyam.database as db
@@ -40,7 +40,9 @@ def get_session_class():
     # For details, see:
     # - https://stackoverflow.com/questions/12223335
     # - https://flask.palletsprojects.com/en/2.1.x/patterns/sqlalchemy/
-    session_factory = sessionmaker(bind=get_engine(), autoflush=False, autocommit=False)
+    session_factory = sessionmaker(
+        bind=get_engine(), autoflush=False, autocommit=False, expire_on_commit=False
+    )
     return scoped_session(session_factory, scopefunc=_ident_func)
 
 
@@ -207,17 +209,85 @@ def page(project_id, page_slug: str) -> db.Page | None:
 
 def user(username: str) -> db.User | None:
     session = get_session()
+    if not username:
+        return None
     return (
         session.query(db.User)
-        .filter_by(username=username, is_deleted=False, is_banned=False)
+        .filter(
+            func.lower(db.User.username) == username.lower(),
+            db.User.is_deleted == False,
+            db.User.is_banned == False,
+        )
         .first()
     )
+
+
+def user_by_email(email: str) -> db.User | None:
+    session = get_session()
+    if not email:
+        return None
+    return (
+        session.query(db.User)
+        .filter(
+            func.lower(db.User.email) == email.lower(),
+            db.User.is_deleted == False,
+            db.User.is_banned == False,
+        )
+        .first()
+    )
+
+
+def get_or_create_open_tenant() -> db.Group | None:
+    session = get_session()
+    tenant = session.query(db.Group).filter_by(slug="open-tenant").first()
+    if not tenant:
+        from flask import current_app
+        if current_app and not current_app.config.get("ENABLE_REGISTERED_ACCESS", True):
+            return None
+
+        tenant = db.Group(
+            name="Open Tenant",
+            slug="open-tenant",
+            description="Default tenant for registered users."
+        )
+        session.add(tenant)
+        session.commit()
+    return tenant
+
+
+def get_system_settings() -> db.SystemSetting:
+    session = get_session()
+    settings = session.query(db.SystemSetting).first()
+    if not settings:
+        from flask import current_app
+        default_eng = "tesseract"
+        try:
+            default_eng = current_app.config.get("DEFAULT_OCR_ENGINE", "tesseract")
+        except RuntimeError:
+            pass
+        settings = db.SystemSetting(
+            unregistered_user_ocr_limit=10,
+            unregistered_user_project_limit=5,
+            unregistered_user_upload_limit=10,
+            default_ocr_engine=default_eng,
+            recommended_ocr_engine=None,
+            auto_cleanup_days=7,
+        )
+        session.add(settings)
+        session.commit()
+    return settings
+
 
 
 def create_user(*, username: str, email: str, raw_password: str) -> db.User:
     session = get_session()
     user = db.User(username=username, email=email)
     user.set_password(raw_password)
+    
+    # Assign default tenant
+    open_tenant = get_or_create_open_tenant()
+    user.organization_id = open_tenant.id
+    
     session.add(user)
     session.flush()
 
@@ -227,6 +297,9 @@ def create_user(*, username: str, email: str, raw_password: str) -> db.User:
     )
     user_role = db.UserRoles(user_id=user.id, role_id=proofreader_role.id)
     session.add(user_role)
+    
+    # Also add user to the default tenant group
+    session.add(db.UserGroups(user_id=user.id, group_id=open_tenant.id))
 
     session.commit()
     return user
@@ -498,6 +571,14 @@ def user_can_view_project(user, project: db.Project) -> bool:
     from kalanjiyam.utils.org_access import user_can_access_project
 
     return user_can_access_project(user, project)
+
+
+def user_can_view_proofing_project(user, project: db.Project) -> bool:
+    """Tenant-aware project visibility wrapper for proofing context."""
+    from kalanjiyam.utils.org_access import user_can_view_proofing_project
+
+    return user_can_view_proofing_project(user, project)
+
 
 
 def projects_in_group(

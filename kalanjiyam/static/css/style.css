@@ -6,9 +6,14 @@
   ::selection {
     @apply text-white bg-emerald-400;
   }
-  body, html {
-    /* For sticky footers. */
+  html, body {
     @apply h-full;
+  }
+  /* Non-editor pages that need vertical scrolling */
+  body.page-scrollable {
+    height: auto;
+    min-height: 100%;
+    overflow-y: auto;
   }
   body {
     background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
@@ -289,8 +294,12 @@
   }
 
   .premium-gradient-bg {
-    background: radial-gradient(circle at top left, #f0fdfa, #ffffff),
-                radial-gradient(circle at bottom right, #f5f3ff, #ffffff);
+    background-color: #f8fafc;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(224, 242, 254, 0.4) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(243, 232, 255, 0.4) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(254, 243, 199, 0.3) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, rgba(236, 253, 245, 0.4) 0px, transparent 50%);
   }
 
   .progress-bar-premium {
@@ -522,22 +531,22 @@
   }
 
   .toolbar-btn {
-    @apply flex items-center justify-center w-9 h-9 rounded transition-all duration-150;
-    @apply text-gray-700 hover:bg-gray-100 hover:text-gray-900;
-    @apply disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent;
-    @apply focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-1;
+    @apply flex items-center justify-center w-8 h-8 rounded-md transition-all duration-150 mx-0.5;
+    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+    @apply disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent;
+    @apply focus:outline-none focus:ring-2 focus:ring-slate-300;
   }
 
   .toolbar-btn.active {
-    @apply bg-gray-100 text-gray-900;
+    @apply bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 font-semibold;
   }
 
   .toolbar-btn svg {
-    @apply flex-shrink-0 w-5 h-5;
+    @apply flex-shrink-0 w-4 h-4;
   }
 
   .toolbar-separator {
-    @apply w-px h-6 bg-gray-300 mx-1;
+    @apply w-px h-5 bg-slate-200 mx-2 self-center;
   }
 
   .toolbar-group {
@@ -550,8 +559,16 @@
 
   /* Book editor — image + text focused layout */
   .book-editor-page {
-    @apply flex flex-col flex-1 min-h-0;
+    @apply flex flex-col flex-1 min-h-0 overflow-hidden;
     background: #e8e4dc;
+  }
+
+  .flex-1:has(> .book-editor-page.has-conflict),
+  .book-editor-page.has-conflict,
+  .book-editor-shell.has-conflict {
+    min-height: auto;
+    height: auto;
+    flex: none;
   }
 
   .book-editor-site-header nav {
@@ -600,11 +617,15 @@
   }
 
   .book-editor-workspace {
-    @apply grid grid-cols-1 lg:grid-cols-2 flex-1 min-h-0;
+    @apply grid grid-cols-1 lg:grid-cols-2 flex-1 min-h-0 overflow-hidden;
+  }
+
+  .book-editor-workspace.has-conflict {
+    height: 85vh;
   }
 
   .book-editor-image-pane {
-    @apply relative min-h-[40vh] lg:min-h-0 bg-gray-800 border-b lg:border-r border-slate-300;
+    @apply relative min-h-[40vh] lg:min-h-0 bg-gray-800 border-b lg:border-r border-slate-300 overflow-hidden;
   }
 
   .book-editor-image-viewport {
@@ -665,7 +686,7 @@
   }
 
   .ocr-replica-block {
-    @apply border border-transparent text-sm leading-snug;
+    @apply border border-transparent text-sm leading-snug overflow-auto;
   }
 
   .ocr-replica-block--table {
@@ -682,6 +703,16 @@
 
   .ocr-block-edited {
     @apply border-l-2 border-l-sky-400;
+  }
+
+  .ocr-review-chip {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold
+      bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100
+      transition-colors cursor-pointer;
+  }
+
+  .ocr-review-dot {
+    @apply inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse;
   }
 
   .ocr-table-flow-hint {
@@ -708,6 +739,238 @@
 
   .ocr-export-page {
     @apply mb-12 break-after-page;
+  }
+
+  /* Slide-in Pages Sidebar */
+  .editor-sidebar-container {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 16px;
+    height: 100vh;
+    z-index: 10000;
+    transition: width 0.3s ease;
+  }
+  
+  .editor-sidebar-container:hover,
+  .editor-sidebar-container.is-open {
+    width: 280px;
+  }
+  
+  .editor-sidebar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 280px;
+    height: 100vh;
+    background: #ffffff;
+    border-right: 1px solid #f1f5f9;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.05);
+    transform: translateX(-100%);
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    padding: 20px 16px;
+    box-sizing: border-box;
+    pointer-events: auto;
+  }
+  
+  .editor-sidebar-container:hover .editor-sidebar,
+  .editor-sidebar-container.is-open .editor-sidebar {
+    transform: translateX(0);
+  }
+  
+  .editor-sidebar-handle {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 64px;
+    background: royalblue;
+    color: white;
+    border-radius: 0 12px 12px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+    z-index: 9999;
+  }
+  
+  .editor-sidebar-container:hover .editor-sidebar-handle,
+  .editor-sidebar-container.is-open .editor-sidebar-handle {
+    opacity: 0;
+    transform: translate(-100%, -50%);
+  }
+
+  .editor-sidebar-list::-webkit-scrollbar {
+    width: 4px;
+  }
+  .editor-sidebar-list::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 2px;
+  }
+
+
+  /* ==========================================
+     DOCX Proofing Page Layout Styles
+     ========================================== */
+  .is-docx-project {
+    background-color: #f1f5f9 !important;
+  }
+
+  /* 1. Canvas backgrounds for both panels */
+  .is-docx-project .book-editor-image-pane {
+    background-color: #f1f5f9 !important;
+    padding: 2.5rem !important;
+    display: block;
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+
+  .is-docx-project #rich-editor {
+    background-color: #f1f5f9 !important;
+    padding: 2.5rem !important;
+    overflow-y: auto;
+    box-sizing: border-box;
+    display: block;
+  }
+
+  /* 2. Paper Sheet Styling */
+  .is-docx-project .book-editor-image-pane > div,
+  .is-docx-project #rich-editor .ProseMirror {
+    background-color: #ffffff !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 4px !important;
+    padding: 4.5rem !important; /* 1in - 1.2in margin */
+    margin: 0 auto 3rem auto !important;
+    width: 100% !important;
+    max-width: 812px !important; /* Standard A4 equivalent width at typical zoom */
+    min-height: 1120px !important; /* A4 aspect ratio height */
+    box-sizing: border-box !important;
+    color: #1e293b !important;
+    text-align: justify; /* justify text for docx-like standard formatting */
+  }
+
+  /* 3. Typography for DOCX Content (Preview & Editor) */
+  .is-docx-project .book-editor-image-pane h1,
+  .is-docx-project #rich-editor .ProseMirror h1 {
+    font-size: 2rem !important;
+    font-weight: 800 !important;
+    margin-top: 1.5rem !important;
+    margin-bottom: 0.75rem !important;
+    color: #1e293b !important;
+    display: block !important;
+  }
+
+  .is-docx-project .book-editor-image-pane h2,
+  .is-docx-project #rich-editor .ProseMirror h2 {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    margin-top: 1.25rem !important;
+    margin-bottom: 0.6rem !important;
+    color: #334155 !important;
+    display: block !important;
+  }
+
+  .is-docx-project .book-editor-image-pane h3,
+  .is-docx-project #rich-editor .ProseMirror h3 {
+    font-size: 1.25rem !important;
+    font-weight: 700 !important;
+    margin-top: 1rem !important;
+    margin-bottom: 0.5rem !important;
+    color: #475569 !important;
+    display: block !important;
+  }
+
+  .is-docx-project .book-editor-image-pane p,
+  .is-docx-project #rich-editor .ProseMirror p {
+    margin-bottom: 1rem !important;
+    line-height: 1.75 !important;
+    color: #334155 !important;
+    display: block !important;
+  }
+
+  /* 4. Lists styling */
+  .is-docx-project .book-editor-image-pane ul,
+  .is-docx-project #rich-editor .ProseMirror ul {
+    list-style-type: disc !important;
+    padding-left: 1.5rem !important;
+    margin-bottom: 1rem !important;
+    display: block !important;
+  }
+
+  .is-docx-project .book-editor-image-pane ol,
+  .is-docx-project #rich-editor .ProseMirror ol {
+    list-style-type: decimal !important;
+    padding-left: 1.5rem !important;
+    margin-bottom: 1rem !important;
+    display: block !important;
+  }
+
+  .is-docx-project .book-editor-image-pane li,
+  .is-docx-project #rich-editor .ProseMirror li {
+    margin-bottom: 0.5rem !important;
+    line-height: 1.6 !important;
+    display: list-item !important;
+  }
+
+  /* 5. Tables styling */
+  .is-docx-project .book-editor-image-pane table,
+  .is-docx-project #rich-editor .ProseMirror table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-top: 1rem !important;
+    margin-bottom: 1rem !important;
+    display: table !important;
+  }
+
+  .is-docx-project .book-editor-image-pane tr,
+  .is-docx-project #rich-editor .ProseMirror tr {
+    display: table-row !important;
+  }
+
+  .is-docx-project .book-editor-image-pane td,
+  .is-docx-project .book-editor-image-pane th,
+  .is-docx-project #rich-editor .ProseMirror td,
+  .is-docx-project #rich-editor .ProseMirror th {
+    border: 1px solid #cbd5e1 !important;
+    padding: 0.75rem 1rem !important;
+    text-align: left !important;
+    display: table-cell !important;
+  }
+
+  .is-docx-project .book-editor-image-pane th,
+  .is-docx-project #rich-editor .ProseMirror th {
+    background-color: #f1f5f9 !important;
+    font-weight: 700 !important;
+  }
+
+  /* 6. Formatting */
+  .is-docx-project .book-editor-image-pane s,
+  .is-docx-project .book-editor-image-pane del,
+  .is-docx-project #rich-editor .ProseMirror s,
+  .is-docx-project #rich-editor .ProseMirror del {
+    text-decoration: line-through !important;
+    color: #94a3b8 !important;
+  }
+
+  .is-docx-project .book-editor-image-pane a,
+  .is-docx-project #rich-editor .ProseMirror a {
+    color: #2563eb !important;
+    text-decoration: underline !important;
+  }
+
+  .is-docx-project .book-editor-image-pane img,
+  .is-docx-project #rich-editor .ProseMirror img {
+    max-width: 100% !important;
+    height: auto !important;
+    border-radius: 4px !important;
+    margin: 1.5rem auto !important;
+    display: block !important;
   }
 
 }

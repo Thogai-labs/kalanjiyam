@@ -17,7 +17,8 @@ Architecture
    Browser → nginx → Gunicorn (Kalanjiyam)
                        ├── PostgreSQL
                        ├── Redis → Celery (queues: default, ocr)
-                       └── HTTP → OCR service (:5001)
+                       ├── HTTP → OCR service (OCR_SERVICE_URL)
+                       └── S3 API → Versity Gateway → ~/kalanjiyam-data/uploads/
 
 
 OCR service (deploy first)
@@ -52,13 +53,27 @@ Required production environment variables:
 - ``FLASK_ENV=production``
 - ``SECRET_KEY`` — long random string
 - ``SQLALCHEMY_DATABASE_URI`` — PostgreSQL URI
-- ``FLASK_UPLOAD_FOLDER`` — absolute path
-- ``REDIS_URL`` — e.g. ``redis://127.0.0.1:6379/0``
+- ``FLASK_UPLOAD_FOLDER`` — absolute path (e.g. ``/data/uploads`` in Docker, ``/srv/kalanjiyam/uploads`` bare-metal)
+- ``APPLICATION_URL_PREFIX=/kalanjiyam`` — required when hosting under a subpath
+- ``REDIS_URL`` — e.g. ``redis://kalanjiyam-redis:6379/0``
 - ``OCR_BACKEND=remote``
-- ``OCR_SERVICE_URL`` — e.g. ``http://<ocr-host>:5001``
+- ``OCR_SERVICE_URL`` — full URL to the OCR service (e.g. ``http://<ocr-host>:8000``)
 - ``OCR_SERVICE_API_KEY`` — same as OCR service ``API_KEY``
 - ``KALANJIYAM_BOT_PASSWORD``
+- ``POSTGRES_PASSWORD`` — PostgreSQL password for Docker deployments
+- ``KALANJIYAM_HOST_IP`` — host IP Docker binds the web port to (default ``127.0.0.1``)
+- ``KALANJIYAM_HOST_PORT`` — host port for the web container (default ``5000``)
 - ``SENTRY_DSN`` — required for ``ProductionConfig``
+
+Storage (S3-compatible, required when ``STORAGE_BACKEND=s3``):
+
+- ``STORAGE_BACKEND=s3`` — use ``local`` to write directly under ``FLASK_UPLOAD_FOLDER``
+- ``S3_ACCESS_KEY_ID`` — credential for the S3 gateway
+- ``S3_SECRET_ACCESS_KEY`` — credential for the S3 gateway
+- ``S3_BUCKET`` — bucket name (default ``uploads``; the Docker Compose creates it automatically)
+- ``S3_ENDPOINT_URL`` — set by Compose to the bundled Versity Gateway; override for external S3
+- ``S3_REGION`` — optional; self-hosted gateways ignore it
+- ``S3_PUBLIC_ENDPOINT_URL`` — optional; if set, page images redirect to presigned URLs rather than streaming through Flask
 
 Optional multi-tenant flags (enable after bootstrap; see :doc:`multi-tenant`)::
 
@@ -157,31 +172,63 @@ Put TLS in front of Gunicorn (or the Docker web container on port 5000)::
 Redirect HTTP to HTTPS on port 80.
 
 
+File storage
+------------
+
+All uploads (source PDFs, page images, editor images) go through an S3-compatible
+storage layer. In the Docker deployment, a bundled `Versity Gateway`_ exposes
+``~/kalanjiyam-data/uploads/`` on disk as the ``uploads`` S3 bucket. Files stay as
+plain files on the host; the app addresses them through the S3 API. Pre-existing
+uploads need no migration.
+
+.. _Versity Gateway: https://github.com/versity/versitygw
+
+To switch to an external S3 backend later (AWS, MinIO, Ceph, SeaweedFS), sync the
+objects with ``rclone sync`` or ``aws s3 sync``, then update ``S3_ENDPOINT_URL`` and
+the credentials — no code changes required.
+
+Set ``STORAGE_BACKEND=local`` to write files directly under ``FLASK_UPLOAD_FOLDER``
+(no gateway required; suitable for simple bare-metal setups).
+
+
 Docker deployment
 -----------------
 
-::
+The recommended way to deploy to production is via ``deploy/prod/deploy.sh``::
 
    cp .env.example .env
-   make docker-build
-   KALANJIYAM_DEPLOYMENT_ENV=prod make docker-start
+   # Edit .env — fill in SECRET_KEY, POSTGRES_PASSWORD, OCR_SERVICE_URL,
+   # S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, and all other required values.
+   ./deploy/prod/deploy.sh
 
-Uses ``deploy/prod/docker-compose.yml``. Set ``OCR_SERVICE_URL`` to a host reachable
-from containers.
+The script validates ``.env``, builds the Docker image, runs Alembic migrations,
+and starts all services (web, Celery, PostgreSQL, Redis, Versity Gateway).
+
+Other subcommands::
+
+   ./deploy/prod/deploy.sh migrate   # run migrations only
+   ./deploy/prod/deploy.sh restart   # restart running containers
+   ./deploy/prod/deploy.sh logs      # tail all logs
+   ./deploy/prod/deploy.sh stop      # stop and remove containers
+
+Uses ``deploy/prod/docker-compose.yml``. ``OCR_SERVICE_URL`` must point to a host
+reachable from inside the containers (not ``localhost``).
 
 
 Pre-go-live checklist
 ---------------------
 
-- OCR service healthy; API key matches Kalanjiyam ``.env``
-- PostgreSQL (not SQLite) in production
+- ``.env`` validated by ``deploy.sh`` (run ``./deploy/prod/deploy.sh`` to check)
+- ``FLASK_ENV=production`` and ``APPLICATION_URL_PREFIX=/kalanjiyam`` set
+- ``SECRET_KEY``, ``POSTGRES_PASSWORD``, ``KALANJIYAM_BOT_PASSWORD`` all changed from defaults
+- OCR service healthy (``curl http://<ocr-host>/health``); ``OCR_SERVICE_API_KEY`` matches
+- PostgreSQL (not SQLite) in production; Alembic migrations applied (``./deploy/prod/deploy.sh migrate``)
 - ``proof_ocr_comparisons`` table created
-- Alembic migrations applied
+- Storage: if ``STORAGE_BACKEND=s3``, ``S3_ACCESS_KEY_ID`` and ``S3_SECRET_ACCESS_KEY`` set; gateway container starts cleanly
 - Super admin created via ``./cli.py create-super-admin``
 - At least one organization and org admin; ``migrate_multi_tenant.py`` clean or fixes applied
 - ``MULTI_TENANT_MODE=true`` and related flags set **after** bootstrap, then app restarted
 - Admin UI reachable at ``/admin/platform/`` for super admin
-- ``FLASK_ENV=production`` for Gunicorn / Docker web
-- Celery worker includes ``ocr`` queue
-- Static assets built (``make css js``)
-- nginx TLS; OCR admin not public
+- Celery worker includes both ``default`` and ``ocr`` queues
+- Static assets built (``make css js``) before Docker image build
+- nginx TLS terminating; OCR service ``/admin`` not publicly routable

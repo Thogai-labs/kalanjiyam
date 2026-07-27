@@ -4,11 +4,15 @@
 {% import "proofing/pages/editor-components.html" as editor with context %}
 
 
-{% macro _status(field, peer_classes) %}
-<div>
-  {{ field(class_="hidden peer") }}
-  {{ field.label(class_="block border border-slate-200 rounded-lg px-3 py-2 mr-1 text-slate-500 hover:bg-slate-50 transition-all text-xs font-semibold peer-checked:shadow-inner cursor-pointer text-center " + peer_classes + " peer-checked:shadow-inner") }}
-</div>
+{% macro _status(field, dot_bg, peer_checked_styles) %}
+<label class="relative flex items-center justify-center border border-slate-200 rounded-2xl px-4 py-3.5 cursor-pointer select-none transition-all hover:bg-slate-50 hover:border-slate-300/80 group">
+  {{ field(class_="sr-only peer") }}
+  <span class="absolute inset-0 rounded-2xl border pointer-events-none transition-all scale-98 peer-checked:scale-100 opacity-0 peer-checked:opacity-100 {{ peer_checked_styles }}"></span>
+  <div class="flex items-center gap-2.5 z-10 text-slate-500 {{ peer_checked_styles }}">
+    <span class="w-2 h-2 rounded-full {{ dot_bg }} shrink-0 transition-all group-hover:scale-110"></span>
+    <span class="text-xs font-bold text-current transition-colors">{{ field.label.text }}</span>
+  </div>
+</label>
 {% endmacro %}
 
 
@@ -17,12 +21,12 @@
 
 {# Full site nav; book toolbar handles page navigation below. #}
 {% block header %}
-<div class="shrink-0 border-b border-slate-200 bg-white book-editor-site-header">
-  {% include "include/header.html" with context %}
-</div>
+{% include "include/header.html" with context %}
 {% endblock %}
 
-{% block body_class %}flex flex-col h-screen overflow-hidden{% endblock %}
+{% block body_class %}flex flex-col {% if conflict %}min-h-screen overflow-y-auto{% else %}h-screen overflow-hidden{% endif %}{% endblock %}
+
+{% block footer %}{% endblock %}
 
 {% block extra_css %}
 {{ super() }}
@@ -33,32 +37,88 @@
 
 
 {% block main %}
-<article class="book-editor-page">
-  {% if not current_user.is_authenticated -%}
-  {% call mc.div_warning() %}{% trans %}
-  Since you are not logged in, some functions (such as the OCR button) have
-  been disabled. To use all website features, please contact the site administrator
-  to create an account.
-  {% endtrans %}{% endcall %}
-  {%- endif %}
+{% set can_save = current_user.is_authenticated or (project.fingerprint_id and request.cookies.get('device_fingerprint') == project.fingerprint_id) %}
+<script>
+  window.IS_DOCX = {{ 'true' if is_docx else 'false' }};
+</script>
+
+<div x-data="{ isOpen: false }"
+     class="editor-sidebar-container"
+     :class="{ 'is-open': isOpen }"
+     @mouseenter="isOpen = true"
+     @mouseleave="isOpen = false">
+  
+  <div class="editor-sidebar">
+    <div class="editor-sidebar-header flex items-center justify-between pb-4 border-b border-slate-100 mb-4 shrink-0">
+      <h3 class="font-black text-xs text-slate-800 uppercase tracking-wider">{{ _('Pages') }}</h3>
+      <span class="text-xs text-slate-400 font-bold font-mono">{{ cur.slug }} / {{ project.pages|length }}</span>
+    </div>
+    
+    <div class="editor-sidebar-list flex-1 overflow-y-auto space-y-1 pr-1">
+      {% for page_title, p in pages %}
+        {% set colors = m.revision_colors(p.status.name) %}
+        {% set url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=p.slug) %}
+        {% set is_active = (p.id == cur.id) %}
+        
+        <a href="{{ url }}" 
+           class="flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all border border-transparent {% if is_active %}bg-royalblue/5 border-royalblue/20 text-royalblue active-page-item{% else %}hover:bg-slate-50 text-slate-600 hover:text-slate-900{% endif %}">
+          <span class="truncate pr-2">{{ page_title }}</span>
+          <span class="w-2.5 h-2.5 rounded-full shrink-0 {{ colors }}" title="{{ p.status.name }}"></span>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+  
+  <div class="editor-sidebar-handle" @click="isOpen = !isOpen">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16"></path>
+    </svg>
+  </div>
+</div>
+
+<article class="book-editor-page{% if conflict %} has-conflict{% endif %}{% if is_docx %} is-docx-project{% endif %}">
 
   {% set num_images = project.pages|length %}
   {{ mc.flash_messages() }}
 
   {% if conflict %}
-  <div class="mx-4 mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
+  <div class="mx-4 mt-4 bg-red-50 border border-red-200 rounded-lg p-4 shrink-0">
     <h3 class="text-red-800 font-semibold mb-2">{{ _('Conflict detected') }}</h3>
-    <pre class="book-editor-text text-red-700 text-sm bg-white/50 p-3 rounded overflow-x-auto">{{ conflict.content }}</pre>
+    <pre class="book-editor-text text-red-700 text-sm bg-white/50 p-3 rounded max-h-48 overflow-y-auto overflow-x-auto">{{ conflict.content }}</pre>
   </div>
   {% endif %}
 
-  <form x-data="proofer" method="POST" class="book-editor-shell">
+  <form x-data="proofer" method="POST" class="book-editor-shell{% if conflict %} has-conflict{% endif %} relative">
     {{ form.csrf_token }}
     {{ form.version }}
     <input type="hidden" name="document" id="document" value="">
     <textarea id="content" name="content" class="hidden">{{ page_plain_text }}</textarea>
 
-    {{ editor.book_toolbar(page_context, page_number, image_number, num_images, ocr_status=ocr_status, engine_choices=engine_choices) }}
+    <!-- Loading Overlay -->
+    <div x-show="isRunningOCR || isRunningTranslation" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center gap-4 text-white"
+         x-cloak>
+      <div class="bg-white/10 p-8 rounded-3xl border border-white/10 shadow-2xl flex flex-col items-center gap-4 text-center max-w-sm mx-4 backdrop-blur-md">
+        <!-- Spinner -->
+        <div class="relative w-16 h-16">
+          <div class="absolute inset-0 rounded-full border-4 border-white/20"></div>
+          <div class="absolute inset-0 rounded-full border-4 border-t-royalblue border-r-transparent border-b-transparent border-l-transparent animate-spin"></div>
+        </div>
+        <!-- Status Text -->
+        <h3 class="text-lg font-bold text-white tracking-wide mt-2" x-text="isRunningOCR ? '{{ _("OCR is running") }}' : '{{ _("Translation is running") }}'"></h3>
+        <p class="text-xs text-slate-300 px-4 leading-relaxed">
+          {% trans %}Please wait a few moments. We are processing your request...{% endtrans %}
+        </p>
+      </div>
+    </div>
+
+    {{ editor.book_toolbar(page_context, page_number, image_number, num_images, ocr_status=ocr_status, engine_choices=engine_choices, can_save=can_save) }}
 
     {% if not has_edits and not has_ocr_content %}
     <p class="book-editor-hint px-4 py-2 text-sm text-slate-500 border-b border-slate-200 bg-amber-50">
@@ -70,8 +130,70 @@
     </p>
     {% endif %}
 
-    <div class="book-editor-workspace">
+    <div class="book-editor-workspace{% if conflict %} has-conflict{% endif %}">
+      {% if is_docx %}
+      <style>
+        .book-editor-image-pane h1 { font-size: 2.25rem; font-weight: 800; margin-top: 1.5rem; margin-bottom: 0.75rem; color: #1e293b; display: block; }
+        .book-editor-image-pane h2 { font-size: 1.75rem; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.6rem; color: #334155; display: block; }
+        .book-editor-image-pane h3 { font-size: 1.5rem; font-weight: 700; margin-top: 1rem; margin-bottom: 0.5rem; color: #475569; display: block; }
+        .book-editor-image-pane p { margin-bottom: 1rem; line-height: 1.75; color: #334155; display: block; }
+        .book-editor-image-pane ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; display: block; }
+        .book-editor-image-pane ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1rem; display: block; }
+        .book-editor-image-pane li { margin-bottom: 0.5rem; line-height: 1.6; display: list-item; }
+        .book-editor-image-pane table { width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1rem; display: table; }
+        .book-editor-image-pane tr { display: table-row; }
+        .book-editor-image-pane td, .book-editor-image-pane th { border: 1px solid #cbd5e1; padding: 0.75rem 1rem; text-align: left; display: table-cell; }
+        .book-editor-image-pane th { background-color: #f1f5f9; font-weight: 700; }
+        .book-editor-image-pane s, .book-editor-image-pane del { text-decoration: line-through; color: #94a3b8; }
+        .book-editor-image-pane a { color: #2563eb; text-decoration: underline; }
+        .book-editor-image-pane img { max-width: 100%; height: auto; display: block; margin: 1rem auto; border-radius: 0.5rem; }
+        .book-editor-image-pane .docx-column-section,
+        #rich-editor .docx-column-section,
+        .ProseMirror .docx-column-section {
+          display: block;
+          column-gap: 2rem;
+          margin-bottom: 1rem;
+        }
+        .docx-footnote {
+          color: #0f766e !important;
+          font-weight: bold;
+          vertical-align: super;
+          font-size: 0.75em;
+          cursor: help;
+          position: relative;
+          text-decoration: none !important;
+          display: inline-block;
+          padding: 0 2px;
+        }
+        .docx-footnote:hover::after {
+          content: attr(data-footnote-text);
+          position: absolute;
+          bottom: 130%;
+          left: 50%;
+          transform: translateX(-50%);
+          background-color: #334155;
+          color: #ffffff;
+          padding: 0.5rem 0.75rem;
+          border-radius: 0.375rem;
+          font-size: 0.75rem;
+          line-height: 1.4;
+          white-space: normal;
+          width: max-content;
+          max-width: 250px;
+          box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+          z-index: 50;
+          font-weight: normal;
+          pointer-events: none;
+        }
+      </style>
+      <div class="book-editor-image-pane overflow-y-auto p-8 text-slate-800 border-r border-slate-200 bg-[#faf8f5]">
+        <div class="max-w-none text-left leading-relaxed">
+          {{ original_html | safe }}
+        </div>
+      </div>
+      {% else %}
       {{ editor.image_box(translation_content, translation_metadata, available_translations) }}
+      {% endif %}
 
       <section class="book-editor-content-pane">
         <div x-show="editorMode === 'replica'" class="h-full">
@@ -83,38 +205,51 @@
       </section>
     </div>
 
-    <div class="book-editor-meta" x-show="showMetaPanel" x-cloak x-transition>
+    <div class="book-editor-meta" x-show="showMetaPanel" x-cloak
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="transform translate-y-full opacity-0"
+         x-transition:enter-end="transform translate-y-0 opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="transform translate-y-0 opacity-100"
+         x-transition:leave-end="transform translate-y-full opacity-0">
       <div class="book-editor-meta-inner">
-        <div class="grid md:grid-cols-2 gap-6">
+        <div class="grid md:grid-cols-2 gap-8">
           <div>
-            <label class="block text-xs font-semibold text-slate-500 mb-2">{{ form.summary.label.text }}</label>
-            {{ form.summary(class_="block rounded-lg bg-white w-full p-3 border border-slate-200 focus:border-slate-400 outline-none text-sm",
+            <label class="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2.5">{{ form.summary.label.text }}</label>
+            {{ form.summary(class_="block w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:border-royalblue focus:ring-2 focus:ring-royalblue/10 outline-none transition-all",
                 placeholder=_("Fixed various OCR errors")) }}
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-500 mb-2">{{ form.status.label.text }}</label>
+            <label class="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2.5">{{ form.status.label.text }}</label>
             {% set radios = form.status|list %}
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {{ _status(radios[0], "peer-checked:bg-red-400 peer-checked:text-white peer-checked:border-red-500") }}
-              {{ _status(radios[1], "peer-checked:bg-yellow-400 peer-checked:text-white peer-checked:border-yellow-500") }}
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {{ _status(radios[0], "bg-red-400", "peer-checked:bg-red-50/50 peer-checked:border-red-300 peer-checked:text-red-900") }}
+              {{ _status(radios[1], "bg-yellow-400", "peer-checked:bg-yellow-50/50 peer-checked:border-yellow-300 peer-checked:text-yellow-900") }}
               {% if not is_r0 %}
-              {{ _status(radios[2], "peer-checked:bg-emerald-400 peer-checked:text-white peer-checked:border-emerald-500") }}
+              {{ _status(radios[2], "bg-emerald-400", "peer-checked:bg-emerald-50/50 peer-checked:border-emerald-300 peer-checked:text-emerald-900") }}
               {% endif %}
-              {{ _status(radios[3], "peer-checked:bg-slate-400 peer-checked:text-white peer-checked:border-slate-500") }}
+              {{ _status(radios[3], "bg-slate-400", "peer-checked:bg-slate-50/50 peer-checked:border-slate-300 peer-checked:text-slate-900") }}
             </div>
           </div>
         </div>
 
-        {% if current_user.is_authenticated %}
+        {% if can_save %}
         {% set cc0 = "https://creativecommons.org/publicdomain/zero/1.0/" %}
-        <div class="mt-4 pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <p class="text-xs text-slate-500 max-w-lg">{% trans %}
-          By saving, you release your contribution under the
-          <a class="text-royalblue hover:underline" href="{{ cc0 }}">CC0 license</a>.
-          {% endtrans %}</p>
-          <button class="btn-premium px-8 py-2.5 text-base rounded-xl shrink-0"
+        <div class="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <p class="text-xs text-slate-400 max-w-lg leading-relaxed">
+              {% trans %}
+              By saving, you release your contribution under the
+              <a class="text-royalblue font-bold hover:underline" href="{{ cc0 }}">CC0 license</a>.
+              {% endtrans %}
+            </p>
+          </div>
+          <button class="btn-premium px-8 py-3 text-sm font-bold rounded-2xl shrink-0 transition-transform active:scale-98"
                   type="submit"
-                  @click="syncContentBeforeSubmit()">
+                  @click="syncContentBeforeSubmit($event)">
             {{ _('Publish changes') }}
           </button>
         </div>
@@ -123,11 +258,11 @@
     </div>
   </form>
 
-  {% if not current_user.is_authenticated %}
+  {% if not can_save %}
   {% set log_in = url_for("auth.sign_in") %}
   <div class="p-4">
     {% call mc.div_warning() %}
-    Only registered users can save changes.
+    {{ _('Only registered users can save changes.') }}
     <a href="{{ log_in }}" class="font-semibold underline">{{ _('Sign in') }}</a>
     {% endcall %}
   </div>
@@ -142,5 +277,20 @@ const PAGE_DOCUMENT_JSON = {{ page_document|tojson }};
 const OCR_BOUNDING_BOXES = {{ ocr_bounding_boxes|tojson }};
 const PAGE_WIDTH = {{ page_width|tojson }};
 const PAGE_HEIGHT = {{ page_height|tojson }};
+const ACTIVE_VERSION = {{ active_version_key|tojson }};
+const TARGET_VERSION = {{ target_version_key|tojson }};
+const AVAILABLE_VERSIONS = {{ available_versions|tojson }};
 </script>
+
+<script type="text/javascript">
+  document.addEventListener("DOMContentLoaded", () => {
+    const activeItem = document.querySelector(".active-page-item");
+    if (activeItem) {
+      activeItem.scrollIntoView({ block: "center", inline: "nearest" });
+    }
+  });
+</script>
+
+{% include 'include/math_editor_modal.html' %}
+<script src="https://unpkg.com/mathlive@0.98.6/dist/mathlive.min.js"></script>
 {% endblock %}

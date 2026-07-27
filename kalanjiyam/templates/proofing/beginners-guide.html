@@ -1,4 +1,4 @@
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'base.html' %}
 {% import "macros/components.html" as components %}
 {% import "macros/proofing.html" as m %}
 {% import "macros/proofing-guides.html" as m_guide %}
@@ -12,17 +12,17 @@
 } %}
 
 {% macro _h(anchor) %}
-<h2 id="{{ anchor }}" class="text-2xl font-black text-slate-800 mt-12 mb-6 border-b border-slate-100 pb-2">{{ contents[anchor] }}</h2>
+<h2 id="{{ anchor }}" class="text-2xl font-bold text-slate-900 font-serif-title mt-12 mb-6 border-b border-slate-100 pb-2">{{ contents[anchor] }}</h2>
 {% endmacro %}
 
 {% macro _table_of_contents(contents) %}
 <div class="bg-slate-50 rounded-2xl p-6 my-8 border border-slate-100">
-    <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">{{ _('Table of Contents') }}</h3>
+    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">{{ _('Table of Contents') }}</h3>
     <ul class="space-y-2">
       {% for anchor, title in contents.items() %}
       <li class="flex items-center gap-3">
           <span class="w-1.5 h-1.5 rounded-full bg-royalblue/40"></span>
-          <a href="#{{ anchor }}" class="font-bold text-slate-600 hover:text-royalblue transition-colors">{{ title }}</a>
+          <a href="#{{ anchor }}" class="font-semibold text-slate-700 hover:text-royalblue transition-colors">{{ title }}</a>
       </li>
       {% endfor %}
     </ul>
@@ -32,155 +32,132 @@
 
 {% block title %}{{ _("Beginner's guide to proofing") }} | Kalanjiyam{% endblock %}
 
+{% block meta_description %}{{ _("A five minute guide to proofing Sanskrit texts on Kalanjiyam.") }}{% endblock %}
 
-{% block sidebar %}{{ m.main_nav('beginners', current_user=current_user) }}{% endblock %}
+{% block extra_head %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
 
+  .font-serif-title {
+    font-family: 'Cinzel', Georgia, serif;
+  }
 
-{% block content %}
-{{ m.title_and_subtitle(
-    _("Beginner's guide"),
-    _("A five minute guide to proofing Sanskrit texts")) }}
+  .catalog-hero {
+    background: #0b1120;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
+      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
+      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
+    background-size: 100% 100%, 24px 24px, 24px 24px;
+  }
+</style>
+{% endblock %}
 
-<div class="prose prose-slate max-w-none prose-lg">
-<p class="font-medium text-slate-600 leading-relaxed"><dfn class="text-royalblue font-bold">Proofing</dfn>, short for "proofreading," is when people like you create
-high-quality Sanskrit text that everyone can use and enjoy. All of our proofing
-projects are based on scans of physical books.</p>
+{% block main_class %}bg-slate-50 min-h-screen pb-16{% endblock %}
 
-{{ _table_of_contents(contents) }}
+{% block main %}
+<!-- Hero Header Section -->
+<header class="catalog-hero text-slate-100 py-16 px-4 mb-10 border-b border-slate-800">
+  <div class="max-w-4xl mx-auto">
+    <nav class="mb-6">
+      <a href="{{ url_for('proofing.help_index') }}" class="inline-flex items-center gap-2 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-wider bg-slate-800/80 px-3.5 py-1.5 rounded-full border border-slate-700">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        <span>{{ _('Back to Help Center') }}</span>
+      </a>
+    </nav>
 
-
-{{ _h('how-to-find-a-project') }}
-
-{% set index = url_for('proofing.index') %}
-{% set create = url_for('proofing.create_project') %}
-<p>You can see all of our active projects on our <a href="{{ index }}">ongoing
-projects</a> page. Each project has a progress bar that shows what work has
-been done on its pages so far:</p>
-
-<div class="grid gap-4 my-8">
-  <div class="flex items-center gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
-      <div class="w-8 h-8 rounded-full bg-slate-400 shrink-0"></div>
-      <p class="m-0! text-sm font-medium"><dfn class="font-bold text-slate-800">{{ _('Gray') }}</dfn> {{ _('means that the page is not relevant to the main text (blank pages, copyright, etc.)') }}</p>
+    <h1 class="text-4xl sm:text-5xl font-bold font-serif-title tracking-tight mb-4 text-white">
+      {{ _("Beginner's Guide") }}
+    </h1>
+    <p class="text-lg text-slate-300 max-w-2xl leading-relaxed">
+      {{ _("A five minute guide to proofing Sanskrit texts.") }}
+    </p>
   </div>
-  <div class="flex items-center gap-4 p-4 rounded-xl bg-red-50 border border-red-100">
-      <div class="w-8 h-8 rounded-full bg-red-400 shrink-0"></div>
-      <p class="m-0! text-sm font-medium text-red-700"><dfn class="font-bold">{{ _('Red') }}</dfn> {{ _('means that nobody has fully proofed the page.') }}</p>
+</header>
+
+<!-- Main Article Content Card -->
+<div class="max-w-4xl mx-auto px-4">
+  <div class="bg-white p-8 md:p-12 rounded-2xl shadow-sm border border-slate-200 prose prose-slate max-w-none text-slate-800 leading-relaxed">
+
+    <p class="text-lg font-medium text-slate-700 leading-relaxed">
+      {{ _('Proofing, short for "proofreading," is when people like you create high-quality Sanskrit text that everyone can use and enjoy. All of our proofing projects are based on scans of physical books.') }}
+    </p>
+
+    {{ _table_of_contents(contents) }}
+
+
+    {{ _h('how-to-find-a-project') }}
+
+    {% set index = url_for('proofing.index') %}
+    {% set create = url_for('proofing.create_project') %}
+    <p>You can see all of our active projects on our <a href="{{ index }}" class="text-royalblue font-semibold hover:underline">ongoing projects</a> page. Each project has a progress bar that shows what work has been done on its pages so far:</p>
+
+    <div class="grid gap-4 my-8">
+      <div class="flex items-center gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
+          <div class="w-8 h-8 rounded-full bg-slate-400 shrink-0"></div>
+          <div>
+              <strong class="text-slate-800 block text-sm">{{ _('Gray pages have not been proofed.') }}</strong>
+              <span class="text-slate-500 text-xs">{{ _('Starting on a gray page is a great way to help out, because you will be the first person to read and transcribe it.') }}</span>
+          </div>
+      </div>
+
+      <div class="flex items-center gap-4 p-4 rounded-xl bg-amber-50 border border-amber-100">
+          <div class="w-8 h-8 rounded-full bg-amber-400 shrink-0"></div>
+          <div>
+              <strong class="text-amber-900 block text-sm">{{ _('Yellow pages have been proofed once.') }}</strong>
+              <span class="text-amber-700 text-xs">{{ _('Working on a yellow page means reviewing someone else\'s work to catch any mistakes they might have missed.') }}</span>
+          </div>
+      </div>
+
+      <div class="flex items-center gap-4 p-4 rounded-xl bg-emerald-50 border border-emerald-100">
+          <div class="w-8 h-8 rounded-full bg-emerald-400 shrink-0"></div>
+          <div>
+              <strong class="text-emerald-900 block text-sm">{{ _('Green pages have been proofed twice.') }}</strong>
+              <span class="text-emerald-700 text-xs">{{ _('These pages are considered finished and do not need any more proofing.') }}</span>
+          </div>
+      </div>
+    </div>
+
+
+    {{ _h('how-to-proof') }}
+
+    <p>{{ _('To proof a page, simply click on its page number in the project view. This opens our side-by-side page editor:') }}</p>
+
+    <ul class="space-y-2 my-6">
+      <li><strong>{{ _('Image on the right:') }}</strong> {{ _('Shows the scan of the original printed book page.') }}</li>
+      <li><strong>{{ _('Text on the left:') }}</strong> {{ _('Contains the machine-transcribed (OCR) text that you will edit.') }}</li>
+    </ul>
+
+    <p>{{ _('Compare the text on the left with the image on the right. Correct any typos, missing characters, or formatting errors so the text matches the original scan.') }}</p>
+
+
+    {{ _h('guidelines') }}
+
+    <p>{{ _('When proofing, follow these simple guidelines:') }}</p>
+
+    <ol class="space-y-3 my-6">
+      <li><strong>{{ _('Match the original text.') }}</strong> {{ _('Transcribe the text as it appears in the book scan, even if you notice spelling errors in the original source.') }}</li>
+      <li><strong>{{ _('Use standard Sanskrit transliteration.') }}</strong> {{ _('Enter text in Devanagari or standard Roman IAST as requested by the project guidelines.') }}</li>
+      <li><strong>{{ _('Preserve verse structures.') }}</strong> {{ _('Keep danda (।) and double danda (॥) marks in their original locations.') }}</li>
+    </ol>
+
+
+    {{ _h('faq') }}
+
+    <div class="space-y-6 my-8">
+      <div class="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+        <h3 class="text-base font-bold text-slate-900 mb-2">{{ _('What if I am not sure about a character?') }}</h3>
+        <p class="text-slate-600 text-sm leading-relaxed">{{ _('If a character is blurry or smudged in the scan, do your best guess or use the [?] markup button in the editor toolbar to flag it for the next reviewer.') }}</p>
+      </div>
+
+      <div class="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+        <h3 class="text-base font-bold text-slate-900 mb-2">{{ _('Can I upload my own book scan?') }}</h3>
+        <p class="text-slate-600 text-sm leading-relaxed">{{ _('Yes! Registered users can upload PDF scans or archive.org identifiers using the') }} <a href="{{ create }}" class="text-royalblue font-semibold hover:underline">{{ _('New Project') }}</a> {{ _('button.') }}</p>
+      </div>
+    </div>
+
   </div>
-  <div class="flex items-center gap-4 p-4 rounded-xl bg-yellow-50 border border-yellow-100">
-      <div class="w-8 h-8 rounded-full bg-yellow-400 shrink-0"></div>
-      <p class="m-0! text-sm font-medium text-yellow-700"><dfn class="font-bold">{{ _('Yellow') }}</dfn> {{ _('means that one person has proofed the page and it is ready for review.') }}</p>
-  </div>
-  <div class="flex items-center gap-4 p-4 rounded-xl bg-emerald-50 border border-emerald-100">
-      <div class="w-8 h-8 rounded-full bg-emerald-400 shrink-0"></div>
-      <p class="m-0! text-sm font-medium text-emerald-700"><dfn class="font-bold">{{ _('Green') }}</dfn> {{ _('means that two people have fully proofed the page.') }}</p>
-  </div>
-</div>
-
-<p>If you don't see a book you want to work on, you can <a href="{{ create
-}}">create a project</a> instead. We are open to any book that is in the public
-domain and related to Sanskrit in some way.</p>
-
-
-{{ _h('how-to-proof') }}
-
-<p>Once you find an interesting project, you can start proofing one of its
-pages. We recommend starting with a <span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-lg font-black">{{ _('red') }}</span> page, since these pages need the most work.</p>
-
-<p>Our page editor shows a basic side-by-side view:</p>
-
-{% call m_guide.html_figure(_("Our page editor interface")) %}
-<div class="flex flex-col md:flex-row gap-4">
-{{ m_guide.text_box() }}
-{{ m_guide.image_viewer() }}
-</div>
-{% endcall %}
-
-<p>The right side has the original page, and the left side has a text box where
-you can type your changes. The left side also has an <span class="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded font-black text-xs">OCR</span> button that automatically transcribes the page.</p>
-
-<p>Your goal is to match the text in the original scan as accurately as
-possible. We strongly recommend running OCR first then fixing its mistakes by
-hand.</p>
-
-<p>When you're ready to save your changes, you can use the form at the bottom
-of the page editor:</p>
-</div>
-
-{% call m_guide.html_figure(_("The submission form")) %}
-{{ m_guide.submission_form() }}
-{% endcall %}
-
-<div class="prose prose-slate max-w-none prose-lg mt-8">
-<p>If your change is complex, feel free to write a short message about what
-changes you made. Otherwise, you can leave this blank.</p>
-
-<p>More importantly, you can change the page's status so that other proofers
-know what work still needs to be done on the page.</p>
-
-
-{{ _h('guidelines') }}
-</div>
-
-{% call components.div_note() %}
-{% set url = url_for("proofing.complete_guide") %}
-<p class="m-0! font-bold">For much more detail, see our <a href="{{ url }}" class="underline hover:text-white transition-colors">complete
-    guidelines</a>.</p>
-{% endcall %}
-
-<div class="prose prose-slate max-w-none prose-lg">
-<p>Our goal is to extract the original text and its basic format as accurately
-as possible. However, our goal is <strong>not</strong> to create a
-pixel-perfect copy of the original image.</p>
-
-<div class="grid md:grid-cols-2 gap-8 mt-10">
-    <div class="bg-emerald-50 rounded-2xl p-8 border border-emerald-100">
-        <h4 class="text-emerald-700 font-black flex items-center gap-2 mb-4">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
-            {{ _('Do include:') }}
-        </h4>
-        <ul class="space-y-4 text-emerald-900/70 text-sm font-medium list-none! pl-0!">
-          <li><p class="m-0!">{{ _("The exact text of the book. If the book says 'kAryyate', please write 'kAryyate' and not 'kAryate'. Our goal is to transcribe, not edit.") }}</li>
-          <li><p class="m-0!">{{ _("Hyphens and line breaks if they appear in the original text. They help compare lines against the scan.") }}</li>
-        </ul>
-    </div>
-    <div class="bg-red-50 rounded-2xl p-8 border border-red-100">
-        <h4 class="text-red-700 font-black flex items-center gap-2 mb-4">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
-            {{ _("Don't include:") }}
-        </h4>
-        <ul class="space-y-4 text-red-900/70 text-sm font-medium list-none! pl-0!">
-          <li><p class="m-0!">{{ _('Page numbers and headers. These are not useful for a digital edition.') }}</li>
-          <li><p class="m-0!">{{ _('Non-book content: handwritten notes, stamps, watermarks, dirt, stains, etc.') }}</li>
-          <li><p class="m-0!">{{ _('Extra word splitting (padaccheda) or sandhi splitting. Maintain the original spacing.') }}</li>
-        </ul>
-    </div>
-</div>
-
-
-{{ _h('faq') }}
-
-<div class="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden mt-8">
-    <div class="p-8 border-b border-slate-50">
-        <h3 class="text-xl font-bold text-slate-800 mb-4">{{ _('How do I write in Devanagari?') }}</h3>
-        {% set baraha = "https://baraha.com/v10/index.php" %}
-        {% set lipika = "https://github.com/ratreya/lipika-ime" %}
-        <p class="text-slate-600 font-medium">We recommend using the following tools for typing Sanskrit:</p>
-        <ul class="flex gap-4 mt-4">
-          <li><a href="{{ baraha }}" class="btn-premium py-2 px-4 text-xs">Baraha (Windows)</a></li>
-          <li><a href="{{ lipika }}" class="btn-premium py-2 px-4 text-xs">LipikaIME (macOS)</a></li>
-        </ul>
-    </div>
-    <div class="p-8 bg-slate-50/50">
-        <h3 class="text-xl font-bold text-slate-800 mb-4">{{ _('How should I handle typos and mistakes?') }}</h3>
-        <p class="text-slate-600 font-medium">Our job is to capture the text as-is. Use the editor's <kbd class="px-2 py-0.5 bg-white border border-slate-200 rounded text-xs">Markup</kbd> menu to highlight and flag errors without changing the original transcription.</p>
-    </div>
-    {% set discord_url = "https://discord.gg/7rGdTyWY7Z" %}
-    <div class="p-8 bg-royalblue/5 text-center">
-        <h3 class="text-xl font-bold text-royalblue mb-4">{{ _('What if I still have questions?') }}</h3>
-        <p class="text-royalblue/70 font-medium mb-6">{{ _('Join our friendly Discord community to get help from expert proofers.') }}</p>
-        <a href="{{ discord_url }}" class="btn-premium">{{ _('Join our Discord Server') }}</a>
-    </div>
-</div>
-
 </div>
 {% endblock %}

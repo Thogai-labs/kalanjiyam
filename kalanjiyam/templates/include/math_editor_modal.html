@@ -1,0 +1,103 @@
+<div id="math-editor-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+  <div class="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col transform transition-all duration-300 scale-95 opacity-0" id="math-editor-modal-card">
+    <!-- Header -->
+    <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-full bg-peacock-subtle flex items-center justify-center text-peacock-primary">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+          </svg>
+        </div>
+        <h3 class="text-base font-bold text-slate-800">Visual Equation Editor</h3>
+      </div>
+      <button type="button" onclick="closeMathEditorModal()" class="text-slate-400 hover:text-slate-600 transition-colors p-1.5 rounded-xl hover:bg-slate-100">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="p-6 flex flex-col gap-4">
+      <p class="text-xs text-slate-500">Type your equation visually. Use the virtual keyboard or type standard symbols. It will be inserted as a compiled formula.</p>
+      
+      <!-- MathLive Field Wrapper -->
+      <div class="border-2 border-slate-200/80 rounded-2xl p-4 focus-within:border-peacock-primary transition-all bg-slate-50/30">
+        <math-field id="math-editor-field" class="w-full text-lg outline-none min-h-[80px]" style="background: transparent; border: none; box-shadow: none; font-size: 1.25rem;">
+        </math-field>
+      </div>
+
+      <!-- Live LaTeX Preview -->
+      <div class="flex flex-col gap-1">
+        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">LaTeX Syntax Code</span>
+        <div class="bg-slate-50 rounded-xl px-4 py-3 text-xs font-mono text-slate-600 select-all border border-slate-100 overflow-x-auto whitespace-nowrap" id="math-editor-latex-preview">
+          
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+      <button type="button" onclick="closeMathEditorModal()" class="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all">
+        Cancel
+      </button>
+      <button type="button" id="math-editor-submit-btn" class="px-6 py-2.5 rounded-xl bg-peacock-primary hover:bg-peacock-secondary text-white text-sm font-bold shadow-md shadow-peacock-primary/10 transition-all">
+        Insert Equation
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let activeMathEditorCallback = null;
+
+  function openMathEditorModal(initialLatex, callback) {
+    const modal = document.getElementById('math-editor-modal');
+    const card = document.getElementById('math-editor-modal-card');
+    const field = document.getElementById('math-editor-field');
+    const preview = document.getElementById('math-editor-latex-preview');
+    
+    if (!modal || !card || !field) return;
+
+    activeMathEditorCallback = callback;
+    field.value = initialLatex || '';
+    preview.textContent = field.value;
+
+    // Listen to value changes
+    field.addEventListener('input', () => {
+      preview.textContent = field.value;
+    });
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    setTimeout(() => {
+      card.classList.remove('scale-95', 'opacity-0');
+      card.classList.add('scale-100', 'opacity-100');
+      field.focus();
+    }, 10);
+  }
+
+  function closeMathEditorModal() {
+    const modal = document.getElementById('math-editor-modal');
+    const card = document.getElementById('math-editor-modal-card');
+    if (!modal || !card) return;
+
+    card.classList.remove('scale-100', 'opacity-100');
+    card.classList.add('scale-95', 'opacity-0');
+
+    setTimeout(() => {
+      modal.classList.remove('flex');
+      modal.classList.add('hidden');
+      activeMathEditorCallback = null;
+    }, 150);
+  }
+
+  document.getElementById('math-editor-submit-btn').addEventListener('click', () => {
+    const field = document.getElementById('math-editor-field');
+    if (field && activeMathEditorCallback) {
+      activeMathEditorCallback(field.value);
+    }
+    closeMathEditorModal();
+  });
+</script>
