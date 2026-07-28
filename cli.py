@@ -306,7 +306,7 @@ def cleanup_uploads(days, force, app_env):
 @click.option("--org", required=False, help="Organization slug to attach the processed projects to (e.g., 'udaan')")
 @click.option("--pdf", is_flag=True, help="Process PDF files only")
 @click.option("--image", is_flag=True, help="Process image directories only")
-@click.option("--lang", "--language", "lang", default="eng", help="OCR Language code (default: 'eng', e.g. 'eng', 'tam', 'hin')")
+@click.option("--lang", "--language", "lang", default="en", help="OCR Language code (default: 'en', e.g. 'en', 'ta', 'hi')")
 def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
     """Start a Batch OCR process for PDFs and Image folders from S3 or Local."""
     import boto3
@@ -529,7 +529,7 @@ def batch_cancel(job_id):
 @cli.command()
 @click.option("--job-id", required=True, type=int, help="Batch Job ID to retry")
 @click.option("--org", required=False, help="Organization slug to attach the processed projects to")
-@click.option("--lang", "--language", "lang", default="eng", help="OCR Language code (default: 'eng')")
+@click.option("--lang", "--language", "lang", default="en", help="OCR Language code (default: 'en')")
 def batch_retry(job_id, org, lang):
     """Retry failed or stuck items in a Batch OCR job without re-scanning."""
     from kalanjiyam.models.batch import BatchJob, BatchItem
