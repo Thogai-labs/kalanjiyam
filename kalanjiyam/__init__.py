@@ -68,6 +68,7 @@ def _initialize_db_session(app, config_name: str):
             """Rollback errors so that the db can handle future requests."""
             session = queries.get_session()
             session.rollback()
+            return render_template("500.html"), 500
 
 
 def _initialize_logger(log_level: int) -> None:

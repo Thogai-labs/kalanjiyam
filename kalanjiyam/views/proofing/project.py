@@ -402,6 +402,8 @@ def delete_project(slug):
     if form.validate_on_submit():
         if form.slug.data == slug:
             session = q.get_session()
+            from kalanjiyam.models.batch import BatchItem
+            session.query(BatchItem).filter_by(project_id=project_.id).update({"project_id": None})
             session.delete(project_)
             session.commit()
 
@@ -1455,6 +1457,8 @@ def admin(slug):
     if form.validate_on_submit():
         if form.slug.data == slug:
             session = q.get_session()
+            from kalanjiyam.models.batch import BatchItem
+            session.query(BatchItem).filter_by(project_id=project_.id).update({"project_id": None})
             session.delete(project_)
             session.commit()
 

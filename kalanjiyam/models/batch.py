@@ -25,7 +25,7 @@ class BatchItem(Base):
     job_id = Column(Integer, ForeignKey('batch_jobs.id'), nullable=False)
     file_path = Column(String(1024), nullable=False)
     mime_type = Column(String(128), nullable=True)
-    project_id = Column(Integer, ForeignKey('proof_projects.id'), nullable=True)
+    project_id = Column(Integer, ForeignKey('proof_projects.id', ondelete='SET NULL'), nullable=True)
     
     status = Column(String(64), nullable=False, default='PENDING') # PENDING, DOWNLOADED, IMAGES_EXTRACTED, OCR_IN_PROGRESS, COMPLETED, FAILED
     
