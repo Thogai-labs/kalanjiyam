@@ -299,11 +299,23 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                 
                 item.status = 'COMPLETED'
                 item.completed_at = datetime.utcnow()
+                
+                # Check if all items in parent job are finished
+                if item.job and all(i.status in ('COMPLETED', 'FAILED') for i in item.job.items):
+                    item.job.status = 'COMPLETED' if any(i.status == 'COMPLETED' for i in item.job.items) else 'FAILED'
+                    item.job.completed_at = datetime.utcnow()
+                    
                 session.commit()
                 
         except Exception as e:
             LOG.exception(f"Error processing BatchItem {batch_item_id}")
             item.status = 'FAILED'
             item.error_message = str(e)
+            
+            # Check if all items in parent job are finished
+            if item.job and all(i.status in ('COMPLETED', 'FAILED') for i in item.job.items):
+                item.job.status = 'COMPLETED' if any(i.status == 'COMPLETED' for i in item.job.items) else 'FAILED'
+                item.job.completed_at = datetime.utcnow()
+                
             session.commit()
             raise self.retry(exc=e, countdown=60)

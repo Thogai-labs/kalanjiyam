@@ -956,7 +956,7 @@ docker exec -it kalanjiyam-web python scripts/cli.py batch-ocr --local-uri /data
 
 ### Listing & Checking Batch Jobs
 
-**List recent batch jobs (ID, Status, Time, Target):**
+**List recent batch jobs (ID, Status, Time, Time Taken, Target):**
 ```bash
 docker exec -it kalanjiyam-web python scripts/cli.py batch-list
 ```
@@ -969,6 +969,11 @@ docker exec -it kalanjiyam-web python scripts/cli.py batch-status --job-id 1
 **Cancel a pending or in-progress batch job:**
 ```bash
 docker exec -it kalanjiyam-web python scripts/cli.py batch-cancel --job-id 1
+```
+
+**Retry failed or stuck items in a batch job:**
+```bash
+docker exec -it kalanjiyam-web python scripts/cli.py batch-retry --job-id 1 --org "udaan" --lang "eng"
 ```
 
 ### How it Works (Under the Hood)

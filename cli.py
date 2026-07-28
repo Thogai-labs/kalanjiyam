@@ -3,6 +3,7 @@
 import getpass
 
 import click
+from datetime import datetime
 from slugify import slugify
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -455,10 +456,24 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
         click.echo(f"Dispatched {len(db_items)} items to the default Celery queue successfully!")
 
 
+def _format_duration(seconds):
+    if seconds is None or seconds < 0:
+        return "N/A"
+    seconds = int(seconds)
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours > 0:
+        return f"{hours}h {minutes}m {secs}s"
+    elif minutes > 0:
+        return f"{minutes}m {secs}s"
+    else:
+        return f"{secs}s"
+
+
 @cli.command()
 @click.option("--limit", default=20, type=int, help="Number of recent jobs to list")
 def batch_list(limit):
-    """List recent batch jobs with their status and created time."""
+    """List recent batch jobs with their status, created time, and duration."""
     from kalanjiyam.models.batch import BatchJob
     
     with Session(engine) as session:
@@ -468,11 +483,17 @@ def batch_list(limit):
             click.echo("No batch jobs found in database.")
             return
             
-        click.echo(f"{'ID':<5} | {'Status':<15} | {'Created At':<22} | Target")
-        click.echo("-" * 80)
+        click.echo(f"{'ID':<5} | {'Status':<15} | {'Created At':<22} | {'Time Taken':<12} | Target")
+        click.echo("-" * 95)
         for j in jobs:
             created_str = j.created_at.strftime("%Y-%m-%d %H:%M:%S") if j.created_at else "Unknown"
-            click.echo(f"{j.id:<5} | {j.status:<15} | {created_str:<22} | {j.target_uri}")
+            if j.completed_at and j.created_at:
+                dur = _format_duration((j.completed_at - j.created_at).total_seconds())
+            elif j.created_at and j.status in ('PENDING', 'IN_PROGRESS'):
+                dur = _format_duration((datetime.utcnow() - j.created_at).total_seconds())
+            else:
+                dur = "N/A"
+            click.echo(f"{j.id:<5} | {j.status:<15} | {created_str:<22} | {dur:<12} | {j.target_uri}")
 
 
 @cli.command()
@@ -491,6 +512,7 @@ def batch_cancel(job_id):
             return
             
         job.status = 'FAILED'
+        job.completed_at = datetime.utcnow()
         job.error_message = 'Cancelled by user'
         
         cancelled_count = 0
@@ -502,6 +524,52 @@ def batch_cancel(job_id):
                 
         session.commit()
         click.echo(f"Successfully cancelled BatchJob {job.id}. {cancelled_count} pending/active items marked as failed.")
+
+
+@cli.command()
+@click.option("--job-id", required=True, type=int, help="Batch Job ID to retry")
+@click.option("--org", required=False, help="Organization slug to attach the processed projects to")
+@click.option("--lang", "--language", "lang", default="eng", help="OCR Language code (default: 'eng')")
+def batch_retry(job_id, org, lang):
+    """Retry failed or stuck items in a Batch OCR job without re-scanning."""
+    from kalanjiyam.models.batch import BatchJob, BatchItem
+    from kalanjiyam.tasks.s3_batch import process_s3_batch_item
+    
+    if org:
+        org = slugify(org)
+        from kalanjiyam.models.group import Group
+        with Session(engine) as session:
+            if not session.query(Group).filter_by(slug=org).first():
+                raise click.ClickException(f"Organization '{org}' not found. Please provide a valid organization slug.")
+                
+    with Session(engine) as session:
+        job = session.query(BatchJob).get(job_id)
+        if not job:
+            raise click.ClickException(f"BatchJob ID {job_id} not found.")
+            
+        items_to_retry = [item for item in job.items if item.status in ('FAILED', 'PENDING')]
+        
+        if not items_to_retry:
+            click.echo(f"Job #{job_id} has no failed or pending items to retry.")
+            return
+            
+        job.status = 'IN_PROGRESS'
+        job.error_message = None
+        job.completed_at = None
+        
+        for item in items_to_retry:
+            item.status = 'PENDING'
+            item.error_message = None
+            
+        session.commit()
+        
+        for item in items_to_retry:
+            process_s3_batch_item.apply_async(
+                args=[item.id, org, lang],
+                queue='default'
+            )
+            
+        click.echo(f"Re-dispatched {len(items_to_retry)} items for BatchJob #{job.id} to Celery queue successfully!")
 
 
 @cli.command()
@@ -539,14 +607,26 @@ def batch_status(job_id):
             click.echo(f"Target URI : {j.target_uri}")
             click.echo(f"Job Status : {j.status}")
             click.echo(f"Created At : {j.created_at}")
+            if j.completed_at and j.created_at:
+                dur_str = _format_duration((j.completed_at - j.created_at).total_seconds())
+                click.echo(f"Time Taken : {dur_str}")
+            elif j.created_at and j.status in ('PENDING', 'IN_PROGRESS'):
+                dur_str = _format_duration((datetime.utcnow() - j.created_at).total_seconds())
+                click.echo(f"Time Elapsed: {dur_str} (Running)")
+                
             click.echo(f"Progress   : {completed}/{total} Completed ({failed} Failed, {in_progress} Processing, {pending} Pending)")
             
+            item_durations = [(i.completed_at - i.created_at).total_seconds() for i in items if i.completed_at and i.created_at]
+            if item_durations:
+                avg_item_dur = _format_duration(sum(item_durations) / len(item_durations))
+                click.echo(f"Avg Item Processing Time : {avg_item_dur}")
+
             if total_bytes:
                 click.echo(f"Total Size : {total_bytes / (1024*1024):.2f} MB")
             if avg_extraction:
-                click.echo(f"Avg Extraction Latency: {sum(avg_extraction)/len(avg_extraction):.2f} ms")
+                click.echo(f"Avg Extraction Latency   : {sum(avg_extraction)/len(avg_extraction):.2f} ms")
             if avg_ocr:
-                click.echo(f"Avg OCR Latency       : {sum(avg_ocr)/len(avg_ocr):.2f} ms")
+                click.echo(f"Avg OCR Latency          : {sum(avg_ocr)/len(avg_ocr):.2f} ms")
 
             if failed > 0:
                 click.echo("Failed Items:")
