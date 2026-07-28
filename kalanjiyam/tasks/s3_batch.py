@@ -13,10 +13,11 @@ from PIL import Image
 
 from kalanjiyam.tasks import app
 from kalanjiyam.models.batch import BatchItem, BatchJob
-from kalanjiyam.database import Session, engine
+from kalanjiyam.models.group import Group, ProjectGroups
 from kalanjiyam.utils.storage import get_storage, page_image_key
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
+from config import create_config_only_app
 
 LOG = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ def _download_from_s3(s3_url: str, dest_path: str):
     s3_client.download_file(bucket, key, dest_path)
 
 
-def _setup_project(session, project_name: str, num_pages: int, creator_id: int = None) -> db.Project:
+def _setup_project(session, project_name: str, num_pages: int, creator_id: int = None, org_slug: str = None) -> db.Project:
     """Create a project and its pages in the database."""
     slug = slugify(project_name)
     # Check collision
@@ -51,6 +52,14 @@ def _setup_project(session, project_name: str, num_pages: int, creator_id: int =
     session.add(project)
     session.flush()
 
+    if org_slug:
+        group = session.query(Group).filter_by(slug=org_slug).first()
+        if group:
+            project_group = ProjectGroups(group_id=group.id, project_id=project.id)
+            session.add(project_group)
+        else:
+            LOG.warning(f"Organization '{org_slug}' not found. Project '{slug}' created without an organization.")
+
     unreviewed = session.query(db.PageStatus).filter_by(name="reviewed-0").one()
     for n in range(1, num_pages + 1):
         session.add(
@@ -65,10 +74,14 @@ def _setup_project(session, project_name: str, num_pages: int, creator_id: int =
     return project
 
 @app.task(bind=True, max_retries=3)
-def process_s3_batch_item(self, batch_item_id: int):
+def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None):
     """Celery task to download, convert, and OCR a batch item."""
     start_time = time.time()
-    with Session(engine) as session:
+    app_env = os.environ.get("KALANJIYAM_DEPLOYMENT_ENV", "local")
+    flask_app = create_config_only_app(app_env)
+    
+    with flask_app.app_context():
+        session = q.get_session()
         item = session.query(BatchItem).get(batch_item_id)
         if not item:
             LOG.error(f"BatchItem {batch_item_id} not found.")
@@ -101,7 +114,7 @@ def process_s3_batch_item(self, batch_item_id: int):
                     doc = fitz.open(local_path)
                     page_count = doc.page_count
                     
-                    project = _setup_project(session, project_name, page_count)
+                    project = _setup_project(session, project_name, page_count, org_slug=org_slug)
                     item.project_id = project.id
                     
                     for page in doc:
@@ -144,7 +157,7 @@ def process_s3_batch_item(self, batch_item_id: int):
                     image_paths.sort(key=lambda p: p.name)
                     page_count = len(image_paths)
                     
-                    project = _setup_project(session, project_name, page_count)
+                    project = _setup_project(session, project_name, page_count, org_slug=org_slug)
                     item.project_id = project.id
                     
                     total_bytes = 0

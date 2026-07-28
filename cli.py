@@ -302,9 +302,10 @@ def cleanup_uploads(days, force, app_env):
 @cli.command()
 @click.option("--s3-uri", required=False, help="S3 URI target (e.g., s3://bucket/test/)")
 @click.option("--local-uri", required=False, help="Local path target (e.g., /home/user/test/)")
+@click.option("--org", required=False, help="Organization slug to attach the processed projects to (e.g., 'udaan')")
 @click.option("--pdf", is_flag=True, help="Process PDF files only")
 @click.option("--image", is_flag=True, help="Process image directories only")
-def batch_ocr(s3_uri, local_uri, pdf, image):
+def batch_ocr(s3_uri, local_uri, org, pdf, image):
     """Start a Batch OCR process for PDFs and Image folders from S3 or Local."""
     import boto3
     import os
@@ -318,6 +319,12 @@ def batch_ocr(s3_uri, local_uri, pdf, image):
         
     if s3_uri and local_uri:
         raise click.UsageError("You cannot provide both --s3-uri and --local-uri")
+        
+    if org:
+        from kalanjiyam.models.group import Group
+        with Session(engine) as session:
+            if not session.query(Group).filter_by(slug=org).first():
+                raise click.ClickException(f"Organization '{org}' not found. Please provide a valid organization slug.")
     
     # Logic for filtering
     process_pdfs = pdf or (not pdf and not image)
@@ -433,12 +440,84 @@ def batch_ocr(s3_uri, local_uri, pdf, image):
             
             # Dispatch to Celery
             process_s3_batch_item.apply_async(
-                args=[item.id], 
+                args=[item.id, org], 
                 queue='s3_batch'
             )
             
         session.commit()
         click.echo(f"Dispatched {len(items_to_process)} items to the s3_batch Celery queue successfully!")
+
+
+@cli.command()
+@click.option("--limit", default=20, type=int, help="Number of recent jobs to list")
+def batch_list(limit):
+    """List recent batch jobs with their status and created time."""
+    from kalanjiyam.models.batch import BatchJob
+    
+    with Session(engine) as session:
+        jobs = session.query(BatchJob).order_by(BatchJob.id.desc()).limit(limit).all()
+
+        if not jobs:
+            click.echo("No batch jobs found in database.")
+            return
+            
+        click.echo(f"{'ID':<5} | {'Status':<15} | {'Created At':<22} | Target")
+        click.echo("-" * 80)
+        for j in jobs:
+            created_str = j.created_at.strftime("%Y-%m-%d %H:%M:%S") if j.created_at else "Unknown"
+            click.echo(f"{j.id:<5} | {j.status:<15} | {created_str:<22} | {j.target_uri}")
+
+
+@cli.command()
+@click.option("--job-id", required=False, type=int, help="Batch Job ID to inspect")
+def batch_status(job_id):
+    """Check status and performance metrics for Batch OCR jobs."""
+    from kalanjiyam.models.batch import BatchJob, BatchItem
+    
+    with Session(engine) as session:
+        if job_id:
+            job = session.query(BatchJob).get(job_id)
+            if not job:
+                raise click.ClickException(f"BatchJob ID {job_id} not found.")
+            jobs = [job]
+        else:
+            jobs = session.query(BatchJob).order_by(BatchJob.id.desc()).limit(5).all()
+
+        if not jobs:
+            click.echo("No batch jobs found in database.")
+            return
+
+        for j in jobs:
+            items = j.items
+            total = len(items)
+            completed = sum(1 for i in items if i.status == 'COMPLETED')
+            failed = sum(1 for i in items if i.status == 'FAILED')
+            in_progress = sum(1 for i in items if i.status in ('IN_PROGRESS', 'DOWNLOADED', 'IMAGES_EXTRACTED', 'OCR_IN_PROGRESS'))
+            pending = sum(1 for i in items if i.status == 'PENDING')
+            
+            avg_extraction = [i.extraction_latency_ms for i in items if i.extraction_latency_ms is not None]
+            avg_ocr = [i.total_ocr_latency_ms for i in items if i.total_ocr_latency_ms is not None]
+            total_bytes = sum(i.source_size_bytes for i in items if i.source_size_bytes is not None)
+
+            click.echo(f"=== BatchJob #{j.id} ===")
+            click.echo(f"Target URI : {j.target_uri}")
+            click.echo(f"Job Status : {j.status}")
+            click.echo(f"Created At : {j.created_at}")
+            click.echo(f"Progress   : {completed}/{total} Completed ({failed} Failed, {in_progress} Processing, {pending} Pending)")
+            
+            if total_bytes:
+                click.echo(f"Total Size : {total_bytes / (1024*1024):.2f} MB")
+            if avg_extraction:
+                click.echo(f"Avg Extraction Latency: {sum(avg_extraction)/len(avg_extraction):.2f} ms")
+            if avg_ocr:
+                click.echo(f"Avg OCR Latency       : {sum(avg_ocr)/len(avg_ocr):.2f} ms")
+
+            if failed > 0:
+                click.echo("Failed Items:")
+                for i in items:
+                    if i.status == 'FAILED':
+                        click.echo(f" - {i.file_path}: {i.error_message}")
+            click.echo("")
 
 
 if __name__ == "__main__":

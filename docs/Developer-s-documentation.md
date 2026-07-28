@@ -937,20 +937,33 @@ Run the command inside the web container using `python cli.py batch-ocr`.
 
 **Basic S3 Bucket Scan (PDFs & Images):**
 ```bash
-docker exec -it kalanjiyam-web python cli.py batch-ocr --s3-uri s3://my-bucket/target-folder/
+docker exec -it kalanjiyam-web python scripts/cli.py batch-ocr --s3-uri s3://my-bucket/target-folder/ --org "udaan"
 ```
 
-**Local Directory Scan (Filtered for PDFs):**
+**Local Directory Scan (Filtered for PDFs under an Organization):**
 ```bash
-docker exec -it kalanjiyam-web python cli.py batch-ocr --local-uri /data/uploads/batch/ --pdf
+docker exec -it kalanjiyam-web python scripts/cli.py batch-ocr --local-uri /data/uploads/batch_pdfs/ --pdf --org "udaan"
 ```
 
 **Available Options:**
 * `--s3-uri <URI>`: Scans an S3 bucket path recursively.
 * `--local-uri <PATH>`: Scans a local filesystem path recursively.
+* `--org <SLUG>`: Attach created projects to a specific Organization by its URL slug (e.g. `udaan`). Fails if the organization doesn't exist.
 * `--pdf`: Filter the discovery to only queue PDF documents.
 * `--image`: Filter the discovery to only queue Image Folders (directories containing standard image formats).
 * If neither `--pdf` nor `--image` is provided, it will process both.
+
+### Listing & Checking Batch Jobs
+
+**List recent batch jobs (ID, Status, Time, Target):**
+```bash
+docker exec -it kalanjiyam-web python scripts/cli.py batch-list
+```
+
+**Inspect a specific batch job (with full performance metrics):**
+```bash
+docker exec -it kalanjiyam-web python scripts/cli.py batch-status --job-id 1
+```
 
 ### How it Works (Under the Hood)
 1. **Discovery & Registration**: The CLI recursively lists all matching files/folders and registers them as `BatchItem` records in PostgreSQL.
