@@ -305,7 +305,8 @@ def cleanup_uploads(days, force, app_env):
 @click.option("--org", required=False, help="Organization slug to attach the processed projects to (e.g., 'udaan')")
 @click.option("--pdf", is_flag=True, help="Process PDF files only")
 @click.option("--image", is_flag=True, help="Process image directories only")
-def batch_ocr(s3_uri, local_uri, org, pdf, image):
+@click.option("--lang", "--language", "lang", default="eng", help="OCR Language code (default: 'eng', e.g. 'eng', 'tam', 'hin')")
+def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
     """Start a Batch OCR process for PDFs and Image folders from S3 or Local."""
     import boto3
     import os
@@ -321,6 +322,7 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image):
         raise click.UsageError("You cannot provide both --s3-uri and --local-uri")
         
     if org:
+        org = slugify(org)
         from kalanjiyam.models.group import Group
         with Session(engine) as session:
             if not session.query(Group).filter_by(slug=org).first():
@@ -428,6 +430,7 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image):
         
         click.echo(f"Created BatchJob ID: {job.id}. Dispatching items...")
         
+        db_items = []
         for item_data in items_to_process:
             item = BatchItem(
                 job_id=job.id,
@@ -437,15 +440,19 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image):
             )
             session.add(item)
             session.flush()
+            db_items.append(item)
             
+        # Commit items to DB so Celery can find them!
+        session.commit()
+        
+        for item in db_items:
             # Dispatch to Celery
             process_s3_batch_item.apply_async(
-                args=[item.id, org], 
-                queue='s3_batch'
+                args=[item.id, org, lang], 
+                queue='default'
             )
             
-        session.commit()
-        click.echo(f"Dispatched {len(items_to_process)} items to the s3_batch Celery queue successfully!")
+        click.echo(f"Dispatched {len(db_items)} items to the default Celery queue successfully!")
 
 
 @cli.command()
@@ -466,6 +473,35 @@ def batch_list(limit):
         for j in jobs:
             created_str = j.created_at.strftime("%Y-%m-%d %H:%M:%S") if j.created_at else "Unknown"
             click.echo(f"{j.id:<5} | {j.status:<15} | {created_str:<22} | {j.target_uri}")
+
+
+@cli.command()
+@click.option("--job-id", required=True, type=int, help="Batch Job ID to cancel")
+def batch_cancel(job_id):
+    """Cancel a pending or in-progress Batch OCR job."""
+    from kalanjiyam.models.batch import BatchJob
+    
+    with Session(engine) as session:
+        job = session.query(BatchJob).get(job_id)
+        if not job:
+            raise click.ClickException(f"BatchJob ID {job_id} not found.")
+            
+        if job.status in ('COMPLETED', 'FAILED'):
+            click.echo(f"Job {job.id} is already {job.status}.")
+            return
+            
+        job.status = 'FAILED'
+        job.error_message = 'Cancelled by user'
+        
+        cancelled_count = 0
+        for item in job.items:
+            if item.status in ('PENDING', 'IN_PROGRESS', 'DOWNLOADED', 'IMAGES_EXTRACTED', 'OCR_IN_PROGRESS'):
+                item.status = 'FAILED'
+                item.error_message = 'Cancelled by user'
+                cancelled_count += 1
+                
+        session.commit()
+        click.echo(f"Successfully cancelled BatchJob {job.id}. {cancelled_count} pending/active items marked as failed.")
 
 
 @cli.command()

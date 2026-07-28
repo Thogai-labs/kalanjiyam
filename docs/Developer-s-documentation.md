@@ -949,6 +949,7 @@ docker exec -it kalanjiyam-web python scripts/cli.py batch-ocr --local-uri /data
 * `--s3-uri <URI>`: Scans an S3 bucket path recursively.
 * `--local-uri <PATH>`: Scans a local filesystem path recursively.
 * `--org <SLUG>`: Attach created projects to a specific Organization by its URL slug (e.g. `udaan`). Fails if the organization doesn't exist.
+* `--lang <LANG>`: Specify OCR language code (defaults to `eng`). Examples: `eng`, `tam`, `hin`.
 * `--pdf`: Filter the discovery to only queue PDF documents.
 * `--image`: Filter the discovery to only queue Image Folders (directories containing standard image formats).
 * If neither `--pdf` nor `--image` is provided, it will process both.
@@ -963,6 +964,11 @@ docker exec -it kalanjiyam-web python scripts/cli.py batch-list
 **Inspect a specific batch job (with full performance metrics):**
 ```bash
 docker exec -it kalanjiyam-web python scripts/cli.py batch-status --job-id 1
+```
+
+**Cancel a pending or in-progress batch job:**
+```bash
+docker exec -it kalanjiyam-web python scripts/cli.py batch-cancel --job-id 1
 ```
 
 ### How it Works (Under the Hood)

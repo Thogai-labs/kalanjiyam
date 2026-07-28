@@ -3,6 +3,7 @@ import os
 import time
 import tempfile
 import mimetypes
+from datetime import datetime
 from pathlib import Path
 from slugify import slugify
 from urllib.parse import urlparse
@@ -47,13 +48,15 @@ def _setup_project(session, project_name: str, num_pages: int, creator_id: int =
         slug=slug,
         display_title=project_name,
         creator_id=creator_id,
-        board_id=board.id
+        board_id=board.id,
+        is_publicly_viewable=False
     )
     session.add(project)
     session.flush()
 
     if org_slug:
-        group = session.query(Group).filter_by(slug=org_slug).first()
+        clean_org_slug = slugify(org_slug)
+        group = session.query(Group).filter_by(slug=clean_org_slug).first()
         if group:
             project_group = ProjectGroups(group_id=group.id, project_id=project.id)
             session.add(project_group)
@@ -74,10 +77,10 @@ def _setup_project(session, project_name: str, num_pages: int, creator_id: int =
     return project
 
 @app.task(bind=True, max_retries=3)
-def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None):
+def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, language: str = "eng"):
     """Celery task to download, convert, and OCR a batch item."""
     start_time = time.time()
-    app_env = os.environ.get("KALANJIYAM_DEPLOYMENT_ENV", "local")
+    app_env = os.environ.get("KALANJIYAM_DEPLOYMENT_ENV", os.environ.get("FLASK_ENV", "development"))
     flask_app = create_config_only_app(app_env)
     
     with flask_app.app_context():
@@ -85,6 +88,10 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None):
         item = session.query(BatchItem).get(batch_item_id)
         if not item:
             LOG.error(f"BatchItem {batch_item_id} not found.")
+            return
+
+        if item.status == 'FAILED':
+            LOG.warning(f"BatchItem {batch_item_id} was cancelled or already failed. Skipping.")
             return
 
         item.status = 'IN_PROGRESS'
@@ -95,6 +102,7 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None):
         try:
             with tempfile.TemporaryDirectory() as tmp_dir:
                 tmp_dir_path = Path(tmp_dir)
+                extract_start = time.time()
                 
                 if item.mime_type == 'application/pdf':
                     # Download PDF if S3
@@ -191,17 +199,17 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None):
                 from kalanjiyam.enums import SitePageStatus
                 import json
                 
-                batch_ocr_url = current_app.config.get("BATCH_OCR_SERVICE_URL", "").rstrip("/")
-                batch_ocr_api_key = current_app.config.get("BATCH_OCR_API_KEY", "")
+                batch_ocr_url = (current_app.config.get("BATCH_OCR_SERVICE_URL") or current_app.config.get("OCR_SERVICE_URL", "")).rstrip("/")
+                batch_ocr_api_key = current_app.config.get("BATCH_OCR_API_KEY") or current_app.config.get("OCR_SERVICE_API_KEY", "")
                 
                 if not batch_ocr_url:
-                    LOG.warning(f"BATCH_OCR_SERVICE_URL is not configured. Skipping OCR for BatchItem {batch_item_id}.")
+                    LOG.warning(f"BATCH_OCR_SERVICE_URL / OCR_SERVICE_URL is not configured. Skipping OCR for BatchItem {batch_item_id}.")
                 else:
                     headers = {"X-API-Key": batch_ocr_api_key} if batch_ocr_api_key else {}
                     url = f"{batch_ocr_url}/v1/ocr"
                     
                     engine = "tesseract"
-                    language = "tam"
+                    language = language or "eng"
                     version_key = f"ocr:{engine}"
                     bot_user = q.user("kalanjiyam-bot")
                     
@@ -210,7 +218,7 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None):
                     
                     for n in range(1, page_count + 1):
                         page_key = page_image_key(project.slug, str(n))
-                        img_bytes = storage.get_bytes(page_key)
+                        img_bytes = storage.read_bytes(page_key)
                         
                         retries = 3
                         backoff = 2
@@ -286,12 +294,11 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None):
                                 version_key=version_key,
                             )
                             
-                    item.ocr_latency_ms = total_ocr_latency
-                    item.ocr_payload_bytes = total_payload_size
+                    item.total_ocr_latency_ms = total_ocr_latency
                     LOG.info(f"Batch OCR complete for {project.slug}: {page_count} pages, {total_ocr_latency}ms latency.")
                 
                 item.status = 'COMPLETED'
-                item.completed_at = db.func.now()
+                item.completed_at = datetime.utcnow()
                 session.commit()
                 
         except Exception as e:
