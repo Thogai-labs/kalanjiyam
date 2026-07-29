@@ -199,14 +199,28 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                 from kalanjiyam.enums import SitePageStatus
                 import json
                 
-                batch_ocr_url = (current_app.config.get("BATCH_OCR_SERVICE_URL") or current_app.config.get("OCR_SERVICE_URL", "")).rstrip("/")
-                batch_ocr_api_key = current_app.config.get("BATCH_OCR_API_KEY") or current_app.config.get("OCR_SERVICE_API_KEY", "")
+                batch_ocr_url = (
+                    os.environ.get("BATCH_OCR_SERVICE_URL")
+                    or current_app.config.get("BATCH_OCR_SERVICE_URL")
+                    or os.environ.get("OCR_SERVICE_URL")
+                    or current_app.config.get("OCR_SERVICE_URL", "")
+                ).rstrip("/")
+                
+                batch_ocr_api_key = (
+                    os.environ.get("BATCH_OCR_API_KEY")
+                    or current_app.config.get("BATCH_OCR_API_KEY")
+                    or os.environ.get("OCR_SERVICE_API_KEY")
+                    or current_app.config.get("OCR_SERVICE_API_KEY", "")
+                )
                 
                 if not batch_ocr_url:
                     LOG.warning(f"BATCH_OCR_SERVICE_URL / OCR_SERVICE_URL is not configured. Skipping OCR for BatchItem {batch_item_id}.")
                 else:
                     headers = {"X-API-Key": batch_ocr_api_key} if batch_ocr_api_key else {}
-                    url = f"{batch_ocr_url}/v1/ocr"
+                    if batch_ocr_url.endswith("/v1/ocr") or batch_ocr_url.endswith("/ocr"):
+                        url = batch_ocr_url
+                    else:
+                        url = f"{batch_ocr_url}/v1/ocr"
                     
                     engine = "tesseract"
                     language = language or "eng"

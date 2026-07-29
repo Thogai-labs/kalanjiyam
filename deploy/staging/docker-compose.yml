@@ -50,8 +50,10 @@ services:
     environment:
       - FLASK_ENV=${FLASK_ENV:-staging}
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
-      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
+      - OCR_SERVICE_URL=${OCR_SERVICE_URL}
+      - BATCH_OCR_SERVICE_URL=${BATCH_OCR_SERVICE_URL}
+      - BATCH_OCR_API_KEY=${BATCH_OCR_API_KEY}
       - FLASK_UPLOAD_FOLDER=/data/uploads
     volumes:
       - ${HOME}/kalanjiyam-data/uploads:/data/uploads
