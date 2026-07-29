@@ -450,10 +450,10 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
             # Dispatch to Celery
             process_s3_batch_item.apply_async(
                 args=[item.id, org, lang], 
-                queue='default'
+                queue='s3_batch'
             )
             
-        click.echo(f"Dispatched {len(db_items)} items to the default Celery queue successfully!")
+        click.echo(f"Dispatched {len(db_items)} items to the s3_batch Celery queue successfully!")
 
 
 def _format_duration(seconds):
@@ -566,7 +566,7 @@ def batch_retry(job_id, org, lang):
         for item in items_to_retry:
             process_s3_batch_item.apply_async(
                 args=[item.id, org, lang],
-                queue='default'
+                queue='s3_batch'
             )
             
         click.echo(f"Re-dispatched {len(items_to_retry)} items for BatchJob #{job.id} to Celery queue successfully!")
