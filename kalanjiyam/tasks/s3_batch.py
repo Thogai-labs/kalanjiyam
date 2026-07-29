@@ -216,7 +216,10 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                 if not batch_ocr_url:
                     LOG.warning(f"BATCH_OCR_SERVICE_URL / OCR_SERVICE_URL is not configured. Skipping OCR for BatchItem {batch_item_id}.")
                 else:
-                    headers = {"X-API-Key": batch_ocr_api_key} if batch_ocr_api_key else {}
+                    headers = {"Accept": "application/json"}
+                    if batch_ocr_api_key:
+                        headers["X-API-Key"] = batch_ocr_api_key
+
                     if batch_ocr_url.endswith("/v1/ocr") or batch_ocr_url.endswith("/ocr"):
                         url = batch_ocr_url
                     else:
@@ -242,11 +245,17 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                         for attempt in range(retries):
                             try:
                                 with httpx.Client(timeout=300) as client:
-                                    files = {"image": (f"{n}.jpg", img_bytes, "image/jpeg")}
+                                    files = {
+                                        "file": (f"{n}.jpg", img_bytes, "image/jpeg"),
+                                        "image": (f"{n}.jpg", img_bytes, "image/jpeg")
+                                    }
                                     data = {"engine": engine, "language": language}
                                     resp = client.post(url, files=files, data=data, headers=headers)
                                     resp.raise_for_status()
-                                    ocr_result = resp.json()
+                                    try:
+                                        ocr_result = resp.json()
+                                    except Exception:
+                                        ocr_result = resp.text
                                     break
                             except Exception as e:
                                 if attempt == retries - 1:
@@ -259,14 +268,32 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                         total_ocr_latency += page_latency
                         
                         if ocr_result:
-                            payload_str = json.dumps(ocr_result)
+                            payload_str = json.dumps(ocr_result) if isinstance(ocr_result, (dict, list)) else str(ocr_result)
                             total_payload_size += len(payload_str)
                             
+                            if isinstance(ocr_result, dict):
+                                txt = (
+                                    ocr_result.get("text")
+                                    or ocr_result.get("text_content")
+                                    or ocr_result.get("output")
+                                    or ocr_result.get("result")
+                                    or ocr_result.get("ocr_text")
+                                    or ""
+                                )
+                                boxes = ocr_result.get("bounding_boxes", [])
+                                blks = ocr_result.get("blocks", [])
+                                html = ocr_result.get("layout_html", "")
+                            else:
+                                txt = str(ocr_result)
+                                boxes = []
+                                blks = []
+                                html = ""
+
                             ocr_resp = OcrResponse(
-                                text_content=ocr_result.get("text", ""),
-                                bounding_boxes=ocr_result.get("bounding_boxes", []),
-                                blocks=ocr_result.get("blocks", []),
-                                layout_html=ocr_result.get("layout_html", "")
+                                text_content=txt,
+                                bounding_boxes=boxes,
+                                blocks=blks,
+                                layout_html=html
                             )
                             
                             # Extract visual elements if blocks are returned
