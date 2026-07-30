@@ -55,7 +55,7 @@ services:
       celery -A kalanjiyam.tasks worker
       -Q default,ocr,low_priority
       --loglevel=INFO
-      --concurrency=2
+      --concurrency=1
       --prefetch-multiplier=1
     env_file:
       - ../../.env
@@ -91,7 +91,7 @@ services:
       celery -A kalanjiyam.tasks worker
       -Q s3_batch
       --loglevel=INFO
-      --concurrency=2
+      --concurrency=1
       --prefetch-multiplier=1
     env_file:
       - ../../.env

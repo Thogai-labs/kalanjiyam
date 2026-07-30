@@ -123,8 +123,12 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                     doc = fitz.open(local_path)
                     page_count = doc.page_count
                     
-                    project = _setup_project(session, project_name, page_count, org_slug=org_slug)
-                    item.project_id = project.id
+                    if item.project_id:
+                        project = session.query(db.Project).get(item.project_id)
+                    else:
+                        project = _setup_project(session, project_name, page_count, org_slug=org_slug)
+                        item.project_id = project.id
+                    session.commit()
                     
                     for page in doc:
                         n = page.number + 1
@@ -166,8 +170,12 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                     image_paths.sort(key=lambda p: p.name)
                     page_count = len(image_paths)
                     
-                    project = _setup_project(session, project_name, page_count, org_slug=org_slug)
-                    item.project_id = project.id
+                    if item.project_id:
+                        project = session.query(db.Project).get(item.project_id)
+                    else:
+                        project = _setup_project(session, project_name, page_count, org_slug=org_slug)
+                        item.project_id = project.id
+                    session.commit()
                     
                     total_bytes = 0
                     for n, img_path in enumerate(image_paths, start=1):
@@ -431,8 +439,7 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                                 version_key="role:p1",
                             )
                             
-                            with open("/app/logs.txt", "w") as f:
-                                f.write(f"{project.slug}-page-no={n}\n")
+                            LOG.info(f"Processed page {n}/{page_count} for project {project.slug}")
                             
                     item = session.query(BatchItem).get(batch_item_id)
                     if item:
