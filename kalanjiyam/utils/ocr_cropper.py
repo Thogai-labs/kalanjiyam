@@ -115,7 +115,7 @@ def crop_elements_from_image(
 
                     # Update block content to display the image
                     if project_slug:
-                        block["content"] = f'<img class="max-w-full h-auto rounded-lg" src="{saved_path}">'
+                        block["content"] = f'<img class="max-w-full max-h-full h-auto rounded-lg object-contain mx-auto" src="{saved_path}">'
                         block["type"] = "paragraph"
             return saved_paths
     except Exception as e:

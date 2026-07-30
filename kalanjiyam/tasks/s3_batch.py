@@ -245,12 +245,9 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                         for attempt in range(retries):
                             try:
                                 with httpx.Client(timeout=300) as client:
-                                    files = {
-                                        "file": (f"{n}.jpg", img_bytes, "image/jpeg"),
-                                        "image": (f"{n}.jpg", img_bytes, "image/jpeg")
-                                    }
-                                    data = {"engine": engine, "language": language}
-                                    resp = client.post(url, files=files, data=data, headers=headers)
+                                    files = {"file": (f"page_{n}.jpg", img_bytes, "image/jpeg")}
+                                    params = {"language": language} if language else {}
+                                    resp = client.post(url, files=files, params=params, headers=headers)
                                     resp.raise_for_status()
                                     try:
                                         ocr_result = resp.json()
@@ -272,6 +269,7 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                             total_payload_size += len(payload_str)
                             
                             if isinstance(ocr_result, dict):
+                                results_list = ocr_result.get("results") or ocr_result.get("blocks") or []
                                 txt = (
                                     ocr_result.get("text")
                                     or ocr_result.get("text_content")
@@ -283,40 +281,104 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                                 boxes = ocr_result.get("bounding_boxes", [])
                                 blks = ocr_result.get("blocks", [])
                                 html = ocr_result.get("layout_html", "")
+
+                                # Parse results list if returned by custom OCR engine
+                                if isinstance(results_list, list) and results_list:
+                                    parsed_blks = []
+                                    parsed_boxes = []
+                                    text_parts = []
+                                    for idx, item in enumerate(results_list):
+                                        if isinstance(item, dict):
+                                            bbox = item.get("bbox", [0, 0, 0, 0])
+                                            parsed_boxes.append(bbox)
+                                            val = (
+                                                item.get("text")
+                                                or item.get("content")
+                                                or item.get("ocr_text")
+                                                or item.get("transcription")
+                                                or item.get("label")
+                                                or ""
+                                            )
+                                            cat = str(item.get("category", "paragraph")).lower()
+                                            if val:
+                                                text_parts.append(val)
+                                            if "table" in cat:
+                                                blk_type = "table"
+                                            elif "title" in cat or "header" in cat or "caption" in cat:
+                                                blk_type = "heading"
+                                            elif "picture" in cat or "image" in cat or "figure" in cat or "diagram" in cat:
+                                                blk_type = "figure"
+                                            else:
+                                                blk_type = "paragraph"
+                                            parsed_blks.append({
+                                                "id": f"block-{idx+1}",
+                                                "type": blk_type,
+                                                "bbox": bbox,
+                                                "content": val,
+                                                "reading_order": idx + 1
+                                            })
+                                        elif isinstance(item, str):
+                                            text_parts.append(item)
+                                            parsed_blks.append({
+                                                "id": f"block-{idx+1}",
+                                                "type": "paragraph",
+                                                "bbox": [0, 0, 0, 0],
+                                                "content": item,
+                                                "reading_order": idx + 1
+                                            })
+
+                                    if not txt and text_parts:
+                                        txt = "\n\n".join(text_parts)
+                                    if not blks and parsed_blks:
+                                        blks = parsed_blks
+                                    if not boxes and parsed_boxes:
+                                        boxes = parsed_boxes
                             else:
                                 txt = str(ocr_result)
                                 boxes = []
                                 blks = []
                                 html = ""
 
+                            tmp_crop_src = tmp_dir_path / f"tmp_crop_{n}.jpg"
+                            tmp_crop_src.write_bytes(img_bytes)
+
+                            # Read actual image dimensions for accurate coordinate mapping
+                            from PIL import Image as PILImage
+                            with PILImage.open(tmp_crop_src) as img_obj:
+                                img_w, img_h = img_obj.width, img_obj.height
+
                             ocr_resp = OcrResponse(
                                 text_content=txt,
                                 bounding_boxes=boxes,
                                 blocks=blks,
-                                layout_html=html
+                                layout_html=html,
+                                page_width=img_w,
+                                page_height=img_h,
+                                coordinate_space="pixel",
                             )
-                            
+
                             # Extract visual elements if blocks are returned
                             if ocr_resp.blocks:
                                 from kalanjiyam.utils.ocr_cropper import crop_ocr_response_elements
                                 try:
-                                    tmp_crop_src = tmp_dir_path / f"tmp_crop_{n}.jpg"
-                                    tmp_crop_src.write_bytes(img_bytes)
                                     crop_ocr_response_elements(
                                         doc_path=str(tmp_crop_src),
                                         ocr_response=ocr_resp,
                                         project_slug=project.slug,
                                         output_dir=str(tmp_dir_path)
                                     )
-                                    tmp_crop_src.unlink()
                                 except Exception as e:
                                     LOG.exception(f"Failed to crop visual elements for page {n}: {e}")
-                            
+                             
                             page_record = q.page(project.id, str(n))
-                            doc = apply_ocr_to_page(page_record, ocr_resp, engine)
+                            doc = apply_ocr_to_page(page_record, ocr_resp, engine, image_path=tmp_crop_src)
                             session.add(page_record)
                             session.commit()
+
+                            if tmp_crop_src.exists():
+                                tmp_crop_src.unlink()
                             
+                            # 1. Save revision under ocr:{engine} track
                             pv = session.query(db.PageVersion).filter_by(
                                 page_id=page_record.id,
                                 version_key=version_key
@@ -334,29 +396,51 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                                 content_format=doc.content_format,
                                 version_key=version_key,
                             )
+
+                            # 2. ALSO save revision under role:p1 (default active track in UI)
+                            pv_p1 = session.query(db.PageVersion).filter_by(
+                                page_id=page_record.id,
+                                version_key="role:p1"
+                            ).first()
+                            p1_ver = pv_p1.version if pv_p1 else 0
+
+                            add_revision(
+                                page=page_record,
+                                summary="Batch OCR run (Default Track)",
+                                content=doc.to_plain_text() or ocr_resp.text_content,
+                                status=SitePageStatus.R0,
+                                version=p1_ver,
+                                author_id=bot_user.id if bot_user else None,
+                                document=doc.to_dict(),
+                                content_format=doc.content_format,
+                                version_key="role:p1",
+                            )
                             
-                    item.total_ocr_latency_ms = total_ocr_latency
-                    LOG.info(f"Batch OCR complete for {project.slug}: {page_count} pages, {total_ocr_latency}ms latency.")
-                
-                item.status = 'COMPLETED'
-                item.completed_at = datetime.utcnow()
-                
-                # Check if all items in parent job are finished
-                if item.job and all(i.status in ('COMPLETED', 'FAILED') for i in item.job.items):
-                    item.job.status = 'COMPLETED' if any(i.status == 'COMPLETED' for i in item.job.items) else 'FAILED'
-                    item.job.completed_at = datetime.utcnow()
-                    
-                session.commit()
+                    item = session.query(BatchItem).get(batch_item_id)
+                    if item:
+                        item.total_ocr_latency_ms = total_ocr_latency
+                        item.status = 'COMPLETED'
+                        item.completed_at = datetime.utcnow()
+                        LOG.info(f"Batch OCR complete for {project.slug}: {page_count} pages, {total_ocr_latency}ms latency.")
+                        
+                        job = session.query(BatchJob).get(item.job_id) if item.job_id else None
+                        if job and all(i.status in ('COMPLETED', 'FAILED') for i in job.items):
+                            job.status = 'COMPLETED' if any(i.status == 'COMPLETED' for i in job.items) else 'FAILED'
+                            job.completed_at = datetime.utcnow()
+                            
+                        session.commit()
                 
         except Exception as e:
             LOG.exception(f"Error processing BatchItem {batch_item_id}")
-            item.status = 'FAILED'
-            item.error_message = str(e)
-            
-            # Check if all items in parent job are finished
-            if item.job and all(i.status in ('COMPLETED', 'FAILED') for i in item.job.items):
-                item.job.status = 'COMPLETED' if any(i.status == 'COMPLETED' for i in item.job.items) else 'FAILED'
-                item.job.completed_at = datetime.utcnow()
+            item = session.query(BatchItem).get(batch_item_id)
+            if item:
+                item.status = 'FAILED'
+                item.error_message = str(e)
                 
-            session.commit()
+                job = session.query(BatchJob).get(item.job_id) if item.job_id else None
+                if job and all(i.status in ('COMPLETED', 'FAILED') for i in job.items):
+                    job.status = 'COMPLETED' if any(i.status == 'COMPLETED' for i in job.items) else 'FAILED'
+                    job.completed_at = datetime.utcnow()
+                    
+                session.commit()
             raise self.retry(exc=e, countdown=60)

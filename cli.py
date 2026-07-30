@@ -636,5 +636,56 @@ def batch_status(job_id):
             click.echo("")
 
 
+@cli.command()
+@click.option("--job-id", required=False, type=int, help="Batch Job ID (optional)")
+def batch_promote_ocr(job_id):
+    """Promote OCR output from ocr:tesseract track to role:p1 default active track."""
+    from kalanjiyam.models.batch import BatchJob, BatchItem
+    from kalanjiyam.utils.revisions import add_revision
+    from kalanjiyam.enums import SitePageStatus
+    
+    with Session(engine) as session:
+        if job_id:
+            job = session.query(BatchJob).get(job_id)
+            jobs = [job] if job else []
+        else:
+            jobs = session.query(BatchJob).all()
+
+        promoted_count = 0
+        bot_user = q.user("kalanjiyam-bot")
+        
+        for j in jobs:
+            if not j:
+                continue
+            for item in j.items:
+                if not item.project:
+                    continue
+                for page in item.project.pages:
+                    pv_ocr = session.query(db.PageVersion).filter_by(page_id=page.id).filter(db.PageVersion.version_key.like("ocr:%")).first()
+                    if not pv_ocr:
+                        continue
+                    rev_ocr = session.query(db.Revision).filter_by(page_version_id=pv_ocr.id).order_by(db.Revision.id.desc()).first()
+                    if not rev_ocr or not rev_ocr.content:
+                        continue
+                        
+                    pv_p1 = session.query(db.PageVersion).filter_by(page_id=page.id, version_key="role:p1").first()
+                    p1_ver = pv_p1.version if pv_p1 else 0
+                    
+                    add_revision(
+                        page=page,
+                        summary="Promoted Batch OCR to Default Track",
+                        content=rev_ocr.content,
+                        status=SitePageStatus.R0,
+                        version=p1_ver,
+                        author_id=bot_user.id if bot_user else None,
+                        document=rev_ocr.document,
+                        content_format=rev_ocr.content_format or "plain",
+                        version_key="role:p1",
+                    )
+                    promoted_count += 1
+                    
+        click.echo(f"Successfully promoted {promoted_count} pages to the default active editor track (role:p1)!")
+
+
 if __name__ == "__main__":
     cli()
