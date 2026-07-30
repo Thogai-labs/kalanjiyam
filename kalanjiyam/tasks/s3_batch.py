@@ -300,18 +300,31 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                                                 or ""
                                             )
                                             cat = str(item.get("category", "paragraph")).lower()
+                                            
+                                            import re
+                                            md_heading_match = re.match(r'^(#{1,6})\s+(.*)', val, flags=re.DOTALL)
+                                            if md_heading_match:
+                                                level = len(md_heading_match.group(1))
+                                                val = md_heading_match.group(2).strip()
+                                                if level <= 2:
+                                                    blk_type = "heading"
+                                                else:
+                                                    blk_type = "subheading"
+                                            else:
+                                                if "table" in cat:
+                                                    blk_type = "table"
+                                                elif "title" in cat or "header" in cat or "caption" in cat:
+                                                    blk_type = "heading"
+                                                elif "picture" in cat or "image" in cat or "figure" in cat or "diagram" in cat:
+                                                    blk_type = "figure"
+                                                else:
+                                                    blk_type = "paragraph"
+
                                             if val:
                                                 text_parts.append(val)
-                                            if "table" in cat:
-                                                blk_type = "table"
-                                            elif "title" in cat or "header" in cat or "caption" in cat:
-                                                blk_type = "heading"
-                                            elif "picture" in cat or "image" in cat or "figure" in cat or "diagram" in cat:
-                                                blk_type = "figure"
-                                            else:
-                                                blk_type = "paragraph"
+
                                             parsed_blks.append({
-                                                "id": f"block-{idx+1}",
+                                                "id": f"page-{n}-block-{idx+1}",
                                                 "type": blk_type,
                                                 "bbox": bbox,
                                                 "content": val,
@@ -320,7 +333,7 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                                         elif isinstance(item, str):
                                             text_parts.append(item)
                                             parsed_blks.append({
-                                                "id": f"block-{idx+1}",
+                                                "id": f"page-{n}-block-{idx+1}",
                                                 "type": "paragraph",
                                                 "bbox": [0, 0, 0, 0],
                                                 "content": item,
