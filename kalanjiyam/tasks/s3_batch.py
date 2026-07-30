@@ -77,7 +77,7 @@ def _setup_project(session, project_name: str, num_pages: int, creator_id: int =
     return project
 
 @app.task(bind=True, max_retries=3)
-def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, language: str = "eng"):
+def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, language: str = "eng", start_page: int = 1):
     """Celery task to download, convert, and OCR a batch item."""
     start_time = time.time()
     app_env = os.environ.get("KALANJIYAM_DEPLOYMENT_ENV", os.environ.get("FLASK_ENV", "development"))
@@ -99,6 +99,7 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
 
         storage = get_storage()
         
+        current_page = start_page
         try:
             with tempfile.TemporaryDirectory() as tmp_dir:
                 tmp_dir_path = Path(tmp_dir)
@@ -233,7 +234,8 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                     total_ocr_latency = 0
                     total_payload_size = 0
                     
-                    for n in range(1, page_count + 1):
+                    for n in range(start_page, page_count + 1):
+                        current_page = n
                         page_key = page_image_key(project.slug, str(n))
                         img_bytes = storage.read_bytes(page_key)
                         
@@ -429,6 +431,9 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                                 version_key="role:p1",
                             )
                             
+                            with open("/app/logs.txt", "w") as f:
+                                f.write(f"{project.slug}-page-no={n}\n")
+                            
                     item = session.query(BatchItem).get(batch_item_id)
                     if item:
                         item.total_ocr_latency_ms = total_ocr_latency
@@ -456,4 +461,4 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                     job.completed_at = datetime.utcnow()
                     
                 session.commit()
-            raise self.retry(exc=e, countdown=60)
+            raise self.retry(exc=e, countdown=60, kwargs={"batch_item_id": batch_item_id, "org_slug": org_slug, "language": language, "start_page": current_page})
