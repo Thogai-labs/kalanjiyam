@@ -46,6 +46,10 @@ app.conf.update(
     task_always_eager=False,
     # Force arguments to be plain data by requiring them to be JSON-compatible.
     task_serializer="json",
+    # Redis broker settings to prevent premature re-delivery of batch tasks
+    broker_transport_options={
+        'visibility_timeout': 10800,  # 3 hours (balanced for large batch PDFs)
+    },
     # Conservative worker configuration to prevent memory issues
     worker_concurrency=1,  # Limit to 1 worker process
     worker_prefetch_multiplier=1,  # Don't prefetch too many tasks

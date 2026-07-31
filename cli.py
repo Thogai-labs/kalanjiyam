@@ -521,6 +521,18 @@ def batch_cancel(job_id):
                 item.status = 'FAILED'
                 item.error_message = 'Cancelled by user'
                 cancelled_count += 1
+
+                for chunk in item.chunks:
+                    if chunk.status in ('PENDING', 'IN_PROGRESS'):
+                        chunk.status = 'FAILED'
+                        chunk.error_message = 'Cancelled by user'
+                        chunk.completed_at = datetime.utcnow()
+
+                for ocr_p in item.ocr_pages:
+                    if ocr_p.status in ('PENDING', 'IN_PROGRESS'):
+                        ocr_p.status = 'FAILED'
+                        ocr_p.error_message = 'Cancelled by user'
+                        ocr_p.completed_at = datetime.utcnow()
                 
         session.commit()
         click.echo(f"Successfully cancelled BatchJob {job.id}. {cancelled_count} pending/active items marked as failed.")
@@ -531,9 +543,9 @@ def batch_cancel(job_id):
 @click.option("--org", required=False, help="Organization slug to attach the processed projects to")
 @click.option("--lang", "--language", "lang", default="en", help="OCR Language code (default: 'en')")
 def batch_retry(job_id, org, lang):
-    """Retry failed or stuck items in a Batch OCR job without re-scanning."""
-    from kalanjiyam.models.batch import BatchJob, BatchItem
-    from kalanjiyam.tasks.s3_batch import process_s3_batch_item
+    """Retry failed or stuck items/chunks in a Batch OCR job without re-scanning."""
+    from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrChunk, BatchOcrPage
+    from kalanjiyam.tasks.s3_batch import process_s3_batch_item, process_s3_batch_chunk
     
     if org:
         org = slugify(org)
@@ -547,29 +559,60 @@ def batch_retry(job_id, org, lang):
         if not job:
             raise click.ClickException(f"BatchJob ID {job_id} not found.")
             
-        items_to_retry = [item for item in job.items if item.status in ('FAILED', 'PENDING')]
+        items_to_retry = [
+            item for item in job.items
+            if item.status in ('FAILED', 'PENDING', 'IN_PROGRESS', 'IMAGES_EXTRACTED')
+            or any(page.status == 'FAILED' for page in item.ocr_pages)
+        ]
         
         if not items_to_retry:
-            click.echo(f"Job #{job_id} has no failed or pending items to retry.")
+            click.echo(f"Job #{job_id} has no items to retry.")
             return
             
         job.status = 'IN_PROGRESS'
         job.error_message = None
         job.completed_at = None
+
+        chunks_dispatched = 0
+        items_dispatched = 0
         
         for item in items_to_retry:
-            item.status = 'PENDING'
-            item.error_message = None
+            if item.project_id and item.chunks:
+                item.status = 'IN_PROGRESS'
+                item.error_message = None
+                item.completed_at = None
+                
+                for chunk in item.chunks:
+                    has_failed_pages = any(page.status == 'FAILED' for page in chunk.pages)
+                    if chunk.status in ('FAILED', 'PENDING', 'IN_PROGRESS') or has_failed_pages:
+                        chunk.status = 'PENDING'
+                        chunk.error_message = None
+                        chunk.completed_at = None
+                        
+                        for ocr_p in chunk.pages:
+                            if ocr_p.status != 'COMPLETED':
+                                ocr_p.status = 'PENDING'
+                                ocr_p.error_message = None
+                                ocr_p.completed_at = None
+                                
+                        session.commit()
+                        process_s3_batch_chunk.apply_async(
+                            args=[chunk.id, org, lang],
+                            queue='s3_batch'
+                        )
+                        chunks_dispatched += 1
+            else:
+                item.status = 'PENDING'
+                item.error_message = None
+                session.commit()
+                process_s3_batch_item.apply_async(
+                    args=[item.id, org, lang],
+                    queue='s3_batch'
+                )
+                items_dispatched += 1
             
         session.commit()
-        
-        for item in items_to_retry:
-            process_s3_batch_item.apply_async(
-                args=[item.id, org, lang],
-                queue='s3_batch'
-            )
-            
-        click.echo(f"Re-dispatched {len(items_to_retry)} items for BatchJob #{job.id} to Celery queue successfully!")
+        click.echo(f"Re-dispatched {chunks_dispatched} chunk tasks and {items_dispatched} preparation tasks for BatchJob #{job.id} successfully!")
 
 
 @cli.command()
@@ -599,6 +642,11 @@ def batch_status(job_id):
             in_progress = sum(1 for i in items if i.status in ('IN_PROGRESS', 'DOWNLOADED', 'IMAGES_EXTRACTED', 'OCR_IN_PROGRESS'))
             pending = sum(1 for i in items if i.status == 'PENDING')
             
+            total_chunks = sum(len(i.chunks) for i in items)
+            completed_chunks = sum(sum(1 for c in i.chunks if c.status == 'COMPLETED') for i in items)
+            total_pages = sum(sum(len(c.pages) for c in i.chunks) for i in items)
+            completed_pages = sum(sum(sum(1 for p in c.pages if p.status == 'COMPLETED') for c in i.chunks) for i in items)
+            
             avg_extraction = [i.extraction_latency_ms for i in items if i.extraction_latency_ms is not None]
             avg_ocr = [i.total_ocr_latency_ms for i in items if i.total_ocr_latency_ms is not None]
             total_bytes = sum(i.source_size_bytes for i in items if i.source_size_bytes is not None)
@@ -614,7 +662,11 @@ def batch_status(job_id):
                 dur_str = _format_duration((datetime.utcnow() - j.created_at).total_seconds())
                 click.echo(f"Time Elapsed: {dur_str} (Running)")
                 
-            click.echo(f"Progress   : {completed}/{total} Completed ({failed} Failed, {in_progress} Processing, {pending} Pending)")
+            click.echo(f"Progress   : {completed}/{total} Items Completed ({failed} Failed, {in_progress} Processing, {pending} Pending)")
+            if total_chunks > 0:
+                click.echo(f"Chunks     : {completed_chunks}/{total_chunks} Completed")
+            if total_pages > 0:
+                click.echo(f"Pages      : {completed_pages}/{total_pages} Completed")
             
             item_durations = [(i.completed_at - i.created_at).total_seconds() for i in items if i.completed_at and i.created_at]
             if item_durations:
