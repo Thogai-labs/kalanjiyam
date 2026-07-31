@@ -15,6 +15,10 @@ class BatchJob(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
+    # JSONL import metadata.  Nullable keeps the existing batch OCR workflow intact.
+    jsonl_uri = Column(String(1024), nullable=True)
+    pdf_uri = Column(String(1024), nullable=True)
+    job_type = Column(String(64), nullable=False, default='BATCH_OCR')
 
     items = relationship('BatchItem', back_populates='job', cascade='all, delete-orphan')
 
@@ -37,6 +41,10 @@ class BatchItem(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
+    # Stable identity and source location for JSONL/PDF imports.
+    source_book_id = Column(String(255), nullable=True, index=True)
+    source_jsonl_uri = Column(String(1024), nullable=True)
+    total_pages = Column(Integer, nullable=True)
 
     job = relationship('BatchJob', back_populates='items')
     project = relationship('Project')

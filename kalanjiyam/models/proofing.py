@@ -76,6 +76,8 @@ class Project(Base):
     id = pk()
     #: Human-readable ID, which we display in the URL.
     slug = Column(String, unique=True, nullable=False)
+    #: Stable upstream identifier used by resumable external imports.
+    source_book_id = Column(String(255), unique=True, nullable=True, index=True)
 
     #: Human-readable title, which we show on the page.
     display_title = Column(String, nullable=False)

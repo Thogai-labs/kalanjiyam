@@ -52,6 +52,24 @@ Ingest and process PDFs or Image directories from S3 or a local filesystem.
 
    docker exec -it kalanjiyam-web python scripts/cli.py batch-ocr --s3-uri s3://my-bucket/documents/ --org "udaan" --lang "tam"
 
+import-jsonl
+~~~~~~~~~~~~
+
+Import externally generated page-level JSONL OCR together with source PDFs.
+The JSONL identifier is ``<bookId>↳<pageNumber>``; page numbers are 1-based and
+must exactly match source-PDF positions. PDF filenames must be ``<bookId>.pdf``.
+
+.. code-block:: bash
+
+   docker exec -it kalanjiyam-web python cli.py import-jsonl \
+     --jsonl-uri s3://my-bucket/imports/jsonl/ \
+     --pdf-uri s3://my-bucket/imports/pdfs/ \
+     --org udaan --dry-run
+
+``--dry-run`` performs discovery and validation only. The importer uses the
+existing 200-DPI PDF rendering behavior; bbox/image alignment is intentionally
+not configurable in this first version.
+
 batch-list
 ~~~~~~~~~~
 
