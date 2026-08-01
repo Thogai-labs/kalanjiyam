@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+import shutil
+import hashlib
+import sqlite3
 import tempfile
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -32,6 +37,7 @@ CATEGORY_TYPES = {
     "page-number": "page-number", "equation": "equation", "formula": "equation",
     "column-header": "column-header",
 }
+MISSING_TEXT_QUOTE = re.compile(r'("text"\s*:\s*"(?:\\.|[^"\\])*)}(?=\s*,\s*\{)')
 
 
 class ImportValidationError(ValueError):
@@ -97,18 +103,58 @@ def normalize_blocks(raw_blocks: object, book_id: str, page_number: int) -> list
     return result
 
 
+def _decode_generated_text(value: object) -> tuple[object, int]:
+    """Decode OCR JSON, repairing only a known missing text-quote defect.
+
+    Some partner exports omit the closing double quote of a text value just
+    before an OCR block ends (``"text": "...'} ``).  The repair is deliberately
+    narrow and is attempted only after strict JSON decoding has failed.
+    """
+    if not isinstance(value, str):
+        raise ImportValidationError("generated_text must be a JSON-encoded string")
+    try:
+        return json.loads(value), 0
+    except json.JSONDecodeError as original_error:
+        repaired = value
+        repairs = 0
+        while repairs < 100:
+            repaired, count = MISSING_TEXT_QUOTE.subn(r'\1"}', repaired)
+            repairs += count
+            if not count:
+                break
+        if not repairs:
+            raise ImportValidationError(f"malformed generated_text: {original_error}") from original_error
+        try:
+            return json.loads(repaired), repairs
+        except json.JSONDecodeError as repair_error:
+            raise ImportValidationError(f"malformed generated_text after safe repair: {repair_error}") from repair_error
+
+
 def parse_jsonl_record(line: str | bytes) -> tuple[str, int, list[dict]]:
     try:
         record = json.loads(line)
         book_id, page_number = parse_record_id(record.get("id"))
-        generated = json.loads(record["generated_text"])
+        generated, repairs = _decode_generated_text(record["generated_text"])
     except (KeyError, TypeError, json.JSONDecodeError) as exc:
         raise ImportValidationError(f"malformed JSONL record: {exc}") from exc
+    if repairs:
+        LOG.warning("Repaired %s missing generated_text quote(s) book=%s page=%s", repairs, book_id, page_number)
     return book_id, page_number, normalize_blocks(generated, book_id, page_number)
 
 
-def _list_objects(client, uri: str, suffix: str) -> list[str]:
-    bucket, prefix = parse_s3_uri(uri)
+def _is_s3_uri(value: str) -> bool:
+    return urlparse(value).scheme == "s3"
+
+
+def _list_objects(client, location: str, suffix: str) -> list[str]:
+    """List matching S3 objects or files below a local directory."""
+    if not _is_s3_uri(location):
+        directory = Path(location)
+        if not directory.is_dir():
+            raise ImportValidationError(f"Local directory does not exist: {directory}")
+        return sorted(str(path) for path in directory.rglob("*")
+                      if path.is_file() and path.suffix.lower() == suffix)
+    bucket, prefix = parse_s3_uri(location)
     found = []
     for response in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
         found.extend(f"s3://{bucket}/{obj['Key']}" for obj in response.get("Contents", [])
@@ -120,16 +166,110 @@ def _parts(uri: str) -> tuple[str, str]:
     return parse_s3_uri(uri)
 
 
+def _iter_lines(client, source: str):
+    if _is_s3_uri(source):
+        bucket, key = _parts(source)
+        yield from client.get_object(Bucket=bucket, Key=key)["Body"].iter_lines()
+        return
+    with Path(source).open("rb") as stream:
+        yield from stream
+
+
+def _copy_pdf_to_local(client, source: str, destination: Path) -> None:
+    if _is_s3_uri(source):
+        bucket, key = _parts(source)
+        client.download_file(bucket, key, str(destination))
+        return
+    shutil.copyfile(source, destination)
+
+
+def _retry(operation, *, attempts: int = 3):
+    """Retry bounded transient filesystem/S3 operations."""
+    for attempt in range(attempts):
+        try:
+            return operation()
+        except Exception:
+            if attempt + 1 == attempts:
+                raise
+            time.sleep(2 ** attempt)
+
+
+def _safe_name(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
 def _pdf_index(client, uri: str) -> dict[str, list[str]]:
     output = defaultdict(list)
     for item in _list_objects(client, uri, ".pdf"):
-        output[Path(urlparse(item).path).stem].append(item)
+        output[Path(urlparse(item).path if _is_s3_uri(item) else item).stem].append(item)
     return output
+
+
+class DiskIndex:
+    """SQLite-backed page index; keeps large JSONL batches out of RAM."""
+
+    def __init__(self, path: Path):
+        self.connection = sqlite3.connect(path)
+        self.connection.executescript("""
+            CREATE TABLE pages (book_id TEXT, page_number INTEGER, path TEXT,
+                                source TEXT, PRIMARY KEY (book_id, page_number));
+            CREATE TABLE errors (book_id TEXT, message TEXT);
+            CREATE TABLE books (book_id TEXT PRIMARY KEY);
+        """)
+
+    def add_page(self, book_id: str, page_number: int, path: Path, source: str) -> bool:
+        self.connection.execute("INSERT OR IGNORE INTO books VALUES (?)", (book_id,))
+        try:
+            self.connection.execute("INSERT INTO pages VALUES (?, ?, ?, ?)",
+                                    (book_id, page_number, str(path), source))
+            return True
+        except sqlite3.IntegrityError:
+            self.error(book_id, f"duplicate page {page_number}")
+            return False
+
+    def error(self, book_id: str, message: str) -> None:
+        self.connection.execute("INSERT OR IGNORE INTO books VALUES (?)", (book_id,))
+        self.connection.execute("INSERT INTO errors VALUES (?, ?)", (book_id, message))
+
+    def book_ids(self):
+        return (row[0] for row in self.connection.execute("SELECT book_id FROM books ORDER BY book_id"))
+
+    def book(self, book_id: str) -> BookInput:
+        book = BookInput()
+        for number, path, source in self.connection.execute(
+            "SELECT page_number, path, source FROM pages WHERE book_id=? ORDER BY page_number", (book_id,)
+        ):
+            book.pages[number] = Path(path)
+            book.source_objects.add(source)
+        book.errors = [row[0] for row in self.connection.execute(
+            "SELECT message FROM errors WHERE book_id=?", (book_id,)
+        )]
+        return book
+
+    def count_books(self) -> int:
+        return self.connection.execute("SELECT COUNT(*) FROM books").fetchone()[0]
+
+    def close(self) -> None:
+        self.connection.commit()
+        self.connection.close()
 
 
 def _create_project(session, book_id: str, count: int, org_slug: str):
     project = session.query(db.Project).filter_by(source_book_id=book_id).first()
     if project:
+        status = session.query(db.PageStatus).filter_by(name="reviewed-0").one()
+        existing_orders = {
+            row[0] for row in session.query(db.Page.order).filter_by(project_id=project.id)
+        }
+        for page_number in range(1, count + 1):
+            if page_number not in existing_orders:
+                session.add(db.Page(
+                    project_id=project.id,
+                    slug=str(page_number),
+                    order=page_number,
+                    status_id=status.id,
+                ))
+        session.flush()
         return project
     base = slugify(f"import-{book_id}") or "import-book"
     slug, number = base, 2
@@ -167,16 +307,19 @@ def _persist_ocr(session, page, blocks: list[dict], width: int, height: int):
 
 def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
                dry_run: bool = False, client=None) -> ImportSummary:
-    """Run a bounded, streaming import. JSONL page numbers are 1-based."""
-    client = client or boto3.client("s3")
+    """Run a bounded import from S3 prefixes or local directories.
+
+    JSONL page numbers are 1-based.  Local and S3 sources can be mixed.
+    """
+    if client is None and (_is_s3_uri(jsonl_uri) or _is_s3_uri(pdf_uri)):
+        client = boto3.client("s3")
     summary = ImportSummary()
     with tempfile.TemporaryDirectory(prefix="kalanjiyam-jsonl-") as temporary:
         root = Path(temporary)
-        books: dict[str, BookInput] = defaultdict(BookInput)
+        index = DiskIndex(root / "manifest.sqlite")
         for source in _list_objects(client, jsonl_uri, ".jsonl"):
             summary.jsonl_files += 1
-            bucket, key = _parts(source)
-            for line_no, line in enumerate(client.get_object(Bucket=bucket, Key=key)["Body"].iter_lines(), 1):
+            for line_no, line in enumerate(_iter_lines(client, source), 1):
                 if not line.strip():
                     continue
                 try:
@@ -185,36 +328,37 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
                     summary.malformed_records += 1
                     LOG.warning("JSONL import malformed record object=%s line=%s error=%s", source, line_no, exc)
                     continue
-                book = books[book_id]
-                book.source_objects.add(source)
-                if page_no in book.pages:
-                    book.errors.append(f"duplicate page {page_no}")
-                    summary.duplicate_pages += 1
-                    continue
-                page_file = root / f"page-{len(book.pages)}-{page_no}.json"
-                # Include a book directory to avoid same page names across books.
-                page_file = root / slugify(book_id) / page_file.name
-                page_file.parent.mkdir(exist_ok=True)
+                page_file = root / "pages" / _safe_name(book_id) / f"{page_no}.json"
+                page_file.parent.mkdir(parents=True, exist_ok=True)
                 page_file.write_text(json.dumps(blocks), encoding="utf-8")
-                book.pages[page_no] = page_file
+                if not index.add_page(book_id, page_no, page_file, source):
+                    summary.duplicate_pages += 1
+                    page_file.unlink(missing_ok=True)
+                    continue
                 summary.pages += 1
         if not summary.jsonl_files:
             raise ImportValidationError("no JSONL files discovered")
-        summary.books = len(books)
+        index.connection.commit()
+        summary.books = index.count_books()
+        book_ids = list(index.book_ids())
         pdfs = _pdf_index(client, pdf_uri)
-        for book_id, book in books.items():
+        invalid_book_ids: set[str] = set()
+        validation_errors: dict[str, str] = {}
+        for book_id in book_ids:
+            book = index.book(book_id)
             matches = pdfs.get(book_id, [])
             if len(matches) != 1:
                 book.errors.append("missing PDF" if not matches else "ambiguous PDF matches")
                 if not matches:
                     summary.missing_pdfs += 1
+                invalid_book_ids.add(book_id)
+                validation_errors[book_id] = "; ".join(book.errors)
                 continue
             summary.matched_pdfs += 1
-            local_pdf = root / f"validate-{slugify(book_id)}.pdf"
+            local_pdf = root / f"validate-{_safe_name(book_id)}.pdf"
             document = None
             try:
-                bucket, key = _parts(matches[0])
-                client.download_file(bucket, key, str(local_pdf))
+                _retry(lambda: _copy_pdf_to_local(client, matches[0], local_pdf))
                 document = fitz.open(local_pdf)
                 if document.needs_pass or document.page_count == 0:
                     raise ImportValidationError("encrypted or empty PDF")
@@ -225,9 +369,13 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
             finally:
                 if document:
                     document.close()
-        summary.invalid_books = sum(bool(book.errors) for book in books.values())
+            if book.errors:
+                invalid_book_ids.add(book_id)
+                validation_errors[book_id] = "; ".join(book.errors)
+        summary.invalid_books = len(invalid_book_ids)
         summary.importable_books = summary.books - summary.invalid_books
         if dry_run:
+            index.close()
             return summary
 
         job = BatchJob(target_uri=jsonl_uri, jsonl_uri=jsonl_uri, pdf_uri=pdf_uri,
@@ -235,31 +383,41 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
         session.add(job); session.flush()
         storage = get_storage()
         completed = False
-        for book_id, book in books.items():
+        for book_id in book_ids:
+            book = index.book(book_id)
             item = BatchItem(job_id=job.id, file_path=(pdfs.get(book_id) or [""])[0],
                              mime_type="application/pdf", source_book_id=book_id,
-                             source_jsonl_uri=",".join(sorted(book.source_objects)),
+                             source_jsonl_uri=jsonl_uri,
                              total_pages=len(book.pages), status="VALIDATING")
             session.add(item); session.flush()
-            if book.errors:
-                item.status, item.error_message, item.completed_at = "FAILED", "; ".join(book.errors), datetime.utcnow()
+            if book_id in invalid_book_ids:
+                item.status = "FAILED"
+                item.error_message = validation_errors.get(book_id, "; ".join(book.errors))
+                item.completed_at = datetime.utcnow()
                 session.commit()
                 continue
             try:
                 project = _create_project(session, book_id, len(book.pages), org_slug)
                 item.project_id, item.status = project.id, "PROCESSING"
                 session.flush()
-                local_pdf = root / f"process-{slugify(book_id)}.pdf"
-                bucket, key = _parts(item.file_path)
-                client.download_file(bucket, key, str(local_pdf))
-                storage.save(pdf_key(project.slug), local_pdf)
+                local_pdf = root / f"process-{_safe_name(book_id)}.pdf"
+                _retry(lambda: _copy_pdf_to_local(client, item.file_path, local_pdf))
+                _retry(lambda: storage.save(pdf_key(project.slug), local_pdf))
+                pages_by_order = {
+                    page.order: page
+                    for page in session.query(db.Page).filter_by(project_id=project.id)
+                }
                 with fitz.open(local_pdf) as document:
                     for page_no in range(1, document.page_count + 1):
                         pixmap = document[page_no - 1].get_pixmap(dpi=200)
-                        image = root / f"image-{slugify(book_id)}-{page_no}.jpg"
+                        image = root / f"image-{_safe_name(book_id)}-{page_no}.jpg"
                         pixmap.pil_save(image, optimize=True)
-                        storage.save(page_image_key(project.slug, str(page_no)), image)
-                        page = session.query(db.Page).filter_by(project_id=project.id, order=page_no).one()
+                        _retry(lambda: storage.save(page_image_key(project.slug, str(page_no)), image))
+                        page = pages_by_order.get(page_no)
+                        if page is None:
+                            raise ImportValidationError(
+                                f"project {project.id} is missing page row {page_no} after reconciliation"
+                            )
                         blocks = json.loads(book.pages[page_no].read_text(encoding="utf-8"))
                         _persist_ocr(session, page, blocks, pixmap.width, pixmap.height)
                         session.flush()
@@ -271,4 +429,5 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
             session.commit()
         job.status, job.completed_at = ("COMPLETED" if completed else "FAILED"), datetime.utcnow()
         session.commit()
+        index.close()
     return summary

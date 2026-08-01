@@ -70,6 +70,16 @@ must exactly match source-PDF positions. PDF filenames must be ``<bookId>.pdf``.
 existing 200-DPI PDF rendering behavior; bbox/image alignment is intentionally
 not configurable in this first version.
 
+Local directories are supported when the importer cannot access S3. For example,
+with ``/home1/kalanjiyam-data/uploads/batch_imports/jsonl`` and ``pdfs``:
+
+.. code-block:: bash
+
+   docker exec -it kalanjiyam-web python scripts/cli.py import-jsonl \
+     --jsonl-uri /data/uploads/batch_imports/jsonl \
+     --pdf-uri /data/uploads/batch_imports/pdfs \
+     --org nai
+
 batch-list
 ~~~~~~~~~~
 

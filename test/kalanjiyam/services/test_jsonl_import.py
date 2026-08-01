@@ -4,6 +4,8 @@ import pytest
 
 from kalanjiyam.services.jsonl_import import (
     ImportValidationError,
+    _iter_lines,
+    _list_objects,
     normalize_blocks,
     parse_jsonl_record,
     parse_record_id,
@@ -42,7 +44,29 @@ def test_unknown_category_is_safe_paragraph():
     assert normalize_blocks([{"bbox": [0, 0, 1, 1], "category": "unknown", "text": "x"}], "b", 1)[0]["type"] == "paragraph"
 
 
+def test_repairs_known_missing_generated_text_quote():
+    malformed_nested = (
+        '[{"bbox":[0,0,1,1],"category":"Text","text":"first},'
+        ' {"bbox":[1,1,2,2],"category":"Text","text":"second"}]'
+    )
+    _, _, blocks = parse_jsonl_record(json.dumps({"id": "book↳1", "generated_text": malformed_nested}))
+    assert [block["content"] for block in blocks] == ["first", "second"]
+
+
 @pytest.mark.parametrize("line", ["{", json.dumps({"id": "book↳1", "generated_text": "{"})])
 def test_rejects_malformed_jsonl(line):
     with pytest.raises(ImportValidationError):
         parse_jsonl_record(line)
+
+
+def test_discovers_and_streams_local_jsonl_files(tmp_path):
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    source = nested / "pages.JSONL"
+    source.write_text('{"id": "book↳1"}\n', encoding="utf-8")
+    (tmp_path / "ignore.txt").write_text("ignore", encoding="utf-8")
+
+    assert _list_objects(None, str(tmp_path), ".jsonl") == [str(source)]
+    assert [line.rstrip() for line in _iter_lines(None, str(source))] == [
+        '{"id": "book↳1"}'.encode("utf-8")
+    ]

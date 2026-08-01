@@ -457,24 +457,26 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
 
 
 @cli.command("import-jsonl")
-@click.option("--jsonl-uri", required=True, help="S3 JSONL prefix (s3://bucket/prefix/)")
-@click.option("--pdf-uri", required=True, help="S3 PDF prefix (s3://bucket/prefix/)")
+@click.option("--jsonl-uri", required=True, help="S3 JSONL prefix or local JSONL directory")
+@click.option("--pdf-uri", required=True, help="S3 PDF prefix or local PDF directory")
 @click.option("--org", required=True, help="Organization slug for imported projects")
 @click.option("--dry-run", is_flag=True, help="Discover and validate without writing DB or storage")
 def import_jsonl(jsonl_uri, pdf_uri, org, dry_run):
-    """Import PDF pages and JSONL OCR records from S3 (JSONL page numbers are 1-based)."""
+    """Import PDF pages and JSONL OCR records from S3 or local directories."""
     from kalanjiyam.models.group import Group
     from kalanjiyam.services.jsonl_import import ImportValidationError, run_import
 
     org = slugify(org)
-    with Session(engine) as session:
-        if not session.query(Group).filter_by(slug=org).first():
-            raise click.ClickException(f"Organization '{org}' not found.")
-        try:
-            summary = run_import(session, jsonl_uri=jsonl_uri, pdf_uri=pdf_uri,
-                                 org_slug=org, dry_run=dry_run)
-        except ImportValidationError as exc:
-            raise click.ClickException(str(exc)) from exc
+    app = kalanjiyam.create_app("production")
+    with app.app_context():
+        with Session(engine) as session:
+            if not session.query(Group).filter_by(slug=org).first():
+                raise click.ClickException(f"Organization '{org}' not found.")
+            try:
+                summary = run_import(session, jsonl_uri=jsonl_uri, pdf_uri=pdf_uri,
+                                     org_slug=org, dry_run=dry_run)
+            except ImportValidationError as exc:
+                raise click.ClickException(str(exc)) from exc
     click.echo(f"JSONL files discovered: {summary.jsonl_files}")
     click.echo(f"Books discovered: {summary.books}")
     click.echo(f"Pages discovered: {summary.pages}")
