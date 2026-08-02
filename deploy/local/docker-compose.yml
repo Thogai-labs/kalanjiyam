@@ -53,7 +53,7 @@ services:
       celery -A kalanjiyam.tasks worker
       -Q default,ocr,low_priority
       --loglevel=INFO
-      --concurrency=2
+      --concurrency=1
       --prefetch-multiplier=1
     env_file:
       - ../../.env
@@ -62,8 +62,37 @@ services:
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
+      - OCR_SERVICE_URL=${OCR_SERVICE_URL}
+      - BATCH_OCR_SERVICE_URL=${BATCH_OCR_SERVICE_URL}
+      - BATCH_OCR_API_KEY=${BATCH_OCR_API_KEY}
       - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
-      # - OCR_SERVICE_URL=${OCR_SERVICE_URL:-http://host.docker.internal:5001}
+    depends_on:
+      - kalanjiyam-db
+      - kalanjiyam-redis
+      - kalanjiyam-versitygw
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  kalanjiyam-celery-batch:
+    image: ${KALANJIYAM_IMAGE}
+    container_name: kalanjiyam-celery-batch
+    command: >
+      celery -A kalanjiyam.tasks worker
+      -Q s3_batch
+      --loglevel=INFO
+      --concurrency=1
+      --prefetch-multiplier=1
+    env_file:
+      - ../../.env
+    environment:
+      - FLASK_ENV=${FLASK_ENV:-development}
+      - REDIS_URL=redis://kalanjiyam-redis:6379/0
+      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
+      - OCR_BACKEND=remote
+      - OCR_SERVICE_URL=${OCR_SERVICE_URL}
+      - BATCH_OCR_SERVICE_URL=${BATCH_OCR_SERVICE_URL}
+      - BATCH_OCR_API_KEY=${BATCH_OCR_API_KEY}
+      - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
     depends_on:
       - kalanjiyam-db
       - kalanjiyam-redis

@@ -150,14 +150,14 @@
     },
     getGlossaryDisplayName(name) {
       const lookup = {
-        'agri': {{ _('Agriculture')|tojson }},
-        'mech': {{ _('Mechanical')|tojson }},
-        'bio': {{ _('Biology')|tojson }},
-        'chem': {{ _('Chemistry')|tojson }},
-        'comp': {{ _('Computer Science')|tojson }},
-        'phy': {{ _('Physics')|tojson }},
-        'math': {{ _('Mathematics')|tojson }},
-        'it': {{ _('Information Technology')|tojson }}
+        'agri': {{ _('Agriculture')|tojson|forceescape }},
+        'mech': {{ _('Mechanical')|tojson|forceescape }},
+        'bio': {{ _('Biology')|tojson|forceescape }},
+        'chem': {{ _('Chemistry')|tojson|forceescape }},
+        'comp': {{ _('Computer Science')|tojson|forceescape }},
+        'phy': {{ _('Physics')|tojson|forceescape }},
+        'math': {{ _('Mathematics')|tojson|forceescape }},
+        'it': {{ _('Information Technology')|tojson|forceescape }}
       };
       if (lookup[name]) {
         return lookup[name];
@@ -165,7 +165,7 @@
       if (!name) return '';
       return name.charAt(0).toUpperCase() + name.slice(1);
     }
-  }" @submit.prevent="if (sourceLang === targetLang) { alert('{{ _("Source and Target languages must be different.") }}'); } else { $el.submit(); }">
+  }" @submit.prevent="if (sourceLang === targetLang) { alert({{ _('Source and Target languages must be different.')|tojson|forceescape }}); } else { $el.submit(); }">
     <div class="bg-white shadow rounded-lg p-6">
       <h3 class="text-lg font-medium text-gray-900 mb-4">{{ _('Translation Settings') }}</h3>
       

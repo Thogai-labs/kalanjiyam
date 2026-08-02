@@ -912,6 +912,73 @@ All five main containers have explicit `container_name` attributes, meaning you 
   * **Fatal Authentication Errors / Database Connection Refused:**
     * *Cause:* The credentials configured in `SQLALCHEMY_DATABASE_URI` do not match the database username, database name, or `POSTGRES_PASSWORD` defined in the environment.
     * *Troubleshooting:* Verify that the passwords and usernames match in your `.env` file. Check db container logs for messages like `password authentication failed for user "kalanjiyam"`.
-  * **Database Lock / Unapplied Migrations:**
     * *Cause:* The database schema is out of sync with the application code or migrations were interrupted.
     * *Troubleshooting:* Check the migration status by running `docker exec -it kalanjiyam-web alembic current` and apply pending updates with `docker exec -it kalanjiyam-web alembic upgrade head` (or running `./deploy/prod/deploy.sh migrate` in production).
+
+---
+
+## Batch OCR Process (CLI)
+
+Kalanjiyam supports ingesting and running OCR on massive batches of PDFs and raw image folders using the dedicated `batch-ocr` CLI command. This process avoids Out-of-Memory (OOM) errors and is fully tracked in the PostgreSQL database.
+
+### Prerequisites
+Before running the batch process, ensure the following `.env` variables are configured:
+* `BATCH_OCR_SERVICE_URL`: The URL of the dedicated batch OCR API.
+* `BATCH_OCR_API_KEY`: The API key (if required) for the batch OCR API.
+
+Ensure the Celery worker (`s3_batch` queue) is running to process the jobs:
+```bash
+docker exec -it kalanjiyam-celery celery -A kalanjiyam.tasks.app worker -Q s3_batch,celery -l info
+```
+
+### Usage
+
+Run the command inside the web container using `python cli.py batch-ocr`.
+
+**Basic S3 Bucket Scan (PDFs & Images):**
+```bash
+docker exec -it kalanjiyam-web python scripts/cli.py batch-ocr --s3-uri s3://my-bucket/target-folder/ --org "udaan"
+```
+
+**Local Directory Scan (Filtered for PDFs under an Organization):**
+```bash
+docker exec -it kalanjiyam-web python scripts/cli.py batch-ocr --local-uri /data/uploads/batch_pdfs/ --pdf --org "udaan"
+```
+
+**Available Options:**
+* `--s3-uri <URI>`: Scans an S3 bucket path recursively.
+* `--local-uri <PATH>`: Scans a local filesystem path recursively.
+* `--org <SLUG>`: Attach created projects to a specific Organization by its URL slug (e.g. `udaan`). Fails if the organization doesn't exist.
+* `--lang <LANG>`: Specify OCR language code (defaults to `eng`). Examples: `eng`, `tam`, `hin`.
+* `--pdf`: Filter the discovery to only queue PDF documents.
+* `--image`: Filter the discovery to only queue Image Folders (directories containing standard image formats).
+* If neither `--pdf` nor `--image` is provided, it will process both.
+
+### Listing & Checking Batch Jobs
+
+**List recent batch jobs (ID, Status, Time, Time Taken, Target):**
+```bash
+docker exec -it kalanjiyam-web python scripts/cli.py batch-list
+```
+
+**Inspect a specific batch job (with full performance metrics):**
+```bash
+docker exec -it kalanjiyam-web python scripts/cli.py batch-status --job-id 1
+```
+
+**Cancel a pending or in-progress batch job:**
+```bash
+docker exec -it kalanjiyam-web python scripts/cli.py batch-cancel --job-id 1
+```
+
+**Retry failed or stuck items in a batch job:**
+```bash
+docker exec -it kalanjiyam-web python scripts/cli.py batch-retry --job-id 1 --org "udaan" --lang "eng"
+```
+
+### How it Works (Under the Hood)
+1. **Discovery & Registration**: The CLI recursively lists all matching files/folders and registers them as `BatchItem` records in PostgreSQL.
+2. **Celery Queueing**: Each item is dispatched to the `s3_batch` Celery worker queue.
+3. **Download & Extraction**: The worker downloads the file. PDFs are memory-efficiently split into JPEGs using `PyMuPDF`. Image folders are standardized to JPEGs using `Pillow`. Temporary source files are automatically cleaned up from the host disk.
+4. **Visual Cropping & Storage**: Page images are passed to the OCR API. If tables/figures are detected, the Visual Element Cropper extracts them and stores everything securely in the Kalanjiyam `Storage` backend.
+5. **Database Sync**: Status tracking, metrics (file size, extraction latency, OCR latency, payload bytes), and parsed `OCRBlock` / `PageVersion` data are actively synchronized to PostgreSQL in real-time.

@@ -20,6 +20,7 @@ Kalanjiyam locally or contribute to Kalanjiyam's technical work.
    multi-tenant
    background-tasks-with-celery
    batch-ocr-task-tracking
+   batch-cli
    ocr-api
    ocr-editing
    production-deploy

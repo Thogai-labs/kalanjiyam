@@ -332,18 +332,20 @@ def _coords_are_normalized(
 
 
 def _scale_boxes_to_image(
-    boxes: list[tuple[float, float, float, float, str]],
+    boxes: list[tuple],
     width: int | None,
     height: int | None,
     *,
     coordinate_space: str = "pixel",
-) -> list[tuple[float, float, float, float, str]]:
+) -> list[tuple]:
     if not boxes or not width or not height:
         return boxes
     if not _coords_are_normalized(list(boxes[0][:4]), coordinate_space=coordinate_space):
         return boxes
     return [
         (b[0] * width, b[1] * height, b[2] * width, b[3] * height, b[4])
+        if len(b) >= 5 else
+        (b[0] * width, b[1] * height, b[2] * width, b[3] * height)
         for b in boxes
     ]
 
@@ -414,7 +416,10 @@ def normalize_geometry(
 
     if sx != 1.0 or sy != 1.0:
         scaled = [
-            (b[0] * sx, b[1] * sy, b[2] * sx, b[3] * sy, b[4]) for b in scaled
+            (b[0] * sx, b[1] * sy, b[2] * sx, b[3] * sy, b[4])
+            if len(b) >= 5 else
+            (b[0] * sx, b[1] * sy, b[2] * sx, b[3] * sy)
+            for b in scaled
         ]
 
     normalized_blocks = blocks
@@ -497,16 +502,20 @@ def _blocks_look_like_lines(blocks: list[Block], page_height: int | None) -> boo
 
 
 def _group_boxes_into_lines(
-    boxes: list[tuple[float, float, float, float, str]],
-) -> list[list[tuple[float, float, float, float, str]]]:
+    boxes: list[tuple],
+) -> list[list[tuple]]:
     if not boxes:
         return []
     sorted_boxes = sorted(boxes, key=lambda b: (b[1], b[0]))
-    lines: list[list[tuple[float, float, float, float, str]]] = []
+    lines: list[list[tuple]] = []
     for box in sorted_boxes:
-        x1, y1, x2, y2, text = box
-        if not text.strip():
-            continue
+        if len(box) >= 5:
+            x1, y1, x2, y2, text = box[:5]
+            if not text.strip():
+                continue
+        else:
+            x1, y1, x2, y2 = box[:4]
+            text = ""
         center_y = (y1 + y2) / 2
         placed = False
         for line in lines:
@@ -526,13 +535,13 @@ def _group_boxes_into_lines(
 
 
 def _merge_line_boxes(
-    row_boxes: list[tuple[float, float, float, float, str]],
+    row_boxes: list[tuple],
 ) -> tuple[int, int, int, int, str]:
     x1 = min(b[0] for b in row_boxes)
     y1 = min(b[1] for b in row_boxes)
     x2 = max(b[2] for b in row_boxes)
     y2 = max(b[3] for b in row_boxes)
-    texts = [post_process(normalize_unicode_text(b[4])) for b in row_boxes]
+    texts = [post_process(normalize_unicode_text(b[4])) for b in row_boxes if len(b) >= 5]
     content = " ".join(t for t in texts if t.strip()).strip()
     return int(x1), int(y1), int(x2), int(y2), content
 
