@@ -13,28 +13,20 @@
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
           {{ _('OCR Failed') }}
       </h3>
-      <p class="text-sm text-red-700 font-medium leading-relaxed">We weren't able to complete OCR on this project using {{ engine_label }} with {{ language }} language. If you
-      believe this is an error, please <a href="{{ url_for('about.contact') }}" class="underline font-bold">{{ _('let us know') }}</a> and {{ _("we'll fix the error as soon as we can.") }}
-  </div>
-
-{% elif status == 'CANCELLED' %}
-  <div class="premium-card p-6 border-l-4 border-l-amber-500 bg-amber-50/30">
-      <h3 class="text-amber-800 font-black mb-2 flex items-center gap-2">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.36 18.36A9 9 0 015.64 5.64m12.72 12.72A9 9 0 005.64 5.64m12.72 12.72L5.64 5.64"></path></svg>
-          {{ _('OCR Cancelled') }}
-      </h3>
-      <p class="text-sm text-amber-700 font-medium leading-relaxed">{{ _('The OCR task has been cancelled.') }}</p>
+      <p class="text-sm text-red-700 font-medium leading-relaxed">We weren't able to complete OCR on this project using {{ engine }} engine with {{ language }} language. If you
+      believe this is an error, please <a href="{{ url_for('about.contact') }}" class="underline font-bold">let
+      us know</a> and we'll fix the error as soon as we can.
   </div>
 
 {% elif status == 'PROGRESS' %}
   <div class="premium-card p-6">
       <div class="flex justify-between items-center mb-6">
           <div>
-              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{{ _('Current Engine') }}</span>
-              <span class="px-3 py-1 bg-royalblue/10 text-royalblue rounded-lg font-bold text-xs">{{ engine_label }}</span>
+              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Current Engine</span>
+              <span class="px-3 py-1 bg-royalblue/10 text-royalblue rounded-lg font-bold text-xs">{{ engine|title }} OCR</span>
           </div>
           <div class="text-right">
-              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{{ _('Language') }}</span>
+              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Language</span>
               <span class="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg font-bold text-xs">{{ language|upper }}</span>
           </div>
       </div>
@@ -42,7 +34,7 @@
       {{ progress_bar(percent) }}
       
       <div class="flex justify-between items-end">
-          <p class="text-slate-500 font-medium">{{ _('Processed %(current)s of %(total)s pages.', current=current, total=total) }}</p>
+          <p class="text-slate-500 font-medium">Processed <span class="text-slate-900 font-black">{{ current }}</span> of <span class="text-slate-900 font-black">{{ total }}</span> pages.</p>
           <span class="text-2xl font-black text-royalblue">{{ percent|round|int }}%</span>
       </div>
 
@@ -51,13 +43,13 @@
           {% if active_tasks > 0 %}
           <div class="flex items-center gap-2">
               <div class="w-2 h-2 rounded-full bg-royalblue animate-pulse"></div>
-              <span class="text-xs font-bold text-slate-600">{{ _('%(count)s processing', count=active_tasks) }}</span>
+              <span class="text-xs font-bold text-slate-600">{{ active_tasks }} processing</span>
           </div>
           {% endif %}
           {% if pending_tasks > 0 %}
           <div class="flex items-center gap-2">
               <div class="w-2 h-2 rounded-full bg-amber-400"></div>
-              <span class="text-xs font-bold text-slate-600">{{ _('%(count)s queued', count=pending_tasks) }}</span>
+              <span class="text-xs font-bold text-slate-600">{{ pending_tasks }} queued</span>
           </div>
           {% endif %}
       </div>
@@ -72,21 +64,21 @@
           </div>
           <div>
               <h3 class="text-lg font-black text-slate-900">{{ _('OCR Complete') }}</h3>
-              <p class="text-xs text-slate-500 font-medium">{{ engine_label }} • {{ language|upper }}</p>
+              <p class="text-xs text-slate-500 font-medium">{{ engine|title }} OCR • {{ language|upper }}</p>
           </div>
       </div>
       {{ progress_bar(100) }}
-      <p class="text-slate-500 font-medium text-sm">{{ _('Successfully processed %(count)s unedited pages.', count=current) }}</p>
+      <p class="text-slate-500 font-medium text-sm">Successfully processed {{ current }} unedited pages.</p>
   </div>
 
 {% else %}
   <div class="premium-card p-8 text-center">
       <div class="pulse-indicator mb-4 mx-auto"></div>
       <h3 class="text-xl font-black text-slate-900 mb-2">{{ _('Initializing OCR') }}</h3>
-      <p class="text-slate-500 font-medium mb-6">{{ _('Setting up the pipeline for %(engine)s...', engine=engine_label) }}</p>
+      <p class="text-slate-500 font-medium mb-6">Setting up the pipeline for {{ engine|title }} OCR...</p>
       {{ progress_bar(0) }}
       {% if pending_tasks > 0 %}
-      <p class="text-xs font-black text-amber-500 uppercase tracking-widest mt-4">{{ _('%(count)s pages waiting in queue', count=pending_tasks) }}</p>
+      <p class="text-xs font-black text-amber-500 uppercase tracking-widest mt-4">{{ pending_tasks }} pages waiting in queue</p>
       {% endif %}
   </div>
 {% endif %}

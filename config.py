@@ -53,10 +53,7 @@ def _env(key: str, default=None) -> str | None:
     :param key: the environment variable to fetch
     :return: a value, or ``None`` if the variable is undefined.
     """
-    val = os.environ.get(key)
-    if val is None:
-        val = os.environ.get(key.lower(), default)
-    return val
+    return os.environ.get(key, default)
 
 
 class BaseConfig:
@@ -113,16 +110,6 @@ class BaseConfig:
         _env("ENFORCE_GROUP_ACCESS_FOR_TEXTS", "false").lower() in ("true", "1", "yes")
     )
 
-    #: If True, direct DOCX translation will save all data of the original docx in database.
-    SAVE_DOCX_DIRECT_TR_DATA = (
-        str(_env("SAVE_DOCX_DIRECT_TR_DATA", "false")).lower() in ("true", "1", "yes")
-    )
-
-    #: If True, uploaded source PDF and DOC/DOCX files older than 7 days will be automatically deleted.
-    AUTO_UPLOADED_FILES_CLEANUP = (
-        str(_env("AUTO_UPLOADED_FILES_CLEANUP", "false")).lower() in ("true", "1", "yes")
-    )
-
     #: If True, proofing projects (public books under /books/...) are restricted
     #: by group: only users in a group that contains the project (or admins) can
     #: view it. Projects not in any group remain visible to everyone.
@@ -143,21 +130,6 @@ class BaseConfig:
     DEFAULT_PROJECT_REQUIRES_ORG = (
         _env("DEFAULT_PROJECT_REQUIRES_ORG", "true").lower() in ("true", "1", "yes")
     )
-
-    #: If True, allow guest (unregistered) users to create projects and access features.
-    ENABLE_GUEST_ACCESS = (
-        _env("ENABLE_GUEST_ACCESS", "true").lower() in ("true", "1", "yes")
-    )
-
-    #: If True, allow new users to register.
-    ENABLE_REGISTERED_ACCESS = (
-        _env("ENABLE_REGISTERED_ACCESS", "true").lower() in ("true", "1", "yes")
-    )
-
-
-    #: Guest daily rate limits (creations and OCR runs)
-    GUEST_DAILY_PROJECT_LIMIT = int(_env("GUEST_DAILY_PROJECT_LIMIT", "5") or "5")
-    GUEST_DAILY_OCR_LIMIT = int(_env("GUEST_DAILY_OCR_LIMIT", "10") or "10")
 
     #: Logger setup
     LOG_LEVEL = logging.ERROR
@@ -217,26 +189,8 @@ class BaseConfig:
     #: API key for service-to-service OCR requests.
     OCR_SERVICE_API_KEY = _env("OCR_SERVICE_API_KEY", "")
 
-    #: Dedicated OCR service for CLI batch processing.
-    BATCH_OCR_SERVICE_URL = _env("BATCH_OCR_SERVICE_URL", "")
-
-    #: API key for batch OCR requests.
-    BATCH_OCR_API_KEY = _env("BATCH_OCR_API_KEY", "")
-
     #: Timeout in seconds for OCR service HTTP requests.
     OCR_SERVICE_TIMEOUT = int(_env("OCR_SERVICE_TIMEOUT", "300") or "300")
-
-    #: Base URL of the standalone translation service.
-    TRANSLATION_SERVICE_URL = _env("TRANSLATION_SERVICE_URL", "http://10.129.6.170:8888")
-
-    #: API key for service-to-service translation requests.
-    TRANSLATION_SERVICE_API_KEY = _env("TRANSLATION_SERVICE_API_KEY", "")
-
-    #: Timeout in seconds for translation service HTTP requests.
-    TRANSLATION_SERVICE_TIMEOUT = int(_env("TRANSLATION_SERVICE_TIMEOUT", "300") or "300")
-
-    #: Default OCR engine/model.
-    DEFAULT_OCR_ENGINE = _env("DEFAULT_OCR_ENGINE", "tesseract")
 
     # Test-only
     # ---------
@@ -264,10 +218,6 @@ class UnitTestConfig(BaseConfig):
 
     KALANJIYAM_ENVIRONMENT = TESTING
     TESTING = True
-    APPLICATION_URL_PREFIX = ""
-    STORAGE_BACKEND = "local"
-    MULTI_TENANT_MODE = False
-    ENFORCE_ORG_ACCESS = False
     SECRET_KEY = "insecure unit test secret"
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     UPLOAD_FOLDER = _make_path(Path(__file__).parent / "data" / "file-uploads")

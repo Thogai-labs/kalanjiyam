@@ -1,5 +1,4 @@
 from flask import Blueprint, abort, render_template
-from flask_babel import lazy_gettext as _l
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from wtforms import HiddenField, StringField
@@ -15,8 +14,8 @@ bp = Blueprint("tagging", __name__)
 
 
 class EditBlockForm(FlaskForm):
-    version = HiddenField(_l("Page version"))
-    content = StringField(_l("Content"), widget=TextArea(), validators=[DataRequired()])
+    version = HiddenField("Page version")
+    content = StringField("Content", widget=TextArea(), validators=[DataRequired()])
 
 
 @bp.route("/")

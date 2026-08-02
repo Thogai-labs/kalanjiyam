@@ -13,11 +13,6 @@ from kalanjiyam import queries as q
 bp = Blueprint("talk", __name__)
 
 
-@bp.before_request
-def disable_talk():
-    abort(404)
-
-
 class CreateThreadForm(FlaskForm):
     title = StringField(_l("Title"))
     content = StringField(

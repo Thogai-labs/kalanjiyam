@@ -12,7 +12,6 @@ from flask import (
     url_for,
     send_file,
     current_app,
-    jsonify,
 )
 from flask_admin import Admin, AdminIndexView, expose, BaseView as AdminBaseView
 from flask_admin.babel import gettext
@@ -83,7 +82,7 @@ def _schedule_zip_cleanup(zip_path: Path) -> None:
 
 class KalanjiyamIndexView(AdminIndexView):
     def is_accessible(self):
-        return current_user.is_authenticated and (current_user.is_moderator or current_user.is_org_admin)
+        return current_user.is_authenticated and current_user.is_moderator
     
     def inaccessible_callback(self, name, **kwargs):
         abort(404)
@@ -111,9 +110,7 @@ class KalanjiyamIndexView(AdminIndexView):
     @login_required
     def export_project(self, project_slug):
         """Export a single project as a ZIP file."""
-        if is_platform_super_admin():
-            abort(403, description="Superadmins are not allowed to access or export project data.")
-        if not current_user.is_org_admin:
+        if not (is_platform_super_admin() or current_user.is_org_admin):
             abort(404)
         
         project = q.project(project_slug)
@@ -184,16 +181,14 @@ class KalanjiyamIndexView(AdminIndexView):
             import shutil
             if export_dir.exists():
                 shutil.rmtree(export_dir)
-            flash(f"Export failed: {str(e)}", "error")
+            flash(f"Export failed: {str(e)}")
             return redirect(url_for('admin.index'))
     
     @expose('/export/all-projects')
     @login_required
     def export_all_projects(self):
         """Export all projects as a single ZIP file."""
-        if is_platform_super_admin():
-            abort(403, description="Superadmins are not allowed to access or export project data.")
-        if not current_user.is_org_admin:
+        if not (is_platform_super_admin() or current_user.is_org_admin):
             abort(404)
         
         projects = self._projects_for_current_admin()
@@ -262,16 +257,16 @@ class KalanjiyamIndexView(AdminIndexView):
             import shutil
             if export_dir.exists():
                 shutil.rmtree(export_dir)
-            flash(f"Export failed: {str(e)}", "error")
+            flash(f"Export failed: {str(e)}")
             return redirect(url_for('admin.index'))
     
     @expose('/export-import')
     @login_required
     def export_import_dashboard(self):
-        """Export/import dashboard."""
-        if is_platform_super_admin():
-            abort(403, description="Superadmins are not allowed to access or export project data.")
-        if not current_user.is_org_admin:
+        """Export/import dashboard for super admins."""
+        if not is_platform_super_admin():
+            if current_user.is_org_admin:
+                return redirect(url_for("org_admin_view.index"))
             abort(404)
         projects = self._projects_for_current_admin()
         return render_template("admin/export_import.html", projects=projects)
@@ -280,23 +275,21 @@ class KalanjiyamIndexView(AdminIndexView):
     @login_required
     def import_project(self):
         """Import a project from a ZIP file."""
-        if is_platform_super_admin():
-            abort(403, description="Superadmins are not allowed to access or import project data.")
-        if not current_user.is_org_admin:
+        if not is_platform_super_admin():
             abort(404)
         
         if request.method == "POST":
             if 'project_file' not in request.files:
-                flash("No file selected", "error")
+                flash("No file selected")
                 return redirect(request.url)
             
             file = request.files['project_file']
             if file.filename == '':
-                flash("No file selected", "error")
+                flash("No file selected")
                 return redirect(request.url)
             
             if not file.filename.endswith('.zip'):
-                flash("Please upload a ZIP file", "error")
+                flash("Please upload a ZIP file")
                 return redirect(request.url)
             
             try:
@@ -316,12 +309,12 @@ class KalanjiyamIndexView(AdminIndexView):
                 # Clean up
                 temp_file.unlink()
                 
-                flash(f"Successfully imported project: {result['metadata']['display_title']}", "success")
+                flash(f"Successfully imported project: {result['metadata']['display_title']}")
                 return redirect(url_for("proofing.project.detail", slug=result['project'].slug))
                 
             except Exception as e:
                 session.rollback()
-                flash(f"Import failed: {str(e)}", "error")
+                flash(f"Import failed: {str(e)}")
                 return redirect(request.url)
         
         return render_template("admin/import.html")
@@ -330,23 +323,21 @@ class KalanjiyamIndexView(AdminIndexView):
     @login_required
     def import_all_projects(self):
         """Import all projects from a ZIP file."""
-        if is_platform_super_admin():
-            abort(403, description="Superadmins are not allowed to access or import project data.")
-        if not current_user.is_org_admin:
+        if not is_platform_super_admin():
             abort(404)
         
         if request.method == "POST":
             if 'projects_file' not in request.files:
-                flash("No file selected", "error")
+                flash("No file selected")
                 return redirect(request.url)
             
             file = request.files['projects_file']
             if file.filename == '':
-                flash("No file selected", "error")
+                flash("No file selected")
                 return redirect(request.url)
             
             if not file.filename.endswith('.zip'):
-                flash("Please upload a ZIP file", "error")
+                flash("Please upload a ZIP file")
                 return redirect(request.url)
             
             try:
@@ -402,7 +393,7 @@ class KalanjiyamIndexView(AdminIndexView):
                                 project = self._import_project_data(session, project_data)
                             imported_projects.append(project.display_title)
                         except Exception as e:
-                            flash(f"Failed to import project {project_data['metadata']['display_title']}: {str(e)}", "error")
+                            flash(f"Failed to import project {project_data['metadata']['display_title']}: {str(e)}")
                             continue
                     
                     session.commit()
@@ -410,12 +401,12 @@ class KalanjiyamIndexView(AdminIndexView):
                     # Clean up
                     temp_file.unlink()
                     
-                    flash(f"Successfully imported {len(imported_projects)} projects", "success")
+                    flash(f"Successfully imported {len(imported_projects)} projects")
                     return redirect(url_for("proofing.index"))
                     
             except Exception as e:
                 session.rollback()
-                flash(f"Import failed: {str(e)}", "error")
+                flash(f"Import failed: {str(e)}")
                 return redirect(request.url)
         
         return render_template("admin/import_all.html")
@@ -705,17 +696,11 @@ class KalanjiyamIndexView(AdminIndexView):
             )
             session.add(translation)
 
-        # Enforce Org Admin's organization assignment
-        if not is_platform_super_admin() and current_user.is_org_admin:
-            org_id = current_user.organization_id
-            if org_id:
-                session.add(db.ProjectGroups(group_id=org_id, project_id=project.id))
-        else:
-            org_slug = project_data.get("organization_slug")
-            if org_slug:
-                org = q.organization_by_slug(org_slug)
-                if org:
-                    session.add(db.ProjectGroups(group_id=org.id, project_id=project.id))
+        org_slug = project_data.get("organization_slug")
+        if org_slug:
+            org = q.organization_by_slug(org_slug)
+            if org:
+                session.add(db.ProjectGroups(group_id=org.id, project_id=project.id))
         
         return project
     
@@ -781,295 +766,13 @@ class PlatformView(AdminBaseView):
         orgs = q.groups()
         total_storage_used = sum(g.storage_used_bytes or 0 for g in orgs)
         total_ocr_used = sum(g.ocr_credits_used or 0 for g in orgs)
-        total_translation_used = sum(g.translation_credits_used or 0 for g in orgs)
         return render_template(
             "admin/platform_dashboard.html",
             orgs=orgs,
             org_count=len(orgs),
             total_storage_used=total_storage_used,
             total_ocr_used=total_ocr_used,
-            total_translation_used=total_translation_used,
         )
-
-    @expose("/user_analytics")
-    def user_analytics(self):
-        require_platform_super_admin()
-        orgs = q.groups()
-        session = q.get_session()
-        
-        # Calculate overall stats for each organization
-        org_stats = []
-        for org in orgs:
-            users_count = len(q.users_in_group(org.id))
-            projects_count, _ = q.projects_in_group(org.id, page=1, per_page=1000)
-            projects_count = len(projects_count)
-            
-            # Count revisions made by users of this org
-            user_ids = [u.id for u in q.users_in_group(org.id)]
-            revisions_count = 0
-            if user_ids:
-                revisions_count = session.query(db.Revision).filter(db.Revision.author_id.in_(user_ids)).count()
-                
-            org_stats.append({
-                "org": org,
-                "users_count": users_count,
-                "projects_count": projects_count,
-                "revisions_count": revisions_count,
-                "ocr_count": org.ocr_credits_used or 0,
-                "translation_count": org.translation_credits_used or 0,
-                "storage_used": org.storage_used_bytes or 0,
-            })
-            
-        return render_template(
-            "admin/org_analytics.html",
-            org_stats=org_stats,
-            is_platform=True
-        )
-
-    @expose("/user_analytics/<int:org_id>")
-    def org_user_analytics(self, org_id):
-        require_platform_super_admin()
-        org = q.group(org_id)
-        if not org:
-            abort(404)
-            
-        session = q.get_session()
-        users = q.users_in_group(org.id)
-        
-        user_stats = []
-        for user in users:
-            projects_count = session.query(db.Project).filter_by(creator_id=user.id).count()
-            revisions_count = session.query(db.Revision).filter_by(author_id=user.id).count()
-            ocr_count = session.query(db.UsageLog).filter_by(user_id=user.id, action="run_ocr").count()
-            translation_count = user.translation_credits_used or 0
-            user_stats.append({
-                "user": user,
-                "projects_count": projects_count,
-                "revisions_count": revisions_count,
-                "ocr_count": ocr_count,
-                "translation_count": translation_count,
-            })
-            
-        return render_template(
-            "admin/org_user_analytics.html",
-            org=org,
-            user_stats=user_stats,
-            is_platform=True
-        )
-
-    @expose("/settings", methods=["GET", "POST"])
-    def settings(self):
-        require_platform_super_admin()
-        
-        session = q.get_session()
-        system_settings = q.get_system_settings()
-        
-        from flask_wtf import FlaskForm
-        from wtforms import IntegerField, SelectField
-        from wtforms.validators import Optional as wtform_Optional, NumberRange
-        from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES, ENGINE_LABELS
-        
-        class PlatformSettingsForm(FlaskForm):
-            unregistered_user_ocr_limit = IntegerField(
-                "Daily OCR Credit Limit (Unregistered Users)",
-                validators=[wtform_Optional(), NumberRange(min=0)],
-                description="Daily limit per guest user (IP/fingerprint)."
-            )
-            unregistered_user_project_limit = IntegerField(
-                "Daily Project Limit (Unregistered Users)",
-                validators=[wtform_Optional(), NumberRange(min=0)],
-                description="Daily project creation limit per guest user (IP/fingerprint)."
-            )
-            unregistered_user_upload_limit = IntegerField(
-                "Guest Upload Limit (MB)",
-                validators=[wtform_Optional(), NumberRange(min=1)],
-                description="Max PDF upload size in MB for guest users."
-            )
-            default_ocr_engine = SelectField(
-                "Default OCR Engine",
-                choices=[],
-                default="tesseract",
-                description="The OCR engine that registered (non-super-admin) and unregistered users will use."
-            )
-            recommended_ocr_engine = SelectField(
-                "Recommended OCR Engine",
-                choices=[],
-                default="",
-                description="The recommended OCR engine displayed with a star icon for users."
-            )
-            auto_cleanup_days = SelectField(
-                "Source File Retention Period",
-                coerce=int,
-                choices=[
-                    (1, "1 Day"),
-                    (3, "3 Days"),
-                    (7, "7 Days (Default)"),
-                    (14, "14 Days"),
-                    (30, "30 Days"),
-                    (60, "60 Days"),
-                    (90, "90 Days"),
-                ],
-                default=7,
-                description="Number of days before uploaded source PDF/DOC files are automatically cleaned up.",
-            )
-            
-        form = PlatformSettingsForm()
-        
-        from kalanjiyam.utils.ocr_client import get_available_engines
-        ocr_ping = get_available_engines()
-        active_engines = ocr_ping.get("engines", [])
-        
-        choices_set = {eng for eng in active_engines if eng in SUPPORTED_ENGINES and eng != "google"}
-        choices_set.add("tesseract")
-        if system_settings.default_ocr_engine and system_settings.default_ocr_engine != "google":
-            choices_set.add(system_settings.default_ocr_engine)
-            
-        sorted_engines = [eng for eng in SUPPORTED_ENGINES if eng in choices_set]
-        form.default_ocr_engine.choices = [(eng, ENGINE_LABELS.get(eng, eng.capitalize())) for eng in sorted_engines]
-        
-        # Populate recommended engine choices
-        rec_choices_set = set(choices_set)
-        if system_settings.recommended_ocr_engine and system_settings.recommended_ocr_engine != "google":
-            rec_choices_set.add(system_settings.recommended_ocr_engine)
-        sorted_rec_engines = [eng for eng in SUPPORTED_ENGINES if eng in rec_choices_set]
-        rec_choices = [("", "None (No recommended engine)")] + [(eng, ENGINE_LABELS.get(eng, eng.capitalize())) for eng in sorted_rec_engines]
-        form.recommended_ocr_engine.choices = rec_choices
-        
-        cleanup_enabled = current_app.config.get("AUTO_UPLOADED_FILES_CLEANUP", False)
-
-        if form.validate_on_submit():
-            system_settings.unregistered_user_ocr_limit = form.unregistered_user_ocr_limit.data if form.unregistered_user_ocr_limit.data is not None else 10
-            system_settings.unregistered_user_project_limit = form.unregistered_user_project_limit.data if form.unregistered_user_project_limit.data is not None else 5
-            system_settings.unregistered_user_upload_limit = form.unregistered_user_upload_limit.data if form.unregistered_user_upload_limit.data is not None else 10
-            system_settings.default_ocr_engine = form.default_ocr_engine.data if form.default_ocr_engine.data else "tesseract"
-            system_settings.recommended_ocr_engine = form.recommended_ocr_engine.data if form.recommended_ocr_engine.data else None
-            system_settings.auto_cleanup_days = form.auto_cleanup_days.data if form.auto_cleanup_days.data is not None else 7
-            
-            session.add(system_settings)
-            session.commit()
-            flash("Platform settings saved successfully.", "success")
-            return redirect(url_for(".settings"))
-            
-        if request.method == "GET":
-            form.unregistered_user_ocr_limit.data = system_settings.unregistered_user_ocr_limit
-            form.unregistered_user_project_limit.data = system_settings.unregistered_user_project_limit
-            form.unregistered_user_upload_limit.data = getattr(system_settings, "unregistered_user_upload_limit", 10)
-            form.default_ocr_engine.data = system_settings.default_ocr_engine
-            form.recommended_ocr_engine.data = system_settings.recommended_ocr_engine or ""
-            form.auto_cleanup_days.data = getattr(system_settings, "auto_cleanup_days", 7) or 7
-            
-        return render_template("admin/platform_settings.html", form=form, cleanup_enabled=cleanup_enabled)
-
-    @expose("/metrics")
-    def metrics(self):
-        require_platform_super_admin()
-
-        from kalanjiyam.utils.metrics import (
-            get_active_celery_queues,
-            get_latency_metrics_summary,
-            get_error_logs_paginated,
-        )
-
-        queues_data = get_active_celery_queues()
-        latencies_data = get_latency_metrics_summary(days=7)
-        error_logs_data = get_error_logs_paginated(page=1, per_page=20)
-        groups = q.groups()
-        session = q.get_session()
-        all_users = session.query(db.User).all()
-
-        return render_template(
-            "admin/platform_metrics.html",
-            queues_data=queues_data,
-            latencies_data=latencies_data,
-            error_logs_data=error_logs_data,
-            groups=groups,
-            all_users=all_users,
-            csrf_token=generate_csrf(),
-        )
-
-    @expose("/metrics/api")
-    def metrics_api(self):
-        require_platform_super_admin()
-
-        from kalanjiyam.utils.metrics import (
-            get_active_celery_queues,
-            get_latency_metrics_summary,
-            get_error_logs_paginated,
-        )
-
-        tab = request.args.get("tab", "queues")
-        if tab == "queues":
-            data = get_active_celery_queues()
-        elif tab == "latencies":
-            days = request.args.get("days", 7, type=int)
-            data = get_latency_metrics_summary(days=days)
-        elif tab == "errors":
-            page = request.args.get("page", 1, type=int)
-            per_page = request.args.get("per_page", 20, type=int)
-            level = request.args.get("level")
-            group_id = request.args.get("group_id", type=int)
-            user_id = request.args.get("user_id", type=int)
-            search = request.args.get("search")
-            data = get_error_logs_paginated(
-                page=page,
-                per_page=per_page,
-                level=level,
-                group_id=group_id,
-                user_id=user_id,
-                search=search,
-            )
-        else:
-            data = {"error": "Invalid tab parameter"}
-
-        return jsonify(data)
-
-    @expose("/metrics/clear", methods=["POST"])
-    def metrics_clear(self):
-        require_platform_super_admin()
-        session = q.get_session()
-        category = request.form.get("category", "ALL")
-
-        query = session.query(db.SystemMetricLog)
-        if category != "ALL":
-            query = query.filter(db.SystemMetricLog.category == category)
-
-        deleted_count = query.delete(synchronize_session=False)
-        session.commit()
-
-        flash(f"Cleared {deleted_count} metric logs.", "success")
-        return redirect(url_for(".metrics"))
-
-    @expose("/reported-issues")
-    def reported_issues(self):
-        require_platform_super_admin()
-        session = q.get_session()
-        issues = session.query(db.ReportedIssue).order_by(db.ReportedIssue.created_at.desc()).all()
-        return render_template(
-            "admin/reported_issues.html",
-            issues=issues,
-            csrf_token=generate_csrf(),
-        )
-
-    @expose("/reported-issues/update-status", methods=["POST"])
-    def update_issue_status(self):
-        require_platform_super_admin()
-        issue_id = request.form.get("issue_id", type=int)
-        status = request.form.get("status", "").strip()
-
-        valid_statuses = ["pending", "resolved", "not_applicable"]
-        if issue_id and status in valid_statuses:
-            session = q.get_session()
-            issue = session.query(db.ReportedIssue).filter_by(id=issue_id).first()
-            if issue:
-                issue.status = status
-                session.commit()
-                flash("Issue status updated successfully.", "success")
-            else:
-                flash("Issue not found.", "error")
-        else:
-            flash("Invalid status or issue ID.", "error")
-
-        return redirect(url_for(".reported_issues"))
 
 
 class GroupsView(AdminBaseView):
@@ -1110,19 +813,9 @@ class GroupsView(AdminBaseView):
             slug = (request.form.get("slug") or slugify(name)).strip()
             storage_quota_mb = request.form.get("storage_quota_mb", type=int)
             ocr_credit_limit = request.form.get("ocr_credit_limit", type=int)
-            translation_credit_limit = request.form.get("translation_credit_limit", type=int)
             admin_user_id = request.form.get("admin_user_id", type=int)
             if not name:
                 flash("Name is required.", "error")
-                return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
-            if storage_quota_mb is not None and storage_quota_mb < 0:
-                flash("Storage quota cannot be negative.", "error")
-                return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
-            if ocr_credit_limit is not None and ocr_credit_limit < 0:
-                flash("OCR credit limit cannot be negative.", "error")
-                return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
-            if translation_credit_limit is not None and translation_credit_limit < 0:
-                flash("Translation credit limit cannot be negative.", "error")
                 return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
             session = q.get_session()
             group = db.Group(
@@ -1131,14 +824,13 @@ class GroupsView(AdminBaseView):
                 description=description,
                 storage_quota_bytes=(storage_quota_mb * 1024 * 1024) if storage_quota_mb else None,
                 ocr_credit_limit=ocr_credit_limit,
-                translation_credit_limit=translation_credit_limit,
                 admin_user_id=admin_user_id,
             )
             session.add(group)
             session.flush()
             _promote_org_admin(session, group, admin_user_id)
             session.commit()
-            flash("Group created.", "success")
+            flash("Group created.")
             return redirect(url_for("groups_view.manage", id=group.id))
         return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
 
@@ -1155,33 +847,22 @@ class GroupsView(AdminBaseView):
             slug = (request.form.get("slug") or slugify(name)).strip()
             storage_quota_mb = request.form.get("storage_quota_mb", type=int)
             ocr_credit_limit = request.form.get("ocr_credit_limit", type=int)
-            translation_credit_limit = request.form.get("translation_credit_limit", type=int)
             admin_user_id = request.form.get("admin_user_id", type=int)
             if not name:
                 flash("Name is required.", "error")
                 return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())
-            if not storage_quota_mb is None and storage_quota_mb < 0:
-                flash("Storage quota cannot be negative.", "error")
-                return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())
-            if not ocr_credit_limit is None and ocr_credit_limit < 0:
-                flash("OCR credit limit cannot be negative.", "error")
-                return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())   
-            if not translation_credit_limit is None and translation_credit_limit < 0:
-                flash("Translation credit limit cannot be negative.", "error")
-                return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())   
             group.name = name
             group.slug = slug
             group.description = description
             group.storage_quota_bytes = (storage_quota_mb * 1024 * 1024) if storage_quota_mb else None
             group.ocr_credit_limit = ocr_credit_limit
-            group.translation_credit_limit = translation_credit_limit
             group.admin_user_id = admin_user_id
             session = q.get_session()
             session.add(group)
             session.flush()
             _promote_org_admin(session, group, admin_user_id)
             session.commit()
-            flash("Group updated.", "success")
+            flash("Group updated.")
             return redirect(url_for("groups_view.index"))
         return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())
 
@@ -1194,7 +875,7 @@ class GroupsView(AdminBaseView):
         session = q.get_session()
         session.delete(group)
         session.commit()
-        flash("Group deleted.", "success")
+        flash("Group deleted.")
         return redirect(url_for("groups_view.index"))
 
     @expose("/manage/<int:id>", methods=["GET", "POST"])
@@ -1213,22 +894,22 @@ class GroupsView(AdminBaseView):
                 user_id = request.form.get("user_id", type=int)
                 if user_id:
                     q.add_user_to_group(user_id=user_id, group_id=id)
-                    flash("User added to group.", "success")
+                    flash("User added to group.")
             elif action == "remove_user":
                 user_id = request.form.get("user_id", type=int)
                 if user_id:
                     q.remove_user_from_group(user_id=user_id, group_id=id)
-                    flash("User removed from group.", "success")
+                    flash("User removed from group.")
             elif action == "add_project":
                 project_id = request.form.get("project_id", type=int)
                 if project_id:
                     q.add_project_to_group(project_id=project_id, group_id=id)
-                    flash("Project added to group.", "success")
+                    flash("Project added to group.")
             elif action == "remove_project":
                 project_id = request.form.get("project_id", type=int)
                 if project_id:
                     q.remove_project_from_group(project_id=project_id, group_id=id)
-                    flash("Project removed from group.", "success")
+                    flash("Project removed from group.")
             elif action == "set_project_public":
                 project_id = request.form.get("project_id", type=int)
                 is_public = request.form.get("is_public") == "1"
@@ -1241,30 +922,6 @@ class GroupsView(AdminBaseView):
                     else:
                         label = "public on /books/" if is_public else "organization-only"
                         flash(f'"{updated.display_title}" is now {label}.', "success")
-            elif action == "update_user_quotas":
-                default_user_storage_mb = request.form.get("default_user_storage_mb")
-                default_user_ocr_limit = request.form.get("default_user_ocr_limit")
-                default_user_translation_limit = request.form.get("default_user_translation_limit")
-                
-                # Convert values to correct type/None
-                default_user_storage_mb = int(default_user_storage_mb) if default_user_storage_mb else None
-                default_user_ocr_limit = int(default_user_ocr_limit) if default_user_ocr_limit else None
-                default_user_translation_limit = int(default_user_translation_limit) if default_user_translation_limit else None
-                
-                if default_user_storage_mb is not None and default_user_storage_mb < 0:
-                    flash("Default per-user storage quota cannot be negative.", "error")
-                elif default_user_ocr_limit is not None and default_user_ocr_limit < 0:
-                    flash("Default per-user OCR credit limit cannot be negative.", "error")
-                elif default_user_translation_limit is not None and default_user_translation_limit < 0:
-                    flash("Default per-user Translation credit limit cannot be negative.", "error")
-                else:
-                    group.default_user_storage_limit = (default_user_storage_mb * 1024 * 1024) if default_user_storage_mb is not None else None
-                    group.default_user_ocr_limit = default_user_ocr_limit
-                    group.default_user_translation_limit = default_user_translation_limit
-                    session = q.get_session()
-                    session.add(group)
-                    session.commit()
-                    flash("Per-user quotas updated.", "success")
             return redirect(
                 url_for(
                     "groups_view.manage",
@@ -1424,86 +1081,15 @@ class OrgAdminView(AdminBaseView):
             csrf_token=generate_csrf(),
         )
 
-    @expose("/analytics")
-    def user_analytics(self):
-        org_id = require_org_admin()
-        org = q.group(org_id)
-        if org is None:
-            abort(404)
-            
-        session = q.get_session()
-        users = q.users_in_group(org.id)
-        user_ids = [u.id for u in users]
-        
-        revisions_count = 0
-        if user_ids:
-            revisions_count = session.query(db.Revision).filter(db.Revision.author_id.in_(user_ids)).count()
-            
-        projects, _ = q.projects_in_group(org.id, page=1, per_page=1000)
-        
-        org_stat = {
-            "org": org,
-            "users_count": len(users),
-            "projects_count": len(projects),
-            "revisions_count": revisions_count,
-            "ocr_count": org.ocr_credits_used or 0,
-            "translation_count": org.translation_credits_used or 0,
-            "storage_used": org.storage_used_bytes or 0,
-        }
-        
-        return render_template(
-            "admin/org_analytics.html",
-            org_stat=org_stat,
-            is_platform=False
-        )
-
-    @expose("/analytics/users")
-    def org_user_analytics(self):
-        org_id = require_org_admin()
-        org = q.group(org_id)
-        if org is None:
-            abort(404)
-            
-        session = q.get_session()
-        users = q.users_in_group(org.id)
-        
-        user_stats = []
-        for user in users:
-            projects_count = session.query(db.Project).filter_by(creator_id=user.id).count()
-            revisions_count = session.query(db.Revision).filter_by(author_id=user.id).count()
-            ocr_count = session.query(db.UsageLog).filter_by(user_id=user.id, action="run_ocr").count()
-            translation_count = user.translation_credits_used or 0
-            user_stats.append({
-                "user": user,
-                "projects_count": projects_count,
-                "revisions_count": revisions_count,
-                "ocr_count": ocr_count,
-                "translation_count": translation_count,
-            })
-            
-        return render_template(
-            "admin/org_user_analytics.html",
-            org=org,
-            user_stats=user_stats,
-            is_platform=False
-        )
-
-
-class ProjectSponsorshipView(sqla.ModelView):
-    """View for ProjectSponsorship accessible to moderators and admins."""
-
-    def is_accessible(self):
-        return current_user.is_authenticated and (current_user.is_admin or current_user.is_moderator)
-
-    def inaccessible_callback(self, name, **kw):
-        abort(404)
-
 
 class BaseView(sqla.ModelView):
-    """Base view for models."""
+    """Base view for models.
+
+    By default, only platform super admins can see model data.
+    """
 
     def is_accessible(self):
-        return current_user.is_authenticated and current_user.is_admin
+        return is_platform_super_admin()
 
     def inaccessible_callback(self, name, **kw):
         abort(404)
@@ -1569,7 +1155,7 @@ class UserView(BaseView):
     def _prepare_user_form(self, form, model=None):
         form.role_ids.choices = assignable_role_choices(self.session)
         form.organization_pick.choices = organization_choices()
-        if model is not None and request.method != "POST":
+        if model is not None:
             form.role_ids.data = [
                 r.id for r in model.roles if r.name in WEB_ASSIGNABLE_ROLES
             ]
@@ -1638,26 +1224,11 @@ class UserView(BaseView):
 class ProjectView(BaseView):
     """Super-admin list/edit for proofing projects (books)."""
 
-    can_create = False
     list_template = "admin/project_list.html"
-    column_list = ["slug", "display_title", "is_publicly_viewable", "creator", "creator_mode"]
-    column_labels = {
-        "is_publicly_viewable": "Public on /books/",
-        "creator_mode": "Creation Mode",
-    }
+    column_list = ["slug", "display_title", "is_publicly_viewable", "creator"]
+    column_labels = {"is_publicly_viewable": "Public on /books/"}
     form_columns = ["slug", "display_title", "is_publicly_viewable", "description"]
     form_excluded_columns = ["creator", "board", "pages", "created_at", "updated_at"]
-
-
-class ReportedIssueView(BaseView):
-    """Super-admin view for user-reported issues."""
-
-    column_list = ["id", "name", "email", "category", "message", "status", "created_at"]
-    column_searchable_list = ["name", "email", "category", "message"]
-    column_filters = ["category", "status", "created_at"]
-    column_editable_list = ["status"]
-    column_default_sort = ("created_at", True)
-    form_columns = ["name", "email", "category", "message", "status"]
 
 
 def create_admin_manager(app):
@@ -1697,8 +1268,5 @@ def create_admin_manager(app):
 
     admin.add_view(ProjectView(db.Project, session))
     admin.add_view(UserView(db.User, session))
-    admin.add_view(BaseView(db.Text, session))
-    admin.add_view(ProjectSponsorshipView(db.ProjectSponsorship, session))
-    admin.add_view(ReportedIssueView(db.ReportedIssue, session, name="Reported Issues"))
 
     return admin

@@ -25,13 +25,11 @@
       <span>{{ _('Password') }}</span>
     </label>
 
-    {#
     {% if form.recaptcha %}
     <div class="mb-4">
       {{ form.recaptcha }}
     </div>
     {% endif %}
-    #}
 
     <button type="submit" class="submit">{{ _('Create account') }}</button>
     

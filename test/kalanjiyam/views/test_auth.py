@@ -82,7 +82,7 @@ def test_register__banned(banned_client):
 
 def test_sign_in__unauth(client):
     r = client.get("/sign-in")
-    assert "Sign In" in r.text and "Welcome back to Kalanjiyam" in r.text
+    assert ">Sign in to Kalanjiyam<" in r.text
 
 
 def test_sign_in__unauth_post__ok(client):
@@ -144,30 +144,6 @@ def test_sign_out__auth(rama_client):
         assert current_user.is_anonymous
 
 
-def test_sign_in__case_insensitive(client):
-    r = client.post(
-        "/sign-in",
-        data={
-            "username": "U-BASIC",
-            "password": "pass_basic",
-        },
-    )
-    assert r.status_code == 302
-
-
-def test_reset_password__anti_enumeration(client):
-    # Valid email
-    r1 = client.post("/reset-password", data={"email": "admin@example.com"})
-    assert r1.status_code == 200
-    assert "Instructions sent to" in r1.text or "admin@example.com" in r1.text
-
-    # Non-existent email should return same response template without error revealing account missing
-    r2 = client.post("/reset-password", data={"email": "nonexistent@example.com"})
-    assert r2.status_code == 200
-    assert "Sorry, the email address you provided is not associated" not in r2.text
-    assert "nonexistent@example.com" in r2.text
-
-
 def test_get_reset_password_token__get(client):
     r = client.get("/reset-password")
     assert "Reset your password" in r.text
@@ -187,7 +163,7 @@ def test_reset_password_from_token(client):
     assert r.status_code == 302
 
     r = client.get(f"/reset-password/u-admin/{raw_token}")
-    assert "Set New Password" in r.text
+    assert "Change password for" in r.text
 
 
 def test_change_password(rama_client):
@@ -239,57 +215,3 @@ def test_change_password__bad_old_password(rama_client):
         },
     )
     assert "Old password isn&#39;t valid" in r.text
-
-
-def test_sign_in__rate_limiting(client):
-    session = q.get_session()
-    session.query(db.UsageLog).filter_by(action="sign_in").delete()
-    session.commit()
-
-    for i in range(5):
-        r = client.post(
-            "/sign-in",
-            data={
-                "username": "u-basic",
-                "password": "wrong_password",
-            },
-        )
-        assert "Too many login attempts" not in r.text
-
-    # 6th attempt should be rate limited
-    r = client.post(
-        "/sign-in",
-        data={
-            "username": "u-basic",
-            "password": "wrong_password",
-        },
-    )
-    assert "Too many login attempts" in r.text
-
-
-def test_register__rate_limiting(client):
-    session = q.get_session()
-    session.query(db.UsageLog).filter_by(action="register").delete()
-    session.commit()
-
-    for i in range(5):
-        r = client.post(
-            "/register",
-            data={
-                "username": f"user{i}",
-                "password": "password123",
-                "email": f"user{i}@example.com",
-            },
-        )
-        assert "Too many registration attempts" not in r.text
-
-    # 6th attempt should be rate limited
-    r = client.post(
-        "/register",
-        data={
-            "username": "user6",
-            "password": "password123",
-            "email": "user6@example.com",
-        },
-    )
-    assert "Too many registration attempts" in r.text

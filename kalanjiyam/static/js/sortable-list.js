@@ -13,15 +13,13 @@ function sortDescending(field) {
  * and data in JS (through `this.data`). If we need to add more features here,
  * clean it up properly first.
  */
-export default (defaultField, defaultOrder = 'asc') => ({
+export default (defaultField) => ({
   // The sort field. Initialize this in `x-data`.
   field: defaultField,
   // The query to filter by. If empty, use all data.
   query: '',
-  // The creator mode filter value.
-  selectedMode: 'all',
   // The order of the sort ("asc" or "desc").
-  order: defaultOrder,
+  order: 'asc',
   // The keys to display.
   displayed: new Set(),
   // A simplified representation of the project data.
@@ -33,24 +31,19 @@ export default (defaultField, defaultOrder = 'asc') => ({
       key: x.dataset.key,
       // Store title in lowercase to support case-insensitive searching
       title: x.dataset.title.toLowerCase(),
-      ...(x.dataset.mode ? { mode: x.dataset.mode } : {}),
     }));
     // Collect all keys in `this.displayed`.
     this.displayed = new Set([...list.children].map((x) => x.dataset.key));
-    this.sort();
   },
 
-  /** Filter the list by the user's query string and selected creator mode. */
+  /** Filter the list by the user's query string. */
   filter() {
-    const query = this.query.toLowerCase();
-    const mode = this.selectedMode || 'all';
+    if (!this.query) return;
 
+    const query = this.query.toLowerCase();
+    // toLowerCase for case-insensitive matching.
     const newKeys = this.data
-      .filter((x) => {
-        const matchesQuery = !query || x.title.includes(query);
-        const matchesMode = mode === 'all' || x.mode === mode;
-        return matchesQuery && matchesMode;
-      })
+      .filter((x) => x.title.includes(query))
       .map((x) => x.key);
     this.displayed = new Set(newKeys);
   },

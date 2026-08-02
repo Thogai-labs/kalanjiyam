@@ -14,11 +14,7 @@
 <div class="p-6 bg-red-50 border border-red-100 text-red-700 rounded-3xl my-6 shadow-sm">
   <div class="flex items-start gap-4">
     <div class="w-10 h-10 rounded-full bg-red-400 flex items-center justify-center text-white shrink-0">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
-        </path>
-      </svg>
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
     </div>
     <div class="font-medium leading-relaxed">{{ caller() }}</div>
   </div>
@@ -39,10 +35,7 @@
 <div class="p-6 bg-royalblue/5 border border-royalblue/10 text-royalblue rounded-3xl my-6 shadow-sm">
   <div class="flex items-start gap-4">
     <div class="w-10 h-10 rounded-full bg-royalblue flex items-center justify-center text-white shrink-0">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-      </svg>
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
     </div>
     <div class="font-medium leading-relaxed">{{ caller() }}</div>
   </div>
@@ -54,65 +47,18 @@
 {% macro flash_messages() %}
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% if messages %}
-<div class="fixed top-4 right-4 z-[9999] flex flex-col gap-3 w-full max-w-sm px-4 sm:px-0 pointer-events-none">
   {% for category, message in messages %}
-  <div
-    x-data="{ show: true, percent: 100 }"
-    x-show="show"
-    x-transition:enter="transition ease-out duration-300 transform"
-    x-transition:enter-start="opacity-0 translate-y-[-20px] scale-95"
-    x-transition:enter-end="opacity-100 translate-y-0 scale-100"
-    x-transition:leave="transition ease-in duration-200 transform"
-    x-transition:leave-start="opacity-100 scale-100"
-    x-transition:leave-end="opacity-0 scale-95"
-    x-init="
-      let interval = setInterval(() => {
-        percent -= 1;
-        if (percent <= 0) {
-          clearInterval(interval);
-          show = false;
-        }
-      }, 50);
-    "
-    class="relative overflow-hidden pointer-events-auto w-full rounded-2xl border p-4 pb-5 shadow-xl flex items-start gap-3 backdrop-blur-md transition-all duration-300 {{ 'bg-emerald-50/90 text-emerald-900 border-emerald-200/60 shadow-emerald-800/10' if category in ['success', 'message'] else 'bg-red-50/90 text-red-900 border-red-200/60 shadow-red-800/10' }}"
-  >
-    <div class="w-7 h-7 rounded-full flex items-center justify-center text-white shrink-0 shadow-sm {{ 'bg-emerald-500' if category in ['success', 'message'] else 'bg-red-500' }}">
-      {% if category in ['success', 'message'] %}
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
-      </svg>
-      {% else %}
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
-        </path>
-      </svg>
-      {% endif %}
+    <div class="p-5 rounded-2xl mb-6 shadow-sm border font-bold flex items-center gap-4 {{ 'bg-emerald-50 text-emerald-700 border-emerald-100' if category == 'success' else 'bg-red-50 text-red-700 border-red-100' }}">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0 {{ 'bg-emerald-400' if category == 'success' else 'bg-red-400' }}">
+        {% if category == 'success' %}
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+        {% else %}
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        {% endif %}
+      </div>
+      {{ message }}
     </div>
-    <div class="grow flex flex-col gap-1 pr-4">
-      <p class="text-[10px] uppercase font-black tracking-widest text-slate-400">
-        {{ _('Success') if category in ['success', 'message'] else _('Error') }}
-      </p>
-      <p class="text-sm font-semibold leading-relaxed">
-        {{ message }}
-      </p>
-    </div>
-    <button @click="show = false" class="shrink-0 text-slate-400 hover:text-slate-600 transition-colors p-0.5 rounded-lg hover:bg-black/5">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-      </svg>
-    </button>
-    
-    <!-- Progress Bar -->
-    <div class="absolute bottom-0 left-0 right-0 h-1 bg-black/5">
-      <div 
-        class="h-full transition-all duration-75 ease-linear {{ 'bg-emerald-500' if category in ['success', 'message'] else 'bg-red-500' }}"
-        :style="`width: ${percent}%`"
-      ></div>
-    </div>
-  </div>
   {% endfor %}
-</div>
 {% endif %}
 {% endwith %}
 {% endmacro %}
@@ -129,8 +75,7 @@
     </li>
     {% else %}
     <li>
-      <a class="block px-6 py-4 font-bold text-slate-400 hover:text-slate-900 transition-all border-b-4 border-transparent hover:border-slate-200"
-        href="{{ url }}">{{ label }}</a>
+      <a class="block px-6 py-4 font-bold text-slate-400 hover:text-slate-900 transition-all border-b-4 border-transparent hover:border-slate-200" href="{{ url }}">{{ label }}</a>
     </li>
     {% endif %}
     {% endfor %}
@@ -148,8 +93,8 @@
 
   <header class="text-center py-24 bg-gradient-to-b from-slate-50 to-white">
     <h1 class="font-black text-6xl text-slate-900 flex items-center justify-center">
-      <span class="pulse-indicator"></span>
-      {{ title }}
+        <span class="pulse-indicator"></span>
+        {{ title }}
     </h1>
   </header>
 </div>

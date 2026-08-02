@@ -2,7 +2,6 @@
 
 import logging
 import re
-import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
@@ -202,250 +201,44 @@ class OpenAITranslateEngine(TranslationEngine):
         return ['en', 'hi', 'sa', 'te', 'mr', 'fr', 'de', 'es', 'ja', 'ko', 'zh']
 
 
-class IndicTransEngine(TranslationEngine):
-    """Client for the external standalone IndicTrans translation service."""
-
-    def __init__(self, version: str):
-        # version is 'indictrans2' or 'indictrans3'
-        self.version = version
-
-    def translate(self, text: str, source_lang: str, target_lang: str, **kwargs) -> TranslationResponse:
-        import httpx
-        from flask import current_app
-
-        base_url = current_app.config.get("TRANSLATION_SERVICE_URL", "").rstrip("/")
-        if not base_url:
-            raise RuntimeError("TRANSLATION_SERVICE_URL is not configured")
-
-        url = f"{base_url}/translate/text"
-        api_key = current_app.config.get("TRANSLATION_SERVICE_API_KEY", "")
-        timeout = float(current_app.config.get("TRANSLATION_SERVICE_TIMEOUT", 300))
-
-        headers = {"X-API-Key": api_key} if api_key else {}
-
-        # Map language codes to English names
-        language_map = {
-            'en': 'English',
-            'hi': 'Hindi',
-            'bn': 'Bengali',
-            'ta': 'Tamil',
-            'te': 'Telugu',
-            'mr': 'Marathi',
-            'gu': 'Gujarati',
-            'kn': 'Kannada',
-            'ml': 'Malayalam',
-            'pa': 'Punjabi',
-            'ur': 'Urdu',
-            'or': 'Odia',
-            'as': 'Assamese',
-            'sa': 'Sanskrit',
-            'ks': 'Kashmiri',
-            'sd': 'Sindhi',
-            'mni': 'Manipuri',
-            'sat': 'Santali',
-            'npi': 'Nepali',
-            'gom': 'Konkani',
-            'doi': 'Dogri',
-            'brx': 'Bodo',
-            'mai': 'Maithili',
-        }
-
-        source_name = language_map.get(source_lang, source_lang.capitalize())
-        target_name = language_map.get(target_lang, target_lang.capitalize())
-
-        # Determine the model name based on translation direction
-        if source_lang == 'en':
-            direction = 'en-indic'
-        elif target_lang == 'en':
-            direction = 'indic-en'
-        else:
-            direction = 'indic-indic'
-
-        model_name = f"ai4bharat/{self.version}-{direction}-1B"
-
-        payload = {
-            "text": text,
-            "model_name": model_name,
-            "source_language": source_name,
-            "target_language": target_name,
-            "gpu_id": 0,
-            "batch_size": 8
-        }
-        if kwargs.get("glossary"):
-            payload["glossary"] = kwargs["glossary"]
-
-        try:
-            with httpx.Client(timeout=timeout) as client:
-                response = client.post(url, json=payload, headers=headers)
-
-            if response.status_code >= 400:
-                detail = response.text
-                try:
-                    detail = response.json().get("detail", detail)
-                except Exception:
-                    pass
-                raise RuntimeError(f"Translation service error ({response.status_code}): {detail}")
-
-            result = response.json()
-            translated_text = result.get("text", "")
-
-            return TranslationResponse(
-                translated_text=translated_text,
-                source_language=source_lang,
-                target_language=target_lang,
-                engine=self.version,
-                metadata={'model': model_name}
-            )
-        except Exception as e:
-            logging.error(f"IndicTrans translation failed: {e}")
-            raise
-
-    def get_supported_languages(self) -> List[str]:
-        return ['en', 'hi', 'bn', 'ta', 'te', 'mr', 'gu', 'kn', 'ml', 'pa', 'ur', 'or', 'as', 'sa', 'ks', 'sd', 'mni', 'sat', 'npi', 'gom', 'doi', 'brx', 'mai']
-
-
 class TranslationEngineFactory:
     """Factory for creating translation engines."""
     
     _engines = {
-        'indictrans2': lambda: IndicTransEngine('indictrans2'),
+        'google': GoogleTranslateEngine,
+        'openai': OpenAITranslateEngine,
     }
     
     @classmethod
     def create(cls, engine_name: str, **kwargs) -> TranslationEngine:
         """Create a translation engine instance.
         
-        :param engine_name: Name of the engine ('indictrans2' or other indictrans variants)
+        :param engine_name: Name of the engine ('google' or 'openai')
         :param kwargs: Additional arguments for the engine
         :return: Translation engine instance
         :raises: ValueError if engine name is not supported
         """
         if engine_name not in cls._engines:
-            if engine_name.startswith('indictrans'):
-                return IndicTransEngine(engine_name)
             raise ValueError(f"Unsupported translation engine: {engine_name}. Supported engines: {list(cls._engines.keys())}")
         
-        engine_class_or_factory = cls._engines[engine_name]
-        return engine_class_or_factory()
+        engine_class = cls._engines[engine_name]
+        
+        # Handle different constructor signatures
+        if engine_name == 'google':
+            return engine_class()  # GoogleTranslateEngine doesn't take kwargs
+        elif engine_name == 'openai':
+            api_key = kwargs.get('api_key')
+            return engine_class(api_key=api_key)
+        else:
+            return engine_class(**kwargs)
     
     @classmethod
     def get_supported_engines(cls) -> List[str]:
         """Get list of supported translation engines."""
         return list(cls._engines.keys())
 
-    @classmethod
-    def is_supported(cls, engine_name: str) -> bool:
-        """Check if the translation engine is supported."""
-        return engine_name in cls._engines or engine_name.startswith('indictrans')
 
-
-def protect_dnt_and_math(text: str) -> tuple[str, dict[str, str]]:
-    """Detect <dnt> blocks and math equations, wrap math in <dnt> if needed, and substitute with safe placeholders.
-    
-    :param text: Input string to process
-    :return: A tuple of (protected_text, dnt_map)
-    """
-    if not text:
-        return text, {}
-
-    processed_text = text
-
-    # Step 1: Extract existing <dnt>...</dnt> blocks to prevent double-wrapping
-    existing_dnts = []
-    def _extract_existing(m):
-        idx = len(existing_dnts)
-        existing_dnts.append(m.group(0))
-        return f"__EXISTING_DNT_{idx}__"
-
-    processed_text = re.sub(r'(?i)<dnt\b[^>]*>[\s\S]*?</dnt>', _extract_existing, processed_text)
-
-    # Step 2: Temporarily protect HTML tags so math patterns do not match inside tags or attributes (src=, href=, etc.)
-    html_tags = []
-    def _extract_html_tag(m):
-        tag = m.group(0)
-        if "__EXISTING_DNT_" in tag:
-            return tag
-        idx = len(html_tags)
-        html_tags.append(tag)
-        return f"__TEMP_HTML_TAG_{idx}__"
-
-    processed_text = re.sub(r'<[^>]+>', _extract_html_tag, processed_text)
-
-    # Step 3: Wrap math patterns in <dnt>...</dnt>
-    math_patterns = [
-        r'\$\$[\s\S]*?\$\$',  # $$...$$
-        r'\\\[[\s\S]*?\\\]',  # \[...\]
-        r'\\\([\s\S]*?\\\)',  # \(...\)
-        r'<(?:math|math-field)\b[^>]*>[\s\S]*?</(?:math|math-field)>',
-        r'<(?:span|div)\b[^>]*(?:class="[^"]*\bmath\b[^"]*"|data-type="math")[^>]*>[\s\S]*?</(?:span|div)>',
-    ]
-
-    for pattern in math_patterns:
-        processed_text = re.sub(pattern, lambda m: f"<dnt>{m.group(0)}</dnt>", processed_text)
-
-    # Step 4: Wrap single-dollar math ($formula$) carefully
-    def _is_math_dollar(match):
-        full_match = match.group(0)
-        content = match.group(1).strip()
-        # Do not treat URLs, file paths (containing / or .png/.jpg), or HTTP links as math
-        if re.search(r'[/\\.]', content) or 'http:' in content or 'https:' in content:
-            return full_match
-        # Require math symbols or valid math variable expressions
-        if re.search(r'[\\+=\^_{\}]', content) or (re.search(r'[a-zA-Z]', content) and len(content) <= 50):
-            return f"<dnt>{full_match}</dnt>"
-        return full_match
-
-    processed_text = re.sub(r'(?<!\$)\$([^$\n\r<>]+?)\$(?!\$)', _is_math_dollar, processed_text)
-
-    # Step 5: Restore HTML tags
-    for idx, tag in enumerate(html_tags):
-        processed_text = processed_text.replace(f"__TEMP_HTML_TAG_{idx}__", tag)
-
-    # Step 6: Restore existing <dnt> blocks
-    for idx, dnt_content in enumerate(existing_dnts):
-        processed_text = processed_text.replace(f"__EXISTING_DNT_{idx}__", dnt_content)
-
-    # Step 7: Substitute all <dnt>...</dnt> blocks with unique placeholders
-    dnt_map = {}
-    def _replace_dnt(match):
-        idx = len(dnt_map)
-        placeholder = f"DNTBLOCK{idx}DNT"
-        dnt_map[placeholder] = match.group(0)
-        return placeholder
-
-    protected_text = re.sub(r'(?i)<dnt\b[^>]*>[\s\S]*?</dnt>', _replace_dnt, processed_text)
-    return protected_text, dnt_map
-
-
-def restore_dnt_and_math(text: str, dnt_map: dict[str, str]) -> str:
-    """Restore placeholders back to original <dnt>...</dnt> blocks.
-    
-    :param text: Translated text containing placeholders
-    :param dnt_map: Mapping from placeholder to original <dnt> block
-    :return: Restored text
-    """
-    if not text:
-        return text
-
-    result = text
-    if dnt_map:
-        for placeholder, original_content in dnt_map.items():
-            if placeholder in result:
-                result = result.replace(placeholder, original_content)
-            else:
-                pattern = re.escape(placeholder)
-                result = re.sub(pattern, original_content, result, flags=re.IGNORECASE)
-
-    # Sanitize any image URLs where $ or <dnt> was inserted around extracted filenames
-    result = re.sub(r'(?i)<dnt>([^<]*extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg)[^<]*)</dnt>', r'\1', result)
-    result = re.sub(r'\$+(extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg))\$+', r'\1', result)
-    result = re.sub(r'(/images/)\$+(extracted_[a-zA-Z0-9_\-]+)\.(png|jpg|jpeg|gif|svg)\$+', r'\1\2.\3', result)
-    result = re.sub(r'/(?:images|uploads)/[^\'"\s]*?\$+(extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg))\$*', lambda m: m.group(0).replace('$', ''), result)
-
-    return result
-
-
-def translate_text(text: str, source_lang: str, target_lang: str, engine_name: str = 'indictrans2', **kwargs) -> TranslationResponse:
+def translate_text(text: str, source_lang: str, target_lang: str, engine_name: str = 'google', **kwargs) -> TranslationResponse:
     """Convenience function to translate text using the specified engine.
     
     :param text: Text to translate
@@ -464,46 +257,11 @@ def translate_text(text: str, source_lang: str, target_lang: str, engine_name: s
             raise ValueError("Source and target language codes are required")
         
         logging.info(f"Starting translation: {source_lang} -> {target_lang} using {engine_name}")
-        start_time = time.time()
         
-        # Protect <dnt> blocks and math equations
-        protected_text, dnt_map = protect_dnt_and_math(text)
-
         engine = TranslationEngineFactory.create(engine_name, **kwargs)
-        response = engine.translate(protected_text, source_lang, target_lang, **kwargs)
-
-        latency_ms = round((time.time() - start_time) * 1000, 2)
-        try:
-            from kalanjiyam.utils.metrics import record_metric
-            record_metric(
-                category="translation",
-                name=f"translation.{engine_name}",
-                latency_ms=latency_ms,
-                status="SUCCESS",
-                details={"engine": engine_name, "source_lang": source_lang, "target_lang": target_lang},
-            )
-        except Exception:
-            pass
-
-        # Restore <dnt> blocks and math equations
-        if dnt_map and response and response.translated_text:
-            response.translated_text = restore_dnt_and_math(response.translated_text, dnt_map)
-
-        return response
+        return engine.translate(text, source_lang, target_lang, **kwargs)
     except Exception as e:
         logging.error(f"Translation failed: {e}")
-        try:
-            from kalanjiyam.utils.metrics import record_metric
-            record_metric(
-                category="translation",
-                name=f"translation.{engine_name}",
-                status="FAILED",
-                error_level="ERROR",
-                error_message=str(e),
-                details={"engine": engine_name, "source_lang": source_lang, "target_lang": target_lang},
-            )
-        except Exception:
-            pass
         raise
 
 
@@ -559,78 +317,3 @@ def segment_text_for_translation(text: str, max_length: int = 1000) -> List[str]
         segments.append(current_segment.strip())
     
     return segments 
-
-
-def get_available_translation_engines() -> List[Dict[str, str]]:
-    """Fetch available translation engines dynamically from the translation service endpoint."""
-    import httpx
-    from flask import current_app
-    base_url = current_app.config.get("TRANSLATION_SERVICE_URL", "").rstrip("/")
-    if not base_url:
-        return []
-    url = f"{base_url}/models"
-    api_key = current_app.config.get("TRANSLATION_SERVICE_API_KEY", "")
-    headers = {"X-API-Key": api_key} if api_key else {}
-    try:
-        # Use a short timeout (5s) for fetching available models to avoid blocking the app
-        timeout = 5.0
-        with httpx.Client(timeout=timeout) as client:
-            response = client.get(url, headers=headers)
-        if response.status_code == 200:
-            models = response.json()
-            versions = set()
-            for m in models:
-                name = m.get("model_name", "")
-                parts = name.split('/')
-                if len(parts) > 1:
-                    family_part = parts[1]
-                    family = family_part.split('-')[0]
-                    versions.add(family)
-                else:
-                    versions.add(name)
-            
-            choices = []
-            label_map = {
-                'indictrans2': 'IndicTrans v2',
-                'indictrans3': 'IndicTrans v3',
-            }
-            for v in sorted(list(versions)):
-                choices.append({
-                    'value': v,
-                    'label': label_map.get(v, v.replace('_', ' ').title())
-                })
-            return choices
-    except Exception as e:
-        logging.error(f"Failed to fetch translation models: {e}")
-    return []
-
-
-def get_supported_languages_list() -> List[Dict[str, str]]:
-    """Get list of supported languages for display, matching IndicTrans and other engines."""
-    language_names = {
-        'sa': 'Sanskrit',
-        'hi': 'Hindi',
-        'en': 'English',
-        'ta': 'Tamil',
-        'te': 'Telugu',
-        'mr': 'Marathi',
-        'kn': 'Kannada',
-        'ml': 'Malayalam',
-        'bn': 'Bengali',
-        'gu': 'Gujarati',
-        'or': 'Odia',
-        'pa': 'Punjabi',
-        'ur': 'Urdu',
-        'as': 'Assamese',
-        'ks': 'Kashmiri',
-        'sd': 'Sindhi',
-        'mni': 'Manipuri',
-        'sat': 'Santali',
-        'npi': 'Nepali',
-        'gom': 'Konkani',
-        'doi': 'Dogri',
-        'brx': 'Bodo',
-        'mai': 'Maithili',
-    }
-    return [{'code': code, 'name': f"{name} ({code})"} for code, name in language_names.items()]
- 

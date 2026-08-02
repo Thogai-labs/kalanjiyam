@@ -11,7 +11,6 @@ exec gunicorn \
     --bind "${BIND}" \
     --workers "${WORKERS}" \
     --timeout "${TIMEOUT}" \
-    --worker-tmp-dir /dev/shm \
     --access-logfile - \
     --error-logfile - \
     wsgi:app

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import html
-import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -27,15 +26,6 @@ _BLOCK_TYPE_ALIASES: dict[str, str] = {
     "list_item": "paragraph",
     "verse": "paragraph",
 }
-
-
-def _sanitize_image_content(content: str) -> str:
-    if not content or "extracted_" not in content:
-        return content
-    content = re.sub(r'(?i)<dnt>([^<]*extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg)[^<]*)</dnt>', r'\1', content)
-    content = re.sub(r'\$+(extracted_[a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|svg))\$+', r'\1', content)
-    content = re.sub(r'(/images/)\$+(extracted_[a-zA-Z0-9_\-]+)\.(png|jpg|jpeg|gif|svg)\$+', r'\1\2.\3', content)
-    return content
 
 
 @dataclass
@@ -93,12 +83,11 @@ class Block:
         source = data.get("source")
         if not isinstance(source, dict):
             source = None
-        raw_content = str(normalize_unicode_text(data.get("content") or ""))
         return cls(
             id=str(data.get("id") or _new_block_id()),
             type=block_type,
             bbox=[int(x) for x in bbox],
-            content=_sanitize_image_content(raw_content),
+            content=str(normalize_unicode_text(data.get("content") or "")),
             reading_order=int(data.get("reading_order") or 0),
             children=list(data.get("children") or []),
             confidence=conf,
@@ -159,7 +148,7 @@ class PageDocument:
             return ""
         parts = []
         for block in sorted(self.blocks, key=lambda b: b.reading_order):
-            text = _strip_html_tags(block.content).strip()
+            text = block.content.strip()
             if text:
                 parts.append(text)
         return "\n\n".join(parts)
@@ -170,8 +159,8 @@ class PageDocument:
         if not self.blocks:
             return ""
         if replica and self.page_width and self.page_height:
-            return _blocks_to_replica_html(self.blocks, self.page_width, self.page_height, content_format=self.content_format)
-        return _blocks_to_flow_html(self.blocks, content_format=self.content_format)
+            return _blocks_to_replica_html(self.blocks, self.page_width, self.page_height)
+        return _blocks_to_flow_html(self.blocks)
 
     def to_tei_fragment(self) -> str:
         parts = []
@@ -302,12 +291,6 @@ def _new_block_id() -> str:
     return f"b{uuid.uuid4().hex[:8]}"
 
 
-def _strip_html_tags(text: str) -> str:
-    if not text:
-        return ""
-    return re.sub(r"<[^>]*>", "", text)
-
-
 def _clamp_confidence(value: Any) -> float | None:
     if value is None:
         return None
@@ -332,20 +315,18 @@ def _coords_are_normalized(
 
 
 def _scale_boxes_to_image(
-    boxes: list[tuple],
+    boxes: list[tuple[float, float, float, float, str]],
     width: int | None,
     height: int | None,
     *,
     coordinate_space: str = "pixel",
-) -> list[tuple]:
+) -> list[tuple[float, float, float, float, str]]:
     if not boxes or not width or not height:
         return boxes
     if not _coords_are_normalized(list(boxes[0][:4]), coordinate_space=coordinate_space):
         return boxes
     return [
         (b[0] * width, b[1] * height, b[2] * width, b[3] * height, b[4])
-        if len(b) >= 5 else
-        (b[0] * width, b[1] * height, b[2] * width, b[3] * height)
         for b in boxes
     ]
 
@@ -416,10 +397,7 @@ def normalize_geometry(
 
     if sx != 1.0 or sy != 1.0:
         scaled = [
-            (b[0] * sx, b[1] * sy, b[2] * sx, b[3] * sy, b[4])
-            if len(b) >= 5 else
-            (b[0] * sx, b[1] * sy, b[2] * sx, b[3] * sy)
-            for b in scaled
+            (b[0] * sx, b[1] * sy, b[2] * sx, b[3] * sy, b[4]) for b in scaled
         ]
 
     normalized_blocks = blocks
@@ -502,20 +480,16 @@ def _blocks_look_like_lines(blocks: list[Block], page_height: int | None) -> boo
 
 
 def _group_boxes_into_lines(
-    boxes: list[tuple],
-) -> list[list[tuple]]:
+    boxes: list[tuple[float, float, float, float, str]],
+) -> list[list[tuple[float, float, float, float, str]]]:
     if not boxes:
         return []
     sorted_boxes = sorted(boxes, key=lambda b: (b[1], b[0]))
-    lines: list[list[tuple]] = []
+    lines: list[list[tuple[float, float, float, float, str]]] = []
     for box in sorted_boxes:
-        if len(box) >= 5:
-            x1, y1, x2, y2, text = box[:5]
-            if not text.strip():
-                continue
-        else:
-            x1, y1, x2, y2 = box[:4]
-            text = ""
+        x1, y1, x2, y2, text = box
+        if not text.strip():
+            continue
         center_y = (y1 + y2) / 2
         placed = False
         for line in lines:
@@ -535,13 +509,13 @@ def _group_boxes_into_lines(
 
 
 def _merge_line_boxes(
-    row_boxes: list[tuple],
+    row_boxes: list[tuple[float, float, float, float, str]],
 ) -> tuple[int, int, int, int, str]:
     x1 = min(b[0] for b in row_boxes)
     y1 = min(b[1] for b in row_boxes)
     x2 = max(b[2] for b in row_boxes)
     y2 = max(b[3] for b in row_boxes)
-    texts = [post_process(normalize_unicode_text(b[4])) for b in row_boxes if len(b) >= 5]
+    texts = [post_process(normalize_unicode_text(b[4])) for b in row_boxes]
     content = " ".join(t for t in texts if t.strip()).strip()
     return int(x1), int(y1), int(x2), int(y2), content
 
@@ -614,15 +588,13 @@ def _blocks_from_bounding_boxes(
     return blocks
 
 
-def _block_replica_inner_html(block: Block, content_format: str = "plain") -> str:
+def _block_replica_inner_html(block: Block) -> str:
     """HTML inside a replica block (tables as grids, not escaped plain text)."""
     content = (block.content or "").strip()
     if block.type == "table" or "<table" in content.lower():
         if "<table" in content.lower():
             return content
         return _plain_text_to_html_table(content)
-    if content_format == "blocks":
-        return block.content.replace("\n", "<br>")
     return html.escape(block.content).replace("\n", "<br>")
 
 
@@ -666,15 +638,12 @@ _BLOCK_TYPE_TO_HTML_TAG: dict[str, str] = {
 }
 
 
-def _blocks_to_flow_html(blocks: list[Block], content_format: str = "plain") -> str:
+def _blocks_to_flow_html(blocks: list[Block]) -> str:
     parts = []
     for block in sorted(blocks, key=lambda b: b.reading_order):
         if block.type in DECORATIVE_BLOCK_TYPES:
             continue
         if not block.content.strip() and block.type != "table":
-            continue
-        if content_format == "html":
-            parts.append(block.content)
             continue
         if block.type == "table" or "<table" in block.content.lower():
             inner = _block_replica_inner_html(block)
@@ -683,17 +652,14 @@ def _blocks_to_flow_html(blocks: list[Block], content_format: str = "plain") -> 
                 f"{inner}</div>"
             )
             continue
-        if content_format in ("blocks", "html") or "<img" in block.content.lower():
-            text = block.content.replace("\n", "<br>")
-        else:
-            text = html.escape(block.content).replace("\n", "<br>")
+        text = html.escape(block.content).replace("\n", "<br>")
         tag = _BLOCK_TYPE_TO_HTML_TAG.get(block.type, "p")
         parts.append(f'<{tag} data-block-id="{block.id}">{text}</{tag}>')
     return "\n".join(parts)
 
 
 def _blocks_to_replica_html(
-    blocks: list[Block], page_width: int, page_height: int, content_format: str = "plain"
+    blocks: list[Block], page_width: int, page_height: int
 ) -> str:
     inner = []
     for block in sorted(blocks, key=lambda b: b.reading_order):
@@ -705,17 +671,17 @@ def _blocks_to_replica_html(
             top = 100 * y1 / page_height
             width = 100 * (x2 - x1) / page_width
             height = 100 * (y2 - y1) / page_height
-        inner_html = _block_replica_inner_html(block, content_format=content_format)
+        inner_html = _block_replica_inner_html(block)
         inner.append(
             f'<div class="ocr-replica-block ocr-replica-block--{block.type}" '
             f'data-block-id="{block.id}" '
             f'data-block-type="{block.type}" '
-            f'style="position: absolute; left:{left:.2f}%;top:{top:.2f}%;width:{width:.2f}%;'
-            f'height:{height:.2f}%;">{inner_html}</div>'
+            f'style="left:{left:.2f}%;top:{top:.2f}%;width:{width:.2f}%;'
+            f'min-height:{height:.2f}%;">{inner_html}</div>'
         )
     return (
         f'<div class="ocr-replica-page" '
-        f'style="position: relative; aspect-ratio:{page_width}/{page_height};">'
+        f'style="aspect-ratio:{page_width}/{page_height};">'
         f'{"".join(inner)}</div>'
     )
 

@@ -54,37 +54,6 @@ test('filter is a no-op if the query is empty', () => {
   expect(s.displayed).toEqual(new Set(["a", "b", "c"]))
 });
 
-test('filter filters on creator mode', () => {
-  const testHTML = `
-  <ul>
-    <li data-key="1" data-title="A" data-mode="unregistered">A</li>
-    <li data-key="2" data-title="B" data-mode="registered">B</li>
-    <li data-key="3" data-title="C" data-mode="enterprise">C</li>
-  </ul>
-  `;
-  document.body.innerHTML = testHTML;
-
-  const s = SortableList('key');
-  s.$refs = { list: document.querySelector('ul') };
-  s.init();
-
-  s.selectedMode = "unregistered";
-  s.filter();
-  expect(s.displayed).toEqual(new Set(["1"]));
-
-  s.selectedMode = "registered";
-  s.filter();
-  expect(s.displayed).toEqual(new Set(["2"]));
-
-  s.selectedMode = "enterprise";
-  s.filter();
-  expect(s.displayed).toEqual(new Set(["3"]));
-
-  s.selectedMode = "all";
-  s.filter();
-  expect(s.displayed).toEqual(new Set(["1", "2", "3"]));
-});
-
 test('sort ascending', () => {
   const s = SortableList('key');
   s.$refs = { list: document.querySelector('ul') };

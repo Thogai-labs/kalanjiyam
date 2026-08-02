@@ -64,11 +64,6 @@ COPY cli.py ./scripts/
 ## 5. Final image
 FROM python:3.11-slim-bookworm AS final
 
-# Install fonts-noto-core for Unicode/Indic character support
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    fonts-noto-core \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PYTHONFAULTHANDLER=1 \
@@ -78,4 +73,3 @@ ENV PYTHONUNBUFFERED=1 \
 COPY --from=build-app /app /app
 RUN chmod +x /app/scripts/start_server_prod.sh
 CMD ["/app/scripts/start_server_prod.sh"]
-

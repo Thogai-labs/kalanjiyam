@@ -15,9 +15,7 @@ services:
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
-      - FLASK_UPLOAD_FOLDER=/data/uploads
-    volumes:
-      - ${HOME}/kalanjiyam-data/uploads:/data/uploads
+      - OCR_SERVICE_URL=${OCR_SERVICE_URL:-http://host.docker.internal:5001}
     depends_on:
       - kalanjiyam-db
       - kalanjiyam-redis
@@ -38,25 +36,20 @@ services:
 
   kalanjiyam-celery:
     image: ${KALANJIYAM_IMAGE}
-    container_name: kalanjiyam-celery
     command: >
       celery -A kalanjiyam.tasks worker
-      -Q default,ocr,low_priority,s3_batch
+      -Q default,ocr
       --loglevel=INFO
-      --concurrency=1
+      --concurrency=2
       --prefetch-multiplier=1
     env_file:
       - ../../.env
     environment:
       - FLASK_ENV=${FLASK_ENV:-staging}
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
+      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
-      - OCR_SERVICE_URL=${OCR_SERVICE_URL}
-      - BATCH_OCR_SERVICE_URL=${BATCH_OCR_SERVICE_URL}
-      - BATCH_OCR_API_KEY=${BATCH_OCR_API_KEY}
-      - FLASK_UPLOAD_FOLDER=/data/uploads
-    volumes:
-      - ${HOME}/kalanjiyam-data/uploads:/data/uploads
+      - OCR_SERVICE_URL=${OCR_SERVICE_URL:-http://host.docker.internal:5001}
     depends_on:
       - kalanjiyam-db
       - kalanjiyam-redis

@@ -1,7 +1,7 @@
 /* Rich text editor using TipTap */
 /* global Editor, Image, Table, TableRow, TableCell, TableHeader, StarterKit, Underline, TextAlign */
 
-import { Editor, Extension, Node, Mark } from '@tiptap/core';
+import { Editor, Extension } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Table from '@tiptap/extension-table';
@@ -41,41 +41,6 @@ const BlockId = Extension.create({
   },
 });
 
-/* Custom TipTap Node to support DOCX column sections */
-const DocxColumnSection = Node.create({
-  name: 'docxColumnSection',
-  group: 'block',
-  content: 'block+',
-  defining: true,
-
-  addAttributes() {
-    return {
-      style: {
-        default: null,
-        parseHTML: (element) => element.getAttribute('style'),
-        renderHTML: (attributes) => {
-          if (!attributes.style) {
-            return {};
-          }
-          return { style: attributes.style };
-        },
-      },
-    };
-  },
-
-  parseHTML() {
-    return [
-      {
-        tag: 'div.docx-column-section',
-      },
-    ];
-  },
-
-  renderHTML({ HTMLAttributes }) {
-    return ['div', { class: 'docx-column-section', ...HTMLAttributes }, 0];
-  },
-});
-
 /**
  * Initialize TipTap editor instance
  * @param {string} elementId - ID of the DOM element to attach editor to
@@ -85,186 +50,16 @@ const DocxColumnSection = Node.create({
  * @param {Function} options.onSelectionUpdate - Callback when selection changes
  * @returns {Editor} TipTap editor instance
  */
-const ResizableImage = Image.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      width: {
-        default: null,
-        parseHTML: element => element.getAttribute('width') || element.style.width,
-        renderHTML: attributes => {
-          if (!attributes.width) return {};
-          return { width: attributes.width, style: `width: ${attributes.width}` };
-        },
-      },
-      height: {
-        default: null,
-        parseHTML: element => element.getAttribute('height') || element.style.height,
-        renderHTML: attributes => {
-          if (!attributes.height) return {};
-          return { height: attributes.height, style: `height: ${attributes.height}` };
-        },
-      },
-    };
-  },
-  addNodeView() {
-    return ({ node, HTMLAttributes, getPos, editor }) => {
-      const container = document.createElement('span');
-      container.style.position = 'relative';
-      container.style.display = 'inline-block';
-      container.style.lineHeight = '0';
-      container.className = 'resizable-image-container';
-
-      const img = document.createElement('img');
-      Object.entries(HTMLAttributes).forEach(([key, value]) => {
-        if (key !== 'style') img.setAttribute(key, value);
-      });
-      if (node.attrs.width) img.style.width = node.attrs.width;
-      if (node.attrs.height) img.style.height = node.attrs.height;
-      img.className = 'max-w-full rounded-lg';
-      container.appendChild(img);
-
-      // Create handle
-      const handle = document.createElement('div');
-      handle.style.position = 'absolute';
-      handle.style.bottom = '5px';
-      handle.style.right = '5px';
-      handle.style.width = '12px';
-      handle.style.height = '12px';
-      handle.style.cursor = 'nwse-resize';
-      handle.style.backgroundColor = '#0f766e'; // teal-700
-      handle.style.border = '2px solid white';
-      handle.style.borderRadius = '50%';
-      handle.style.zIndex = '10';
-      handle.style.opacity = '0';
-      handle.style.transition = 'opacity 0.2s';
-      handle.className = 'resize-handle';
-      container.appendChild(handle);
-
-      container.addEventListener('mouseenter', () => { handle.style.opacity = '1'; });
-      container.addEventListener('mouseleave', () => { handle.style.opacity = '0'; });
-
-      let isResizing = false;
-      let startX, startY, startWidth, startHeight;
-
-      handle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        isResizing = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        startWidth = img.offsetWidth;
-        startHeight = img.offsetHeight;
-
-        const onMouseMove = (moveEvent) => {
-          if (!isResizing) return;
-          const dx = moveEvent.clientX - startX;
-          const dy = moveEvent.clientY - startY;
-          
-          const newWidth = Math.max(50, startWidth + dx);
-          const newHeight = Math.max(50, startHeight + dy);
-          
-          img.style.width = `${newWidth}px`;
-          img.style.height = `${newHeight}px`;
-        };
-
-        const onMouseUp = () => {
-          if (isResizing) {
-            isResizing = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-
-            if (typeof getPos === 'function') {
-              editor.commands.command(({ tr }) => {
-                const pos = getPos();
-                tr.setNodeMarkup(pos, undefined, {
-                  ...node.attrs,
-                  width: img.style.width,
-                  height: img.style.height,
-                });
-                return true;
-              });
-            }
-          }
-        };
-
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-      });
-
-      return {
-        dom: container,
-        contentDOM: null,
-      };
-    };
-  },
-});
-
-const DocxFootnote = Mark.create({
-  name: 'docxFootnote',
-  addAttributes() {
-    return {
-      'data-footnote-id': {
-        default: null,
-        parseHTML: element => element.getAttribute('data-footnote-id'),
-        renderHTML: attributes => {
-          if (!attributes['data-footnote-id']) return {};
-          return { 'data-footnote-id': attributes['data-footnote-id'] };
-        },
-      },
-      'data-footnote-text': {
-        default: '',
-        parseHTML: element => element.getAttribute('data-footnote-text'),
-        renderHTML: attributes => {
-          if (!attributes['data-footnote-text']) return {};
-          return { 'data-footnote-text': attributes['data-footnote-text'] };
-        },
-      },
-    };
-  },
-  parseHTML() {
-    return [{ tag: 'span.docx-footnote' }];
-  },
-  renderHTML({ HTMLAttributes }) {
-    return ['span', { class: 'docx-footnote', ...HTMLAttributes }, 0];
-  },
-});
-
-const SpanStyle = Mark.create({
-  name: 'spanStyle',
-  addAttributes() {
-    return {
-      style: {
-        default: null,
-        parseHTML: element => element.getAttribute('style'),
-        renderHTML: attributes => {
-          if (!attributes.style) return {};
-          return { style: attributes.style };
-        },
-      },
-    };
-  },
-  parseHTML() {
-    return [{ tag: 'span[style]' }];
-  },
-  renderHTML({ HTMLAttributes }) {
-    return ['span', HTMLAttributes, 0];
-  },
-});
-
 export function createRichEditor(elementId, options = {}) {
   const {
     content = '',
     onUpdate = () => {},
     onSelectionUpdate = () => {},
-    onUploadImage = null,
   } = options;
 
   const editor = new Editor({
     element: document.getElementById(elementId),
     extensions: [
-      DocxFootnote,
-      SpanStyle,
       StarterKit.configure({
         // Disable default heading levels except h1-h3
         heading: {
@@ -274,7 +69,7 @@ export function createRichEditor(elementId, options = {}) {
         codeBlock: true,
         code: true,
       }),
-      ResizableImage.configure({
+      Image.configure({
         inline: true,
         allowBase64: true, // Allow base64 for flexibility
         HTMLAttributes: {
@@ -308,8 +103,6 @@ export function createRichEditor(elementId, options = {}) {
       }),
       Link.configure({
         openOnClick: false,
-        autolink: false,
-        linkOnPaste: false,
         HTMLAttributes: {
           class: 'text-peacock-primary underline hover:text-peacock-secondary',
         },
@@ -320,7 +113,6 @@ export function createRichEditor(elementId, options = {}) {
         },
       }),
       BlockId,
-      DocxColumnSection,
     ],
     content,
     onUpdate: ({ editor }) => {
@@ -334,35 +126,6 @@ export function createRichEditor(elementId, options = {}) {
       attributes: {
         class: 'prose prose-lg max-w-none focus:outline-none min-h-[500px] px-4 py-6 text-base leading-relaxed',
       },
-      handlePaste(view, event) {
-        if (!onUploadImage) return false;
-        const items = (event.clipboardData || event.originalEvent.clipboardData || {}).items || [];
-        for (const item of items) {
-          if (item.type.indexOf('image') === 0) {
-            const file = item.getAsFile();
-            if (file) {
-              event.preventDefault();
-              onUploadImage(file);
-              return true;
-            }
-          }
-        }
-        return false;
-      },
-      handleDrop(view, event, slice, moved) {
-        if (!moved && onUploadImage && event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length) {
-          const files = Array.from(event.dataTransfer.files);
-          const imageFiles = files.filter(f => f.type.startsWith('image/'));
-          if (imageFiles.length > 0) {
-            event.preventDefault();
-            imageFiles.forEach(file => {
-              onUploadImage(file);
-            });
-            return true;
-          }
-        }
-        return false;
-      }
     },
   });
 
@@ -722,20 +485,6 @@ export function initializeToolbar(editor) {
 
   // Update toolbar button states
   const updateToolbarState = () => {
-    // Style dropdown label (Google Docs style)
-    const styleLabel = document.getElementById('rich-editor-style-label');
-    if (styleLabel) {
-      if (editor.isActive('heading', { level: 1 })) {
-        styleLabel.textContent = 'Heading 1';
-      } else if (editor.isActive('heading', { level: 2 })) {
-        styleLabel.textContent = 'Heading 2';
-      } else if (editor.isActive('heading', { level: 3 })) {
-        styleLabel.textContent = 'Heading 3';
-      } else {
-        styleLabel.textContent = 'Normal text';
-      }
-    }
-
     // Bold
     const boldBtn = document.querySelector('[data-tiptap-command="toggleBold"]');
     if (boldBtn) {
@@ -849,19 +598,6 @@ export function initializeToolbar(editor) {
               cols: options.cols,
               withHeaderRow: options.withHeaderRow || false,
             }).run();
-          }
-          break;
-        case 'openMathEditor':
-          const currentSelectionText = editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to, ' ');
-          const initialMathText = currentSelectionText.replace(/^\$\$?|\$\$?$/g, '').trim();
-          if (window.openMathEditorModal) {
-            window.openMathEditorModal(initialMathText, (latex) => {
-              if (latex && latex.trim()) {
-                editor.chain().focus().insertContent(`$${latex.trim()}$`).run();
-              }
-            });
-          } else {
-            console.error('openMathEditorModal is not loaded on window.');
           }
           break;
         default:

@@ -17,11 +17,11 @@ if [ -f /.dockerenv ]; then
     
     # Start with conservative settings to prevent memory issues
     # Listen to both default and ocr queues
-    celery -A kalanjiyam.tasks worker --loglevel=INFO --concurrency=1 --prefetch-multiplier=1 -Q default,ocr
+    celery -A kalanjiyam.tasks worker --loglevel=INFO --concurrency=2 --prefetch-multiplier=1 -Q default,ocr
 else
     echo "Running locally..."
     
     # Start Celery worker locally with conservative settings
     # Listen to both default and ocr queues
-    celery -A kalanjiyam.tasks worker --loglevel=INFO --concurrency=1 --prefetch-multiplier=1 -Q default,ocr
+    celery -A kalanjiyam.tasks worker --loglevel=INFO --concurrency=2 --prefetch-multiplier=1 -Q default,ocr
 fi

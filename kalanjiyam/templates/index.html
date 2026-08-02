@@ -4,200 +4,104 @@
 {% set code_url = 'https://github.com/siddhasagaram/kalanjiyam' %}
 {% set contact_url = url_for('about.contact') %}
 
+
 {% block title %}{{ _('Kalanjiyam - Siddha Knowledge Digital Library') }}{% endblock %}
 
 {% block extra_head %}
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
-
   :root {
-    --brand-royalblue: royalblue;
-    --brand-royalblue-dark: #3f51b5;
-    --brand-royalblue-hover: #2c3892;
-    --brand-bg-dark: #0b1120;
-    --brand-card-bg: rgba(15, 23, 42, 0.75);
+    --primary-color: royalblue;
+    --primary-hover: #3f51b5;
+    --premium-gradient: radial-gradient(circle at top, #ffffff, #f8fafc);
+    --premium-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
   }
 
-  body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  }
-
-  .font-serif-title {
-    font-family: 'Cinzel', Georgia, serif;
-  }
-
-  /* Royal Blue Academic Hero Header */
-  .academic-hero {
-    background-color: var(--brand-bg-dark);
-    background-image: 
-      radial-gradient(circle at 50% 10%, rgba(65, 105, 225, 0.22) 0%, rgba(11, 17, 32, 0.95) 70%),
-      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.02) 23px, rgba(255, 255, 255, 0.02) 24px),
-      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.02) 23px, rgba(255, 255, 255, 0.02) 24px);
-    background-size: 100% 100%, 24px 24px, 24px 24px;
+  .premium-hero {
+    background: var(--premium-gradient);
     position: relative;
-    border-bottom: 1px solid rgba(65, 105, 225, 0.2);
+    overflow: hidden;
   }
 
-  /* Formal Card Design with Royalblue Accents */
-  .formal-card {
-    background: var(--brand-card-bg);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(8px);
-    transition: all 0.25s ease-in-out;
+  .premium-hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(circle at 70% 30%, rgba(65, 105, 225, 0.03) 0%, transparent 50%);
+    pointer-events: none;
   }
 
-  .formal-card:hover {
-    border-color: rgba(65, 105, 225, 0.6);
-    box-shadow: 0 12px 35px rgba(65, 105, 225, 0.15);
-    transform: translateY(-2px);
-    background: rgba(15, 23, 42, 0.9);
+  .pulse-indicator {
+    width: 12px;
+    height: 12px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    position: relative;
+    display: inline-block;
+    margin-right: 12px;
+  }
+  .pulse-indicator::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: inherit;
+    border-radius: inherit;
+    animation: pulse-ring 1.5s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(0.9); opacity: 0.8; }
+    100% { transform: scale(2.5); opacity: 0; }
   }
 
-  /* Active Royalblue Button */
-  .btn-royal-active {
-    background: royalblue;
-    color: #ffffff !important;
-    padding: 14px 28px;
-    border-radius: 10px;
-    font-weight: 600;
-    font-size: 0.95rem;
-    transition: all 0.2s ease;
+  .btn-premium-dark {
+    background: #0f172a;
+    color: white !important;
+    padding: 12px 32px;
+    border-radius: 14px;
+    font-weight: 800;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     display: inline-flex;
     align-items: center;
-    gap: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 4px 14px rgba(65, 105, 225, 0.4);
+    gap: 8px;
+    border: none;
+  }
+  .btn-premium-dark:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 25px rgba(0, 0, 0, 0.2);
+    background: var(--primary-color);
   }
 
-  .btn-royal-active:hover {
-    background: #3b52d4;
-    box-shadow: 0 6px 20px rgba(65, 105, 225, 0.55);
-    transform: translateY(-1px);
-  }
-
-  .btn-royal-outline {
-    background: rgba(255, 255, 255, 0.05);
-    color: #e2e8f0 !important;
-    padding: 14px 28px;
-    border-radius: 10px;
-    font-weight: 600;
-    font-size: 0.95rem;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .btn-royal-outline:hover {
-    background: rgba(65, 105, 225, 0.15);
-    border-color: royalblue;
-    color: #ffffff !important;
-  }
-
-  /* Search Input */
-  .academic-search-input {
-    width: 100%;
-    background: rgba(11, 17, 32, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    padding: 16px 20px 16px 52px;
-    color: #ffffff;
-    font-size: 0.975rem;
-    outline: none;
-    transition: all 0.2s ease;
-  }
-
-  .academic-search-input:focus {
-    border-color: royalblue;
-    box-shadow: 0 0 0 3px rgba(65, 105, 225, 0.3);
-  }
 </style>
 {% endblock %}
 
 
 {% block header %}
-<header class="academic-hero text-slate-100 shrink-0 overflow-hidden min-h-screen flex flex-col justify-between">
-  
-  <!-- Navigation Header -->
-  <div class="relative z-10 border-b border-slate-800/80">
+<header class="premium-hero text-slate-900 shrink-0 pb-32">
+  <div class="mb-4">
     {% include("include/header.html") %}
   </div>
 
-  <!-- Hero Content Section -->
-  <div class="relative z-5 text-center px-6 max-w-5xl mx-auto my-auto pt-8 pb-12">
-    
-    <!-- Page Title -->
-    <h1 class="text-4xl sm:text-6xl font-bold font-serif-title tracking-tight mb-6 text-white leading-tight">
-      {{ _('Digital Library') }}
+  <div class="text-center px-4">
+
+  <div class="max-w-4xl mx-auto mt-24 mb-12">
+    <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black mb-6 tracking-tight flex items-center justify-center">
+        <span class="pulse-indicator"></span>
+        {{ _('Digital Library') }}
     </h1>
+    <p class="mx-auto text-xl mt-4 mb-8 max-w-2xl text-slate-500 font-medium leading-relaxed">{{ _('Premium digital repository.') }}</p>
+  </div>
 
-    <!-- Subtitle -->
-    <p class="mx-auto text-lg sm:text-xl text-slate-300 max-w-3xl font-normal leading-relaxed mb-10">
-      {{ _('A formal digital archive dedicated to the preservation, scholarly transcription, and public access of traditional Siddha medical literature and palm-leaf manuscripts.') }}
-    </p>
-
-    <!-- Search Box -->
-    <form action="{{ url_for('public.books.index') }}" method="GET" class="max-w-2xl mx-auto mb-10 relative">
-      <div class="relative flex items-center">
-        <svg class="w-5 h-5 absolute left-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-        </svg>
-        <input type="text" name="q" class="academic-search-input" placeholder="{{ _('Search by manuscript title, author, or keyword...') }}" />
-        <button type="submit" class="absolute right-2 px-5 py-2.5 bg-royalblue hover:bg-blue-600 text-white font-semibold rounded-md text-sm transition-all shadow-md">
-          {{ _('Search Archive') }}
-        </button>
-      </div>
-    </form>
-
-    <!-- Action Links -->
-    <div class="flex flex-wrap items-center justify-center gap-4 mb-16">
-      <a class="btn-royal-active" href="{{ url_for('public.books.index') }}">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-        </svg>
-        <span>{{ _('Browse Catalog') }}</span>
-      </a>
-
-      <a class="btn-royal-outline" href="{{ url_for('proofing.index') }}">
-        <svg class="w-5 h-5 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-        </svg>
-        <span>{{ _('Proofreading Dashboard') }}</span>
-      </a>
-    </div>
-
-    <!-- Formal 3-Column Pillars -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-left border-t border-slate-800/80 pt-10">
-      <!-- Pillar 1 -->
-      <div class="formal-card p-6">
-        <div class="text-blue-400 font-semibold text-xs tracking-wider uppercase mb-2">{{ _('Collection') }}</div>
-        <h3 class="text-lg font-bold text-white mb-2">{{ _('Palm-leaf & Heritage Manuscripts') }}</h3>
-        <p class="text-sm text-slate-300 leading-relaxed">{{ _('High-fidelity digital preservation of ancient medical texts, alchemy treatises, and historical documents.') }}</p>
-      </div>
-
-      <!-- Pillar 2 -->
-      <div class="formal-card p-6">
-        <div class="text-blue-400 font-semibold text-xs tracking-wider uppercase mb-2">{{ _('Scholarship') }}</div>
-        <h3 class="text-lg font-bold text-white mb-2">{{ _('Collaborative Proofing') }}</h3>
-        <p class="text-sm text-slate-300 leading-relaxed">{{ _('Peer-reviewed transcription and multi-stage verification by scholars and domain experts.') }}</p>
-      </div>
-
-      <!-- Pillar 3 -->
-      <div class="formal-card p-6">
-        <div class="text-blue-400 font-semibold text-xs tracking-wider uppercase mb-2">{{ _('Access') }}</div>
-        <h3 class="text-lg font-bold text-white mb-2">{{ _('Open Knowledge Engine') }}</h3>
-        <p class="text-sm text-slate-300 leading-relaxed">{{ _('Structured metadata index, full-text search capability, and transliterated text access.') }}</p>
-      </div>
-    </div>
+  <div class="flex justify-center">
+    <a class="btn-premium-dark" href="{{ url_for("public.books.index") }}">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+        {{ _('Browse Books') }}
+    </a>
+  </div>
 
   </div>
 </header>
 {% endblock %}
 
+
 {% block main %}{% endblock %}
-
-
-

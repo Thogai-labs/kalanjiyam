@@ -2,13 +2,15 @@
 {% import "macros/components.html" as components %}
 {% import "macros/proofing.html" as m %}
 
-{% block title %}{{ _('Batch Translate: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
+{% block title %}Batch Translate: {{ project.display_title }} | Kalanjiyam{% endblock %}
 
 {% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
-{% block content %}
 
-{{ m.project_header_nested(_('Batch Translate'), project) }}
-{{ m.project_tabs(project=project, active='batch_processes', is_mod=current_user.is_moderator) }}
+{% block content %}
+{{ components.flash_messages() }}
+
+{{ m.project_header_nested('Batch Translate', project) }}
+{{ m.project_tabs(project=project, active='edit') }}
 
 {% if status %}
   {# Show progress when task is running #}
@@ -20,8 +22,8 @@
         </svg>
       </div>
       <div class="ml-3">
-        <h3 class="text-lg font-medium text-gray-900">{{ _('Batch Translation Progress') }}</h3>
-        <p class="text-sm text-gray-500">{{ _('Translating project pages...') }}</p>
+        <h3 class="text-lg font-medium text-gray-900">Batch Translation Progress</h3>
+        <p class="text-sm text-gray-500">Translating project pages...</p>
       </div>
     </div>
 
@@ -34,25 +36,25 @@
         <div class="text-sm text-gray-600">
           <span id="status-text">
             {% if status == "PENDING" %}
-              {{ _('Preparing translation tasks...') }}
+              Preparing translation tasks...
             {% elif status == "PROGRESS" %}
-              {{ _('Translation in progress...') }}
+              Translation in progress...
             {% elif status == "SUCCESS" %}
-              {{ _('Translation completed successfully!') }}
+              Translation completed successfully!
             {% elif status == "FAILURE" %}
-              {{ _('Translation failed. Please try again.') }}
+              Translation failed. Please try again.
             {% endif %}
           </span>
         </div>
         <div class="space-x-2">
           <a href="{{ url_for('proofing.project.edit', slug=project.slug) }}" 
              class="bg-gray-300 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-400 transition-colors">
-            {{ _('Back to Project') }}
+            Back to Project
           </a>
           {% if status == "SUCCESS" %}
             <a href="{{ url_for('proofing.project.activity', slug=project.slug) }}" 
                class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors">
-              {{ _('View Results') }}
+              View Results
             </a>
           {% endif %}
         </div>
@@ -76,9 +78,9 @@
             // Update status text
             const statusText = document.getElementById('status-text');
             if (status === 'SUCCESS') {
-              statusText.textContent = {{ _('Translation completed successfully!')|tojson }};
+              statusText.textContent = 'Translation completed successfully!';
             } else if (status === 'FAILURE') {
-              statusText.textContent = {{ _('Translation failed. Please try again.')|tojson }};
+              statusText.textContent = 'Translation failed. Please try again.';
             }
             return; // Stop refreshing
           }
@@ -108,191 +110,85 @@
       </div>
       <div class="ml-3">
         <p class="text-sm text-yellow-700">
-          <strong>{{ _('Note:') }}</strong> {{ _('This will translate all pages in the project that have revisions.') }} 
-          {{ _('The translation will be based on the latest revision of each page.') }}
+          <strong>Note:</strong> This will translate all pages in the project that have revisions. 
+          The translation will be based on the latest revision of each page.
         </p>
       </div>
     </div>
   </div>
 
-  <form method="POST" x-data="{
-    sourceLang: 'sa',
-    targetLang: 'en',
-    allGlossaries: [],
-    selectedGlossaries: [],
-    init() {
-      this.$watch('sourceLang', () => this.selectedGlossaries = []);
-      this.$watch('targetLang', () => this.selectedGlossaries = []);
-      
-      const { pathname } = window.location;
-      const prefixMatch = pathname.match(/^(.*)\/proofing\//);
-      const prefix = prefixMatch ? prefixMatch[1] : '';
-      fetch(`${prefix}/api/glossaries`)
-        .then(response => {
-          if (response.ok) return response.json();
-          return [];
-        })
-        .then(data => {
-          this.allGlossaries = data;
-        })
-        .catch(error => {
-          console.error('Error fetching glossaries:', error);
-        });
-    },
-    get filteredGlossaries() {
-      return this.allGlossaries.filter(g => 
-        g.source_language_code === this.sourceLang && 
-        g.target_language_code === this.targetLang
-      );
-    },
-    get showGlossaryWarning() {
-      return this.selectedGlossaries.includes('all') || this.selectedGlossaries.length > 3;
-    },
-    getGlossaryDisplayName(name) {
-      const lookup = {
-        'agri': {{ _('Agriculture')|tojson|forceescape }},
-        'mech': {{ _('Mechanical')|tojson|forceescape }},
-        'bio': {{ _('Biology')|tojson|forceescape }},
-        'chem': {{ _('Chemistry')|tojson|forceescape }},
-        'comp': {{ _('Computer Science')|tojson|forceescape }},
-        'phy': {{ _('Physics')|tojson|forceescape }},
-        'math': {{ _('Mathematics')|tojson|forceescape }},
-        'it': {{ _('Information Technology')|tojson|forceescape }}
-      };
-      if (lookup[name]) {
-        return lookup[name];
-      }
-      if (!name) return '';
-      return name.charAt(0).toUpperCase() + name.slice(1);
-    }
-  }" @submit.prevent="if (sourceLang === targetLang) { alert({{ _('Source and Target languages must be different.')|tojson|forceescape }}); } else { $el.submit(); }">
+  <form method="POST">
     <div class="bg-white shadow rounded-lg p-6">
-      <h3 class="text-lg font-medium text-gray-900 mb-4">{{ _('Translation Settings') }}</h3>
+      <h3 class="text-lg font-medium text-gray-900 mb-4">Translation Settings</h3>
       
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label for="source_lang" class="block text-sm font-medium text-gray-700 mb-2">
-            {{ _('Source Language') }}
+            Source Language
           </label>
-          <select id="source_lang" name="source_lang" x-model="sourceLang" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            {% for lang in languages %}
-              <option value="{{ lang.code }}" {% if lang.code == 'sa' %}selected{% endif %}>{{ lang.name }}</option>
-            {% endfor %}
+          <select id="source_lang" name="source_lang" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="sa" selected>Sanskrit (sa)</option>
+            <option value="hi">Hindi (hi)</option>
+            <option value="te">Telugu (te)</option>
+            <option value="mr">Marathi (mr)</option>
+            <option value="en">English (en)</option>
+            <option value="fr">French (fr)</option>
+            <option value="de">German (de)</option>
+            <option value="es">Spanish (es)</option>
           </select>
         </div>
         
         <div>
           <label for="target_lang" class="block text-sm font-medium text-gray-700 mb-2">
-            {{ _('Target Language') }}
+            Target Language
           </label>
-          <select id="target_lang" name="target_lang" x-model="targetLang" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            {% for lang in languages %}
-              <option value="{{ lang.code }}" {% if lang.code == 'en' %}selected{% endif %}>{{ lang.name }}</option>
-            {% endfor %}
+          <select id="target_lang" name="target_lang" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="en" selected>English (en)</option>
+            <option value="sa">Sanskrit (sa)</option>
+            <option value="hi">Hindi (hi)</option>
+            <option value="te">Telugu (te)</option>
+            <option value="mr">Marathi (mr)</option>
+            <option value="fr">French (fr)</option>
+            <option value="de">German (de)</option>
+            <option value="es">Spanish (es)</option>
           </select>
         </div>
       </div>
       
       <div class="mt-6">
         <label for="engine" class="block text-sm font-medium text-gray-700 mb-2">
-          {{ _('Translation Engine') }}
+          Translation Engine
         </label>
-        <select id="engine" name="engine" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" {% if not engines %}disabled{% endif %}>
-          {% for eng in engines %}
-            <option value="{{ eng.value }}" {% if loop.first %}selected{% endif %}>{{ eng.label }}</option>
-          {% else %}
-            <option value="" disabled selected>{{ _('No translation models available') }}</option>
-          {% endfor %}
+        <select id="engine" name="engine" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="google" selected>Google Translate</option>
+          <option value="openai">OpenAI GPT</option>
         </select>
         <p class="mt-1 text-sm text-gray-500">
-          {{ _('Select the translation engine to use for batch translating this project.') }}
-        </p>
-      </div>
-
-      <!-- Glossary Selection List -->
-      <div class="mt-6 text-left" x-show="filteredGlossaries.length > 0" x-cloak>
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-          {{ _('Select Glossaries (Optional)') }}
-        </label>
-        <input type="hidden" name="glossary" :value="selectedGlossaries.includes('all') ? 'all' : selectedGlossaries.join(', ')">
-        
-        <div class="relative" x-data="{ open: false }" @click.outside="open = false">
-          <!-- Selector trigger -->
-          <div @click.stop="open = !open" class="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-sm focus-within:border-royalblue focus-within:ring-2 focus-within:ring-royalblue/20 outline-none transition-all font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[38px] select-none">
-            <div class="flex flex-wrap gap-1.5 items-center">
-              <template x-if="selectedGlossaries.length === 0">
-                <span class="text-slate-400 font-medium">{{ _("Select glossaries...") }}</span>
-              </template>
-              <template x-if="selectedGlossaries.includes('all')">
-                <div class="flex items-center bg-royalblue/10 text-royalblue rounded-lg px-2.5 py-1 text-xs font-bold">
-                  <span>{{ _("All Glossaries") }}</span>
-                  <button type="button" @click.stop="selectedGlossaries = []" class="ml-1.5 hover:text-royalblue/80 focus:outline-none text-sm leading-none">&times;</button>
-                </div>
-              </template>
-              <template x-if="!selectedGlossaries.includes('all')">
-                <template x-for="name in selectedGlossaries" :key="name">
-                  <div class="flex items-center bg-slate-100 text-slate-700 rounded-lg px-2.5 py-1 text-xs font-bold border border-slate-200">
-                    <span x-text="getGlossaryDisplayName(name)"></span>
-                    <button type="button" @click.stop="selectedGlossaries = selectedGlossaries.filter(n => n !== name)" class="ml-1.5 text-slate-400 hover:text-slate-600 focus:outline-none text-sm leading-none">&times;</button>
-                  </div>
-                </template>
-              </template>
-            </div>
-            <svg class="w-4 h-4 text-slate-400 ml-2 flex-shrink-0 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-            </svg>
-          </div>
-
-          <!-- Dropdown menu -->
-          <div x-show="open" class="absolute z-[100] w-full mt-1.5 bg-white border border-gray-350 rounded-md shadow-lg max-h-48 overflow-y-auto p-2 space-y-1 text-left" x-cloak x-transition>
-            <label class="flex items-center px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer text-sm font-semibold text-slate-700 select-none">
-              <input type="checkbox" value="all" x-model="selectedGlossaries" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-3 w-4 h-4">
-              <span>{{ _("All Glossaries") }}</span>
-            </label>
-            <div class="h-px bg-slate-100 my-1"></div>
-            <template x-for="g in filteredGlossaries" :key="g.name">
-              <label class="flex items-center px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer text-sm font-medium text-slate-600 select-none">
-                <input type="checkbox" :value="g.name" x-model="selectedGlossaries" :disabled="selectedGlossaries.includes('all')" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-3 w-4 h-4">
-                <span x-text="getGlossaryDisplayName(g.name)"></span>
-              </label>
-            </template>
-          </div>
-        </div>
-        
-        <!-- Warning Message -->
-        <div x-show="showGlossaryWarning" x-transition class="mt-2 text-xs text-yellow-600 bg-yellow-50 border border-yellow-100 rounded-md p-3 font-medium animate-pulse" x-cloak>
-          {{ _("Adding all / more than 3 glossaries may increase translation time.") }}
-        </div>
-      </div>
-
-      <div class="mt-6">
-        <p class="text-sm text-red-500 font-semibold mt-3" x-show="sourceLang === targetLang" x-cloak>
-          {{ _("Source and Target languages must be different.") }}
+          Google Translate is free but may have lower quality. OpenAI GPT provides better quality but requires an API key.
         </p>
       </div>
       
       <div class="mt-6 flex justify-end space-x-3">
         <a href="{{ url_for('proofing.project.edit', slug=project.slug) }}" 
            class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors">
-          {{ _('Cancel') }}
+          Cancel
         </a>
         <button type="submit" 
-                class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                :disabled="sourceLang === targetLang || {% if not engines %}true{% else %}false{% endif %}">
-          {{ _('Start Translation') }}
+                class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+          Start Translation
         </button>
       </div>
     </div>
   </form>
 
   <div class="mt-6 bg-gray-50 rounded-lg p-4">
-    <h4 class="text-sm font-medium text-gray-900 mb-2">{{ _('What happens next?') }}</h4>
+    <h4 class="text-sm font-medium text-gray-900 mb-2">What happens next?</h4>
     <ul class="text-sm text-gray-600 space-y-1">
-      <li>• {{ _('The system will process each page that has revisions') }}</li>
-      <li>• {{ _('Text will be segmented into manageable chunks for translation') }}</li>
-      <li>• {{ _('Each chunk will be translated using the selected engine') }}</li>
-      <li>• {{ _('Translations will be stored and can be viewed/edited later') }}</li>
-      <li>• {{ _('You can monitor progress and navigate away from this page') }}</li>
+      <li>• The system will process each page that has revisions</li>
+      <li>• Text will be segmented into manageable chunks for translation</li>
+      <li>• Each chunk will be translated using the selected engine</li>
+      <li>• Translations will be stored and can be viewed/edited later</li>
+      <li>• You can monitor progress and navigate away from this page</li>
     </ul>
   </div>
 {% endif %}

@@ -17,15 +17,15 @@
     <div class="grid grid-cols-3 gap-6 mt-8 pt-8 border-t border-slate-50">
       <div class="text-center">
         <div class="text-2xl font-black text-royalblue">{{ active_tasks }}</div>
-        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{{ _('Active') }}</div>
+        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Active</div>
       </div>
       <div class="text-center">
         <div class="text-2xl font-black text-amber-500">{{ pending_tasks }}</div>
-        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{{ _('Pending') }}</div>
+        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Pending</div>
       </div>
       <div class="text-center">
         <div class="text-2xl font-black text-red-500">{{ failed_tasks }}</div>
-        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{{ _('Failed') }}</div>
+        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Failed</div>
       </div>
     </div>
 
@@ -51,18 +51,6 @@
           <div>
             <p class="text-red-900 font-black mb-0.5">{{ _('Error!') }}</p>
             <p class="text-sm text-red-700/70 font-medium leading-tight">{{ _('Some translations failed. Please check the logs.') }}</p>
-          </div>
-      </div>
-    {% elif status == "CANCELLED" %}
-      <div class="mt-8 p-6 bg-amber-50 border border-amber-100 rounded-3xl flex items-center gap-4">
-          <div class="w-10 h-10 rounded-full bg-amber-400 flex items-center justify-center text-white shrink-0 shadow-sm shadow-amber-200">
-              <svg class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-              </svg>
-          </div>
-          <div>
-            <p class="text-amber-900 font-black mb-0.5">{{ _('Cancelled') }}</p>
-            <p class="text-sm text-amber-700/70 font-medium leading-tight">{{ _('The translation task has been cancelled.') }}</p>
           </div>
       </div>
     {% elif status == "PROGRESS" %}

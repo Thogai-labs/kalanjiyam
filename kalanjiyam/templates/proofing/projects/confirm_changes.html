@@ -2,17 +2,17 @@
 {% from "macros/forms.html" import field %}
 {% import "macros/proofing.html" as m %}
 
-{% block title %}{{ _('Search and Replace') }} | {{ project.display_title }}{% endblock %}
+{% block title %} Search and Replace | {{ project.display_title }}{% endblock %}
 
 {% block content %}
 
-{{ m.project_header_nested(_('Review and Confirm Changes'), project) }}
+{{ m.project_header_nested('Review and Confirm Changes', project) }}
 {{ m.project_tabs(project=project, active='edit') }}
 
 <div class="prose">
-  <h1>{{ _('Confirm Changes') }}</h1>
+  <h1>Confirm Changes</h1>
   {% macro sp(s, p, n) %}{% if n == 1 %}{{ s }}{% else %}{{ p }}{% endif %}{% endmacro %}
-  <p>{{ _('Please carefully review and confirm the changes you selected:') }}</p>
+  <p>Please carefully review and confirm the changes you selected:</p>
   <form method="POST" action="{{ url_for('proofing.project.confirm_changes', slug=project.slug) }}" class="bg-slate-100 p-4 my-4">
     {{ form.csrf_token }}
     <input type="hidden" name="query" value="{{ query }}">
@@ -20,7 +20,7 @@
 
     {% set match_counts = results|map(attribute='matches')|map('length')|list %}
     {% set nr = match_counts|sum %}
-    <p>{{ ngettext('Confirm changes on %(count)s match containing', 'Confirm changes on %(count)s matches containing', nr, count=nr) }} <span style="color: red;"><kbd>{{ query }}</kbd></span> {{ _('to be replaced by') }} <span style="color: green;"><kbd>{{ replace }}</kbd></span>.</p>
+    <p>Confirm changes on {{ nr }} {{ sp("match", "matches", nr) }} that {{ sp("contains", "contain", nr) }} <span style="color: red;"><kbd>{{ query }}</kbd></span> to be replaced by <span style="color: green;"><kbd>{{ replace }}</kbd></span>.</p>
     
     {% for result in results %}
       {% set page = result.page %}
@@ -28,7 +28,7 @@
       {% set matches = result.matches %}
       {% for match in matches %}
         <div class="match" style="background-color: rgb(243, 239, 239);">
-          <p>{{ _('Page') }} <a href="{{ page_url }}">{{ project.display_title }}/{{ page.slug }}:</a> {{ _('Line') }} {{ match.line_num }}</p>
+          <p>Page <a href="{{ page_url }}">{{ project.display_title }}/{{ page.slug }}:</a> Line {{ match.line_num }}</p>
           <label for="match{{ page.slug }}-{{ match.line_num }}">{{ match.query }}</label>
           <input type="hidden" name="match{{ page.slug }}-{{ match.line_num }}-query" value="{{ match.query }}">
           <br>
@@ -37,8 +37,8 @@
         </div>
       {% endfor %}
     {% endfor %}
-    <button class="btn btn-submit" type="submit" name="cancel" value="cancel">{{ _('Cancel') }}</button>
-    <button class="btn btn-submit" type="submit" name="confirm" value="confirm">{{ _('Confirm') }}</button>
+    <button class="btn btn-submit" type="submit" name="cancel" value="cancel">Cancel</button>
+    <button class="btn btn-submit" type="submit" name="confirm" value="confirm">Confirm</button>
   </form>
   </div>
 {% endblock %}

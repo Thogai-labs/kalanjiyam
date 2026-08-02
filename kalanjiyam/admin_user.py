@@ -111,11 +111,6 @@ def sync_user_org_and_roles(form, model: db.User, session, *, is_created: bool) 
     org_id = org_id or None
     if org_id == 0:
         org_id = None
-    if org_id is None:
-        try:
-            org_id = q.get_or_create_open_tenant().id
-        except Exception:
-            pass
     model.organization_id = org_id
 
     session.flush()

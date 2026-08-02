@@ -123,11 +123,7 @@ HTML_ENGINES = {"nanonets", "chandra"}
 MARKDOWN_ENGINES = {"deepseek", "qwen3"}
 
 
-def build_engine_choices(
-    available_engines: list[str],
-    is_super_admin: bool,
-    recommended_engine: str | None = None
-) -> list[dict]:
+def build_engine_choices(available_engines: list[str], is_super_admin: bool) -> list[dict]:
     """Build the list of engine choices for the OCR form.
 
     Value is the stable numeric key (matches JS ocrEngines / decodeEngine).
@@ -142,9 +138,8 @@ def build_engine_choices(
             continue
         numeric_value = REVERSE_ENGINE_MAP.get(engine_name, str(seq))
         real_name = ENGINE_LABELS.get(engine_name, engine_name.capitalize())
-        label = real_name if is_super_admin else f"OCR {numeric_value}"
-        is_rec = (engine_name == recommended_engine)
-        choices.append({"value": numeric_value, "label": label, "is_recommended": is_rec})
+        label = real_name if is_super_admin else f"OCR {seq}"
+        choices.append({"value": numeric_value, "label": label})
         seq += 1
     return choices
 

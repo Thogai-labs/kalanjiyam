@@ -1,21 +1,21 @@
 def test_index(client):
     resp = client.get("/about/")
-    assert "Mission" in resp.text
+    assert ">About</h1>" in resp.text
 
 
 def test_mission(client):
     resp = client.get("/about/mission")
-    assert "Our Mission" in resp.text
+    assert "<h1>Mission</h1>" in resp.text
 
 
 def test_values(client):
     resp = client.get("/about/values")
-    assert "Values" in resp.text
+    assert "<h1>Values</h1>" in resp.text
 
 
 def test_people(client):
     resp = client.get("/about/people", follow_redirects=True)
-    assert "People" in resp.text
+    assert "<h1>People</h1>" in resp.text
 
 
 def test_people_core(client):
@@ -30,24 +30,24 @@ def test_people_proofing(client):
 
 def test_code_and_data(client):
     resp = client.get("/about/code-and-data")
-    assert "Code and Data" in resp.text
+    assert "<h1>Code and Data</h1>" in resp.text
 
 
 def test_name(client):
     resp = client.get("/about/our-name")
-    assert "Kalanjiyam" in resp.text
+    assert "<h1>Our Name</h1>" in resp.text
 
 
 def test_contact(client):
     resp = client.get("/about/contact")
-    assert "Contact Us" in resp.text
+    assert "<h1>Contact</h1>" in resp.text
 
 
 def test_terms(client):
     resp = client.get("/about/terms")
-    assert "Terms of Service" in resp.text
+    assert "<h1>Terms of Use</h1>" in resp.text
 
 
 def test_privacy(client):
     resp = client.get("/about/privacy-policy")
-    assert "Privacy Policy" in resp.text
+    assert "<h1>Privacy Policy</h1>" in resp.text

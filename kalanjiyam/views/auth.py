@@ -18,7 +18,7 @@ import secrets
 import sys
 from datetime import datetime, timedelta
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, url_for
 from flask_babel import lazy_gettext as _l
 from flask_login import current_user, login_required, login_user, logout_user
 from flask_wtf import FlaskForm, RecaptchaField
@@ -28,7 +28,6 @@ from wtforms import validators as val
 import kalanjiyam.queries as q
 from kalanjiyam import database as db
 from kalanjiyam import mail
-from kalanjiyam.utils.rate_limit import is_rate_limited, log_usage_action
 
 bp = Blueprint("auth", __name__)
 
@@ -106,11 +105,7 @@ class FieldLength:
         self.min = min or 0
         self.max = max or sys.maxsize
         if not message:
-            message = _l(
-                "Field must be between %(min)s and %(max)s characters long.",
-                min=min,
-                max=max,
-            )
+            message = f"Field must be between {min} and {max} characters long."
         self.message = message
 
     def __call__(self, form, field):
@@ -126,12 +121,7 @@ def get_field_validators(field_name: str, min_len: int, max_len: int):
         FieldLength(
             min=min_len,
             max=max_len,
-            message=_l(
-                "%(field)s must be between %(min_len)s and %(max_len)s characters long",
-                field=field_name_capitalized,
-                min_len=min_len,
-                max_len=max_len,
-            ),
+            message=f"{field_name_capitalized} must be between {min_len} and {max_len} characters long",
         ),
     ]
 
@@ -139,7 +129,7 @@ def get_field_validators(field_name: str, min_len: int, max_len: int):
 def get_username_validators():
     validators = get_field_validators("username", MIN_USERNAME_LEN, MAX_USERNAME_LEN)
     validators.append(
-        val.Regexp(r"^[^\s]*$", message=_l("Username must not contain spaces"))
+        val.Regexp(r"^[^\s]*$", message="Username must not contain spaces")
     )
     return validators
 
@@ -164,17 +154,20 @@ class SignupForm(FlaskForm):
     username = StringField(_l("Username"), get_username_validators())
     password = PasswordField(_l("Password"), get_password_validators())
     email = EmailField(_l("Email address"), get_email_validators())
-    # recaptcha = RecaptchaField()
+    recaptcha = RecaptchaField()
 
     def validate_username(self, username):
+        # TODO: make username case insensitive
         user = q.user(username.data)
         if user:
-            raise val.ValidationError(_l("Please use a different username."))
+            raise val.ValidationError("Please use a different username.")
 
     def validate_email(self, email):
-        user = q.user_by_email(email.data)
+        session = q.get_session()
+        # TODO: make email case insensitive
+        user = session.query(db.User).filter_by(email=email.data).first()
         if user:
-            raise val.ValidationError(_l("Please use a different email address."))
+            raise val.ValidationError("Please use a different email address.")
 
 
 class SignInForm(FlaskForm):
@@ -203,28 +196,16 @@ class ResetPasswordFromTokenForm(FlaskForm):
 
 @bp.route("/register", methods=["GET", "POST"])
 def register():
-    from flask import current_app, abort
-    if not current_app.config.get("ENABLE_REGISTERED_ACCESS", True):
-        abort(404)
-
     if current_user.is_authenticated:
         logout_if_not_ok()
         return redirect(url_for("site.index"))
 
     form = SignupForm()
-    if request.method == "POST":
-        ip_address = request.remote_addr
-        fingerprint_id = request.cookies.get("device_fingerprint")
-        if is_rate_limited("register", ip_address=ip_address, fingerprint_id=fingerprint_id, limit=5, period_seconds=3600):
-            flash(_l("Too many registration attempts. Please try again later."), "error")
-            return render_template("auth/register.html", form=form)
-        log_usage_action("register", ip_address=ip_address, fingerprint_id=fingerprint_id)
-
     # save username and email in lowercase
     if form.validate_on_submit():
         user = q.create_user(
-            username=form.username.data.strip().lower(),
-            email=form.email.data.strip().lower(),
+            username=form.username.data,
+            email=form.email.data,
             raw_password=form.password.data,
         )
         login_user(user, remember=True)
@@ -232,8 +213,8 @@ def register():
     else:
         # Override the default message ("The response parameter is missing.")
         # for better UX.
-        # if form.recaptcha.errors:
-        #     form.recaptcha.errors = [_l("Please click the reCAPTCHA box.")]
+        if form.recaptcha.errors:
+            form.recaptcha.errors = [_l("Please click the reCAPTCHA box.")]
 
         return render_template("auth/register.html", form=form)
 
@@ -245,21 +226,14 @@ def sign_in():
         return redirect(url_for("site.index"))
 
     form = SignInForm()
-    if request.method == "POST":
-        ip_address = request.remote_addr
-        fingerprint_id = request.cookies.get("device_fingerprint")
-        if is_rate_limited("sign_in", ip_address=ip_address, fingerprint_id=fingerprint_id, limit=5, period_seconds=300):
-            flash(_l("Too many login attempts. Please try again later."), "error")
-            return render_template("auth/sign-in.html", form=form)
-        log_usage_action("sign_in", ip_address=ip_address, fingerprint_id=fingerprint_id)
-
+    # TODO: make username case insensitive
     if form.validate_on_submit():
-        user = q.user(form.username.data.strip())
+        user = q.user(form.username.data)
         if user and user.check_password(form.password.data):
             login_user(user, remember=True)
             return redirect(url_for(POST_AUTH_ROUTE))
         else:
-            flash(_l("Invalid username or password."), "error")
+            flash("Invalid username or password.")
     return render_template("auth/sign-in.html", form=form)
 
 
@@ -281,20 +255,24 @@ def get_reset_password_token():
     """Email the user a password reset link."""
     form = ResetPasswordForm()
     if form.validate_on_submit():
-        email = form.email.data.strip()
-        user = q.user_by_email(email)
+        email = form.email.data
+        session = q.get_session()
+        user = session.query(db.User).filter_by(email=email).first()
         if user:
             raw_token = _create_reset_token(user.id)
             mail.send_reset_password_link(
                 username=user.username, email=user.email, raw_token=raw_token
             )
-        # Always return uniform response regardless of whether the email exists to prevent enumeration.
-        return render_template("auth/reset-password-post.html", email=email)
+            return render_template("auth/reset-password-post.html", email=user.email)
+        else:
+            flash(
+                "Sorry, the email address you provided is not associated with any of our acounts."
+            )
 
     # Override the default message ("The response parameter is missing.")
     # for better UX.
     if form.recaptcha.errors:
-        form.recaptcha.errors = [_l("Please click the reCAPTCHA box.")]
+        form.recaptcha.errors = ["Please click the reCAPTCHA box."]
 
     return render_template("auth/reset-password.html", form=form)
 
@@ -302,16 +280,16 @@ def get_reset_password_token():
 @bp.route("/reset-password/<username>/<raw_token>", methods=["GET", "POST"])
 def reset_password_from_token(username, raw_token):
     """Reset password after the user clicks a reset link."""
-    msg_invalid = _l("Sorry, this reset password link isn't valid. Please try again.")
+    msg_invalid = "Sorry, this reset password link isn't valid. Please try again."
 
     user = q.user(username)
     if user is None:
-        flash(msg_invalid, "error")
+        flash(msg_invalid)
         return redirect(url_for("auth.get_reset_password_token"))
 
     token = _get_reset_token_for_user(user.id)
     if not _is_valid_reset_token(token, raw_token):
-        flash(msg_invalid, "error")
+        flash(msg_invalid)
         return redirect(url_for("auth.get_reset_password_token"))
 
     form = ResetPasswordFromTokenForm()
@@ -329,7 +307,7 @@ def reset_password_from_token(username, raw_token):
 
             # Expire any existing sessions.
             logout_user()
-            flash(_l("Successfully reset password!"), "success")
+            flash("Successfully reset password!", "success")
             mail.send_confirm_reset_password(
                 username=user.username,
                 email=user.email,
@@ -337,7 +315,7 @@ def reset_password_from_token(username, raw_token):
             return redirect(url_for("auth.sign_in"))
 
         if not has_password_match:
-            form.password.errors.append(_l("Passwords must match."))
+            form.password.errors.append("Passwords must match.")
 
     return render_template(
         "auth/reset-password-from-token.html", username=user.username, form=form
@@ -349,9 +327,8 @@ def reset_password_from_token(username, raw_token):
 def change_password():
     if current_user.is_super_admin:
         flash(
-            _l(
-                "Super-admin passwords can only be changed from the server CLI (./cli.py change-password)."
-            ),
+            "Super-admin passwords can only be changed from the server CLI "
+            "(./cli.py change-password).",
             "error",
         )
         return redirect(url_for("proofing.index"))
@@ -366,11 +343,11 @@ def change_password():
         session.add(current_user)
         session.commit()
 
-        flash(_l("Changed password successfully!"), "success")
+        flash("Changed password successfully!", "success")
         return redirect(
             url_for("proofing.user.summary", username=current_user.username)
         )
     else:
-        flash(_l("Old password isn't valid."), "error")
+        flash("Old password isn't valid.")
 
     return render_template("auth/change-password.html", form=form)

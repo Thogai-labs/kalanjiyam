@@ -1,8 +1,6 @@
 import json
-from datetime import datetime
 
 from sqlalchemy import update
-from sqlalchemy.exc import IntegrityError
 
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
@@ -36,11 +34,10 @@ def add_revision(
     content: str,
     status: str,
     version: int,
-    author_id: int | None,
+    author_id: int,
     *,
     document: dict | None = None,
     content_format: str = "plain",
-    version_key: str = "role:p1",
 ) -> int:
     """Add a new revision for a page."""
     session = q.get_session()
@@ -49,57 +46,22 @@ def add_revision(
     resolved_content, resolved_document, resolved_format = _resolve_content_and_document(
         content, document, content_format
     )
-
-    # 1. Fetch or create the PageVersion record for version_key
-    page_version = session.query(db.PageVersion).filter_by(
-        page_id=page.id,
-        version_key=version_key
-    ).first()
-
-    if not page_version:
-        if version != 0:
-            raise EditError(
-                f"Edit conflict: track {version_key} does not exist, but expected version {version}"
-            )
-        
-        # Create a new version record
-        page_version = db.PageVersion(
-            page_id=page.id,
-            version_key=version_key,
-            version=new_version,
-            updated_at=datetime.utcnow()
-        )
-        session.add(page_version)
-        try:
-            session.flush()
-        except IntegrityError:
-            session.rollback()
-            raise EditError(f"Edit conflict: track {version_key} concurrently created")
-    else:
-        # Perform optimistic locking on PageVersion.version
-        result = session.execute(
-            update(db.PageVersion)
-            .where((db.PageVersion.id == page_version.id) & (db.PageVersion.version == version))
-            .values(version=new_version, updated_at=datetime.utcnow())
-        )
-        if result.rowcount == 0:
-            raise EditError(
-                f"Edit conflict: track {version_key} version mismatch (expected {version})"
-            )
-
-    # 2. Update the page's overall status
-    session.execute(
+    result = session.execute(
         update(db.Page)
-        .where(db.Page.id == page.id)
-        .values(status_id=status_ids[status])
+        .where((db.Page.id == page.id) & (db.Page.version == version))
+        .values(version=new_version, status_id=status_ids[status])
     )
     session.commit()
 
-    # 3. Create the Revision linked to the PageVersion
+    num_rows_changed = result.rowcount
+    if num_rows_changed == 0:
+        raise EditError(f"Edit conflict {page.slug}, {version}")
+
+    assert num_rows_changed == 1
+
     revision_ = db.Revision(
         project_id=page.project_id,
         page_id=page.id,
-        page_version_id=page_version.id,
         summary=summary,
         content=resolved_content,
         author_id=author_id,
@@ -120,4 +82,3 @@ def parse_document_field(raw: str | None) -> dict | None:
         return data if isinstance(data, dict) else None
     except json.JSONDecodeError:
         return None
-

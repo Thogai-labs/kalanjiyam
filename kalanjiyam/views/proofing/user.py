@@ -1,5 +1,4 @@
 from flask import Blueprint, abort, flash, redirect, render_template, url_for
-from flask_babel import lazy_gettext as _l
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from sqlalchemy import orm
@@ -20,7 +19,7 @@ class RolesForm(FlaskForm):
 
 
 class EditProfileForm(FlaskForm):
-    description = StringField(_l("Profile description"), widget=TextArea())
+    description = StringField("Profile description", widget=TextArea())
 
 
 @bp.route("/<username>/")
@@ -90,7 +89,7 @@ def edit(username):
         session = q.get_session()
         form.populate_obj(user_)
         session.commit()
-        flash(_l("Saved changes."), "success")
+        flash("Saved changes.", "success")
         return redirect(url_for("proofing.user.summary", username=username))
 
     return render_template("proofing/user/edit.html", user=user_, form=form)
@@ -98,9 +97,9 @@ def edit(username):
 
 def _make_role_form(roles, user_):
     descriptions = {
-        SiteRole.P1: _l("Proofreading 1 (can make pages yellow)"),
-        SiteRole.P2: _l("Proofreading 2 (can make pages green)"),
-        SiteRole.MODERATOR: _l("Moderator"),
+        SiteRole.P1: "Proofreading 1 (can make pages yellow)",
+        SiteRole.P2: "Proofreading 2 (can make pages green)",
+        SiteRole.MODERATOR: "Moderator",
     }
     # We're mutating a global object, but this is safe because we're doing so
     # in an idempotent way.
@@ -154,7 +153,7 @@ def admin(username):
         session.add(user_)
         session.commit()
 
-        flash(_l("Saved changes."), "success")
+        flash("Saved changes.", "success")
 
     return render_template(
         "proofing/user/admin.html",

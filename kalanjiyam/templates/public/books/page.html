@@ -1,333 +1,342 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ _('Page %(page)s - %(title)s | Kalanjiyam Digital Library', page=page.slug, title=project.display_title) }}{% endblock %}
+{% block title %}Page {{ page.slug }} - {{ project.display_title }} | Kalanjiyam{% endblock %}
 
-{% block meta_description %}{{ _('View page %(page)s of %(title)s with OCR text and translations.', page=page.slug, title=project.display_title) }}{% endblock %}
+{% block meta_description %}View page {{ page.slug }} of {{ project.display_title }} with OCR text and translations.{% endblock %}
 
 {% block extra_head %}
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
-
-  body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background-color: #f8fafc;
-    color: #0f172a;
+  .page-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
   }
-
-  .font-serif-title {
-    font-family: 'Cinzel', Georgia, serif;
-  }
-
-  .viewer-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
-  }
-
-  .content-container {
-    height: calc(100vh - 240px);
-    min-height: 580px;
-    display: flex;
-    flex-direction: column;
-  }
-
+  
   .text-content {
-    font-family: 'Noto Sans Devanagari', 'Inter', system-ui, sans-serif;
+    font-family: 'Noto Sans Devanagari', 'Arial', sans-serif;
     line-height: 1.8;
     word-wrap: break-word;
-    color: #1e293b;
-    font-size: 1.05rem;
+    max-height: 100%;
+    overflow-y: auto;
   }
 
   .text-content table {
     border-collapse: collapse;
     width: 100%;
-    margin: 1rem 0;
-    font-size: 0.95rem;
+    margin: 0.75rem 0;
   }
 
   .text-content th,
   .text-content td {
-    border: 1px solid #cbd5e1;
-    padding: 0.5rem 0.85rem;
+    border: 1px solid #d1d5db;
+    padding: 0.4rem 0.75rem;
     text-align: left;
     vertical-align: top;
   }
 
   .text-content th {
-    background-color: #f1f5f9;
+    background-color: #f3f4f6;
     font-weight: 600;
-    color: #0f172a;
   }
-
-  .osd-control-btn {
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    padding: 6px 10px;
-    color: #475569;
-    font-size: 0.875rem;
-    font-weight: 600;
-    transition: all 0.2s ease;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  
+  .content-container {
+    height: 700px;
+    display: flex;
+    flex-direction: column;
   }
+  
 
-  .osd-control-btn:hover {
-    background: #f8fafc;
-    color: royalblue;
-    border-color: royalblue;
+  
+  .content-header {
+    flex-shrink: 0;
+    margin-bottom: 1rem;
   }
-
-  .bottom-nav-bar {
+  
+  .content-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .scrollable-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    background: white;
+  }
+  
+  .content-container.no-translation .scrollable-content {
+    overflow-y: visible;
+  }
+  
+  .image-controls {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 10;
+    display: flex;
+    gap: 0.25rem;
+  }
+  
+  .image-controls button {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #e5e7eb;
+    border-radius: 0.25rem;
+    padding: 0.25rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .image-controls button:hover {
+    background: rgba(255, 255, 255, 1);
+    border-color: #d1d5db;
+  }
+  
+  .image-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  
+  .translation-toggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+  
+  .navigation-bar {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    background: #ffffff;
-    border-top: 1px solid #e2e8f0;
-    padding: 0.85rem 1.5rem;
-    z-index: 40;
-    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.04);
+    background: white;
+    border-top: 1px solid #e5e7eb;
+    padding: 1rem;
+    z-index: 1000;
   }
-
-  .badge-royalblue {
-    background-color: rgba(65, 105, 225, 0.1);
-    color: royalblue;
-    border: 1px solid rgba(65, 105, 225, 0.25);
-  }
-
-  .badge-emerald {
-    background-color: rgba(16, 185, 129, 0.1);
-    color: #047857;
-    border: 1px solid rgba(16, 185, 129, 0.25);
+  
+  @media (max-width: 768px) {
+    .translation-toggle {
+      top: 10px;
+      right: 10px;
+    }
+    
+    .navigation-bar {
+      padding: 0.75rem;
+    }
   }
 </style>
 {% endblock %}
 
-{% block main_class %}bg-slate-50 min-h-screen pb-24{% endblock %}
+{% block body_class %}{% endblock %}
 
 {% block main %}
-<!-- Professional Header & Control Strip -->
-<div class="bg-white border-b border-slate-200 py-5 px-4 sm:px-8 mb-6 shadow-sm">
-  <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-    
-    <div>
-      <nav class="mb-1.5 flex items-center gap-2 text-xs font-semibold text-slate-500">
-        <a href="{{ url_for('public.books.index') }}" class="hover:text-royalblue transition-colors">{{ _('Catalog') }}</a>
-        <span>/</span>
-        <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" class="hover:text-royalblue transition-colors truncate max-w-xs">{{ project.display_title }}</a>
-        <span>/</span>
-        <span class="text-slate-900 font-bold">{{ _('Page') }} {{ page.slug }}</span>
-      </nav>
-      
-      <h1 class="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-3">
-        <span class="font-serif-title">{{ project.display_title }}</span>
-        <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">{{ _('Page') }} {{ page.slug }}</span>
-      </h1>
-    </div>
-
-    <!-- Right Control Options (Language Selector & Page Index) -->
-    <div class="flex items-center gap-4 flex-wrap">
-      {% if translations %}
-        <div class="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
-          <span class="text-xs font-bold text-slate-600 pl-2 uppercase tracking-wider">{{ _('View Content:') }}</span>
-          <select id="translation-select" class="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-800 focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none cursor-pointer">
-            <option value="none">{{ _('Original OCR Text') }}</option>
-            {% for translation in translations %}
-              <option value="{{ translation.target_language }}" 
-                      {% if selected_translation and selected_translation.id == translation.id %}selected{% endif %}>
-                {{ _('Translation') }} ({{ translation.source_language or 'auto' }} → {{ translation.target_language.upper() }})
-              </option>
-            {% endfor %}
-          </select>
-        </div>
-      {% endif %}
-
-      <div class="text-right text-xs bg-slate-50 px-3.5 py-1.5 rounded-xl border border-slate-200 font-medium text-slate-600">
-        <span class="font-bold text-slate-900">{{ current_index + 1 }}</span> {{ _('of') }} <span class="font-bold text-slate-900">{{ total_pages }}</span>
-        <span class="text-slate-400 mx-1">|</span>
-        <span class="text-royalblue font-bold">{{ "%.0f"|format((current_index + 1) / total_pages * 100) }}%</span>
-      </div>
-    </div>
-
+<!-- Translation Toggle -->
+{% if translations %}
+<div class="translation-toggle">
+  <div class="flex items-center space-x-2">
+    <label class="text-sm font-medium text-gray-700">Translation:</label>
+    <select id="translation-select" class="text-sm border border-gray-300 rounded px-2 py-1">
+      <option value="none">Original</option>
+      {% for translation in translations %}
+        <option value="{{ translation.target_language }}" 
+                {% if selected_translation and selected_translation.id == translation.id %}selected{% endif %}>
+          {{ translation.target_language.upper() }}
+        </option>
+      {% endfor %}
+    </select>
   </div>
 </div>
+{% endif %}
 
-<!-- Main Split Viewer -->
-<div class="max-w-7xl mx-auto px-4 sm:px-6">
-  
-  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+<div class="max-w-7xl mx-auto p-2">
+  <!-- Header -->
+  <header class="mb-6">
+    <nav class="mb-4">
+      <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" 
+         class="text-blue-600 hover:text-blue-800 transition-colors">
+        ← Back to {{ project.display_title }}
+      </a>
+    </nav>
     
-    <!-- Left Column: High-Res Document Scanner / Viewer -->
-    <div class="lg:col-span-6">
-      <div class="viewer-card content-container p-4">
-        
-        <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
-          <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <svg class="w-4 h-4 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-            </svg>
-            {{ _('Original Manuscript Scan') }}
-          </h2>
+    <div class="flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ project.display_title }}</h1>
+        <p class="text-gray-600">Page {{ page.slug }}</p>
+      </div>
+      
+      <div class="text-right">
+        <p class="text-sm text-gray-500">{{ current_index + 1 }} of {{ total_pages }}</p>
+        <p class="text-sm text-gray-500">{{ "%.1f"|format((current_index + 1) / total_pages * 100) }}% complete</p>
+      </div>
+    </div>
+  </header>
 
-          <div class="flex items-center gap-1.5">
-            <button type="button" id="osd-zoom-in" class="osd-control-btn" title="{{ _('Zoom in') }}">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"></path>
+  <!-- Page Content -->
+  <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-20">
+    <!-- Page Image -->
+    <div class="lg:col-span-2">
+      <div class="content-container">
+        <div class="content-header">
+          <h2 class="text-lg font-semibold text-gray-900">Original Page</h2>
+        </div>
+        <div class="content-body">
+          <div class="scrollable-content">
+            <div class="image-container">
+              <div id="osd-image" class="w-full h-full"></div>
+              <div class="image-controls">
+                <button type="button" id="osd-zoom-in" title="Zoom in">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                  </svg>
+                </button>
+                <button type="button" id="osd-zoom-out" title="Zoom out">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 12H6"></path>
+                  </svg>
+                </button>
+                <button type="button" id="osd-home" title="Reset view">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="hidden text-center py-8 text-gray-500" id="image-error">
+              <svg class="mx-auto h-12 w-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
               </svg>
-            </button>
-            <button type="button" id="osd-zoom-out" class="osd-control-btn" title="{{ _('Zoom out') }}">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"></path>
-              </svg>
-            </button>
-            <button type="button" id="osd-home" class="osd-control-btn" title="{{ _('Reset view') }}">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-              </svg>
-            </button>
+              <p>Page image not available</p>
+            </div>
           </div>
         </div>
-
-        <div class="relative flex-1 rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
-          <div id="osd-image" class="w-full h-full"></div>
-          
-          <div class="hidden flex-col items-center justify-center h-full py-16 text-slate-400 text-center" id="image-error">
-            <svg class="w-12 h-12 mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-            </svg>
-            <p class="text-sm font-medium text-slate-600">{{ _('Original manuscript page image is unavailable') }}</p>
-          </div>
-        </div>
-
       </div>
     </div>
 
-    <!-- Right Column: Text & Translation Content -->
-    <div class="lg:col-span-6">
-      <div class="viewer-card content-container p-4">
-        
-        <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
-          <div class="flex items-center gap-2">
-            <h2 class="text-sm font-bold text-slate-800" id="content-title">
-              {{ _('Transcription Text') }}
-            </h2>
-            <span id="content-badge" class="px-2 py-0.5 rounded text-[11px] font-bold badge-royalblue">
-              OCR
-            </span>
-          </div>
-
-          <span class="text-xs text-slate-400 font-medium">
-            {{ _('Shortcut: Press [T] to toggle text') }}
-          </span>
+    <!-- OCR Text -->
+    <div class="lg:col-span-3">
+      <div class="content-container">
+        <div class="content-header">
+          <h2 class="text-lg font-semibold text-gray-900">Text Content</h2>
         </div>
+        <div class="content-body">
+          <div class="scrollable-content">
+            {% if revision %}
+              <!-- Original Text -->
+              <div id="original-text" class="text-content">
+                {{ revision.content | safe }}
+              </div>
 
-        <div class="flex-1 overflow-y-auto p-4 rounded-lg bg-slate-50 border border-slate-200 text-content">
-          {% if revision %}
-            <!-- Original Text -->
-            <div id="original-text" class="prose max-w-none text-slate-800">
-              {{ revision.content | safe }}
-            </div>
-
-            <!-- Translation Text -->
-            {% if selected_translation %}
-              <div id="translation-text" class="prose max-w-none text-slate-800 hidden">
-                {{ selected_translation.content | safe }}
+              <!-- Translation Text (hidden by default) -->
+              {% if selected_translation %}
+                <div id="translation-text" class="text-content hidden">
+                  {{ selected_translation.content | safe }}
+                </div>
+              {% endif %}
+            {% else %}
+              <div class="flex flex-col items-center justify-center h-full text-center text-gray-400 py-16">
+                <svg class="w-12 h-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                <p class="font-medium">This page has not been transcribed yet.</p>
               </div>
             {% endif %}
-          {% else %}
-            <div class="flex flex-col items-center justify-center h-full text-center text-slate-400 py-16">
-              <svg class="w-12 h-12 mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-              </svg>
-              <p class="text-sm font-medium text-slate-600 mb-1">{{ _('No Transcription Available') }}</p>
-              <p class="text-xs text-slate-400 max-w-xs">{{ _('This manuscript page has not been transcribed yet in the proofing portal.') }}</p>
-            </div>
-          {% endif %}
+          </div>
         </div>
-
       </div>
     </div>
-
   </div>
-
+  
+  <!-- No translation available message - displayed outside the grid -->
+  {% if not translations %}
+    <div class="max-w-7xl mx-auto mt-4 mb-20">
+      <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div class="flex items-center">
+          <svg class="w-5 h-5 text-yellow-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+          </svg>
+          <div>
+            <h3 class="text-sm font-medium text-yellow-800">No Translation Available</h3>
+            <p class="text-sm text-yellow-700 mt-1">Translation has not been generated for this page yet.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+  </div>
 </div>
 
-<!-- Bottom Navigation Bar -->
-<nav class="bottom-nav-bar">
-  <div class="max-w-7xl mx-auto flex items-center justify-between">
-    
-    <div class="flex items-center gap-3">
+<!-- Navigation Bar -->
+<div class="navigation-bar">
+  <div class="max-w-7xl mx-auto flex justify-between items-center">
+    <div class="flex items-center space-x-4">
       {% if prev_page %}
         <a href="{{ url_for('public.books.page', project_slug=project.slug, page_slug=prev_page.slug) }}" 
-           class="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+           class="inline-flex items-center px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 transition-colors">
+          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
           </svg>
-          <span>{{ _('Previous Page') }}</span>
+          Previous
         </a>
-      {% else %}
-        <span class="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 text-xs font-semibold rounded-lg cursor-not-allowed">
-          {{ _('First Page') }}
-        </span>
       {% endif %}
       
-      <span class="text-xs text-slate-500 hidden sm:inline-block font-medium">
-        {{ _('Keyboard: [←] Prev | [→] Next') }}
+      <span class="text-sm text-gray-600">
+        Page {{ current_index + 1 }} of {{ total_pages }}
       </span>
     </div>
-
-    <div class="flex items-center gap-4">
+    
+    <div class="flex items-center space-x-4">
       <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" 
-         class="text-xs font-bold text-slate-600 hover:text-royalblue transition-colors">
-        {{ _('Overview') }}
+         class="text-sm text-gray-600 hover:text-gray-800 transition-colors">
+        Book Overview
       </a>
       
       {% if next_page %}
         <a href="{{ url_for('public.books.page', project_slug=project.slug, page_slug=next_page.slug) }}" 
-           class="inline-flex items-center gap-2 px-5 py-2 bg-royalblue hover:bg-blue-600 text-white text-xs font-semibold rounded-lg transition-all shadow-sm">
-          <span>{{ _('Next Page') }}</span>
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+           class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors">
+          Next
+          <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
           </svg>
         </a>
       {% endif %}
     </div>
-
   </div>
-</nav>
+</div>
 
-<!-- Scripts for interactive controls and OpenSeadragon -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const translationSelect = document.getElementById('translation-select');
   const originalText = document.getElementById('original-text');
   const translationText = document.getElementById('translation-text');
-  const contentTitle = document.getElementById('content-title');
-  const contentBadge = document.getElementById('content-badge');
   
   if (translationSelect) {
     translationSelect.addEventListener('change', function() {
       const selectedValue = this.value;
       
       if (selectedValue === 'none') {
-        if (originalText) originalText.classList.remove('hidden');
-        if (translationText) translationText.classList.add('hidden');
-        if (contentTitle) contentTitle.innerText = "{{ _('Transcription Text') }}";
-        if (contentBadge) {
-          contentBadge.innerText = "OCR";
-          contentBadge.className = "px-2 py-0.5 rounded text-[11px] font-bold badge-royalblue";
+        // Show original text
+        originalText.classList.remove('hidden');
+        if (translationText) {
+          translationText.classList.add('hidden');
         }
       } else {
-        if (originalText) originalText.classList.add('hidden');
-        if (translationText) translationText.classList.remove('hidden');
-        if (contentTitle) contentTitle.innerText = "{{ _('Translated Content') }}";
-        if (contentBadge) {
-          contentBadge.innerText = selectedValue.toUpperCase();
-          contentBadge.className = "px-2 py-0.5 rounded text-[11px] font-bold badge-emerald";
+        // Show translation
+        originalText.classList.add('hidden');
+        if (translationText) {
+          translationText.classList.remove('hidden');
         }
         
+        // Update URL with translation parameter
         const url = new URL(window.location);
         url.searchParams.set('translation', selectedValue);
         window.history.replaceState({}, '', url);
@@ -335,12 +344,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
-  // Keyboard navigation
+  // Handle keyboard navigation
   document.addEventListener('keydown', function(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-      return;
-    }
-
     {% if prev_page %}
       if (e.key === 'ArrowLeft' || e.key === 'a') {
         window.location.href = "{{ url_for('public.books.page', project_slug=project.slug, page_slug=prev_page.slug) }}";
@@ -353,24 +358,24 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     {% endif %}
     
-    if (e.key === 't' || e.key === 'T') {
-      if (translationSelect) {
-        const currentValue = translationSelect.value;
-        const options = Array.from(translationSelect.options);
-        const currentIndex = options.findIndex(option => option.value === currentValue);
-        const nextIndex = (currentIndex + 1) % options.length;
-        translationSelect.value = options[nextIndex].value;
-        translationSelect.dispatchEvent(new Event('change'));
-      }
+    // Toggle translation with 't' key
+    if (e.key === 't' && translationSelect) {
+      const currentValue = translationSelect.value;
+      const options = Array.from(translationSelect.options);
+      const currentIndex = options.findIndex(option => option.value === currentValue);
+      const nextIndex = (currentIndex + 1) % options.length;
+      translationSelect.value = options[nextIndex].value;
+      translationSelect.dispatchEvent(new Event('change'));
     }
   });
 });
 </script>
 
-<!-- OpenSeadragon Viewer Initialization -->
+<!-- OpenSeadragon Image Viewer -->
 <script src="https://cdn.jsdelivr.net/npm/openseadragon@3.1/build/openseadragon/openseadragon.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  // Initialize OpenSeadragon image viewer
   const imageURL = "{{ url_for('site.page_image', project_slug=project.slug, page_slug=page.slug) }}";
   
   try {
@@ -381,29 +386,38 @@ document.addEventListener('DOMContentLoaded', function() {
         url: imageURL,
         buildPyramid: false,
       },
+      
+      // Buttons
       showZoomControl: false,
       showHomeControl: false,
       showRotationControl: false,
       showFullPageControl: false,
+      
+      // Animations
       gestureSettingsMouse: {
         flickEnabled: true,
       },
-      animationTime: 0.4,
-      zoomPerClick: 1.15,
+      animationTime: 0.5,
+      
+      // Zoom settings
+      zoomPerClick: 1.1,
       maxZoomPixelRatio: 2.5,
+      
+      // Error handling
       errorHandler: function(event) {
         console.error('OpenSeadragon error:', event);
         document.getElementById('osd-image').style.display = 'none';
-        document.getElementById('image-error').style.display = 'flex';
+        document.getElementById('image-error').style.display = 'block';
       }
     });
     
+    // Connect zoom buttons
     document.getElementById('osd-zoom-in').addEventListener('click', function() {
-      viewer.viewport.zoomBy(1.15);
+      viewer.viewport.zoomBy(1.1);
     });
     
     document.getElementById('osd-zoom-out').addEventListener('click', function() {
-      viewer.viewport.zoomBy(0.85);
+      viewer.viewport.zoomBy(0.9);
     });
     
     document.getElementById('osd-home').addEventListener('click', function() {
@@ -411,9 +425,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
   } catch (error) {
-    console.error('Failed to initialize OpenSeadragon viewer:', error);
+    console.error('Failed to initialize OpenSeadragon:', error);
     document.getElementById('osd-image').style.display = 'none';
-    document.getElementById('image-error').style.display = 'flex';
+    document.getElementById('image-error').style.display = 'block';
   }
 });
 </script>

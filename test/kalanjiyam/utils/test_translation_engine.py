@@ -7,7 +7,6 @@ from kalanjiyam.utils.translation_engine import (
     TranslationResponse,
     GoogleTranslateEngine,
     OpenAITranslateEngine,
-    IndicTransEngine,
     TranslationEngineFactory,
     translate_text,
     segment_text_for_translation,
@@ -63,15 +62,24 @@ class TestTranslationEngineFactory:
     def test_get_supported_engines(self):
         """Test getting supported engines."""
         engines = TranslationEngineFactory.get_supported_engines()
-        assert "indictrans2" in engines
-        assert "google" not in engines
-        assert "openai" not in engines
+        assert "google" in engines
+        assert "openai" in engines
     
-    def test_create_indictrans_engine(self):
-        """Test creating IndicTrans engine."""
-        engine = TranslationEngineFactory.create("indictrans2")
-        assert isinstance(engine, IndicTransEngine)
-        assert engine.version == "indictrans2"
+    def test_create_google_engine(self):
+        """Test creating Google Translate engine."""
+        with patch('kalanjiyam.utils.translation_engine.GoogleTranslateEngine') as mock_engine_class:
+            mock_engine = Mock()
+            mock_engine_class.return_value = mock_engine
+            engine = TranslationEngineFactory.create("google")
+            mock_engine_class.assert_called_once()
+    
+    def test_create_openai_engine(self):
+        """Test creating OpenAI engine."""
+        with patch('kalanjiyam.utils.translation_engine.OpenAITranslateEngine') as mock_engine_class:
+            mock_engine = Mock()
+            mock_engine_class.return_value = mock_engine
+            engine = TranslationEngineFactory.create("openai", api_key="test-key")
+            mock_engine_class.assert_called_once_with(api_key="test-key")
     
     def test_create_unsupported_engine(self):
         """Test creating unsupported engine raises error."""
@@ -79,75 +87,78 @@ class TestTranslationEngineFactory:
             TranslationEngineFactory.create("unsupported")
 
 
-class TestIndicTransEngine:
-    """Test IndicTrans engine."""
+class TestGoogleTranslateEngine:
+    """Test Google Translate engine."""
     
-    @patch('httpx.Client')
-    def test_translate_simple_text(self, mock_client_class):
+    @patch('kalanjiyam.utils.translation_engine.Translator')
+    def test_translate_simple_text(self, mock_translator_class):
         """Test simple text translation."""
-        mock_client = Mock()
-        mock_client_class.return_value.__enter__.return_value = mock_client
+        mock_translator = Mock()
+        mock_translator_class.return_value = mock_translator
         
-        # Mock the translation response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"text": "Hello world"}
-        mock_client.post.return_value = mock_response
+        # Mock the translation result
+        mock_result = Mock()
+        mock_result.text = "Hello world"
+        mock_translator.translate.return_value = mock_result
         
-        # Create app context because current_app is used
-        from flask import Flask
-        app = Flask("test_app")
-        app.config["TRANSLATION_SERVICE_URL"] = "http://localhost:8888"
-        app.config["TRANSLATION_SERVICE_TIMEOUT"] = 10
-        
-        with app.app_context():
-            engine = IndicTransEngine("indictrans2")
+        with patch('kalanjiyam.utils.translation_engine.GoogleTranslateEngine.__init__', return_value=None):
+            engine = GoogleTranslateEngine()
+            engine.translator = mock_translator
+            engine._supported_languages = None
+            
             response = engine.translate("नमस्ते दुनिया", "sa", "en")
             
             assert response.translated_text == "Hello world"
             assert response.source_language == "sa"
             assert response.target_language == "en"
-            assert response.engine == "indictrans2"
-            
-            # Check mock call
-            mock_client.post.assert_called_once()
-            call_kwargs = mock_client.post.call_args[1]
-            assert call_kwargs["json"]["text"] == "नमस्ते दुनिया"
-            assert call_kwargs["json"]["model_name"] == "ai4bharat/indictrans2-indic-en-1B"
-            assert call_kwargs["json"]["source_language"] == "Sanskrit"
-            assert call_kwargs["json"]["target_language"] == "English"
-
-    @patch('httpx.Client')
-    def test_translate_with_api_key(self, mock_client_class):
-        """Test text translation sends X-API-Key header when configured."""
-        mock_client = Mock()
-        mock_client_class.return_value.__enter__.return_value = mock_client
-        
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"text": "Hello world"}
-        mock_client.post.return_value = mock_response
-        
-        from flask import Flask
-        app = Flask("test_app")
-        app.config["TRANSLATION_SERVICE_URL"] = "http://localhost:8888"
-        app.config["TRANSLATION_SERVICE_API_KEY"] = "test-secret-key"
-        
-        with app.app_context():
-            engine = IndicTransEngine("indictrans2")
-            response = engine.translate("नमस्ते दुनिया", "sa", "en")
-            
-            mock_client.post.assert_called_once()
-            call_kwargs = mock_client.post.call_args[1]
-            assert call_kwargs["headers"] == {"X-API-Key": "test-secret-key"}
+            assert response.engine == "google"
     
     def test_get_supported_languages(self):
         """Test getting supported languages."""
-        engine = IndicTransEngine("indictrans2")
-        languages = engine.get_supported_languages()
-        assert "en" in languages
-        assert "sa" in languages
-        assert "hi" in languages
+        with patch('kalanjiyam.utils.translation_engine.GoogleTranslateEngine.__init__', return_value=None):
+            engine = GoogleTranslateEngine()
+            engine._supported_languages = ['en', 'sa', 'hi']
+            languages = engine.get_supported_languages()
+            assert "en" in languages
+            assert "sa" in languages
+
+
+class TestOpenAITranslateEngine:
+    """Test OpenAI translation engine."""
+    
+    @patch('kalanjiyam.utils.translation_engine.openai')
+    def test_translate_simple_text(self, mock_openai):
+        """Test simple text translation with OpenAI."""
+        # Mock the OpenAI client and response
+        mock_client = Mock()
+        mock_openai.OpenAI.return_value = mock_client
+        
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = "Hello world"
+        mock_response.usage = {"total_tokens": 100}
+        mock_client.chat.completions.create.return_value = mock_response
+        
+        with patch('kalanjiyam.utils.translation_engine.OpenAITranslateEngine.__init__', return_value=None):
+            engine = OpenAITranslateEngine()
+            engine.client = mock_client
+            
+            response = engine.translate("नमस्ते दुनिया", "sa", "en")
+            
+            assert response.translated_text == "Hello world"
+            assert response.source_language == "sa"
+            assert response.target_language == "en"
+            assert response.engine == "openai"
+            assert response.metadata["model"] == "gpt-3.5-turbo"
+    
+    def test_get_supported_languages(self):
+        """Test getting supported languages."""
+        with patch('kalanjiyam.utils.translation_engine.OpenAITranslateEngine.__init__', return_value=None):
+            engine = OpenAITranslateEngine()
+            languages = engine.get_supported_languages()
+            assert "en" in languages
+            assert "sa" in languages
+            assert "hi" in languages
 
 
 class TestTranslateTextFunction:
@@ -161,13 +172,13 @@ class TestTranslateTextFunction:
             translated_text="Hello world",
             source_language="sa",
             target_language="en",
-            engine="indictrans2"
+            engine="google"
         )
         mock_engine.translate.return_value = mock_response
         mock_factory.create.return_value = mock_engine
         
-        response = translate_text("नमस्ते दुनिया", "sa", "en", "indictrans2")
+        response = translate_text("नमस्ते दुनिया", "sa", "en", "google")
         
         assert response.translated_text == "Hello world"
-        mock_factory.create.assert_called_once_with("indictrans2")
-        mock_engine.translate.assert_called_once_with("नमस्ते दुनिया", "sa", "en")
+        mock_factory.create.assert_called_once_with("google")
+        mock_engine.translate.assert_called_once_with("नमस्ते दुनिया", "sa", "en") 

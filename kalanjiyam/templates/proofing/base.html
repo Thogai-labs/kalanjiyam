@@ -4,7 +4,7 @@
 
 
 {% block meta_description -%}
-{{ _('A state-of-the-art Sanskrit proofreading platform with best-in-class OCR. Join today!') }}
+A state-of-the-art Sanskrit proofreading platform with best-in-class OCR. Join today!
 {%- endblock %}
 
 {% block extra_css %}
@@ -70,7 +70,9 @@
 {% endblock %}
 
 {% block header %}
-{% include "include/header.html" %}
+<div class="text-sky-900 bg-white border-b border-slate-100 mb-4 shadow-sm">
+  {% include "include/header-login.html" %}
+</div>
 {% endblock %}
 
 

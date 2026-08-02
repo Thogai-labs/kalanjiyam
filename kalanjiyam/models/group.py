@@ -32,16 +32,6 @@ class Group(Base):
     ocr_credit_limit = Column(Integer, nullable=True)
     #: OCR credits consumed.
     ocr_credits_used = Column(Integer, nullable=False, default=0)
-    #: Optional translation credit limit. Null means unlimited.
-    translation_credit_limit = Column(Integer, nullable=True)
-    #: Translation credits consumed.
-    translation_credits_used = Column(Integer, nullable=False, default=0)
-    #: Optional per-user storage quota in bytes. Null means unlimited/no personal quota.
-    default_user_storage_limit = Column(BigInteger, nullable=True)
-    #: Optional per-user OCR credit limit. Null means unlimited/no personal quota.
-    default_user_ocr_limit = Column(Integer, nullable=True)
-    #: Optional per-user translation credit limit. Null means unlimited/no personal quota.
-    default_user_translation_limit = Column(Integer, nullable=True)
     #: Optional user designated as organization admin.
     admin_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     #: Timestamps.
