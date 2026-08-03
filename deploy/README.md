@@ -18,10 +18,21 @@ cp .env.example .env   # fill in all required values
 ./deploy/prod/deploy.sh stop     # tear down
 ```
 
-**Local** — `make docker-start` (or `KALANJIYAM_DEPLOYMENT_ENV=local make docker-start`).
+**Staging** — use `deploy/staging/deploy.sh`:
 
-**Staging** — does not include the Versity Gateway, so `STORAGE_BACKEND` defaults to `local`.
-The `kalanjiyam-runner` script in this directory drives CI staging runs.
+```bash
+./deploy/staging/deploy.sh
+./deploy/staging/deploy.sh logs     # tail logs
+./deploy/staging/deploy.sh stop     # tear down
+```
+
+**Local / Dev** — use `deploy/local/deploy.sh` (or `make docker-start`):
+
+```bash
+./deploy/local/deploy.sh
+./deploy/local/deploy.sh logs     # tail logs
+./deploy/local/deploy.sh stop     # tear down
+```
 
 Celery listens on `default` and `ocr` queues in all environments. OCR runs as a separate
 service; set `OCR_SERVICE_URL` to a host reachable from inside containers.
