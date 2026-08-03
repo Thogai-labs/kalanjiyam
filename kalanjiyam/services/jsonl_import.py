@@ -108,13 +108,43 @@ def parse_jsonl_record(line: str | bytes) -> tuple[str, int, list[dict]]:
     return book_id, page_number, normalize_blocks(generated, book_id, page_number)
 
 
+def _is_s3_uri(uri: str) -> bool:
+    return str(uri).startswith("s3://")
+
+
 def _list_objects(client, uri: str, suffix: str) -> list[str]:
-    bucket, prefix = parse_s3_uri(uri)
-    found = []
-    for response in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
-        found.extend(f"s3://{bucket}/{obj['Key']}" for obj in response.get("Contents", [])
-                     if obj["Key"].lower().endswith(suffix) and not obj["Key"].endswith("/"))
-    return sorted(found)
+    if _is_s3_uri(uri):
+        bucket, prefix = parse_s3_uri(uri)
+        found = []
+        for response in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
+            found.extend(f"s3://{bucket}/{obj['Key']}" for obj in response.get("Contents", [])
+                         if obj["Key"].lower().endswith(suffix) and not obj["Key"].endswith("/"))
+        return sorted(found)
+    else:
+        p = Path(uri)
+        if not p.exists():
+            return []
+        if p.is_file():
+            return [str(p)] if p.name.lower().endswith(suffix) else []
+        return sorted(str(f) for f in p.rglob("*") if f.is_file() and f.name.lower().endswith(suffix))
+
+
+def _read_lines(source: str, client=None):
+    if _is_s3_uri(source):
+        bucket, key = parse_s3_uri(source)
+        return client.get_object(Bucket=bucket, Key=key)["Body"].iter_lines()
+    else:
+        with Path(source).open("rb") as f:
+            return f.read().splitlines()
+
+
+def _fetch_pdf(pdf_path: str, target_local: Path, client=None):
+    if _is_s3_uri(pdf_path):
+        bucket, key = parse_s3_uri(pdf_path)
+        client.download_file(bucket, key, str(target_local))
+    else:
+        import shutil
+        shutil.copyfile(pdf_path, target_local)
 
 
 def _parts(uri: str) -> tuple[str, str]:
@@ -124,7 +154,8 @@ def _parts(uri: str) -> tuple[str, str]:
 def _pdf_index(client, uri: str) -> dict[str, list[str]]:
     output = defaultdict(list)
     for item in _list_objects(client, uri, ".pdf"):
-        output[Path(urlparse(item).path).stem].append(item)
+        stem = Path(urlparse(item).path if _is_s3_uri(item) else item).stem
+        output[stem].append(item)
     return output
 
 
@@ -169,15 +200,15 @@ def _persist_ocr(session, page, blocks: list[dict], width: int, height: int):
 def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
                dry_run: bool = False, allow_duplicate: bool = False, client=None) -> ImportSummary:
     """Run a bounded, streaming import. JSONL page numbers are 1-based."""
-    client = client or boto3.client("s3")
+    if _is_s3_uri(jsonl_uri) or _is_s3_uri(pdf_uri):
+        client = client or boto3.client("s3")
     summary = ImportSummary()
     with tempfile.TemporaryDirectory(prefix="kalanjiyam-jsonl-") as temporary:
         root = Path(temporary)
         books: dict[str, BookInput] = defaultdict(BookInput)
         for source in _list_objects(client, jsonl_uri, ".jsonl"):
             summary.jsonl_files += 1
-            bucket, key = _parts(source)
-            for line_no, line in enumerate(client.get_object(Bucket=bucket, Key=key)["Body"].iter_lines(), 1):
+            for line_no, line in enumerate(_read_lines(source, client), 1):
                 if not line.strip():
                     continue
                 try:
@@ -249,8 +280,7 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
             local_pdf = root / f"validate-{slugify(book_id)}.pdf"
             document = None
             try:
-                bucket, key = _parts(matches[0])
-                client.download_file(bucket, key, str(local_pdf))
+                _fetch_pdf(matches[0], local_pdf, client)
                 document = fitz.open(local_pdf)
                 if document.needs_pass or document.page_count == 0:
                     raise ImportValidationError("encrypted or empty PDF")
@@ -286,8 +316,7 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
                 item.project_id, item.status = project.id, "PROCESSING"
                 session.flush()
                 local_pdf = root / f"process-{slugify(book_id)}.pdf"
-                bucket, key = _parts(item.file_path)
-                client.download_file(bucket, key, str(local_pdf))
+                _fetch_pdf(item.file_path, local_pdf, client)
                 storage.save(pdf_key(project.slug), local_pdf)
                 with fitz.open(local_pdf) as document:
                     for page_no in range(1, document.page_count + 1):

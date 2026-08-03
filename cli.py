@@ -457,8 +457,8 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
 
 
 @cli.command("import-jsonl")
-@click.option("--jsonl-uri", required=True, help="S3 JSONL prefix (s3://bucket/prefix/)")
-@click.option("--pdf-uri", required=True, help="S3 PDF prefix (s3://bucket/prefix/)")
+@click.option("--jsonl-uri", required=True, help="S3 URI (s3://...) or local directory path for JSONL files")
+@click.option("--pdf-uri", required=True, help="S3 URI (s3://...) or local directory path for PDF files")
 @click.option("--org", required=True, help="Organization slug for imported projects")
 @click.option("--dry-run", is_flag=True, help="Discover and validate without writing DB or storage")
 @click.option(
@@ -468,7 +468,7 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
     help="Allow importing books that already exist in the organization (default: false)",
 )
 def import_jsonl(jsonl_uri, pdf_uri, org, dry_run, allow_duplicate):
-    """Import PDF pages and JSONL OCR records from S3 (JSONL page numbers are 1-based)."""
+    """Import PDF pages and JSONL OCR records from S3 or local filesystem (JSONL page numbers are 1-based)."""
     from kalanjiyam.models.group import Group
     from kalanjiyam.services.jsonl_import import ImportValidationError, run_import
 

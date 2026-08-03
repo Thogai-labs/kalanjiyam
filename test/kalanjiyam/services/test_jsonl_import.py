@@ -169,3 +169,49 @@ def test_run_import_allows_duplicate_books_when_allow_duplicate_true():
     assert summary.skipped_books == 0
 
 
+def test_run_import_with_local_filesystem_paths(tmp_path):
+    from unittest.mock import MagicMock
+    from kalanjiyam.services.jsonl_import import run_import
+    from kalanjiyam.models.group import Group
+    import kalanjiyam.database as db
+
+    jsonl_dir = tmp_path / "jsonl"
+    pdf_dir = tmp_path / "pdfs"
+    jsonl_dir.mkdir()
+    pdf_dir.mkdir()
+
+    record = json.dumps({
+        "id": "localbook1↳1",
+        "generated_text": json.dumps([{"bbox": [0, 0, 10, 10], "category": "text", "text": "Sample"}]),
+    })
+    (jsonl_dir / "localbook1.jsonl").write_text(record + "\n", encoding="utf-8")
+
+    session = MagicMock()
+    mock_group = MagicMock(id=1, slug="my-org")
+    def query_side_effect(model):
+        q = MagicMock()
+        if model == Group:
+            q.filter_by.return_value.first.return_value = mock_group
+        elif model == db.Project:
+            q.join.return_value.filter.return_value.all.return_value = []
+        return q
+
+    session.query.side_effect = query_side_effect
+
+    summary = run_import(
+        session,
+        jsonl_uri=str(jsonl_dir),
+        pdf_uri=str(pdf_dir),
+        org_slug="my-org",
+        dry_run=True,
+        allow_duplicate=False,
+    )
+
+    assert summary.jsonl_files == 1
+    assert summary.books == 1
+    assert summary.pages == 1
+    assert summary.skipped_books == 0
+    assert summary.missing_pdfs == 1
+
+
+
