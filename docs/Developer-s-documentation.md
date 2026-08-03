@@ -47,37 +47,37 @@
    ```
 6. When the process finishes starting the services, you will see a success message:
    ```bash
-   Container kalanjiyam-redis                     Started
-   Container kalanjiyam-local-kalanjiyam-celery-1 Started
-   Container kalanjiyam-web                       Started
-   Container kalanjiyam-db                        Started
+   Container kalanjiyam-redis-dev  Started
+   Container kalanjiyam-celery-dev Started
+   Container kalanjiyam-web-dev    Started
+   Container kalanjiyam-db-dev     Started
    Kalanjiyam WebApp   : ✔ 
-   Kalanjiyam URL      : http://0.0.0.0:5000
+   Kalanjiyam URL      : http://0.0.0.0:5001
    
    To stop, run "make docker-stop".
    ```
-7. Visit the site at [http://localhost:5000](http://localhost:5000).
+7. Visit the site at [http://localhost:5001](http://localhost:5001).
 
 ## Managing Users & Organizations via the CLI
 
-All user and organization management is performed using the CLI tool. Inside the running web container `kalanjiyam-web`, the tool is located at `scripts/cli.py` (which corresponds to `cli.py` at the root of the host workspace). Run these commands as follows:
+All user and organization management is performed using the CLI tool. Inside the running web container (e.g. `kalanjiyam-web-dev` for local dev, `kalanjiyam-web-staging` for staging, or `kalanjiyam-web-prod` for production), the tool is located at `scripts/cli.py` (which corresponds to `cli.py` at the root of the host workspace). Run these commands as follows:
 
 ### 1. Create a Super Admin
 If you need platform-wide administrator privileges to manage settings, organizations, and all other accounts, run:
 ```bash
-docker exec -it kalanjiyam-web python scripts/cli.py create-super-admin
+docker exec -it kalanjiyam-web-dev python scripts/cli.py create-super-admin
 ```
 *(Note: Only one super admin account is allowed on the platform).*
 
 ### 2. Create a New Organization (Tenant)
 ```bash
-docker exec -it kalanjiyam-web python scripts/cli.py create-organization --name "My Org" --slug "my-org"
+docker exec -it kalanjiyam-web-dev python scripts/cli.py create-organization --name "My Org" --slug "my-org"
 ```
 
 ### 3. Create a Regular User inside an Organization
 To create a new user account linked to a specific organization (defaults to the `p1` basic proofer role):
 ```bash
-docker exec -it kalanjiyam-web python scripts/cli.py create-org-user --org "my-org" --username "test_user" --email "user@example.com"
+docker exec -it kalanjiyam-web-dev python scripts/cli.py create-org-user --org "my-org" --username "test_user" --email "user@example.com"
 ```
 
 ### 4. Assign / Update an Organization Admin (Org Admin)

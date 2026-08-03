@@ -3,7 +3,7 @@ version: '3.8'
 services:
   kalanjiyam-dbsetup:
     image: ${KALANJIYAM_IMAGE}
-    container_name: kalanjiyam-dbsetup
+    container_name: kalanjiyam-dbsetup-staging
     command: alembic stamp head && python -m kalanjiyam.seed.lookup && python -m kalanjiyam.seed.texts.gretil && python -m kalanjiyam.seed.dcs
     env_file:
       - ../../.env
@@ -16,7 +16,7 @@ services:
 
   kalanjiyam-db:
     image: postgres:15
-    container_name: kalanjiyam-db
+    container_name: kalanjiyam-db-staging
     environment:
       - POSTGRES_DB=kalanjiyam
       - POSTGRES_USER=kalanjiyam

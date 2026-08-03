@@ -3,10 +3,10 @@ version: '3.8'
 services:
   kalanjiyam-web:
     image: ${KALANJIYAM_IMAGE}
-    container_name: kalanjiyam-web
+    container_name: kalanjiyam-web-staging
     ports:
       - host_ip: ${KALANJIYAM_HOST_IP}
-        published: ${KALANJIYAM_HOST_PORT}
+        published: ${KALANJIYAM_HOST_PORT:-5002}
         target: 5000
     env_file:
       - ../../.env
@@ -24,7 +24,7 @@ services:
 
   kalanjiyam-db:
     image: postgres:15
-    container_name: kalanjiyam-db
+    container_name: kalanjiyam-db-staging
     environment:
       - POSTGRES_DB=kalanjiyam
       - POSTGRES_USER=kalanjiyam
@@ -34,11 +34,11 @@ services:
 
   kalanjiyam-redis:
     image: redis:7
-    container_name: kalanjiyam-redis
+    container_name: kalanjiyam-redis-staging
 
   kalanjiyam-celery:
     image: ${KALANJIYAM_IMAGE}
-    container_name: kalanjiyam-celery
+    container_name: kalanjiyam-celery-staging
     command: >
       celery -A kalanjiyam.tasks worker
       -Q default,ocr,low_priority,s3_batch

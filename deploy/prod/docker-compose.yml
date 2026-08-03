@@ -1,11 +1,11 @@
 services:
   kalanjiyam-web:
     image: ${KALANJIYAM_IMAGE}
-    container_name: kalanjiyam-web
+    container_name: kalanjiyam-web-prod
     restart: unless-stopped
     ports:
       - host_ip: ${KALANJIYAM_HOST_IP}
-        published: ${KALANJIYAM_HOST_PORT}
+        published: ${KALANJIYAM_HOST_PORT:-5000}
         target: 5000
     env_file:
       - ../../.env
@@ -33,7 +33,7 @@ services:
 
   kalanjiyam-db:
     image: postgres:15
-    container_name: kalanjiyam-db
+    container_name: kalanjiyam-db-prod
     restart: unless-stopped
     environment:
       - POSTGRES_DB=kalanjiyam
@@ -44,12 +44,12 @@ services:
 
   kalanjiyam-redis:
     image: redis:7
-    container_name: kalanjiyam-redis
+    container_name: kalanjiyam-redis-prod
     restart: unless-stopped
 
   kalanjiyam-celery:
     image: ${KALANJIYAM_IMAGE}
-    container_name: kalanjiyam-celery
+    container_name: kalanjiyam-celery-prod
     restart: unless-stopped
     command: >
       celery -A kalanjiyam.tasks worker
@@ -85,7 +85,7 @@ services:
 
   kalanjiyam-celery-batch:
     image: ${KALANJIYAM_IMAGE}
-    container_name: kalanjiyam-celery-batch
+    container_name: kalanjiyam-celery-batch-prod
     restart: unless-stopped
     command: >
       celery -A kalanjiyam.tasks worker
@@ -125,7 +125,7 @@ services:
   # plain files; the app reaches them through the S3 API.
   kalanjiyam-versitygw:
     image: versity/versitygw:latest
-    container_name: kalanjiyam-versitygw
+    container_name: kalanjiyam-versitygw-prod
     restart: unless-stopped
     environment:
       - ROOT_ACCESS_KEY=${S3_ACCESS_KEY_ID:-kalanjiyam}

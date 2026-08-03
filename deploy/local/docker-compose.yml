@@ -3,10 +3,10 @@ version: '3.8'
 services:
   kalanjiyam-web:
     image: ${KALANJIYAM_IMAGE}
-    container_name: kalanjiyam-web
+    container_name: kalanjiyam-web-dev
     ports:
       - host_ip: ${KALANJIYAM_HOST_IP}
-        published: ${KALANJIYAM_HOST_PORT}
+        published: ${KALANJIYAM_HOST_PORT:-5001}
         target: 5000
     volumes:
       - ${PWD}/kalanjiyam/static/:/app/kalanjiyam/static/
@@ -34,7 +34,7 @@ services:
 
   kalanjiyam-db:
     image: postgres:15
-    container_name: kalanjiyam-db
+    container_name: kalanjiyam-db-dev
     environment:
       - POSTGRES_DB=kalanjiyam
       - POSTGRES_USER=kalanjiyam
@@ -44,11 +44,11 @@ services:
 
   kalanjiyam-redis:
     image: redis:7
-    container_name: kalanjiyam-redis
+    container_name: kalanjiyam-redis-dev
 
   kalanjiyam-celery:
     image: ${KALANJIYAM_IMAGE}
-    container_name: kalanjiyam-celery
+    container_name: kalanjiyam-celery-dev
     command: >
       celery -A kalanjiyam.tasks worker
       -Q default,ocr,low_priority
@@ -75,7 +75,7 @@ services:
 
   kalanjiyam-celery-batch:
     image: ${KALANJIYAM_IMAGE}
-    container_name: kalanjiyam-celery-batch
+    container_name: kalanjiyam-celery-batch-dev
     command: >
       celery -A kalanjiyam.tasks worker
       -Q s3_batch
@@ -104,7 +104,7 @@ services:
   # Files remain ordinary files on the volume; the app talks S3.
   kalanjiyam-versitygw:
     image: versity/versitygw:latest
-    container_name: kalanjiyam-versitygw
+    container_name: kalanjiyam-versitygw-dev
     environment:
       - ROOT_ACCESS_KEY=${S3_ACCESS_KEY_ID:-kalanjiyam}
       - ROOT_SECRET_KEY=${S3_SECRET_ACCESS_KEY:-kalanjiyam-dev-secret}

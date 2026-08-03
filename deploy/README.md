@@ -1,10 +1,10 @@
 ## Deployment environments
 
-| Directory | Use | Storage | DB password |
-|-----------|-----|---------|-------------|
-| `deploy/local/` | Local Docker dev | S3 via versitygw (named volume) | hardcoded `kalanjiyam` |
-| `deploy/staging/` | CI / staging | `local` (no S3 gateway) | hardcoded `kalanjiyam` |
-| `deploy/prod/` | Production Docker | S3 via versitygw (`~/kalanjiyam-data/uploads`) | `POSTGRES_PASSWORD` from `.env` |
+| Directory | Environment | Container Suffix | Default Web Port | Storage | DB password |
+|-----------|-------------|------------------|------------------|---------|-------------|
+| `deploy/local/` | Local Docker dev | `-dev` | `5001` | S3 via versitygw (named volume) | hardcoded `kalanjiyam` |
+| `deploy/staging/` | CI / staging | `-staging` | `5002` | `local` (no S3 gateway) | hardcoded `kalanjiyam` |
+| `deploy/prod/` | Production Docker | `-prod` | `5000` | S3 via versitygw (`~/kalanjiyam-data/uploads`) | `POSTGRES_PASSWORD` from `.env` |
 
 All three read `../../.env` via `env_file`. Configure `.env` from `.env.example` before starting.
 

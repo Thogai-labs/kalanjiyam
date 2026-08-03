@@ -1600,6 +1600,184 @@ class OrgAdminView(AdminBaseView):
             is_platform=False
         )
 
+    @expose("/cli_batch_ocr")
+    @expose("/cli_batch_ocr/<int:job_id>")
+    def cli_batch_ocr(self, job_id=None):
+        org_id = require_org_admin()
+        org = q.group(org_id)
+        if org is None:
+            abort(404)
+
+        session = q.get_session()
+        from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrPage
+        from kalanjiyam.models.group import ProjectGroups
+        from sqlalchemy import func
+
+        # Get all project IDs belonging to this organization
+        org_project_ids = [
+            pg.project_id
+            for pg in session.query(ProjectGroups.project_id).filter_by(group_id=org.id).all()
+        ]
+
+        if not org_project_ids:
+            return render_template(
+                "admin/cli_batch_ocr.html",
+                jobs=[],
+                selected_job=None,
+                item_metrics=[],
+                is_org_admin=True,
+                org=org,
+            )
+
+        # Get all batch jobs that contain items associated with this org's projects
+        job_ids_for_org = (
+            session.query(BatchItem.job_id)
+            .filter(BatchItem.project_id.in_(org_project_ids))
+            .distinct()
+            .all()
+        )
+        valid_job_ids = [j[0] for j in job_ids_for_org if j[0] is not None]
+
+        jobs = (
+            session.query(BatchJob)
+            .filter(BatchJob.id.in_(valid_job_ids))
+            .order_by(BatchJob.id.desc())
+            .all()
+        ) if valid_job_ids else []
+
+        selected_job = None
+        item_metrics = []
+
+        if job_id:
+            if job_id in valid_job_ids:
+                selected_job = session.query(BatchJob).get(job_id)
+            else:
+                abort(403, description="Access denied to this batch job.")
+        elif jobs:
+            selected_job = jobs[0]
+
+        if selected_job:
+            # Show ONLY items belonging to this org's projects
+            items = (
+                session.query(BatchItem)
+                .filter(
+                    BatchItem.job_id == selected_job.id,
+                    BatchItem.project_id.in_(org_project_ids),
+                )
+                .all()
+            )
+            for item in items:
+                page_count_db = (
+                    session.query(func.count(BatchOcrPage.id))
+                    .filter_by(batch_item_id=item.id)
+                    .scalar()
+                ) or 0
+                pages = item.total_pages or page_count_db
+                time_sec = (item.total_ocr_latency_ms / 1000.0) if item.total_ocr_latency_ms else None
+                avg_per_page_sec = (time_sec / pages) if (time_sec is not None and pages > 0) else None
+
+                item_metrics.append({
+                    "id": item.id,
+                    "name": item.file_path,
+                    "size_bytes": item.source_size_bytes,
+                    "pages": pages,
+                    "time_took_sec": round(time_sec, 2) if time_sec is not None else None,
+                    "avg_per_page_sec": round(avg_per_page_sec, 2) if avg_per_page_sec is not None else None,
+                    "status": item.status,
+                    "error_message": item.error_message,
+                    "extraction_latency_ms": item.extraction_latency_ms,
+                    "project_id": item.project_id,
+                })
+
+        return render_template(
+            "admin/cli_batch_ocr.html",
+            jobs=jobs,
+            selected_job=selected_job,
+            item_metrics=item_metrics,
+            is_org_admin=True,
+            org=org,
+        )
+
+    @expose("/cli_batch_ocr/<int:job_id>/export_csv")
+    def cli_batch_ocr_export_csv(self, job_id):
+        org_id = require_org_admin()
+        org = q.group(org_id)
+        if org is None:
+            abort(404)
+
+        session = q.get_session()
+        import csv
+        import io
+        from flask import Response
+        from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrPage
+        from kalanjiyam.models.group import ProjectGroups
+        from sqlalchemy import func
+
+        org_project_ids = [
+            pg.project_id
+            for pg in session.query(ProjectGroups.project_id).filter_by(group_id=org.id).all()
+        ]
+
+        job = session.query(BatchJob).get(job_id)
+        if not job:
+            abort(404)
+
+        items = (
+            session.query(BatchItem)
+            .filter(
+                BatchItem.job_id == job.id,
+                BatchItem.project_id.in_(org_project_ids),
+            )
+            .all()
+        )
+
+        if not items:
+            abort(403, description="No accessible items in this batch job.")
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        writer.writerow([
+            "Item ID",
+            "Name / File Path",
+            "Size (Bytes)",
+            "Total Pages",
+            "Time Took to OCR (Sec)",
+            "Avg Per Page OCR Time (Sec)",
+            "Status",
+            "Extraction Latency (ms)",
+            "Error Message",
+        ])
+
+        for item in items:
+            page_count_db = (
+                session.query(func.count(BatchOcrPage.id))
+                .filter_by(batch_item_id=item.id)
+                .scalar()
+            ) or 0
+            pages = item.total_pages or page_count_db
+            time_sec = (item.total_ocr_latency_ms / 1000.0) if item.total_ocr_latency_ms else None
+            avg_per_page_sec = (time_sec / pages) if (time_sec is not None and pages > 0) else None
+
+            writer.writerow([
+                item.id,
+                item.file_path,
+                item.source_size_bytes or 0,
+                pages,
+                round(time_sec, 2) if time_sec is not None else "",
+                round(avg_per_page_sec, 2) if avg_per_page_sec is not None else "",
+                item.status,
+                round(item.extraction_latency_ms, 2) if item.extraction_latency_ms else "",
+                item.error_message or "",
+            ])
+
+        filename = f"batch_job_{job.id}_{org.slug}_metrics.csv"
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
 
 class ProjectSponsorshipView(sqla.ModelView):
     """View for ProjectSponsorship accessible to moderators and admins."""

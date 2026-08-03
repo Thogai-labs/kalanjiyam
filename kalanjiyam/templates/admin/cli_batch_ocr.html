@@ -10,6 +10,9 @@
 {% block content %}
 {{ admin.page_header(_('CLI Batch OCR Jobs'), _('Overview of all CLI and S3 batch OCR jobs, page metrics, latencies, and CSV export.')) }}
 
+{% set view_endpoint = 'org_admin_view.cli_batch_ocr' if is_org_admin else 'platform_view.cli_batch_ocr' %}
+{% set export_endpoint = 'org_admin_view.cli_batch_ocr_export_csv' if is_org_admin else 'platform_view.cli_batch_ocr_export_csv' %}
+
 <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
   <!-- Jobs Selection List -->
   <div class="md:col-span-1 bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
@@ -17,7 +20,7 @@
     {% if jobs %}
     <div class="space-y-2 max-h-[600px] overflow-y-auto pr-1">
       {% for j in jobs %}
-      <a href="{{ url_for('platform_view.cli_batch_ocr', job_id=j.id) }}"
+      <a href="{{ url_for(view_endpoint, job_id=j.id) }}"
          class="block p-3 rounded-xl border transition-all {% if selected_job and selected_job.id == j.id %}bg-indigo-50/80 border-indigo-200 text-indigo-900 shadow-sm{% else %}bg-slate-50/50 border-slate-100 hover:bg-slate-100 text-slate-700{% endif %}">
         <div class="flex items-center justify-between mb-1">
           <span class="font-bold text-sm">Job #{{ j.id }}</span>
@@ -63,7 +66,7 @@
       </div>
 
       <div class="flex items-center gap-3">
-        <a href="{{ url_for('platform_view.cli_batch_ocr_export_csv', job_id=selected_job.id) }}"
+        <a href="{{ url_for(export_endpoint, job_id=selected_job.id) }}"
            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors shadow-sm">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
