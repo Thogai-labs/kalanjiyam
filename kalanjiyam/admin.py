@@ -888,10 +888,35 @@ class PlatformView(AdminBaseView):
                 time_sec = (item.total_ocr_latency_ms / 1000.0) if item.total_ocr_latency_ms else None
                 avg_per_page_sec = (time_sec / pages) if (time_sec is not None and pages > 0) else None
 
+                # Fetch per-page metrics
+                page_records = (
+                    session.query(BatchOcrPage)
+                    .filter_by(batch_item_id=item.id)
+                    .order_by(BatchOcrPage.page_number.asc())
+                    .all()
+                )
+                page_metrics_list = []
+                for p_rec in page_records:
+                    p_time_sec = (p_rec.ocr_latency_ms / 1000.0) if p_rec.ocr_latency_ms else None
+                    page_metrics_list.append({
+                        "id": p_rec.id,
+                        "page_number": p_rec.page_number,
+                        "status": p_rec.status,
+                        "time_took_sec": round(p_time_sec, 2) if p_time_sec is not None else None,
+                        "extracted_image_size_bytes": p_rec.extracted_image_size_bytes,
+                        "cropped_image_size_bytes": p_rec.cropped_image_size_bytes,
+                        "ocr_data_size_bytes": p_rec.ocr_data_size_bytes,
+                        "attempt_count": p_rec.attempt_count,
+                        "error_message": p_rec.error_message,
+                    })
+
                 item_metrics.append({
                     "id": item.id,
                     "name": item.file_path,
                     "size_bytes": item.source_size_bytes,
+                    "extracted_images_size_bytes": item.extracted_images_size_bytes,
+                    "cropped_images_size_bytes": item.cropped_images_size_bytes,
+                    "ocr_data_size_bytes": item.ocr_data_size_bytes,
                     "pages": pages,
                     "time_took_sec": round(time_sec, 2) if time_sec is not None else None,
                     "avg_per_page_sec": round(avg_per_page_sec, 2) if avg_per_page_sec is not None else None,
@@ -899,6 +924,7 @@ class PlatformView(AdminBaseView):
                     "error_message": item.error_message,
                     "extraction_latency_ms": item.extraction_latency_ms,
                     "project_id": item.project_id,
+                    "page_metrics": page_metrics_list,
                 })
 
         return render_template(
@@ -908,8 +934,8 @@ class PlatformView(AdminBaseView):
             item_metrics=item_metrics,
         )
 
-    @expose("/cli_batch_ocr/<int:job_id>/export_csv")
-    def cli_batch_ocr_export_csv(self, job_id):
+    @expose("/cli_batch_ocr/<int:job_id>/export_summary_csv")
+    def cli_batch_ocr_export_summary_csv(self, job_id):
         require_platform_super_admin()
         session = q.get_session()
         import csv
@@ -927,11 +953,13 @@ class PlatformView(AdminBaseView):
         output = io.StringIO()
         writer = csv.writer(output)
 
-        # Write header
         writer.writerow([
             "Item ID",
             "Name / File Path",
-            "Size (Bytes)",
+            "Source Size (Bytes)",
+            "Extracted Images Size (Bytes)",
+            "Cropped Images Size (Bytes)",
+            "OCR Data Size (Bytes)",
             "Total Pages",
             "Time Took to OCR (Sec)",
             "Avg Per Page OCR Time (Sec)",
@@ -954,6 +982,9 @@ class PlatformView(AdminBaseView):
                 item.id,
                 item.file_path,
                 item.source_size_bytes or 0,
+                item.extracted_images_size_bytes or 0,
+                item.cropped_images_size_bytes or 0,
+                item.ocr_data_size_bytes or 0,
                 pages,
                 round(time_sec, 2) if time_sec is not None else "",
                 round(avg_per_page_sec, 2) if avg_per_page_sec is not None else "",
@@ -962,7 +993,70 @@ class PlatformView(AdminBaseView):
                 item.error_message or "",
             ])
 
-        filename = f"batch_job_{job.id}_metrics.csv"
+        filename = f"batch_job_{job.id}_document_summary.csv"
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+    @expose("/cli_batch_ocr/<int:job_id>/export_pages_csv")
+    def cli_batch_ocr_export_pages_csv(self, job_id):
+        require_platform_super_admin()
+        session = q.get_session()
+        import csv
+        import io
+        from flask import Response
+        from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrPage
+
+        job = session.query(BatchJob).get(job_id)
+        if not job:
+            abort(404)
+
+        items = session.query(BatchItem).filter_by(job_id=job.id).all()
+        item_ids = [i.id for i in items]
+
+        p_records = (
+            session.query(BatchOcrPage)
+            .filter(BatchOcrPage.batch_item_id.in_(item_ids))
+            .order_by(BatchOcrPage.batch_item_id.asc(), BatchOcrPage.page_number.asc())
+            .all()
+        ) if item_ids else []
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        writer.writerow([
+            "Item ID",
+            "Name / File Path",
+            "Page Number",
+            "Extracted Image Size (Bytes)",
+            "Cropped Images Size (Bytes)",
+            "OCR Data Size (Bytes)",
+            "OCR Time Took (Sec)",
+            "Status",
+            "Attempt Count",
+            "Error Message",
+        ])
+
+        item_path_map = {i.id: i.file_path for i in items}
+
+        for p in p_records:
+            p_time = (p.ocr_latency_ms / 1000.0) if p.ocr_latency_ms else None
+            writer.writerow([
+                p.batch_item_id,
+                item_path_map.get(p.batch_item_id, ""),
+                p.page_number,
+                p.extracted_image_size_bytes or 0,
+                p.cropped_image_size_bytes or 0,
+                p.ocr_data_size_bytes or 0,
+                round(p_time, 2) if p_time is not None else "",
+                p.status,
+                p.attempt_count,
+                p.error_message or "",
+            ])
+
+        filename = f"batch_job_{job.id}_per_page_metrics.csv"
         return Response(
             output.getvalue(),
             mimetype="text/csv",
@@ -1676,10 +1770,35 @@ class OrgAdminView(AdminBaseView):
                 time_sec = (item.total_ocr_latency_ms / 1000.0) if item.total_ocr_latency_ms else None
                 avg_per_page_sec = (time_sec / pages) if (time_sec is not None and pages > 0) else None
 
+                # Fetch per-page metrics
+                page_records = (
+                    session.query(BatchOcrPage)
+                    .filter_by(batch_item_id=item.id)
+                    .order_by(BatchOcrPage.page_number.asc())
+                    .all()
+                )
+                page_metrics_list = []
+                for p_rec in page_records:
+                    p_time_sec = (p_rec.ocr_latency_ms / 1000.0) if p_rec.ocr_latency_ms else None
+                    page_metrics_list.append({
+                        "id": p_rec.id,
+                        "page_number": p_rec.page_number,
+                        "status": p_rec.status,
+                        "time_took_sec": round(p_time_sec, 2) if p_time_sec is not None else None,
+                        "extracted_image_size_bytes": p_rec.extracted_image_size_bytes,
+                        "cropped_image_size_bytes": p_rec.cropped_image_size_bytes,
+                        "ocr_data_size_bytes": p_rec.ocr_data_size_bytes,
+                        "attempt_count": p_rec.attempt_count,
+                        "error_message": p_rec.error_message,
+                    })
+
                 item_metrics.append({
                     "id": item.id,
                     "name": item.file_path,
                     "size_bytes": item.source_size_bytes,
+                    "extracted_images_size_bytes": item.extracted_images_size_bytes,
+                    "cropped_images_size_bytes": item.cropped_images_size_bytes,
+                    "ocr_data_size_bytes": item.ocr_data_size_bytes,
                     "pages": pages,
                     "time_took_sec": round(time_sec, 2) if time_sec is not None else None,
                     "avg_per_page_sec": round(avg_per_page_sec, 2) if avg_per_page_sec is not None else None,
@@ -1687,6 +1806,7 @@ class OrgAdminView(AdminBaseView):
                     "error_message": item.error_message,
                     "extraction_latency_ms": item.extraction_latency_ms,
                     "project_id": item.project_id,
+                    "page_metrics": page_metrics_list,
                 })
 
         return render_template(
@@ -1698,8 +1818,8 @@ class OrgAdminView(AdminBaseView):
             org=org,
         )
 
-    @expose("/cli_batch_ocr/<int:job_id>/export_csv")
-    def cli_batch_ocr_export_csv(self, job_id):
+    @expose("/cli_batch_ocr/<int:job_id>/export_summary_csv")
+    def cli_batch_ocr_export_summary_csv(self, job_id):
         org_id = require_org_admin()
         org = q.group(org_id)
         if org is None:
@@ -1740,7 +1860,10 @@ class OrgAdminView(AdminBaseView):
         writer.writerow([
             "Item ID",
             "Name / File Path",
-            "Size (Bytes)",
+            "Source Size (Bytes)",
+            "Extracted Images Size (Bytes)",
+            "Cropped Images Size (Bytes)",
+            "OCR Data Size (Bytes)",
             "Total Pages",
             "Time Took to OCR (Sec)",
             "Avg Per Page OCR Time (Sec)",
@@ -1763,6 +1886,9 @@ class OrgAdminView(AdminBaseView):
                 item.id,
                 item.file_path,
                 item.source_size_bytes or 0,
+                item.extracted_images_size_bytes or 0,
+                item.cropped_images_size_bytes or 0,
+                item.ocr_data_size_bytes or 0,
                 pages,
                 round(time_sec, 2) if time_sec is not None else "",
                 round(avg_per_page_sec, 2) if avg_per_page_sec is not None else "",
@@ -1771,7 +1897,90 @@ class OrgAdminView(AdminBaseView):
                 item.error_message or "",
             ])
 
-        filename = f"batch_job_{job.id}_{org.slug}_metrics.csv"
+        filename = f"batch_job_{job.id}_{org.slug}_document_summary.csv"
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+    @expose("/cli_batch_ocr/<int:job_id>/export_pages_csv")
+    def cli_batch_ocr_export_pages_csv(self, job_id):
+        org_id = require_org_admin()
+        org = q.group(org_id)
+        if org is None:
+            abort(404)
+
+        session = q.get_session()
+        import csv
+        import io
+        from flask import Response
+        from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrPage
+        from kalanjiyam.models.group import ProjectGroups
+
+        org_project_ids = [
+            pg.project_id
+            for pg in session.query(ProjectGroups.project_id).filter_by(group_id=org.id).all()
+        ]
+
+        job = session.query(BatchJob).get(job_id)
+        if not job:
+            abort(404)
+
+        items = (
+            session.query(BatchItem)
+            .filter(
+                BatchItem.job_id == job.id,
+                BatchItem.project_id.in_(org_project_ids),
+            )
+            .all()
+        )
+        item_ids = [i.id for i in items]
+
+        if not item_ids:
+            abort(403, description="No accessible items in this batch job.")
+
+        p_records = (
+            session.query(BatchOcrPage)
+            .filter(BatchOcrPage.batch_item_id.in_(item_ids))
+            .order_by(BatchOcrPage.batch_item_id.asc(), BatchOcrPage.page_number.asc())
+            .all()
+        )
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        writer.writerow([
+            "Item ID",
+            "Name / File Path",
+            "Page Number",
+            "Extracted Image Size (Bytes)",
+            "Cropped Images Size (Bytes)",
+            "OCR Data Size (Bytes)",
+            "OCR Time Took (Sec)",
+            "Status",
+            "Attempt Count",
+            "Error Message",
+        ])
+
+        item_path_map = {i.id: i.file_path for i in items}
+
+        for p in p_records:
+            p_time = (p.ocr_latency_ms / 1000.0) if p.ocr_latency_ms else None
+            writer.writerow([
+                p.batch_item_id,
+                item_path_map.get(p.batch_item_id, ""),
+                p.page_number,
+                p.extracted_image_size_bytes or 0,
+                p.cropped_image_size_bytes or 0,
+                p.ocr_data_size_bytes or 0,
+                round(p_time, 2) if p_time is not None else "",
+                p.status,
+                p.attempt_count,
+                p.error_message or "",
+            ])
+
+        filename = f"batch_job_{job.id}_{org.slug}_per_page_metrics.csv"
         return Response(
             output.getvalue(),
             mimetype="text/csv",

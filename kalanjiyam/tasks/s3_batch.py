@@ -127,6 +127,40 @@ def _finalize_batch_item_status(session, batch_item_id: int):
     total_ms = sum(c.total_ocr_latency_ms for c in chunks if c.total_ocr_latency_ms)
     item.total_ocr_latency_ms = total_ms
 
+    # Calculate total size of OCR data (revisions content & document JSON) and cropped images for this project
+    if item.project_id:
+        try:
+            project = session.query(db.Project).get(item.project_id)
+            if project and project.pages:
+                page_ids = [p.id for p in project.pages]
+                revs = session.query(db.Revision).filter(db.Revision.page_id.in_(page_ids)).all()
+                total_ocr_bytes = 0
+                for rev in revs:
+                    if rev.content:
+                        total_ocr_bytes += len(rev.content.encode('utf-8'))
+                    if rev.document:
+                        total_ocr_bytes += len(json.dumps(rev.document).encode('utf-8'))
+                item.ocr_data_size_bytes = total_ocr_bytes
+
+                # Calculate cropped element images size from storage
+                storage = get_storage()
+                cropped_bytes = 0
+                for p in project.pages:
+                    for rev in p.revisions:
+                        doc_dict = rev.document or {}
+                        for block in doc_dict.get("blocks", []):
+                            blk_id = block.get("id")
+                            if blk_id:
+                                crop_key = f"{project.slug}/images/extracted_{blk_id}.png"
+                                try:
+                                    if storage.exists(crop_key):
+                                        cropped_bytes += storage.size(crop_key)
+                                except Exception:
+                                    pass
+                item.cropped_images_size_bytes = cropped_bytes
+        except Exception as e:
+            LOG.warning(f"Error calculating OCR data/cropped image sizes for item #{batch_item_id}: {e}")
+
     failed_pages = (
         session.query(BatchOcrPage.page_number)
         .filter(BatchOcrPage.batch_item_id == batch_item_id, BatchOcrPage.status == 'FAILED')
@@ -238,14 +272,17 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                             item.project_id = project.id
                         session.commit()
                         
+                        extracted_img_bytes = 0
                         for page in doc:
                             n = page.number + 1
                             pix = page.get_pixmap(dpi=200)
                             tmp_img_path = tmp_dir_path / f"{n}.jpg"
                             pix.pil_save(tmp_img_path, optimize=True)
                             
+                            extracted_img_bytes += tmp_img_path.stat().st_size
                             storage.save(page_image_key(project.slug, str(n)), tmp_img_path)
                             tmp_img_path.unlink()
+                        item.extracted_images_size_bytes = extracted_img_bytes
                     else:
                         image_paths = []
                         project_name = Path(item.file_path.rstrip('/')).name or "image_project"
@@ -285,17 +322,20 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                         session.commit()
                         
                         total_bytes = 0
+                        extracted_img_bytes = 0
                         for n, img_path in enumerate(image_paths, start=1):
                             total_bytes += img_path.stat().st_size
                             tmp_jpg = tmp_dir_path / f"{n}.jpg"
                             with Image.open(img_path) as im:
                                 im.convert("RGB").save(tmp_jpg, "JPEG", quality=90, optimize=True)
                             
+                            extracted_img_bytes += tmp_jpg.stat().st_size
                             storage.save(page_image_key(project.slug, str(n)), tmp_jpg)
                             if tmp_jpg.exists() and tmp_jpg != img_path:
                                 tmp_jpg.unlink()
                                 
                         item.source_size_bytes = total_bytes
+                        item.extracted_images_size_bytes = extracted_img_bytes
                         item.status = 'DOWNLOADED'
                         session.commit()
                     
@@ -698,6 +738,35 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                                 version_key="role:p1",
                             )
                             
+                            # Record page-level metrics
+                            ocr_page.ocr_latency_ms = page_latency
+                            
+                            # Extracted page image size from storage
+                            try:
+                                if storage.exists(page_key):
+                                    ocr_page.extracted_image_size_bytes = storage.size(page_key)
+                            except Exception:
+                                pass
+
+                            # OCR data size (content + document JSON payload)
+                            plain_text = doc.to_plain_text() or ocr_resp.text_content or ""
+                            doc_json_str = json.dumps(doc.to_dict()) if doc else ""
+                            ocr_page.ocr_data_size_bytes = len(plain_text.encode('utf-8')) + len(doc_json_str.encode('utf-8'))
+
+                            # Cropped visual elements size for this page
+                            page_crop_bytes = 0
+                            if ocr_resp.blocks:
+                                for block in ocr_resp.blocks:
+                                    blk_id = block.get("id") if isinstance(block, dict) else getattr(block, "id", None)
+                                    if blk_id:
+                                        c_key = f"{project.slug}/images/extracted_{blk_id}.png"
+                                        try:
+                                            if storage.exists(c_key):
+                                                page_crop_bytes += storage.size(c_key)
+                                        except Exception:
+                                            pass
+                            ocr_page.cropped_image_size_bytes = page_crop_bytes
+
                             ocr_page.status = 'COMPLETED'
                             ocr_page.completed_at = datetime.utcnow()
                             ocr_page.error_message = None

@@ -65,13 +65,23 @@
         </p>
       </div>
 
-      <div class="flex items-center gap-3">
-        <a href="{{ url_for(export_endpoint, job_id=selected_job.id) }}"
-           class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors shadow-sm">
+{% set export_summary_endpoint = 'org_admin_view.cli_batch_ocr_export_summary_csv' if is_org_admin else 'platform_view.cli_batch_ocr_export_summary_csv' %}
+{% set export_pages_endpoint = 'org_admin_view.cli_batch_ocr_export_pages_csv' if is_org_admin else 'platform_view.cli_batch_ocr_export_pages_csv' %}
+
+      <div class="flex flex-wrap items-center gap-3">
+        <a href="{{ url_for(export_summary_endpoint, job_id=selected_job.id) }}"
+           class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors shadow-sm">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
           </svg>
-          Export as CSV
+          Export Document Summary CSV
+        </a>
+        <a href="{{ url_for(export_pages_endpoint, job_id=selected_job.id) }}"
+           class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+          Export Per-Page Metrics CSV
         </a>
       </div>
     </div>
@@ -88,7 +98,10 @@
             <tr>
               <th class="px-4 py-3">#</th>
               <th class="px-4 py-3">{{ _('Name / Path') }}</th>
-              <th class="px-4 py-3 text-right">{{ _('Size') }}</th>
+              <th class="px-4 py-3 text-right">{{ _('Source Size') }}</th>
+              <th class="px-4 py-3 text-right">{{ _('Extracted Images') }}</th>
+              <th class="px-4 py-3 text-right">{{ _('Cropped Images') }}</th>
+              <th class="px-4 py-3 text-right">{{ _('OCR Data') }}</th>
               <th class="px-4 py-3 text-right">{{ _('Pages') }}</th>
               <th class="px-4 py-3 text-right">{{ _('Time Took to OCR') }}</th>
               <th class="px-4 py-3 text-right">{{ _('Avg / Page') }}</th>
@@ -112,6 +125,31 @@
               <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
                 {% if item.size_bytes %}
                   {{ (item.size_bytes / (1024*1024)) | round(2) }} MB
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
+                {% if item.extracted_images_size_bytes %}
+                  {{ (item.extracted_images_size_bytes / (1024*1024)) | round(2) }} MB
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
+                {% if item.cropped_images_size_bytes %}
+                  {{ (item.cropped_images_size_bytes / (1024*1024)) | round(2) }} MB
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
+                {% if item.ocr_data_size_bytes %}
+                  {% if item.ocr_data_size_bytes >= 1048576 %}
+                    {{ (item.ocr_data_size_bytes / (1024*1024)) | round(2) }} MB
+                  {% else %}
+                    {{ (item.ocr_data_size_bytes / 1024) | round(2) }} KB
+                  {% endif %}
                 {% else %}
                   -
                 {% endif %}
@@ -149,9 +187,80 @@
                 {% endif %}
               </td>
             </tr>
+
+            <!-- Expandable Per-Page Metrics Details -->
+            {% if item.page_metrics %}
+            <tr class="bg-slate-50/40">
+              <td colspan="10" class="px-6 py-3">
+                <details class="group">
+                  <summary class="cursor-pointer text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 select-none py-1">
+                    <svg class="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                    <span>View Per-Page Breakdown ({{ item.page_metrics | length }} Pages)</span>
+                  </summary>
+
+                  <div class="mt-2 mb-2 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-inner">
+                    <table class="min-w-full text-xs">
+                      <thead class="bg-slate-100/70 text-left text-[11px] font-bold text-slate-600 uppercase">
+                        <tr>
+                          <th class="px-3 py-2">Page #</th>
+                          <th class="px-3 py-2 text-right">Extracted Image</th>
+                          <th class="px-3 py-2 text-right">Cropped Images</th>
+                          <th class="px-3 py-2 text-right">OCR Text & Data</th>
+                          <th class="px-3 py-2 text-right">OCR Time Took</th>
+                          <th class="px-3 py-2 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-slate-100">
+                        {% for pm in item.page_metrics %}
+                        <tr class="hover:bg-slate-50">
+                          <td class="px-3 py-2 font-bold text-slate-800">Page {{ pm.page_number }}</td>
+                          <td class="px-3 py-2 text-right font-mono text-slate-600">
+                            {% if pm.extracted_image_size_bytes %}
+                              {{ (pm.extracted_image_size_bytes / 1024) | round(1) }} KB
+                            {% else %}-{% endif %}
+                          </td>
+                          <td class="px-3 py-2 text-right font-mono text-slate-600">
+                            {% if pm.cropped_image_size_bytes %}
+                              {{ (pm.cropped_image_size_bytes / 1024) | round(1) }} KB
+                            {% else %}-{% endif %}
+                          </td>
+                          <td class="px-3 py-2 text-right font-mono text-slate-600">
+                            {% if pm.ocr_data_size_bytes %}
+                              {% if pm.ocr_data_size_bytes >= 1048576 %}
+                                {{ (pm.ocr_data_size_bytes / 1048576) | round(2) }} MB
+                              {% else %}
+                                {{ (pm.ocr_data_size_bytes / 1024) | round(1) }} KB
+                              {% endif %}
+                            {% else %}-{% endif %}
+                          </td>
+                          <td class="px-3 py-2 text-right font-mono text-indigo-700 font-semibold">
+                            {% if pm.time_took_sec is not none %}
+                              {{ pm.time_took_sec }}s
+                            {% else %}-{% endif %}
+                          </td>
+                          <td class="px-3 py-2 text-center">
+                            {% if pm.status == 'COMPLETED' %}
+                            <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">Completed</span>
+                            {% elif pm.status == 'FAILED' %}
+                            <span class="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200" title="{{ pm.error_message }}">Failed</span>
+                            {% else %}
+                            <span class="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">{{ pm.status }}</span>
+                            {% endif %}
+                          </td>
+                        </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              </td>
+            </tr>
+            {% endif %}
             {% else %}
             <tr>
-              <td colspan="7" class="px-4 py-8 text-center text-slate-400">
+              <td colspan="10" class="px-4 py-8 text-center text-slate-400">
                 {{ _('No items in this batch job.') }}
               </td>
             </tr>
