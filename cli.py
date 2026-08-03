@@ -497,6 +497,8 @@ def import_jsonl(jsonl_uri, pdf_uri, org, dry_run, allow_duplicate):
     click.echo(f"Pages discovered: {summary.pages}")
     click.echo(f"PDFs matched: {summary.matched_pdfs}")
     click.echo(f"PDFs missing: {summary.missing_pdfs}")
+    if summary.ambiguous_pdfs > 0:
+        click.echo(f"PDFs ambiguous (multiple matches): {summary.ambiguous_pdfs}")
     click.echo(f"Duplicate pages: {summary.duplicate_pages}")
     click.echo(f"Malformed records: {summary.malformed_records}")
     click.echo(f"Skipped books (duplicates): {summary.skipped_books}")

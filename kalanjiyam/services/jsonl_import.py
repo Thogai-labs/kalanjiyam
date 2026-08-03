@@ -52,6 +52,7 @@ class ImportSummary:
     pages: int = 0
     matched_pdfs: int = 0
     missing_pdfs: int = 0
+    ambiguous_pdfs: int = 0
     malformed_records: int = 0
     duplicate_pages: int = 0
     invalid_books: int = 0
@@ -155,7 +156,14 @@ def _pdf_index(client, uri: str) -> dict[str, list[str]]:
     output = defaultdict(list)
     for item in _list_objects(client, uri, ".pdf"):
         stem = Path(urlparse(item).path if _is_s3_uri(item) else item).stem
-        output[stem].append(item)
+        if item not in output[stem]:
+            output[stem].append(item)
+        stem_lower = stem.strip().lower()
+        if item not in output[stem_lower]:
+            output[stem_lower].append(item)
+        stem_slug = slugify(stem)
+        if stem_slug and item not in output[stem_slug]:
+            output[stem_slug].append(item)
     return output
 
 
@@ -270,11 +278,21 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
 
         pdfs = _pdf_index(client, pdf_uri)
         for book_id, book in books.items():
-            matches = pdfs.get(book_id, [])
+            matches = pdfs.get(book_id) or pdfs.get(book_id.strip().lower()) or pdfs.get(slugify(book_id)) or []
+            matches = list(dict.fromkeys(matches))
+            if len(matches) > 1:
+                # Prefer top-level PDF if uniquely at shallowest directory depth
+                by_depth = sorted(matches, key=lambda p: len(Path(p).parts))
+                if len(Path(by_depth[0]).parts) < len(Path(by_depth[1]).parts):
+                    matches = [by_depth[0]]
             if len(matches) != 1:
-                book.errors.append("missing PDF" if not matches else "ambiguous PDF matches")
                 if not matches:
+                    book.errors.append("missing PDF")
                     summary.missing_pdfs += 1
+                else:
+                    book.errors.append(f"ambiguous PDF matches: {matches}")
+                    summary.ambiguous_pdfs += 1
+                    LOG.warning("Ambiguous PDF matches for book '%s': %s", book_id, matches)
                 continue
             summary.matched_pdfs += 1
             local_pdf = root / f"validate-{slugify(book_id)}.pdf"
