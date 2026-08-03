@@ -95,15 +95,17 @@
       <div class="overflow-x-auto rounded-xl border border-slate-100">
         <table class="min-w-full text-sm">
           <thead class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-            <tr>
-              <th class="px-4 py-3">#</th>
-              <th class="px-4 py-3">{{ _('Name / Path') }}</th>
+            <tr class="text-left font-semibold text-slate-600 border-b border-slate-100 bg-slate-50/50">
+              <th class="px-4 py-3 font-mono text-xs">#</th>
+              <th class="px-4 py-3">{{ _('Name / File Path') }}</th>
+              <th class="px-4 py-3 text-center">{{ _('Langs') }}</th>
               <th class="px-4 py-3 text-right">{{ _('Source Size') }}</th>
               <th class="px-4 py-3 text-right">{{ _('Extracted Images') }}</th>
               <th class="px-4 py-3 text-right">{{ _('Cropped Images') }}</th>
               <th class="px-4 py-3 text-right">{{ _('OCR Data') }}</th>
+              <th class="px-4 py-3 text-right">{{ _('Trans Data') }}</th>
               <th class="px-4 py-3 text-right">{{ _('Pages') }}</th>
-              <th class="px-4 py-3 text-right">{{ _('Time Took to OCR') }}</th>
+              <th class="px-4 py-3 text-right">{{ _('OCR / Trans Time') }}</th>
               <th class="px-4 py-3 text-right">{{ _('Avg / Page') }}</th>
               <th class="px-4 py-3 text-center">{{ _('Status') }}</th>
             </tr>
@@ -120,6 +122,15 @@
                 <div class="text-[11px] text-rose-600 truncate mt-0.5" title="{{ item.error_message }}">
                   ⚠️ {{ item.error_message }}
                 </div>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-center font-mono text-xs">
+                {% if item.source_lang or item.target_lang %}
+                  <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px]">
+                    {{ item.source_lang or 'auto' }} ➔ {{ item.target_lang or 'en' }}
+                  </span>
+                {% else %}
+                  -
                 {% endif %}
               </td>
               <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
@@ -154,19 +165,34 @@
                   -
                 {% endif %}
               </td>
+              <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
+                {% if item.translation_data_size_bytes %}
+                  {% if item.translation_data_size_bytes >= 1048576 %}
+                    {{ (item.translation_data_size_bytes / (1024*1024)) | round(2) }} MB
+                  {% else %}
+                    {{ (item.translation_data_size_bytes / 1024) | round(2) }} KB
+                  {% endif %}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
               <td class="px-4 py-3 text-right font-bold text-slate-800">
                 {{ item.pages }}
               </td>
               <td class="px-4 py-3 text-right font-mono text-xs text-slate-700">
                 {% if item.time_took_sec is not none %}
-                  {{ item.time_took_sec }}s
+                  {{ item.time_took_sec }}s (OCR)
+                {% elif item.translation_time_took_sec is not none %}
+                  {{ item.translation_time_took_sec }}s (Trans)
                 {% else %}
                   -
                 {% endif %}
               </td>
               <td class="px-4 py-3 text-right font-mono text-xs text-indigo-600 font-semibold">
                 {% if item.avg_per_page_sec is not none %}
-                  {{ item.avg_per_page_sec }}s / p
+                  {{ item.avg_per_page_sec }}s/p
+                {% elif item.avg_trans_per_page_sec is not none %}
+                  {{ item.avg_trans_per_page_sec }}s/p
                 {% else %}
                   -
                 {% endif %}
@@ -191,7 +217,7 @@
             <!-- Expandable Per-Page Metrics Details -->
             {% if item.page_metrics %}
             <tr class="bg-slate-50/40">
-              <td colspan="10" class="px-6 py-3">
+              <td colspan="12" class="px-6 py-3">
                 <details class="group">
                   <summary class="cursor-pointer text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 select-none py-1">
                     <svg class="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -205,10 +231,13 @@
                       <thead class="bg-slate-100/70 text-left text-[11px] font-bold text-slate-600 uppercase">
                         <tr>
                           <th class="px-3 py-2">Page #</th>
+                          <th class="px-3 py-2 text-center">Langs</th>
                           <th class="px-3 py-2 text-right">Extracted Image</th>
                           <th class="px-3 py-2 text-right">Cropped Images</th>
-                          <th class="px-3 py-2 text-right">OCR Text & Data</th>
-                          <th class="px-3 py-2 text-right">OCR Time Took</th>
+                          <th class="px-3 py-2 text-right">OCR Data</th>
+                          <th class="px-3 py-2 text-right">Trans Data</th>
+                          <th class="px-3 py-2 text-right">OCR Time</th>
+                          <th class="px-3 py-2 text-right">Trans Time</th>
                           <th class="px-3 py-2 text-center">Status</th>
                         </tr>
                       </thead>
@@ -216,6 +245,11 @@
                         {% for pm in item.page_metrics %}
                         <tr class="hover:bg-slate-50">
                           <td class="px-3 py-2 font-bold text-slate-800">Page {{ pm.page_number }}</td>
+                          <td class="px-3 py-2 text-center font-mono text-[10px]">
+                            {% if pm.source_lang or pm.target_lang %}
+                              {{ pm.source_lang }}➔{{ pm.target_lang }}
+                            {% else %}-{% endif %}
+                          </td>
                           <td class="px-3 py-2 text-right font-mono text-slate-600">
                             {% if pm.extracted_image_size_bytes %}
                               {{ (pm.extracted_image_size_bytes / 1024) | round(1) }} KB
@@ -235,9 +269,23 @@
                               {% endif %}
                             {% else %}-{% endif %}
                           </td>
+                          <td class="px-3 py-2 text-right font-mono text-slate-600">
+                            {% if pm.translation_data_size_bytes %}
+                              {% if pm.translation_data_size_bytes >= 1048576 %}
+                                {{ (pm.translation_data_size_bytes / 1048576) | round(2) }} MB
+                              {% else %}
+                                {{ (pm.translation_data_size_bytes / 1024) | round(1) }} KB
+                              {% endif %}
+                            {% else %}-{% endif %}
+                          </td>
                           <td class="px-3 py-2 text-right font-mono text-indigo-700 font-semibold">
                             {% if pm.time_took_sec is not none %}
                               {{ pm.time_took_sec }}s
+                            {% else %}-{% endif %}
+                          </td>
+                          <td class="px-3 py-2 text-right font-mono text-emerald-700 font-semibold">
+                            {% if pm.translation_time_took_sec is not none %}
+                              {{ pm.translation_time_took_sec }}s
                             {% else %}-{% endif %}
                           </td>
                           <td class="px-3 py-2 text-center">

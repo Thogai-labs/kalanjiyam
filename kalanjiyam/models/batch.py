@@ -38,8 +38,12 @@ class BatchItem(Base):
     extracted_images_size_bytes = Column(Integer, nullable=True)
     cropped_images_size_bytes = Column(Integer, nullable=True)
     ocr_data_size_bytes = Column(Integer, nullable=True)
+    translation_data_size_bytes = Column(Integer, nullable=True)
+    source_lang = Column(String(32), nullable=True)
+    target_lang = Column(String(32), nullable=True)
     extraction_latency_ms = Column(Float, nullable=True)
     total_ocr_latency_ms = Column(Float, nullable=True)
+    total_translation_latency_ms = Column(Float, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
@@ -90,9 +94,13 @@ class BatchOcrPage(Base):
     attempt_count = Column(Integer, nullable=False, default=0)
     # Per-page metrics
     ocr_latency_ms = Column(Float, nullable=True)
+    translation_latency_ms = Column(Float, nullable=True)
     extracted_image_size_bytes = Column(Integer, nullable=True)
     cropped_image_size_bytes = Column(Integer, nullable=True)
     ocr_data_size_bytes = Column(Integer, nullable=True)
+    translation_data_size_bytes = Column(Integer, nullable=True)
+    source_lang = Column(String(32), nullable=True)
+    target_lang = Column(String(32), nullable=True)
     
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

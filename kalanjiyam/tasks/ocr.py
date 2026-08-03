@@ -27,7 +27,12 @@ def _run_ocr_for_page_inner(
     language: str = 'sa',
 ) -> int:
     """Must run in the application context."""
+    import time
+    import json
+    from kalanjiyam.models.batch import BatchItem, BatchOcrPage
+    from kalanjiyam.utils.storage import get_storage, page_image_key
 
+    page_start_time = time.time()
     flask_app = create_config_only_app(app_env)
     with flask_app.app_context():
         bot_user = q.user(consts.BOT_USERNAME)
@@ -91,6 +96,72 @@ def _run_ocr_for_page_inner(
                 version_key=version_key,
             )
             consume_ocr_credit_for_project(project)
+
+            # Record UI Batch OCR metrics in BatchItem / BatchOcrPage
+            try:
+                page_latency_ms = (time.time() - page_start_time) * 1000.0
+                batch_item = session.query(BatchItem).filter_by(project_id=project.id).order_by(BatchItem.id.desc()).first()
+                if batch_item:
+                    p_num = int(page_slug) if page_slug.isdigit() else page.order
+                    ocr_page = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, page_number=p_num).first()
+                    if not ocr_page:
+                        # Dummy chunk id or null if allowed, or find chunk
+                        ocr_page = BatchOcrPage(
+                            batch_item_id=batch_item.id,
+                            chunk_id=0,
+                            page_number=p_num,
+                            status='PENDING'
+                        )
+
+                    ocr_page.ocr_latency_ms = page_latency_ms
+                    ocr_page.status = 'COMPLETED'
+                    ocr_page.completed_at = datetime.utcnow()
+
+                    storage = get_storage()
+                    page_key = page_image_key(project.slug, page_slug)
+                    try:
+                        if storage.exists(page_key):
+                            ocr_page.extracted_image_size_bytes = storage.size(page_key)
+                    except Exception:
+                        pass
+
+                    plain_text = doc.to_plain_text() or ocr_response.text_content or ""
+                    doc_json_str = json.dumps(doc.to_dict()) if doc else ""
+                    ocr_page.ocr_data_size_bytes = len(plain_text.encode('utf-8')) + len(doc_json_str.encode('utf-8'))
+
+                    page_crop_bytes = 0
+                    if ocr_response.blocks:
+                        for block in ocr_response.blocks:
+                            blk_id = block.get("id") if isinstance(block, dict) else getattr(block, "id", None)
+                            if blk_id:
+                                c_key = f"{project.slug}/images/extracted_{blk_id}.png"
+                                try:
+                                    if storage.exists(c_key):
+                                        page_crop_bytes += storage.size(c_key)
+                                except Exception:
+                                    pass
+                    ocr_page.cropped_image_size_bytes = page_crop_bytes
+                    session.add(ocr_page)
+
+                    # Update cumulative item metrics
+                    batch_item.total_ocr_latency_ms = (batch_item.total_ocr_latency_ms or 0) + page_latency_ms
+                    batch_item.extracted_images_size_bytes = (batch_item.extracted_images_size_bytes or 0) + (ocr_page.extracted_image_size_bytes or 0)
+                    batch_item.cropped_images_size_bytes = (batch_item.cropped_images_size_bytes or 0) + page_crop_bytes
+                    batch_item.ocr_data_size_bytes = (batch_item.ocr_data_size_bytes or 0) + ocr_page.ocr_data_size_bytes
+                    
+                    # Update status if all completed
+                    completed_count = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, status='COMPLETED').count()
+                    if completed_count >= (batch_item.total_pages or 1):
+                        batch_item.status = 'COMPLETED'
+                        batch_item.completed_at = datetime.utcnow()
+                        if batch_item.job:
+                            batch_item.job.status = 'COMPLETED'
+                            batch_item.job.completed_at = datetime.utcnow()
+
+                    session.commit()
+            except Exception as metric_err:
+                logging.warning(f"Error recording UI batch OCR metrics: {metric_err}")
+
             return revision_id
         except Exception as e:
             raise ValueError(
@@ -115,6 +186,86 @@ def run_ocr_for_page(
         engine,
         language,
     )
+
+
+def run_ocr_for_project(
+    app_env: str,
+    project: db.Project,
+    engine: str = '1',  # Default to Google OCR (1)
+    language: str = 'sa',
+    queue: str | None = None,
+) -> GroupResult | None:
+    """Create a `group` task to run OCR on a project."""
+    flask_app = create_config_only_app(app_env)
+    with flask_app.app_context():
+        from sqlalchemy import or_
+        from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrPage
+        session = q.get_session()
+        bot_user = q.user(consts.BOT_USERNAME)
+        bot_user_id = bot_user.id if bot_user else None
+
+        db_project = session.query(db.Project).get(project.id)
+        if not db_project:
+            return None
+
+        edited_page_ids = {
+            row[0]
+            for row in session.query(db.Revision.page_id)
+            .filter(db.Revision.project_id == db_project.id)
+            .filter(or_(db.Revision.author_id == None, db.Revision.author_id != bot_user_id))
+            .all()
+        }
+        unedited_pages = [p for p in db_project.pages if p.id not in edited_page_ids]
+
+        if unedited_pages:
+            # Create BatchJob and BatchItem for UI-triggered batch OCR
+            batch_job = BatchJob(
+                target_uri=f"ui://project/{project.slug}",
+                status='IN_PROGRESS',
+                job_type='UI_BATCH_OCR'
+            )
+            session.add(batch_job)
+            session.flush()
+
+            batch_item = BatchItem(
+                job_id=batch_job.id,
+                file_path=f"ui://project/{project.slug}",
+                project_id=db_project.id,
+                status='IN_PROGRESS',
+                total_pages=len(unedited_pages),
+            )
+            session.add(batch_item)
+            session.flush()
+
+            for p in unedited_pages:
+                ocr_p = BatchOcrPage(
+                    batch_item_id=batch_item.id,
+                    chunk_id=0,
+                    page_number=p.order,
+                    status='PENDING'
+                )
+                session.add(ocr_p)
+            session.commit()
+
+    if unedited_pages:
+        tasks = group(
+            run_ocr_for_page.s(
+                app_env=app_env,
+                project_slug=project.slug,
+                page_slug=p.slug,
+                engine=engine,
+                language=language,
+            )
+            for p in unedited_pages
+        )
+        if queue:
+            ret = tasks.apply_async(queue=queue)
+        else:
+            ret = tasks.apply_async()
+        ret.save()
+        return ret
+    else:
+        return None
 
 
 

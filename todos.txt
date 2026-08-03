@@ -21,15 +21,15 @@ babel.messages.frontend.OptionError: no message catalogs found for domain 'messa
 WARNING: i18n fetch failed, running in English only
 
 # ==============================================================================
-# TODO: CLI Batch OCR Superadmin View & CSV Export Feature [COMPLETED]
+# TODO: CLI & UI Batch OCR Admin View & CSV Export Feature [COMPLETED]
 # ==============================================================================
-# 1. SQL Query for CLI Batch OCR metrics:
+# 1. SQL Query for Batch OCR metrics:
 #    docker exec -it kalanjiyam-db psql -U kalanjiyam -d kalanjiyam -c \
 #    "SELECT b.file_path AS name, pg_size_pretty(b.source_size_bytes::bigint) AS size, COALESCE(b.total_pages, page_counts.cnt, 0) AS pages, ROUND((b.total_ocr_latency_ms / 1000)::numeric, 2) || 's' AS time_took_to_ocr, b.status FROM batch_items b LEFT JOIN (SELECT batch_item_id, COUNT(*) as cnt FROM batch_ocr_pages GROUP BY batch_item_id) page_counts ON page_counts.batch_item_id = b.id ORDER BY b.id DESC;"
 #
-# 2. [x] #implement superadmin & admin view for the cli batch ocr:
-#    - [x] Add a superadmin & org-admin dashboard view to list CLI Batch Jobs (BatchJob / BatchItem).
+# 2. [x] #implement superadmin & admin view for CLI / UI batch OCR and UI batch translation:
+#    - [x] Add a superadmin & org-admin dashboard view to list Batch Jobs (BatchJob / BatchItem).
 #    - [x] Display the list of jobs first with options to inspect details.
-#    - [x] Add average per-page latency metrics calculated by (time_took_to_ocr / pages).
-#    - [x] Track and display document-level & per-page metrics (Extracted Image size, OCR time took, OCR text/JSON data size, Cropped elements image size).
-#    - [x] Add a function/endpoint to export batch job metrics as a CSV file according to the job ID (includes per-page breakdown rows).
+#    - [x] Add average per-page latency metrics calculated by (time_took / pages).
+#    - [x] Track and display document-level & per-page metrics for CLI/UI batch OCR and UI batch translation (File Name, Source Lang, Target Lang, Translation Time Took, Translation Data Size, Extracted Image size, OCR time took, OCR text/JSON data size, Cropped elements image size).
+#    - [x] Add separate functions/endpoints to export Document Summary CSV and Per-Page Breakdown CSV according to job ID.

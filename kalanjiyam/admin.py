@@ -886,7 +886,9 @@ class PlatformView(AdminBaseView):
                 ) or 0
                 pages = item.total_pages or page_count_db
                 time_sec = (item.total_ocr_latency_ms / 1000.0) if item.total_ocr_latency_ms else None
+                trans_time_sec = (item.total_translation_latency_ms / 1000.0) if item.total_translation_latency_ms else None
                 avg_per_page_sec = (time_sec / pages) if (time_sec is not None and pages > 0) else None
+                avg_trans_per_page_sec = (trans_time_sec / pages) if (trans_time_sec is not None and pages > 0) else None
 
                 # Fetch per-page metrics
                 page_records = (
@@ -898,14 +900,19 @@ class PlatformView(AdminBaseView):
                 page_metrics_list = []
                 for p_rec in page_records:
                     p_time_sec = (p_rec.ocr_latency_ms / 1000.0) if p_rec.ocr_latency_ms else None
+                    p_trans_time_sec = (p_rec.translation_latency_ms / 1000.0) if p_rec.translation_latency_ms else None
                     page_metrics_list.append({
                         "id": p_rec.id,
                         "page_number": p_rec.page_number,
                         "status": p_rec.status,
                         "time_took_sec": round(p_time_sec, 2) if p_time_sec is not None else None,
+                        "translation_time_took_sec": round(p_trans_time_sec, 2) if p_trans_time_sec is not None else None,
                         "extracted_image_size_bytes": p_rec.extracted_image_size_bytes,
                         "cropped_image_size_bytes": p_rec.cropped_image_size_bytes,
                         "ocr_data_size_bytes": p_rec.ocr_data_size_bytes,
+                        "translation_data_size_bytes": p_rec.translation_data_size_bytes,
+                        "source_lang": p_rec.source_lang,
+                        "target_lang": p_rec.target_lang,
                         "attempt_count": p_rec.attempt_count,
                         "error_message": p_rec.error_message,
                     })
@@ -917,9 +924,14 @@ class PlatformView(AdminBaseView):
                     "extracted_images_size_bytes": item.extracted_images_size_bytes,
                     "cropped_images_size_bytes": item.cropped_images_size_bytes,
                     "ocr_data_size_bytes": item.ocr_data_size_bytes,
+                    "translation_data_size_bytes": item.translation_data_size_bytes,
+                    "source_lang": item.source_lang,
+                    "target_lang": item.target_lang,
                     "pages": pages,
                     "time_took_sec": round(time_sec, 2) if time_sec is not None else None,
+                    "translation_time_took_sec": round(trans_time_sec, 2) if trans_time_sec is not None else None,
                     "avg_per_page_sec": round(avg_per_page_sec, 2) if avg_per_page_sec is not None else None,
+                    "avg_trans_per_page_sec": round(avg_trans_per_page_sec, 2) if avg_trans_per_page_sec is not None else None,
                     "status": item.status,
                     "error_message": item.error_message,
                     "extraction_latency_ms": item.extraction_latency_ms,
@@ -956,12 +968,16 @@ class PlatformView(AdminBaseView):
         writer.writerow([
             "Item ID",
             "Name / File Path",
+            "Source Lang",
+            "Target Lang",
             "Source Size (Bytes)",
             "Extracted Images Size (Bytes)",
             "Cropped Images Size (Bytes)",
             "OCR Data Size (Bytes)",
+            "Translation Data Size (Bytes)",
             "Total Pages",
-            "Time Took to OCR (Sec)",
+            "OCR Time Took (Sec)",
+            "Translation Time Took (Sec)",
             "Avg Per Page OCR Time (Sec)",
             "Status",
             "Extraction Latency (ms)",
@@ -976,17 +992,22 @@ class PlatformView(AdminBaseView):
             ) or 0
             pages = item.total_pages or page_count_db
             time_sec = (item.total_ocr_latency_ms / 1000.0) if item.total_ocr_latency_ms else None
+            trans_time_sec = (item.total_translation_latency_ms / 1000.0) if item.total_translation_latency_ms else None
             avg_per_page_sec = (time_sec / pages) if (time_sec is not None and pages > 0) else None
 
             writer.writerow([
                 item.id,
                 item.file_path,
+                item.source_lang or "",
+                item.target_lang or "",
                 item.source_size_bytes or 0,
                 item.extracted_images_size_bytes or 0,
                 item.cropped_images_size_bytes or 0,
                 item.ocr_data_size_bytes or 0,
+                item.translation_data_size_bytes or 0,
                 pages,
                 round(time_sec, 2) if time_sec is not None else "",
+                round(trans_time_sec, 2) if trans_time_sec is not None else "",
                 round(avg_per_page_sec, 2) if avg_per_page_sec is not None else "",
                 item.status,
                 round(item.extraction_latency_ms, 2) if item.extraction_latency_ms else "",
@@ -1030,10 +1051,14 @@ class PlatformView(AdminBaseView):
             "Item ID",
             "Name / File Path",
             "Page Number",
+            "Source Lang",
+            "Target Lang",
             "Extracted Image Size (Bytes)",
             "Cropped Images Size (Bytes)",
             "OCR Data Size (Bytes)",
+            "Translation Data Size (Bytes)",
             "OCR Time Took (Sec)",
+            "Translation Time Took (Sec)",
             "Status",
             "Attempt Count",
             "Error Message",
@@ -1043,14 +1068,19 @@ class PlatformView(AdminBaseView):
 
         for p in p_records:
             p_time = (p.ocr_latency_ms / 1000.0) if p.ocr_latency_ms else None
+            p_trans_time = (p.translation_latency_ms / 1000.0) if p.translation_latency_ms else None
             writer.writerow([
                 p.batch_item_id,
                 item_path_map.get(p.batch_item_id, ""),
                 p.page_number,
+                p.source_lang or "",
+                p.target_lang or "",
                 p.extracted_image_size_bytes or 0,
                 p.cropped_image_size_bytes or 0,
                 p.ocr_data_size_bytes or 0,
+                p.translation_data_size_bytes or 0,
                 round(p_time, 2) if p_time is not None else "",
+                round(p_trans_time, 2) if p_trans_time is not None else "",
                 p.status,
                 p.attempt_count,
                 p.error_message or "",
@@ -1768,7 +1798,9 @@ class OrgAdminView(AdminBaseView):
                 ) or 0
                 pages = item.total_pages or page_count_db
                 time_sec = (item.total_ocr_latency_ms / 1000.0) if item.total_ocr_latency_ms else None
+                trans_time_sec = (item.total_translation_latency_ms / 1000.0) if item.total_translation_latency_ms else None
                 avg_per_page_sec = (time_sec / pages) if (time_sec is not None and pages > 0) else None
+                avg_trans_per_page_sec = (trans_time_sec / pages) if (trans_time_sec is not None and pages > 0) else None
 
                 # Fetch per-page metrics
                 page_records = (
@@ -1780,14 +1812,19 @@ class OrgAdminView(AdminBaseView):
                 page_metrics_list = []
                 for p_rec in page_records:
                     p_time_sec = (p_rec.ocr_latency_ms / 1000.0) if p_rec.ocr_latency_ms else None
+                    p_trans_time_sec = (p_rec.translation_latency_ms / 1000.0) if p_rec.translation_latency_ms else None
                     page_metrics_list.append({
                         "id": p_rec.id,
                         "page_number": p_rec.page_number,
                         "status": p_rec.status,
                         "time_took_sec": round(p_time_sec, 2) if p_time_sec is not None else None,
+                        "translation_time_took_sec": round(p_trans_time_sec, 2) if p_trans_time_sec is not None else None,
                         "extracted_image_size_bytes": p_rec.extracted_image_size_bytes,
                         "cropped_image_size_bytes": p_rec.cropped_image_size_bytes,
                         "ocr_data_size_bytes": p_rec.ocr_data_size_bytes,
+                        "translation_data_size_bytes": p_rec.translation_data_size_bytes,
+                        "source_lang": p_rec.source_lang,
+                        "target_lang": p_rec.target_lang,
                         "attempt_count": p_rec.attempt_count,
                         "error_message": p_rec.error_message,
                     })
@@ -1799,9 +1836,14 @@ class OrgAdminView(AdminBaseView):
                     "extracted_images_size_bytes": item.extracted_images_size_bytes,
                     "cropped_images_size_bytes": item.cropped_images_size_bytes,
                     "ocr_data_size_bytes": item.ocr_data_size_bytes,
+                    "translation_data_size_bytes": item.translation_data_size_bytes,
+                    "source_lang": item.source_lang,
+                    "target_lang": item.target_lang,
                     "pages": pages,
                     "time_took_sec": round(time_sec, 2) if time_sec is not None else None,
+                    "translation_time_took_sec": round(trans_time_sec, 2) if trans_time_sec is not None else None,
                     "avg_per_page_sec": round(avg_per_page_sec, 2) if avg_per_page_sec is not None else None,
+                    "avg_trans_per_page_sec": round(avg_trans_per_page_sec, 2) if avg_trans_per_page_sec is not None else None,
                     "status": item.status,
                     "error_message": item.error_message,
                     "extraction_latency_ms": item.extraction_latency_ms,

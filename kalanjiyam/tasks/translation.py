@@ -169,6 +169,49 @@ def _run_translation_for_page_inner(
 
             consume_translation_credit_for_project(project)
             session.commit()
+
+            # Record UI Batch Translation metrics in BatchItem / BatchOcrPage
+            try:
+                trans_latency_ms = (time.time() - start_time) * 1000.0
+                trans_data_bytes = len(translated_content.encode('utf-8'))
+                
+                batch_item = session.query(BatchItem).filter_by(project_id=project.id).order_by(BatchItem.id.desc()).first()
+                if batch_item:
+                    p_num = int(page_slug) if page_slug.isdigit() else page.order
+                    ocr_page = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, page_number=p_num).first()
+                    if not ocr_page:
+                        ocr_page = BatchOcrPage(
+                            batch_item_id=batch_item.id,
+                            chunk_id=0,
+                            page_number=p_num,
+                            status='PENDING'
+                        )
+
+                    ocr_page.translation_latency_ms = trans_latency_ms
+                    ocr_page.translation_data_size_bytes = trans_data_bytes
+                    ocr_page.source_lang = source_lang
+                    ocr_page.target_lang = target_lang
+                    ocr_page.status = 'COMPLETED'
+                    ocr_page.completed_at = datetime.utcnow()
+                    session.add(ocr_page)
+
+                    # Update cumulative item metrics
+                    batch_item.total_translation_latency_ms = (batch_item.total_translation_latency_ms or 0) + trans_latency_ms
+                    batch_item.translation_data_size_bytes = (batch_item.translation_data_size_bytes or 0) + trans_data_bytes
+                    batch_item.source_lang = source_lang
+                    batch_item.target_lang = target_lang
+                    
+                    completed_count = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, status='COMPLETED').count()
+                    if completed_count >= (batch_item.total_pages or 1):
+                        batch_item.status = 'COMPLETED'
+                        batch_item.completed_at = datetime.utcnow()
+                        if batch_item.job:
+                            batch_item.job.status = 'COMPLETED'
+                            batch_item.job.completed_at = datetime.utcnow()
+
+                    session.commit()
+            except Exception as metric_err:
+                LOG.warning(f"Error recording UI batch translation metrics: {metric_err}")
             
             LOG.info(f"Translation completed for {project_slug}/{page_slug} ({source_lang}->{target_lang})")
             return translation.id
@@ -235,12 +278,47 @@ def run_translation_for_project(
     """
     flask_app = create_config_only_app(app_env)
     with flask_app.app_context():
+        from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrPage
         session = q.get_session()
         db_project = session.query(db.Project).get(project.id)
         if not db_project:
             return None
         # Get pages that have revisions
         pages_with_revisions = [p for p in db_project.pages if p.revisions]
+
+        if pages_with_revisions:
+            # Create BatchJob and BatchItem for UI-triggered batch translation
+            batch_job = BatchJob(
+                target_uri=f"ui://translation/{project.slug}",
+                status='IN_PROGRESS',
+                job_type='UI_BATCH_TRANSLATION'
+            )
+            session.add(batch_job)
+            session.flush()
+
+            batch_item = BatchItem(
+                job_id=batch_job.id,
+                file_path=f"ui://translation/{project.slug}",
+                project_id=db_project.id,
+                status='IN_PROGRESS',
+                total_pages=len(pages_with_revisions),
+                source_lang=source_lang,
+                target_lang=target_lang,
+            )
+            session.add(batch_item)
+            session.flush()
+
+            for p in pages_with_revisions:
+                ocr_p = BatchOcrPage(
+                    batch_item_id=batch_item.id,
+                    chunk_id=0,
+                    page_number=p.order,
+                    status='PENDING',
+                    source_lang=source_lang,
+                    target_lang=target_lang,
+                )
+                session.add(ocr_p)
+            session.commit()
 
     if pages_with_revisions:
         tasks = group(
