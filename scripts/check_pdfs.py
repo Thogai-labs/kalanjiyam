@@ -54,10 +54,13 @@ def check_pdf_matches(jsonl_path: str, pdf_path: str):
     # Discover PDF files
     p_pdf = Path(pdf_path)
     pdf_files = []
-    if p_pdf.is_file() and p_pdf.name.lower().endswith(".pdf"):
+    if p_pdf.is_file():
         pdf_files = [p_pdf]
     elif p_pdf.is_dir():
-        pdf_files = sorted([f for f in p_pdf.rglob("*") if f.is_file() and f.name.lower().endswith(".pdf")])
+        pdf_files = sorted([
+            f for f in p_pdf.rglob("*")
+            if f.is_file() and (f.name.lower().endswith(".pdf") or f.suffix == "")
+        ])
 
     print(f"Total PDF Files Discovered: {len(pdf_files)}")
 

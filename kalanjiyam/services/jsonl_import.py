@@ -118,16 +118,35 @@ def _list_objects(client, uri: str, suffix: str) -> list[str]:
         bucket, prefix = parse_s3_uri(uri)
         found = []
         for response in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
-            found.extend(f"s3://{bucket}/{obj['Key']}" for obj in response.get("Contents", [])
-                         if obj["Key"].lower().endswith(suffix) and not obj["Key"].endswith("/"))
+            for obj in response.get("Contents", []):
+                key = obj["Key"]
+                if key.endswith("/"):
+                    continue
+                key_lower = key.lower()
+                if suffix == ".pdf":
+                    if key_lower.endswith(".pdf") or Path(key).suffix == "":
+                        found.append(f"s3://{bucket}/{key}")
+                else:
+                    if key_lower.endswith(suffix):
+                        found.append(f"s3://{bucket}/{key}")
         return sorted(found)
     else:
         p = Path(uri)
         if not p.exists():
             return []
         if p.is_file():
-            return [str(p)] if p.name.lower().endswith(suffix) else []
-        return sorted(str(f) for f in p.rglob("*") if f.is_file() and f.name.lower().endswith(suffix))
+            return [str(p)]
+        found = []
+        for f in p.rglob("*"):
+            if not f.is_file():
+                continue
+            if suffix == ".pdf":
+                if f.name.lower().endswith(".pdf") or f.suffix == "":
+                    found.append(str(f))
+            else:
+                if f.name.lower().endswith(suffix):
+                    found.append(str(f))
+        return sorted(found)
 
 
 def _read_lines(source: str, client=None):
