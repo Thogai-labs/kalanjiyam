@@ -1,0 +1,274 @@
+"""Streaming JSONL/PDF importer using the application's existing OCR schema."""
+
+from __future__ import annotations
+
+import json
+import logging
+import tempfile
+from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from urllib.parse import urlparse
+
+import boto3
+import fitz
+from slugify import slugify
+
+from kalanjiyam import database as db
+from kalanjiyam.models.batch import BatchItem, BatchJob
+from kalanjiyam.models.group import Group, ProjectGroups
+from kalanjiyam.utils.ocr_persist import apply_ocr_to_page
+from kalanjiyam.utils.ocr_types import BLOCK_TYPES, OcrResponse
+from kalanjiyam.utils.storage import get_storage, page_image_key, pdf_key
+
+LOG = logging.getLogger(__name__)
+ID_DELIMITERS = ("↳", "â†³")
+CATEGORY_TYPES = {
+    "title": "heading", "section-header": "heading", "page-header": "running-header",
+    "page-footer": "running-header", "text": "paragraph", "paragraph": "paragraph",
+    "list-item": "paragraph", "table": "table", "figure": "figure", "picture": "figure",
+    "image": "figure", "caption": "caption", "footnote": "footnote",
+    "page-number": "page-number", "equation": "equation", "formula": "equation",
+    "column-header": "column-header",
+}
+
+
+class ImportValidationError(ValueError):
+    pass
+
+
+@dataclass
+class BookInput:
+    pages: dict[int, Path] = field(default_factory=dict)
+    source_objects: set[str] = field(default_factory=set)
+    errors: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ImportSummary:
+    jsonl_files: int = 0
+    books: int = 0
+    pages: int = 0
+    matched_pdfs: int = 0
+    missing_pdfs: int = 0
+    malformed_records: int = 0
+    duplicate_pages: int = 0
+    invalid_books: int = 0
+    importable_books: int = 0
+
+
+def parse_s3_uri(uri: str) -> tuple[str, str]:
+    parsed = urlparse(uri)
+    if parsed.scheme != "s3" or not parsed.netloc:
+        raise ImportValidationError("Expected an S3 URI (s3://bucket/prefix)")
+    return parsed.netloc, parsed.path.lstrip("/")
+
+
+def parse_record_id(value: object) -> tuple[str, int]:
+    if not isinstance(value, str) or not value:
+        raise ImportValidationError("missing id")
+    for delimiter in ID_DELIMITERS:
+        if delimiter in value:
+            book_id, page = value.rsplit(delimiter, 1)
+            if book_id and page.isdecimal() and int(page) > 0:
+                return book_id, int(page)
+    raise ImportValidationError("id must be <bookId>↳<positive 1-based pageNumber>")
+
+
+def normalize_blocks(raw_blocks: object, book_id: str, page_number: int) -> list[dict]:
+    if not isinstance(raw_blocks, list):
+        raise ImportValidationError("generated_text must decode to a list")
+    result = []
+    for order, raw in enumerate(raw_blocks, 1):
+        if not isinstance(raw, dict):
+            raise ImportValidationError("OCR block is not an object")
+        bbox, text = raw.get("bbox"), raw.get("text", "")
+        if not isinstance(bbox, list) or len(bbox) != 4 or not all(isinstance(n, (int, float)) for n in bbox):
+            raise ImportValidationError("OCR block has invalid bbox")
+        if not isinstance(text, str):
+            raise ImportValidationError("OCR block text is not a string")
+        category = str(raw.get("category", "")).strip().lower()
+        block_type = CATEGORY_TYPES.get(category, "paragraph")
+        result.append({"id": f"import-{book_id}-page-{page_number}-block-{order}",
+                       "type": block_type if block_type in BLOCK_TYPES else "paragraph",
+                       "bbox": [int(n) for n in bbox], "content": text,
+                       "reading_order": order, "children": []})
+    return result
+
+
+def parse_jsonl_record(line: str | bytes) -> tuple[str, int, list[dict]]:
+    try:
+        record = json.loads(line)
+        book_id, page_number = parse_record_id(record.get("id"))
+        generated = json.loads(record["generated_text"])
+    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise ImportValidationError(f"malformed JSONL record: {exc}") from exc
+    return book_id, page_number, normalize_blocks(generated, book_id, page_number)
+
+
+def _list_objects(client, uri: str, suffix: str) -> list[str]:
+    bucket, prefix = parse_s3_uri(uri)
+    found = []
+    for response in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
+        found.extend(f"s3://{bucket}/{obj['Key']}" for obj in response.get("Contents", [])
+                     if obj["Key"].lower().endswith(suffix) and not obj["Key"].endswith("/"))
+    return sorted(found)
+
+
+def _parts(uri: str) -> tuple[str, str]:
+    return parse_s3_uri(uri)
+
+
+def _pdf_index(client, uri: str) -> dict[str, list[str]]:
+    output = defaultdict(list)
+    for item in _list_objects(client, uri, ".pdf"):
+        output[Path(urlparse(item).path).stem].append(item)
+    return output
+
+
+def _create_project(session, book_id: str, count: int, org_slug: str):
+    project = session.query(db.Project).filter_by(source_book_id=book_id).first()
+    if project:
+        return project
+    base = slugify(f"import-{book_id}") or "import-book"
+    slug, number = base, 2
+    while session.query(db.Project).filter_by(slug=slug).first():
+        slug, number = f"{base}-{number}", number + 1
+    board = db.Board(title=f"{slug} discussion board")
+    session.add(board); session.flush()
+    project = db.Project(slug=slug, source_book_id=book_id, display_title=book_id, board_id=board.id)
+    session.add(project); session.flush()
+    group = session.query(Group).filter_by(slug=org_slug).one()
+    session.add(ProjectGroups(group_id=group.id, project_id=project.id))
+    status = session.query(db.PageStatus).filter_by(name="reviewed-0").one()
+    for page_number in range(1, count + 1):
+        session.add(db.Page(project_id=project.id, slug=str(page_number), order=page_number, status_id=status.id))
+    session.flush()
+    return project
+
+
+def _persist_ocr(session, page, blocks: list[dict], width: int, height: int):
+    response = OcrResponse(text_content="\n\n".join(b["content"] for b in blocks), bounding_boxes=[],
+                           blocks=blocks, content_format="blocks", page_width=width, page_height=height,
+                           pipeline="jsonl_import", source_type="pdf")
+    document = apply_ocr_to_page(page, response, "jsonl_import")
+    track = session.query(db.PageVersion).filter_by(page_id=page.id, version_key="ocr:jsonl_import").first()
+    if track and session.query(db.Revision).filter_by(page_version_id=track.id).first():
+        return
+    if not track:
+        track = db.PageVersion(page_id=page.id, version_key="ocr:jsonl_import", version=1, updated_at=datetime.utcnow())
+        session.add(track); session.flush()
+    status = session.query(db.PageStatus).filter_by(name="reviewed-0").one()
+    session.add(db.Revision(project_id=page.project_id, page_id=page.id, page_version_id=track.id,
+                status_id=status.id, summary="Imported JSONL OCR", content=document.to_plain_text(),
+                document=document.to_dict(), content_format=document.content_format))
+
+
+def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
+               dry_run: bool = False, client=None) -> ImportSummary:
+    """Run a bounded, streaming import. JSONL page numbers are 1-based."""
+    client = client or boto3.client("s3")
+    summary = ImportSummary()
+    with tempfile.TemporaryDirectory(prefix="kalanjiyam-jsonl-") as temporary:
+        root = Path(temporary)
+        books: dict[str, BookInput] = defaultdict(BookInput)
+        for source in _list_objects(client, jsonl_uri, ".jsonl"):
+            summary.jsonl_files += 1
+            bucket, key = _parts(source)
+            for line_no, line in enumerate(client.get_object(Bucket=bucket, Key=key)["Body"].iter_lines(), 1):
+                if not line.strip():
+                    continue
+                try:
+                    book_id, page_no, blocks = parse_jsonl_record(line)
+                except ImportValidationError as exc:
+                    summary.malformed_records += 1
+                    LOG.warning("JSONL import malformed record object=%s line=%s error=%s", source, line_no, exc)
+                    continue
+                book = books[book_id]
+                book.source_objects.add(source)
+                if page_no in book.pages:
+                    book.errors.append(f"duplicate page {page_no}")
+                    summary.duplicate_pages += 1
+                    continue
+                page_file = root / f"page-{len(book.pages)}-{page_no}.json"
+                # Include a book directory to avoid same page names across books.
+                page_file = root / slugify(book_id) / page_file.name
+                page_file.parent.mkdir(exist_ok=True)
+                page_file.write_text(json.dumps(blocks), encoding="utf-8")
+                book.pages[page_no] = page_file
+                summary.pages += 1
+        if not summary.jsonl_files:
+            raise ImportValidationError("no JSONL files discovered")
+        summary.books = len(books)
+        pdfs = _pdf_index(client, pdf_uri)
+        for book_id, book in books.items():
+            matches = pdfs.get(book_id, [])
+            if len(matches) != 1:
+                book.errors.append("missing PDF" if not matches else "ambiguous PDF matches")
+                if not matches:
+                    summary.missing_pdfs += 1
+                continue
+            summary.matched_pdfs += 1
+            local_pdf = root / f"validate-{slugify(book_id)}.pdf"
+            document = None
+            try:
+                bucket, key = _parts(matches[0])
+                client.download_file(bucket, key, str(local_pdf))
+                document = fitz.open(local_pdf)
+                if document.needs_pass or document.page_count == 0:
+                    raise ImportValidationError("encrypted or empty PDF")
+                if set(book.pages) != set(range(1, document.page_count + 1)):
+                    raise ImportValidationError("JSONL pages must exactly match 1..PDF page count")
+            except Exception as exc:
+                book.errors.append(str(exc))
+            finally:
+                if document:
+                    document.close()
+        summary.invalid_books = sum(bool(book.errors) for book in books.values())
+        summary.importable_books = summary.books - summary.invalid_books
+        if dry_run:
+            return summary
+
+        job = BatchJob(target_uri=jsonl_uri, jsonl_uri=jsonl_uri, pdf_uri=pdf_uri,
+                       job_type="JSONL_IMPORT", status="IN_PROGRESS")
+        session.add(job); session.flush()
+        storage = get_storage()
+        completed = False
+        for book_id, book in books.items():
+            item = BatchItem(job_id=job.id, file_path=(pdfs.get(book_id) or [""])[0],
+                             mime_type="application/pdf", source_book_id=book_id,
+                             source_jsonl_uri=",".join(sorted(book.source_objects)),
+                             total_pages=len(book.pages), status="VALIDATING")
+            session.add(item); session.flush()
+            if book.errors:
+                item.status, item.error_message, item.completed_at = "FAILED", "; ".join(book.errors), datetime.utcnow()
+                session.commit()
+                continue
+            try:
+                project = _create_project(session, book_id, len(book.pages), org_slug)
+                item.project_id, item.status = project.id, "PROCESSING"
+                session.flush()
+                local_pdf = root / f"process-{slugify(book_id)}.pdf"
+                bucket, key = _parts(item.file_path)
+                client.download_file(bucket, key, str(local_pdf))
+                storage.save(pdf_key(project.slug), local_pdf)
+                with fitz.open(local_pdf) as document:
+                    for page_no in range(1, document.page_count + 1):
+                        pixmap = document[page_no - 1].get_pixmap(dpi=200)
+                        image = root / f"image-{slugify(book_id)}-{page_no}.jpg"
+                        pixmap.pil_save(image, optimize=True)
+                        storage.save(page_image_key(project.slug, str(page_no)), image)
+                        page = session.query(db.Page).filter_by(project_id=project.id, order=page_no).one()
+                        blocks = json.loads(book.pages[page_no].read_text(encoding="utf-8"))
+                        _persist_ocr(session, page, blocks, pixmap.width, pixmap.height)
+                        session.flush()
+                item.status, item.completed_at = "COMPLETED", datetime.utcnow()
+                completed = True
+            except Exception as exc:
+                LOG.exception("JSONL import failed book=%s", book_id)
+                item.status, item.error_message, item.completed_at = "FAILED", str(exc), datetime.utcnow()
+            session.commit()
+        job.status, job.completed_at = ("COMPLETED" if completed else "FAILED"), datetime.utcnow()
+        session.commit()
+    return summary

@@ -26,8 +26,11 @@
 
     <button type="submit" class="submit">{{ _('Sign In') }}</button>
     
+    {% if config.ENABLE_REGISTERED_ACCESS %}
     <p class="signin">
-      {{ _("Contact the site administrator to create an account.") }}
+      {{ _("Don't have an account?") }} 
+      <a href="{{ url_for('auth.register') }}">{{ _('Register') }}</a>
     </p>
+    {% endif %}
 </form>
 {% endblock %}

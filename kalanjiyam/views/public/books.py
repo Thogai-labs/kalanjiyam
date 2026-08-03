@@ -29,7 +29,7 @@ def get_public_projects():
 
 
 def get_project_stats(project):
-    """Get statistics for a project (total pages, OCR'd pages, translated pages)."""
+    """Get statistics for a project (total pages, OCR'd pages, translated pages, language pairs)."""
     session = q.get_session()
     
     total_pages = len(project.pages)
@@ -51,13 +51,35 @@ def get_project_stats(project):
         .distinct()
         .count()
     )
+
+    # Get language pair breakdown (e.g., {'ta -> en': {'count': 15, 'percentage': 75.0}})
+    lang_pairs = {}
+    if total_pages > 0:
+        translations = (
+            session.query(db.Translation.source_language, db.Translation.target_language, db.Page.id)
+            .join(db.Page, db.Translation.page_id == db.Page.id)
+            .filter(db.Page.project_id == project.id)
+            .distinct()
+            .all()
+        )
+        pair_counts = {}
+        for src, tgt, page_id in translations:
+            pair_key = f"{src or 'auto'} → {tgt}"
+            pair_counts[pair_key] = pair_counts.get(pair_key, 0) + 1
+        
+        for pair_key, count in pair_counts.items():
+            lang_pairs[pair_key] = {
+                'count': count,
+                'percentage': (count / total_pages * 100)
+            }
     
     return {
         'total_pages': total_pages,
         'ocr_pages': ocr_pages,
         'translated_pages': translated_pages,
         'ocr_percentage': (ocr_pages / total_pages * 100) if total_pages > 0 else 0,
-        'translation_percentage': (translated_pages / total_pages * 100) if total_pages > 0 else 0
+        'translation_percentage': (translated_pages / total_pages * 100) if total_pages > 0 else 0,
+        'lang_pairs': lang_pairs
     }
 
 
@@ -78,9 +100,12 @@ def index():
     # Sort by title
     projects_with_stats.sort(key=lambda x: x['project'].display_title)
     
+    query = request.args.get("q", "").strip()
+    
     return render_template(
         "public/books/index.html",
-        projects=projects_with_stats
+        projects=projects_with_stats,
+        query=query
     )
 
 
@@ -101,22 +126,24 @@ def book(project_slug):
     session = q.get_session()
     stats = get_project_stats(project)
     
-    # Get pages with their latest revision and translation info
+    # Get pages with their latest revision and translation info including language pairs
     pages_with_info = []
     for page in project.pages:
         latest_revision = page.revisions[-1] if page.revisions else None
         
-        # Check if page has translations
-        has_translation = (
+        # Get translations for this page
+        translations = (
             session.query(db.Translation)
             .filter(db.Translation.page_id == page.id)
-            .first()
-        ) is not None
+            .all()
+        )
+        translations_langs = [f"{t.source_language or 'auto'}→{t.target_language}" for t in translations]
         
         pages_with_info.append({
             'page': page,
             'latest_revision': latest_revision,
-            'has_translation': has_translation
+            'has_translation': len(translations) > 0,
+            'translation_langs': translations_langs
         })
     
     return render_template(

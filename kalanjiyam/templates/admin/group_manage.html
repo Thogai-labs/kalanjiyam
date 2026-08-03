@@ -138,5 +138,51 @@
     <p class="text-slate-400 font-medium text-sm">{{ _('No books assigned yet.') }}</p>
     {% endif %}
   </div>
+
+  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 lg:col-span-2 mt-2">
+    <h2 class="text-lg font-bold text-slate-900 mb-2">{{ _('Per-User Quotas') }}</h2>
+    <p class="text-sm text-slate-500 mb-6">{{ _('Configure default storage and OCR limits for each individual user in this organization.') }}</p>
+    
+    <form method="post" action="{{ url_for('groups_view.manage', id=group.id) }}" class="space-y-6">
+      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+      <input type="hidden" name="action" value="update_user_quotas">
+      
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div>
+          <label for="default_user_storage_mb" class="{{ admin.label_class() }}">{{ _('Per-User Storage Limit (MB)') }}</label>
+          <input type="number" id="default_user_storage_mb" name="default_user_storage_mb" min=0
+            value="{{ (group.default_user_storage_limit // (1024 * 1024)) if group.default_user_storage_limit is not none else '' }}"
+            class="{{ admin.input_class() }}" placeholder="e.g. 500 (leave blank for fallback / unlimited)">
+          <span class="text-xs text-slate-400 mt-1.5 block">
+            Fallback to organization storage limit: <strong>{{ ((group.storage_quota_bytes // (1024 * 1024)) if group.storage_quota_bytes is not none else "∞") }} MB</strong>
+          </span>
+        </div>
+        
+        <div>
+          <label for="default_user_ocr_limit" class="{{ admin.label_class() }}">{{ _('Per-User OCR Limit') }}</label>
+          <input type="number" id="default_user_ocr_limit" name="default_user_ocr_limit" min=0
+            value="{{ group.default_user_ocr_limit if group.default_user_ocr_limit is not none else '' }}"
+            class="{{ admin.input_class() }}" placeholder="e.g. 100 (leave blank for fallback / unlimited)">
+          <span class="text-xs text-slate-400 mt-1.5 block">
+            Fallback to organization OCR credit limit: <strong>{{ (group.ocr_credit_limit if group.ocr_credit_limit is not none else "∞") }}</strong>
+          </span>
+        </div>
+
+        <div>
+          <label for="default_user_translation_limit" class="{{ admin.label_class() }}">{{ _('Per-User Translation Limit') }}</label>
+          <input type="number" id="default_user_translation_limit" name="default_user_translation_limit" min=0
+            value="{{ group.default_user_translation_limit if group.default_user_translation_limit is not none else '' }}"
+            class="{{ admin.input_class() }}" placeholder="e.g. 100 (leave blank for fallback / unlimited)">
+          <span class="text-xs text-slate-400 mt-1.5 block">
+            Fallback to organization translation credit limit: <strong>{{ (group.translation_credit_limit if group.translation_credit_limit is not none else "∞") }}</strong>
+          </span>
+        </div>
+      </div>
+      
+      <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+        {{ admin.btn_primary(_('Save Quotas'), type='submit') }}
+      </div>
+    </form>
+  </div>
 </div>
 {% endblock %}

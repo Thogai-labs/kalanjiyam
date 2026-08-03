@@ -68,6 +68,7 @@ def _initialize_db_session(app, config_name: str):
             """Rollback errors so that the db can handle future requests."""
             session = queries.get_session()
             session.rollback()
+            return render_template("500.html"), 500
 
 
 def _initialize_logger(log_level: int) -> None:
@@ -122,11 +123,17 @@ def create_app(config_env: str):
         return session.get("locale", config_spec.BABEL_DEFAULT_LOCALE)
 
     # Extensions
+    app.config["BABEL_TRANSLATION_DIRECTORIES"] = "translations"
     Babel(app, locale_selector=get_locale)
 
     @app.context_processor
-    def inject_csrf_token():
-        return dict(csrf_token=generate_csrf())
+    def inject_globals():
+        from kalanjiyam.utils.org_access import is_restricted_ocr_user
+        return dict(
+            csrf_token=generate_csrf(),
+            is_restricted_ocr_user=is_restricted_ocr_user,
+             kalanjiyam_locales=LOCALES,
+        )
 
     login_manager = auth_manager.create_login_manager()
     login_manager.init_app(app)
@@ -135,6 +142,12 @@ def create_app(config_env: str):
 
     with app.app_context():
         _ = admin_manager.create_admin_manager(app)
+
+    # Initialize OpenTelemetry instrumentation & metrics middleware
+    from kalanjiyam.utils.otel import init_opentelemetry
+    from kalanjiyam.utils.metrics import init_metrics_middleware
+    init_opentelemetry(app)
+    init_metrics_middleware(app)
 
     # Route extensions
     app.url_map.converters["list"] = ListConverter
@@ -171,12 +184,14 @@ def create_app(config_env: str):
             "time_ago": filters.time_ago,
         }
     )
+    from flask_login import current_user
     app.jinja_env.globals.update(
         {
             "asset": assets.hashed_static,
             "pgettext": pgettext,
             "kalanjiyam_locales": LOCALES,
             "get_locale": get_locale,
+            "current_user": current_user,
         }
     )
 

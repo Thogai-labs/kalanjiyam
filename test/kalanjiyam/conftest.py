@@ -89,6 +89,11 @@ def initialize_test_db():
     admin = db.User(username="u-admin", email="u_admin@siddhasagaram.in")
     admin.set_password("pass_admin")
     session.add(admin)
+
+    # Super Admin
+    super_admin = db.User(username="u-superadmin", email="u_superadmin@siddhasagaram.in")
+    super_admin.set_password("pass_superadmin")
+    session.add(super_admin)
     session.flush()
 
     # Deleted and Banned
@@ -109,21 +114,25 @@ def initialize_test_db():
     p2_role = session.query(db.Role).filter_by(name="p2").one()
     moderator_role = session.query(db.Role).filter_by(name="moderator").one()
     admin_role = session.query(db.Role).filter_by(name="admin").one()
+    super_admin_role = session.query(db.Role).filter_by(name="super_admin").one()
 
     session.add(p1_role)
     session.add(p2_role)
     session.add(moderator_role)
     session.add(admin_role)
+    session.add(super_admin_role)
     session.flush()
 
     u_basic.roles = [p1_role, p2_role]
     moderator.roles = [p1_role, p2_role, moderator_role]
     admin.roles = [p1_role, p2_role, admin_role]
+    super_admin.roles = [p1_role, p2_role, admin_role, super_admin_role]
     deleted_admin.roles = [p1_role, p2_role, admin_role]
     banned.roles = [p1_role]
     session.add(u_basic)
     session.add(moderator)
     session.add(admin)
+    session.add(super_admin)
     session.add(deleted_admin)
     session.add(banned)
     session.flush()
@@ -214,6 +223,13 @@ def moderator_client(flask_app):
 def admin_client(flask_app):
     session = get_session()
     user = session.query(db.User).filter_by(username="u-admin").first()
+    return flask_app.test_client(user=user)
+
+
+@pytest.fixture()
+def superadmin_client(flask_app):
+    session = get_session()
+    user = session.query(db.User).filter_by(username="u-superadmin").first()
     return flask_app.test_client(user=user)
 
 

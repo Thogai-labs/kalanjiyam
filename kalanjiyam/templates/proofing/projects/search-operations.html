@@ -1,0 +1,39 @@
+{% extends 'proofing/base-sidebar.html' %}
+{% import "macros/components.html" as components %}
+{% import "macros/proofing.html" as m %}
+
+{% block title %}{{ _('Search') }}: {{ project.display_title }} | Kalanjiyam{% endblock %}
+
+{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
+
+{% block content %}
+{{ m.project_header_nested(_('Search'), project) }}
+{{ m.project_tabs(project=project, active='search_operations', is_mod=current_user.is_moderator) }}
+
+{% set search_url = url_for("proofing.project.search", slug=project.slug)  %}
+{% set replace_url = url_for("proofing.project.replace", slug=project.slug)  %}
+
+<div class="prose">
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10 not-prose">
+    <a href="{{ search_url }}" class="flex items-center gap-4 p-5 bg-white border border-slate-100 hover:border-slate-200 hover:bg-slate-50/30 shadow-[0_2px_8px_rgba(0,0,0,0.01)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.04)] rounded-2xl transition-all duration-300 group no-underline">
+      <div class="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/40 flex items-center justify-center text-slate-500 group-hover:bg-royalblue/5 group-hover:text-royalblue group-hover:border-royalblue/10 transition-all duration-300 shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      </div>
+      <div>
+        <span class="block font-bold text-sm text-slate-800 group-hover:text-royalblue transition-all">{{ _('Search the project') }}</span>
+        <span class="block text-[11px] text-slate-400 font-medium mt-0.5 leading-relaxed">{{ _('Search for text patterns across all pages') }}</span>
+      </div>
+    </a>
+
+    <a href="{{ replace_url }}" class="flex items-center gap-4 p-5 bg-white border border-slate-100 hover:border-slate-200 hover:bg-slate-50/30 shadow-[0_2px_8px_rgba(0,0,0,0.01)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.04)] rounded-2xl transition-all duration-300 group no-underline">
+      <div class="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/40 flex items-center justify-center text-slate-500 group-hover:bg-royalblue/5 group-hover:text-royalblue group-hover:border-royalblue/10 transition-all duration-300 shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+      </div>
+      <div>
+        <span class="block font-bold text-sm text-slate-800 group-hover:text-royalblue transition-all">{{ _('Search & replace') }}</span>
+        <span class="block text-[11px] text-slate-400 font-medium mt-0.5 leading-relaxed">{{ _('Find and replace strings globally') }}</span>
+      </div>
+    </a>
+  </div>
+</div>
+{% endblock %}

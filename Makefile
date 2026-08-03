@@ -132,7 +132,7 @@ devserver: py-venv-check
 	
 # Run a local Celery instance for background tasks.
 celery: 
-	celery -A kalanjiyam.tasks worker --loglevel=INFO --concurrency=2 --prefetch-multiplier=1 -Q default,ocr
+	celery -A kalanjiyam.tasks worker --loglevel=INFO --concurrency=1 --prefetch-multiplier=1 -Q default,ocr,low_priority
 
 # Start Redis server for Celery backend and broker.
 redis:
@@ -151,7 +151,7 @@ docker-setup-db: docker-build
 ifneq ("$(wildcard $(DB_FILE))","")
 	@echo "Kalanjiyam using your existing database!"
 else
-	@docker ${DOCKER_LOG_LEVEL} compose -p kalanjiyam-${KALANJIYAM_DEPLOYMENT_ENV} -f deploy/${KALANJIYAM_DEPLOYMENT_ENV}/docker-compose-dbsetup.yml up ${IO_REDIRECT}
+	@docker ${DOCKER_LOG_LEVEL} compose -p kalanjiyam-${KALANJIYAM_DEPLOYMENT_ENV} -f deploy/${KALANJIYAM_DEPLOYMENT_ENV}/docker-compose-dbsetup.yml up --exit-code-from kalanjiyam-dbsetup ${IO_REDIRECT}
 	@echo "Kalanjiyam Database : ✔ "
 endif
 	
@@ -165,6 +165,10 @@ docker-build:
 
 # Start Docker services.
 docker-start: docker-build docker-setup-db
+	@if [ "$(KALANJIYAM_DEPLOYMENT_ENV)" = "local" ]; then \
+		mkdir -p ${PWD}/kalanjiyam/static/gen; \
+		docker run --rm -v ${PWD}/kalanjiyam/static:/host_static ${KALANJIYAM_IMAGE} cp -r /app/kalanjiyam/static/gen /host_static/; \
+	fi
 	@docker ${DOCKER_LOG_LEVEL} compose -p kalanjiyam-${KALANJIYAM_DEPLOYMENT_ENV} -f deploy/${KALANJIYAM_DEPLOYMENT_ENV}/docker-compose.yml up ${DOCKER_DETACH} ${IO_REDIRECT}
 	@echo "Kalanjiyam WebApp   : ✔ "
 	@echo "Kalanjiyam URL      : http://${KALANJIYAM_HOST_IP}:${KALANJIYAM_HOST_PORT}"
@@ -201,6 +205,14 @@ lint-check: js-lint
 # Run all Python unit tests.
 test: py-venv-check
 	pytest .
+
+# Run tests inside a clean Docker container.
+# Usage:
+#   make docker-test
+#   make docker-test TEST_PATH=test/kalanjiyam/views/proofing/test_user_tasks.py
+TEST_PATH ?= .
+docker-test:
+	docker run --rm -it -v $(PWD):/app python:3.11-slim-bookworm bash -c "cd /app && pip install --quiet uv && uv sync --frozen && uv run pytest $(TEST_PATH)"
 
 # Run all Python unit tests with a coverage report.
 # After the command completes, open "htmlcov/index.html".
@@ -282,3 +294,4 @@ babel-compile: py-venv-check
 clean:
 	@rm -rf deploy/data/
 	@rm -rf kalanjiyam/translations/*
+	@rm -rf kalanjiyam/static/gen/

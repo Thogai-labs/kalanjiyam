@@ -44,6 +44,12 @@ class User(KalanjiyamUserMixin, Base):
     )
     organization = relationship("Group", foreign_keys=[organization_id])
 
+    #: Number of OCR credits used by this user.
+    ocr_credits_used = Column(Integer, nullable=False, default=0)
+
+    #: Number of translation credits used by this user.
+    translation_credits_used = Column(Integer, nullable=False, default=0)
+
     #: All roles available for this user.
     roles = relationship("Role", secondary="user_roles")
 

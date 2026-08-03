@@ -1,5 +1,5 @@
 """Views for basic site pages."""
-
+from flask import request
 from flask import Blueprint, abort, redirect, render_template, session, url_for
 
 from kalanjiyam import queries as q
@@ -102,9 +102,15 @@ def internal_server_error(e):
 
 
 @bp.route("/language/<slug>")
-def set_language(slug=None):
-    locale = [L for L in LOCALES if slug == L.slug]
+def set_language(slug):
+    locale = next((L for L in LOCALES if L.slug == slug), None)
+
     if locale:
-        locale = locale[0]
         session["locale"] = locale.code
+
+    next_url = request.args.get("next")
+
+    if next_url:
+        return redirect(next_url)
+
     return redirect(url_for("site.index"))

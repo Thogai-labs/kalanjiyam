@@ -29,6 +29,7 @@ module.exports = {
         'peacock-accent': '#7c3aed',
         'peacock-emerald': '#059669',
         'peacock-gold': '#fbbf24',
+        'royalblue': '#4169e1',
       },
     },
   },

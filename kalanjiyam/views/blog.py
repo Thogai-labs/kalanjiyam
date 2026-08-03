@@ -25,18 +25,18 @@ bp = Blueprint("blog", __name__)
 
 
 class CreatePostForm(FlaskForm):
-    title = StringField("Title", validators=[DataRequired()])
-    content = StringField("Content", widget=TextArea(), validators=[DataRequired()])
+    title = StringField(_l("Title"), validators=[DataRequired()])
+    content = StringField(_l("Content"), widget=TextArea(), validators=[DataRequired()])
 
 
 class EditPostForm(FlaskForm):
-    title = StringField("Title", validators=[DataRequired()])
-    slug = StringField("Slug", validators=[DataRequired()])
-    content = StringField("Content", widget=TextArea(), validators=[DataRequired()])
+    title = StringField(_l("Title"), validators=[DataRequired()])
+    slug = StringField(_l("Slug"), validators=[DataRequired()])
+    content = StringField(_l("Content"), widget=TextArea(), validators=[DataRequired()])
 
 
 class DeletePostForm(FlaskForm):
-    slug = StringField("Slug", validators=[DataRequired()])
+    slug = StringField(_l("Slug"), validators=[DataRequired()])
 
 
 @bp.route("/")
@@ -117,9 +117,9 @@ def delete_post(slug):
             session.delete(post_)
             session.commit()
 
-            flash(f"Deleted post {slug}", "success")
+            flash(_l("Deleted post %(slug)s", slug=slug), "success")
             return redirect(url_for("blog.index"))
         else:
-            form.slug.errors.append("Mismatch with project slug.")
+            form.slug.errors.append(_l("Mismatch with project slug."))
 
     return render_template("blog/delete-post.html", post=post_, form=form)

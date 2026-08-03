@@ -81,8 +81,12 @@ export default () => ({
   content: '',
 
   // Editor mode: replica | flow
-  editorMode: 'replica',
+  editorMode: (typeof window.IS_DOCX !== 'undefined' && window.IS_DOCX) ? 'flow' : 'replica',
+  isDocx: (typeof window.IS_DOCX !== 'undefined') ? window.IS_DOCX : false,
   showMetaPanel: false,
+  activeVersion: (typeof ACTIVE_VERSION !== 'undefined') ? ACTIVE_VERSION : 'role:p1',
+  targetVersion: (typeof TARGET_VERSION !== 'undefined') ? TARGET_VERSION : 'role:p1',
+  availableVersions: (typeof AVAILABLE_VERSIONS !== 'undefined') ? AVAILABLE_VERSIONS : [],
   pageDocument: null,
   _flowPlainCache: '',
   _bboxOverlay: null,
@@ -93,9 +97,13 @@ export default () => ({
   selectedLanguage: 'sa',
 
   // Translation settings
-  selectedTranslationEngine: 'google',
+  selectedTranslationEngine: 'indictrans2',
   sourceLanguage: 'hi',
   targetLanguage: 'en',
+  translationDropdownOpen: false,
+  showTranslationInfo: false,
+  allGlossaries: [],
+  selectedGlossaries: [],
 
   // OCR dropdown state
   ocrDropdownOpen: false,
@@ -110,6 +118,7 @@ export default () => ({
   isRunningOCR: false,
   isRunningTranslation: false,
   hasUnsavedChanges: false,
+  _isProgrammaticUpdate: false,
   imageViewer: null,
   richEditor: null,
   isDragging: false,
@@ -465,8 +474,26 @@ export default () => ({
   },
 
   init() {
+    this.isDocx = (typeof window.IS_DOCX !== 'undefined') ? window.IS_DOCX : false;
+    if (this.isDocx) {
+      this.editorMode = 'flow';
+    }
     this.loadSettings();
+    if (this.isDocx) {
+      this.editorMode = 'flow';
+    }
     this.layoutClasses = this.getLayoutClasses();
+
+    // For DOCX projects, eagerly parse pageDocument *before* the flow editor
+    // so that _flowHtmlFromDocument() returns the real HTML, not empty/plain.
+    if (this.isDocx) {
+      const raw = typeof PAGE_DOCUMENT_JSON !== 'undefined' ? PAGE_DOCUMENT_JSON : null;
+      if (raw) {
+        this.pageDocument = parseDocument(raw);
+        // Do NOT recluster DOCX blocks — they are a single HTML blob,
+        // not OCR word-level boxes.
+      }
+    }
 
     // Initialize content from the textarea if it exists
     const textarea = document.getElementById('content');
@@ -475,12 +502,14 @@ export default () => ({
       this._flowPlainCache = textarea.value;
     }
 
-    // Set `imageZoom` only after the viewer is fully initialized.
-    this.imageViewer = initializeImageViewer(IMAGE_URL);
-    this.imageViewer.addHandler('open', () => {
-      this.imageZoom = this.imageZoom || this.imageViewer.viewport.getHomeZoom();
-      this.imageViewer.viewport.zoomTo(this.imageZoom);
-    });
+    // Set `imageViewer` only if not a DOCX project
+    if (!this.isDocx) {
+      this.imageViewer = initializeImageViewer(IMAGE_URL);
+      this.imageViewer.addHandler('open', () => {
+        this.imageZoom = this.imageZoom || this.imageViewer.viewport.getHomeZoom();
+        this.imageViewer.viewport.zoomTo(this.imageZoom);
+      });
+    }
 
     // Use `.bind(this)` so that `this` in the function refers to this app and
     // not `window`.
@@ -490,7 +519,9 @@ export default () => ({
     this.updateLanguageOptions();
     
     // Add event listeners for rotation buttons
-    this.setupRotationButtons();
+    if (!this.isDocx) {
+      this.setupRotationButtons();
+    }
     
     // Initialize translation selector
     this.initTranslationSelector();
@@ -500,40 +531,114 @@ export default () => ({
     if (this.editorMode === 'flow') {
       setTimeout(() => this.ensureFlowEditor(), 0);
     }
-    this.setupZoomButtons();
+    if (!this.isDocx) {
+      this.setupZoomButtons();
+    }
+  },
+
+  getVersionDisplayName(versionKey) {
+    if (!versionKey) return '';
+    const found = this.availableVersions.find(v => v.version_key === versionKey);
+    if (found) return found.display_name;
+
+    if (versionKey === 'role:p1') return 'Consolidated P1';
+    if (versionKey === 'role:p2') return 'Consolidated P2';
+    if (versionKey === 'role:moderator') return 'Moderator';
+    if (versionKey.startsWith('ocr:')) {
+      const engine = versionKey.split(':')[1];
+      const engineMap = {
+        "google": "1",
+        "tesseract": "2",
+        "surya": "3",
+        "nanonets": "4",
+        "deepseek": "5",
+        "chandra": "6",
+        "qwen3": "7",
+        "surya_table": "8",
+        "paddle_table": "9",
+        "glm_ocr": "10",
+        "tesseract_manuscript": "11"
+      };
+      const num = engineMap[engine] || engine;
+      if (/^\d+$/.test(num)) {
+        return 'OCR ' + num;
+      }
+      return num.charAt(0).toUpperCase() + num.slice(1) + ' OCR';
+    }
+    return versionKey;
+  },
+
+  switchVersion(versionKey) {
+    if (this.hasUnsavedChanges && !confirm('You have unsaved changes. Are you sure you want to switch versions and discard changes?')) {
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set('version', versionKey);
+    window.location.href = url.toString();
+  },
+
+  deriveFromVersion(versionKey) {
+    const display = this.getVersionDisplayName(versionKey);
+    const targetDisplay = this.getVersionDisplayName(this.targetVersion);
+    if (!confirm(`Are you sure you want to load "${display}" content into your active editing track "${targetDisplay}"? Your current unsaved edits will be replaced.`)) {
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set('version', versionKey);
+    window.location.href = url.toString();
   },
 
   ensureFlowEditor() {
     if (window.richEditorInstance) return window.richEditorInstance;
 
     const editorElement = document.getElementById('rich-editor');
-    if (!editorElement) return null;
+    if (!editorElement) {
+      console.warn('ensureFlowEditor: #rich-editor element not found in DOM');
+      return null;
+    }
 
     const textarea = document.getElementById('content');
-    const initialContent = this._flowPlainCache
-      || (textarea ? textarea.value : '')
-      || this.content
-      || documentToPlainText(this.pageDocument || { blocks: [] });
+    let initialHtml = this._flowHtmlFromDocument();
+    if (!initialHtml) {
+      const plain = this._flowPlainCache
+        || (textarea ? textarea.value : '')
+        || this.content;
+      if (plain) {
+        initialHtml = plain
+          .split('\n\n')
+          .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+          .join('');
+      }
+    }
 
+    this._isProgrammaticUpdate = true;
     const editor = createRichEditor('rich-editor', {
-      content: '',
+      content: initialHtml || '',
+      onUploadImage: (file) => {
+        this.uploadImageFiles([file]);
+      },
       onUpdate: (html) => {
         this.content = html;
         const contentTextarea = document.getElementById('content');
         if (contentTextarea) contentTextarea.value = html;
         // Rebuild pageDocument blocks from flow HTML so replica stays in sync.
         // Pass the current blocks so ids/geometry/provenance survive the trip.
-        const newBlocks = blocksFromFlowHtml(html, this.pageDocument?.blocks || []);
+        const newBlocks = blocksFromFlowHtml(html, this.pageDocument?.blocks || [], this.pageDocument?.content_format || 'blocks');
         if (newBlocks.length && this.pageDocument) {
           this.pageDocument = { ...this.pageDocument, blocks: newBlocks };
           const docField = document.getElementById('document');
           if (docField) docField.value = JSON.stringify(this.pageDocument);
           this._updateUncertainCount();
         }
-        this.hasUnsavedChanges = true;
+        if (this._isProgrammaticUpdate) {
+          this._isProgrammaticUpdate = false;
+        } else {
+          this.hasUnsavedChanges = true;
+        }
       },
       onSelectionUpdate: () => {},
     });
+    this._isProgrammaticUpdate = false;
 
     window.richEditorInstance = editor;
     this._richEditor = editor;
@@ -541,16 +646,15 @@ export default () => ({
 
     if (editor) {
       initializeToolbar(editor);
-      if (initialContent) {
-        setEditorText(editor, initialContent);
-      }
     }
 
     this.syncEditorFromTextarea = () => {
       const contentTextarea = document.getElementById('content');
       if (contentTextarea && window.richEditorInstance && contentTextarea.value) {
         try {
+          this._isProgrammaticUpdate = true;
           setEditorText(window.richEditorInstance, contentTextarea.value);
+          this._isProgrammaticUpdate = false;
         } catch (e) {
           console.error('Manual sync failed:', e);
         }
@@ -570,13 +674,33 @@ export default () => ({
     }
     this.content = plain;
     const editor = this.ensureFlowEditor();
-    if (!editor) return;
-    const html = this._flowHtmlFromDocument();
-    if (html) {
-      setEditorContent(editor, html);
-    } else {
-      setEditorContent(editor, '');
+    if (!editor) {
+      console.warn('_applyFlowEditorContent: ensureFlowEditor returned null');
+      return;
     }
+    const html = this._flowHtmlFromDocument();
+    const currentContent = getEditorContent(editor);
+    if (html) {
+      if (currentContent !== html) {
+        this._isProgrammaticUpdate = true;
+        setEditorContent(editor, html);
+        this._isProgrammaticUpdate = false;
+      }
+    } else {
+      if (currentContent !== '<p></p>' && currentContent !== '') {
+        this._isProgrammaticUpdate = true;
+        setEditorContent(editor, '');
+        this._isProgrammaticUpdate = false;
+      }
+    }
+    // Force focus and layout update when switching to flow mode
+    setTimeout(() => {
+      try {
+        editor.commands.focus();
+      } catch (e) {
+        console.warn('Failed to focus editor:', e);
+      }
+    }, 50);
   },
 
   setEditorMode(mode) {
@@ -584,8 +708,14 @@ export default () => ({
     this.saveSettings();
     requestAnimationFrame(() => {
       if (this.imageViewer) {
-        this.imageViewer.viewport.resize();
-        this.imageViewer.forceRedraw();
+        try {
+          if (this.imageViewer.viewport) {
+            this.imageViewer.viewport.resize();
+            this.imageViewer.forceRedraw();
+          }
+        } catch (e) {
+          console.warn('Failed to resize OpenSeadragon viewport:', e);
+        }
         if (this._bboxOverlay) {
           this._bboxOverlay.setBoxes(this._bboxOverlay.boxes || []);
         }
@@ -594,11 +724,9 @@ export default () => ({
         this._replicaView.setDocument(this.pageDocument);
       }
       if (mode === 'flow') {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            this._applyFlowEditorContent();
-          });
-        });
+        setTimeout(() => {
+          this._applyFlowEditorContent();
+        }, 100);
       }
     });
   },
@@ -639,6 +767,16 @@ export default () => ({
 
   initPageDocumentEditor() {
     setTimeout(() => {
+      // For DOCX projects, pageDocument was already parsed eagerly in init().
+      // Skip re-parsing and the destructive _syncDocumentToForm that blanks
+      // the flow editor.
+      if (this.isDocx && this.pageDocument) {
+        // Just sync the hidden form field so Publish works.
+        const docField = document.getElementById('document');
+        if (docField) docField.value = JSON.stringify(this.pageDocument);
+        return;
+      }
+
       const raw = typeof PAGE_DOCUMENT_JSON !== 'undefined' ? PAGE_DOCUMENT_JSON : null;
       this.pageDocument = reclusterDocumentBlocks(parseDocument(raw));
       if (typeof PAGE_WIDTH !== 'undefined' && PAGE_WIDTH && !this.pageDocument.page_width) {
@@ -649,7 +787,7 @@ export default () => ({
       }
       this._applyPageDimensionsFromImage();
       const replicaRoot = document.getElementById('ocr-replica-root');
-      if (replicaRoot) {
+      if (replicaRoot && !this.isDocx) {
         this._replicaView = new ReplicaView(replicaRoot, {
           onChange: (doc) => {
             this.pageDocument = doc;
@@ -714,6 +852,13 @@ export default () => ({
     if (!this.pageDocument) return;
     this._updateUncertainCount();
 
+    // For html-format documents (DOCX), documentToPlainText returns the raw
+    // HTML string.  Writing that into the textarea is fine (it is the
+    // canonical content), but we must NOT feed it back into
+    // _applyFlowEditorContent because that would cause TipTap to re-parse
+    // and normalize the HTML, losing content on every round-trip.
+    const isHtmlFormat = this.pageDocument.content_format === 'html';
+
     const plain = documentToPlainText(this.pageDocument);
     this._flowPlainCache = plain;
 
@@ -726,7 +871,9 @@ export default () => ({
       textarea.value = plain;
       this.content = plain;
     }
-    if (this.editorMode === 'flow') {
+    // Skip _applyFlowEditorContent for DOCX/html-format documents:
+    // the flow editor is authoritative and should not be overwritten.
+    if (this.editorMode === 'flow' && !isHtmlFormat) {
       this._applyFlowEditorContent();
     }
   },
@@ -739,7 +886,9 @@ export default () => ({
     if (this.pageDocument.blocks?.length) {
       return documentToFlowHtml(this.pageDocument);
     }
-    const plain = documentToPlainText(this.pageDocument);
+    const plain = this._flowPlainCache
+      || documentToPlainText(this.pageDocument);
+    if (!plain) return '';
     return plain
       .split('\n\n')
       .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
@@ -853,7 +1002,7 @@ export default () => ({
       });
       
       if (!response.ok) {
-        const errorText = await response.text();
+        const errorText = await this.getErrorMessage(response);
         throw new Error(errorText || `Upload failed with status ${response.status}`);
       }
       
@@ -986,10 +1135,13 @@ export default () => ({
 
   // OCR controls
 
-  selectOcrEngine(engineValue) {
+  selectOcrEngine(engineValue, save = false) {
     this.selectedEngine = engineValue;
     window._ocrSelectedEngine = engineValue;
     this.updateLanguageOptions();
+    if (save) {
+      this.saveSettings();
+    }
   },
 
   updateLanguageOptions() {
@@ -1105,7 +1257,7 @@ export default () => ({
         }
         this.showNotification('OCR completed successfully!', 'success');
       } else {
-        const errorText = await response.text();
+        const errorText = await this.getErrorMessage(response);
         this.showNotification(`OCR failed: ${errorText}`, 'error');
       }
     } catch (error) {
@@ -1117,64 +1269,76 @@ export default () => ({
   },
 
   // Translation controls
-  async runTranslation(engine = 'google', sourceLang = 'sa', targetLang = 'en') {
+  async runTranslation(engine = 'google', sourceLang = 'sa', targetLang = 'en', glossaries = []) {
     console.log('=== TRANSLATION DEBUG START ===');
     
-    // Get content from rich editor if available, otherwise use content property
-    let contentToTranslate = this.content;
-    const editor = window.richEditorInstance;
-    if (editor) {
-      // Get plain text from editor for translation
-      contentToTranslate = editor.getText();
-    }
-    
-    // Check if there's content to translate
-    if (!contentToTranslate || contentToTranslate.trim() === '') {
-      console.log('No content to translate');
-      this.showNotification('No content to translate. Please add some text to the editor first.', 'error');
+    if (!this.pageDocument) {
+      this.showNotification('No document content found to translate.', 'error');
       return;
     }
 
     this.isRunningTranslation = true;
 
-    console.log('Starting translation:', { engine, sourceLang, targetLang });
-    console.log('Content to translate:', contentToTranslate);
+    console.log('Starting translation:', { engine, sourceLang, targetLang, glossaries });
     console.log('Current pathname:', window.location.pathname);
 
     const { pathname } = window.location;
-    // Send content as POST body for translation
-    const url = pathname.replace('/proofing/', '/api/translate/') + `?engine=${engine}&source_lang=${sourceLang}&target_lang=${targetLang}`;
+    let url = pathname.replace('/proofing/', '/api/translate/') + `?engine=${engine}&source_lang=${sourceLang}&target_lang=${targetLang}`;
+    if (glossaries && glossaries.length > 0) {
+      const glossaryVal = glossaries.includes('all') ? 'all' : glossaries.join(',');
+      url += `&glossary=${encodeURIComponent(glossaryVal)}`;
+    }
     
     console.log('Translation URL:', url);
 
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    const csrfInput = document.querySelector('input[name="csrf_token"]');
+    if (csrfInput) {
+      headers['X-CSRFToken'] = csrfInput.value;
+    }
+
     try {
-      console.log('Making fetch request...');
-      const response = await fetch(url);
+      console.log('Making POST fetch request...');
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(this.pageDocument),
+      });
       console.log('Translation response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
       
       if (response.ok) {
-        const translation = await response.text();
-        console.log('Translation result:', translation);
-        console.log('Translation result length:', translation.length);
+        const translatedDoc = await response.json();
+        console.log('Translation result document:', translatedDoc);
         
-        // Check if translation is empty or just whitespace
-        if (!translation || translation.trim() === '') {
-          console.warn('Translation result is empty');
-          this.showNotification('Translation result is empty. Please ensure there is content to translate.', 'error');
-          return;
+        // Update pageDocument
+        this.pageDocument = translatedDoc;
+        this._flowPlainCache = documentToPlainText(this.pageDocument);
+        
+        // Update replica view
+        if (this._replicaView) {
+          this._replicaView.setDocument(this.pageDocument);
         }
         
-        // Show success feedback
-        this.showNotification('Translation completed successfully!', 'success');
+        // Update flow / rich editor
+        this._syncDocumentToForm();
+        if (this.editorMode === 'flow') {
+          this._applyFlowEditorContent();
+        }
+        this.hasUnsavedChanges = true;
         
-        // Store translation in a variable that can be accessed by the image box
+        // Extract plain text for reference translation panel
+        const translation = this._flowPlainCache;
         this.currentTranslation = translation;
         
         // Trigger translation display in the image box
         this.showTranslationInImageBox(translation, sourceLang, targetLang, engine);
+        
+        // Show success feedback
+        this.showNotification('Translation completed successfully!', 'success');
       } else {
-        const errorText = await response.text();
+        const errorText = await this.getErrorMessage(response);
         console.error('Translation API error:', errorText);
         this.showNotification(`Translation failed: ${errorText}`, 'error');
       }
@@ -1192,6 +1356,57 @@ export default () => ({
     console.log('=== TRANSLATION SELECTOR INITIALIZED (Alpine.js) ===');
     // The translation selector is now handled directly by Alpine.js
     // No additional JavaScript needed
+    this.fetchGlossaries();
+  },
+
+  async fetchGlossaries() {
+    try {
+      const { pathname } = window.location;
+      const prefixMatch = pathname.match(/^(.*)\/proofing\//);
+      const prefix = prefixMatch ? prefixMatch[1] : '';
+      const response = await fetch(`${prefix}/api/glossaries`);
+      if (response.ok) {
+        this.allGlossaries = await response.json();
+      } else {
+        console.warn('Failed to fetch glossaries:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching glossaries:', error);
+    }
+  },
+
+  get filteredGlossaries() {
+    if (!this.allGlossaries) return [];
+    const filtered = this.allGlossaries.filter(g => 
+      g.source_language_code === this.sourceLanguage && 
+      g.target_language_code === this.targetLanguage
+    );
+    this.selectedGlossaries = this.selectedGlossaries.filter(name => 
+      name === 'all' || filtered.some(g => g.name === name)
+    );
+    return filtered;
+  },
+
+  get showGlossaryWarning() {
+    return this.selectedGlossaries.includes('all') || this.selectedGlossaries.length > 3;
+  },
+
+  getGlossaryDisplayName(name) {
+    const lookup = {
+      'agri': 'Agriculture',
+      'mech': 'Mechanical',
+      'bio': 'Biology',
+      'chem': 'Chemistry',
+      'comp': 'Computer Science',
+      'phy': 'Physics',
+      'math': 'Mathematics',
+      'it': 'Information Technology'
+    };
+    if (lookup[name]) {
+      return lookup[name];
+    }
+    if (!name) return '';
+    return name.charAt(0).toUpperCase() + name.slice(1);
   },
 
   // Show translation in the image box
@@ -1322,6 +1537,31 @@ export default () => ({
     }
 
     console.log('=== DISPLAY DEBUG END ===');
+  },
+
+  async getErrorMessage(response) {
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      try {
+        const data = await response.json();
+        return data.message || data.error || `Error ${response.status}`;
+      } catch (e) {
+        return `Error ${response.status}`;
+      }
+    }
+    const text = await response.text();
+    if (contentType.includes('text/html') || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+      const match = text.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || text.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+      if (match && match[1]) {
+        const cleanMsg = match[1].replace(/<[^>]*>/g, '').trim();
+        if (cleanMsg.includes(response.status.toString())) {
+          return cleanMsg;
+        }
+        return `${cleanMsg} (${response.status})`;
+      }
+      return `Server error (${response.status})`;
+    }
+    return text || `Error ${response.status}`;
   },
 
   // Simple notification system
@@ -1477,7 +1717,10 @@ export default () => ({
   },
   
   // Sync editor content to textarea before form submission
-  syncContentBeforeSubmit() {
+  syncContentBeforeSubmit(event) {
+    if (event) {
+      event.preventDefault();
+    }
     if (this.editorMode === 'flow') {
       const editor = window.richEditorInstance;
       if (editor) {
@@ -1503,5 +1746,18 @@ export default () => ({
       }
     }
     this.hasUnsavedChanges = false;
+
+    // Clear local storage cache right before programmatically submitting
+    const pathMatch = window.location.pathname.match(/\/proofing\/([^\/]+)\/([^\/]+)/);
+    if (pathMatch) {
+      const key = `kalanjiyam-replica-doc-${pathMatch[1]}-${pathMatch[2]}`;
+      localStorage.removeItem(key);
+    }
+
+    // Submit the form programmatically to ensure DOM fields are saved first
+    const form = document.querySelector('form.book-editor-shell');
+    if (form) {
+      form.submit();
+    }
   },
 });
