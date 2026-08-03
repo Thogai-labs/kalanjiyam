@@ -253,7 +253,7 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
                 page_file = root / f"page-{len(book.pages)}-{page_no}.json"
                 # Include a book directory to avoid same page names across books.
                 page_file = root / slugify(book_id) / page_file.name
-                page_file.parent.mkdir(exist_ok=True)
+                page_file.parent.mkdir(exist_ok=True, parents=True)
                 page_file.write_text(json.dumps(blocks), encoding="utf-8")
                 book.pages[page_no] = page_file
                 summary.pages += 1
@@ -295,7 +295,10 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
                         books_to_process[book_id] = book
                 books = books_to_process
 
+        print(f"Discovered {summary.books} unique book(s) in JSONL ({summary.skipped_books} existing duplicate(s) skipped). Validating PDFs...", flush=True)
+
         pdfs = _pdf_index(client, pdf_uri)
+        pdf_matches_by_book = {}
         for book_id, book in books.items():
             matches = pdfs.get(book_id) or pdfs.get(book_id.strip().lower()) or pdfs.get(slugify(book_id)) or []
             matches = list(dict.fromkeys(matches))
@@ -313,6 +316,7 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
                     summary.ambiguous_pdfs += 1
                     LOG.warning("Ambiguous PDF matches for book '%s': %s", book_id, matches)
                 continue
+            pdf_matches_by_book[book_id] = matches[0]
             summary.matched_pdfs += 1
             local_pdf = root / f"validate-{slugify(book_id)}.pdf"
             document = None
@@ -328,8 +332,15 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
             finally:
                 if document:
                     document.close()
+                if local_pdf.exists():
+                    try:
+                        local_pdf.unlink()
+                    except Exception:
+                        pass
         summary.invalid_books = sum(bool(book.errors) for book in books.values())
         summary.importable_books = len(books) - summary.invalid_books
+        print(f"Validation finished: {summary.importable_books} importable book(s), {summary.invalid_books} invalid/missing PDF(s).", flush=True)
+
         if dry_run:
             return summary
 
@@ -338,17 +349,23 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
         session.add(job); session.flush()
         storage = get_storage()
         completed = False
-        for book_id, book in books.items():
-            item = BatchItem(job_id=job.id, file_path=(pdfs.get(book_id) or [""])[0],
+        total_to_process = len(books)
+        print(f"\nStarting import of {summary.importable_books} book(s) into database and storage...", flush=True)
+
+        for idx, (book_id, book) in enumerate(books.items(), 1):
+            file_path = pdf_matches_by_book.get(book_id, "")
+            item = BatchItem(job_id=job.id, file_path=file_path,
                              mime_type="application/pdf", source_book_id=book_id,
                              source_jsonl_uri=",".join(sorted(book.source_objects)),
                              total_pages=len(book.pages), status="VALIDATING")
             session.add(item); session.flush()
             if book.errors:
+                print(f"[{idx}/{total_to_process}] Skipping invalid book '{book_id}': {'; '.join(book.errors)}", flush=True)
                 item.status, item.error_message, item.completed_at = "FAILED", "; ".join(book.errors), datetime.utcnow()
                 session.commit()
                 continue
             try:
+                print(f"[{idx}/{total_to_process}] Importing '{book_id}' ({len(book.pages)} pages)...", flush=True)
                 project = _create_project(session, book_id, len(book.pages), org_slug)
                 item.project_id, item.status = project.id, "PROCESSING"
                 session.flush()
@@ -361,16 +378,38 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
                         image = root / f"image-{slugify(book_id)}-{page_no}.jpg"
                         pixmap.pil_save(image, optimize=True)
                         storage.save(page_image_key(project.slug, str(page_no)), image)
+                        if image.exists():
+                            try:
+                                image.unlink()
+                            except Exception:
+                                pass
                         page = session.query(db.Page).filter_by(project_id=project.id, order=page_no).one()
                         blocks = json.loads(book.pages[page_no].read_text(encoding="utf-8"))
                         _persist_ocr(session, page, blocks, pixmap.width, pixmap.height)
                         session.flush()
+                if local_pdf.exists():
+                    try:
+                        local_pdf.unlink()
+                    except Exception:
+                        pass
                 item.status, item.completed_at = "COMPLETED", datetime.utcnow()
                 completed = True
+                session.commit()
+                print(f"[{idx}/{total_to_process}] ✓ Completed '{book_id}' ({len(book.pages)} pages)", flush=True)
             except Exception as exc:
+                print(f"[{idx}/{total_to_process}] ✗ Failed '{book_id}': {exc}", flush=True)
                 LOG.exception("JSONL import failed book=%s", book_id)
-                item.status, item.error_message, item.completed_at = "FAILED", str(exc), datetime.utcnow()
-            session.commit()
+                session.rollback()
+                try:
+                    item_ref = session.query(BatchItem).get(item.id)
+                    if item_ref:
+                        item_ref.status = "FAILED"
+                        item_ref.error_message = str(exc)
+                        item_ref.completed_at = datetime.utcnow()
+                        session.commit()
+                except Exception as rollback_exc:
+                    LOG.exception("Failed to update BatchItem status after rollback book=%s", book_id)
+                    session.rollback()
         job.status, job.completed_at = (
             ("COMPLETED" if (completed or (summary.skipped_books > 0 and summary.invalid_books == 0)) else "FAILED"),
             datetime.utcnow(),
