@@ -27,9 +27,11 @@ WARNING: i18n fetch failed, running in English only
 #    docker exec -it kalanjiyam-db psql -U kalanjiyam -d kalanjiyam -c \
 #    "SELECT b.file_path AS name, pg_size_pretty(b.source_size_bytes::bigint) AS size, COALESCE(b.total_pages, page_counts.cnt, 0) AS pages, ROUND((b.total_ocr_latency_ms / 1000)::numeric, 2) || 's' AS time_took_to_ocr, b.status FROM batch_items b LEFT JOIN (SELECT batch_item_id, COUNT(*) as cnt FROM batch_ocr_pages GROUP BY batch_item_id) page_counts ON page_counts.batch_item_id = b.id ORDER BY b.id DESC;"
 #
-# 2. [x] #implement superadmin & admin view for CLI / UI batch OCR and UI batch translation:
-#    - [x] Add a superadmin & org-admin dashboard view to list Batch Jobs (BatchJob / BatchItem).
-#    - [x] Display the list of jobs first with options to inspect details.
+# 2. [x] #implement superadmin & admin view for CLI / UI batch OCR, UI batch translation, and Single Page Proofing OCR/Translation:
+#    - [x] Separate UI pages for Batch Jobs List (Page 1) and Job Metrics Details (Page 2).
+#    - [x] Added Sub-Nav Category Tabs (`All Jobs`, `Proofer Single Page`, `UI Batch`, `CLI Batch`).
+#    - [x] Added Task Type Filter (`All Types`, `OCR Only`, `Translation Only`) and real-time URI / Job Type search input.
 #    - [x] Add average per-page latency metrics calculated by (time_took / pages).
-#    - [x] Track and display document-level & per-page metrics for CLI/UI batch OCR and UI batch translation (File Name, Source Lang, Target Lang, Translation Time Took, Translation Data Size, Extracted Image size, OCR time took, OCR text/JSON data size, Cropped elements image size).
+#    - [x] Track pagewise first then combine for PDF-wise for Single Page Proofing OCR & Translation (`SINGLE_PAGE_PROOFING_OCR` & `SINGLE_PAGE_PROOFING_TRANSLATION`).
+#    - [x] Track and display document-level & per-page metrics for CLI/UI batch OCR, UI batch translation, and single page proofing (File Name, Source Lang, Target Lang, Translation Time Took, Translation Data Size, Extracted Image size, OCR time took, OCR text/JSON data size, Cropped elements image size).
 #    - [x] Add separate functions/endpoints to export Document Summary CSV and Per-Page Breakdown CSV according to job ID.

@@ -902,6 +902,8 @@ def revision(project_slug, page_slug, revision_id):
 @p2_required
 def ocr(project_slug, page_slug):
     """Apply OCR to the given page using the specified engine."""
+    import time
+    start_time = time.time()
     if current_user.is_authenticated and current_user.is_super_admin:
         abort(403, description=_l("Superadmins are not allowed to access project data."))
     project_ = q.project(project_slug)
@@ -1050,6 +1052,97 @@ def ocr(project_slug, page_slug):
 
         session.add(page_)
         session.commit()
+
+        # Record metrics for SINGLE_PAGE_PROOFING_OCR
+        try:
+            page_ocr_latency_ms = (time.time() - start_time) * 1000.0
+            from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrPage
+            from kalanjiyam.utils.storage import get_storage, page_image_key
+            import json
+
+            # Find or create a dedicated SINGLE_PAGE_PROOFING_OCR batch job for this project/book
+            batch_job = session.query(BatchJob).filter_by(
+                target_uri=f"single_page_proofing://project/{project_slug}",
+                job_type='SINGLE_PAGE_PROOFING_OCR'
+            ).order_by(BatchJob.id.desc()).first()
+
+            if not batch_job:
+                batch_job = BatchJob(
+                    target_uri=f"single_page_proofing://project/{project_slug}",
+                    status='IN_PROGRESS',
+                    job_type='SINGLE_PAGE_PROOFING_OCR'
+                )
+                session.add(batch_job)
+                session.flush()
+
+            batch_item = session.query(BatchItem).filter_by(job_id=batch_job.id, project_id=project_.id).first()
+            if not batch_item:
+                batch_item = BatchItem(
+                    job_id=batch_job.id,
+                    file_path=f"single_page_proofing://project/{project_slug}",
+                    project_id=project_.id,
+                    status='IN_PROGRESS',
+                    total_pages=len(project_.pages),
+                )
+                session.add(batch_item)
+                session.flush()
+
+            p_num = int(page_slug) if page_slug.isdigit() else page_.order
+            ocr_page = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, page_number=p_num).first()
+            if not ocr_page:
+                ocr_page = BatchOcrPage(
+                    batch_item_id=batch_item.id,
+                    chunk_id=0,
+                    page_number=p_num,
+                    status='PENDING'
+                )
+
+            ocr_page.ocr_latency_ms = page_ocr_latency_ms
+            ocr_page.status = 'COMPLETED'
+            ocr_page.completed_at = datetime.utcnow()
+
+            storage = get_storage()
+            page_key = page_image_key(project_slug, page_slug)
+            try:
+                if storage.exists(page_key):
+                    ocr_page.extracted_image_size_bytes = storage.size(page_key)
+            except Exception:
+                pass
+
+            plain_text = doc.to_plain_text() or ocr_response.text_content or ""
+            doc_json_str = json.dumps(doc.to_dict()) if doc else ""
+            ocr_page.ocr_data_size_bytes = len(plain_text.encode('utf-8')) + len(doc_json_str.encode('utf-8'))
+
+            page_crop_bytes = 0
+            if ocr_response.blocks:
+                for block in ocr_response.blocks:
+                    blk_id = block.get("id") if isinstance(block, dict) else getattr(block, "id", None)
+                    if blk_id:
+                        c_key = f"{project_slug}/images/extracted_{blk_id}.png"
+                        try:
+                            if storage.exists(c_key):
+                                page_crop_bytes += storage.size(c_key)
+                        except Exception:
+                            pass
+            ocr_page.cropped_image_size_bytes = page_crop_bytes
+            session.add(ocr_page)
+
+            # Combine and aggregate all completed single-page metrics for the PDF / book
+            item_pages = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, status='COMPLETED').all()
+            batch_item.total_ocr_latency_ms = sum(p.ocr_latency_ms or 0 for p in item_pages)
+            batch_item.extracted_images_size_bytes = sum(p.extracted_image_size_bytes or 0 for p in item_pages)
+            batch_item.cropped_images_size_bytes = sum(p.cropped_image_size_bytes or 0 for p in item_pages)
+            batch_item.ocr_data_size_bytes = sum(p.ocr_data_size_bytes or 0 for p in item_pages)
+
+            if len(item_pages) >= (batch_item.total_pages or 1):
+                batch_item.status = 'COMPLETED'
+                batch_item.completed_at = datetime.utcnow()
+                batch_job.status = 'COMPLETED'
+                batch_job.completed_at = datetime.utcnow()
+
+            session.commit()
+        except Exception as metric_err:
+            logging.warning(f"Error recording single page proofing OCR metrics: {metric_err}")
 
         # Log usage action for guests
         if not current_user.is_authenticated:
@@ -1383,6 +1476,8 @@ def _translate_blocks(blocks: list, source_lang: str, target_lang: str, engine: 
 @login_required
 def translate(project_slug, page_slug):
     """Apply translation to the given page using the specified engine."""
+    import time
+    start_time = time.time()
     if current_user.is_authenticated and current_user.is_super_admin:
         abort(403, description=_l("Superadmins are not allowed to access project data."))
     project_ = q.project(project_slug)
@@ -1484,6 +1579,75 @@ def translate(project_slug, page_slug):
                     content_format=content_format,
                     version_key=version_key,
                 )
+
+                # Record metrics for SINGLE_PAGE_PROOFING_TRANSLATION
+                try:
+                    trans_latency_ms = (time.time() - start_time) * 1000.0
+                    trans_data_bytes = len(translated_text.encode('utf-8'))
+                    from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrPage
+
+                    batch_job = session.query(BatchJob).filter_by(
+                        target_uri=f"single_page_proofing://translation/{project_slug}",
+                        job_type='SINGLE_PAGE_PROOFING_TRANSLATION'
+                    ).order_by(BatchJob.id.desc()).first()
+
+                    if not batch_job:
+                        batch_job = BatchJob(
+                            target_uri=f"single_page_proofing://translation/{project_slug}",
+                            status='IN_PROGRESS',
+                            job_type='SINGLE_PAGE_PROOFING_TRANSLATION'
+                        )
+                        session.add(batch_job)
+                        session.flush()
+
+                    batch_item = session.query(BatchItem).filter_by(job_id=batch_job.id, project_id=project_.id).first()
+                    if not batch_item:
+                        batch_item = BatchItem(
+                            job_id=batch_job.id,
+                            file_path=f"single_page_proofing://translation/{project_slug}",
+                            project_id=project_.id,
+                            status='IN_PROGRESS',
+                            total_pages=len(project_.pages),
+                            source_lang=source_lang,
+                            target_lang=target_lang,
+                        )
+                        session.add(batch_item)
+                        session.flush()
+
+                    p_num = int(page_slug) if page_slug.isdigit() else page_.order
+                    ocr_page = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, page_number=p_num).first()
+                    if not ocr_page:
+                        ocr_page = BatchOcrPage(
+                            batch_item_id=batch_item.id,
+                            chunk_id=0,
+                            page_number=p_num,
+                            status='PENDING'
+                        )
+
+                    ocr_page.translation_latency_ms = trans_latency_ms
+                    ocr_page.translation_data_size_bytes = trans_data_bytes
+                    ocr_page.source_lang = source_lang
+                    ocr_page.target_lang = target_lang
+                    ocr_page.status = 'COMPLETED'
+                    ocr_page.completed_at = datetime.utcnow()
+                    session.add(ocr_page)
+
+                    # Recalculate combined totals for the single PDF / project translation
+                    item_pages = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, status='COMPLETED').all()
+                    batch_item.total_translation_latency_ms = sum(p.translation_latency_ms or 0 for p in item_pages)
+                    batch_item.translation_data_size_bytes = sum(p.translation_data_size_bytes or 0 for p in item_pages)
+                    batch_item.source_lang = source_lang
+                    batch_item.target_lang = target_lang
+
+                    if len(item_pages) >= (batch_item.total_pages or 1):
+                        batch_item.status = 'COMPLETED'
+                        batch_item.completed_at = datetime.utcnow()
+                        batch_job.status = 'COMPLETED'
+                        batch_job.completed_at = datetime.utcnow()
+
+                    session.commit()
+                except Exception as metric_err:
+                    logging.warning(f"Error recording single page proofing translation metrics: {metric_err}")
                 
             return jsonify(doc_data)
         except Exception as e:
