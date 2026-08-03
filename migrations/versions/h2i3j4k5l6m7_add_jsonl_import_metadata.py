@@ -25,6 +25,7 @@ def upgrade():
         op.add_column("batch_jobs", sa.Column("pdf_uri", sa.String(1024), nullable=True))
     if "job_type" not in columns:
         op.add_column("batch_jobs", sa.Column("job_type", sa.String(64), nullable=False, server_default="BATCH_OCR"))
+
     columns = _columns("batch_items")
     if "source_book_id" not in columns:
         op.add_column("batch_items", sa.Column("source_book_id", sa.String(255), nullable=True))
@@ -33,6 +34,39 @@ def upgrade():
         op.add_column("batch_items", sa.Column("source_jsonl_uri", sa.String(1024), nullable=True))
     if "total_pages" not in columns:
         op.add_column("batch_items", sa.Column("total_pages", sa.Integer(), nullable=True))
+    if "extracted_images_size_bytes" not in columns:
+        op.add_column("batch_items", sa.Column("extracted_images_size_bytes", sa.Integer(), nullable=True))
+    if "cropped_images_size_bytes" not in columns:
+        op.add_column("batch_items", sa.Column("cropped_images_size_bytes", sa.Integer(), nullable=True))
+    if "ocr_data_size_bytes" not in columns:
+        op.add_column("batch_items", sa.Column("ocr_data_size_bytes", sa.Integer(), nullable=True))
+    if "translation_data_size_bytes" not in columns:
+        op.add_column("batch_items", sa.Column("translation_data_size_bytes", sa.Integer(), nullable=True))
+    if "source_lang" not in columns:
+        op.add_column("batch_items", sa.Column("source_lang", sa.String(32), nullable=True))
+    if "target_lang" not in columns:
+        op.add_column("batch_items", sa.Column("target_lang", sa.String(32), nullable=True))
+    if "total_translation_latency_ms" not in columns:
+        op.add_column("batch_items", sa.Column("total_translation_latency_ms", sa.Float(), nullable=True))
+
+    columns = _columns("batch_ocr_pages")
+    if "ocr_latency_ms" not in columns:
+        op.add_column("batch_ocr_pages", sa.Column("ocr_latency_ms", sa.Float(), nullable=True))
+    if "translation_latency_ms" not in columns:
+        op.add_column("batch_ocr_pages", sa.Column("translation_latency_ms", sa.Float(), nullable=True))
+    if "extracted_image_size_bytes" not in columns:
+        op.add_column("batch_ocr_pages", sa.Column("extracted_image_size_bytes", sa.Integer(), nullable=True))
+    if "cropped_image_size_bytes" not in columns:
+        op.add_column("batch_ocr_pages", sa.Column("cropped_image_size_bytes", sa.Integer(), nullable=True))
+    if "ocr_data_size_bytes" not in columns:
+        op.add_column("batch_ocr_pages", sa.Column("ocr_data_size_bytes", sa.Integer(), nullable=True))
+    if "translation_data_size_bytes" not in columns:
+        op.add_column("batch_ocr_pages", sa.Column("translation_data_size_bytes", sa.Integer(), nullable=True))
+    if "source_lang" not in columns:
+        op.add_column("batch_ocr_pages", sa.Column("source_lang", sa.String(32), nullable=True))
+    if "target_lang" not in columns:
+        op.add_column("batch_ocr_pages", sa.Column("target_lang", sa.String(32), nullable=True))
+
     columns = _columns("proof_projects")
     if "source_book_id" not in columns:
         op.add_column("proof_projects", sa.Column("source_book_id", sa.String(255), nullable=True))
