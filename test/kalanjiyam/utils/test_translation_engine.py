@@ -140,7 +140,29 @@ class TestIndicTransEngine:
             mock_client.post.assert_called_once()
             call_kwargs = mock_client.post.call_args[1]
             assert call_kwargs["headers"] == {"X-API-Key": "test-secret-key"}
-    
+
+    @patch('httpx.Client')
+    def test_translate_with_glossary(self, mock_client_class):
+        """Test translation passes glossary payload."""
+        mock_client = Mock()
+        mock_client_class.return_value.__enter__.return_value = mock_client
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"text": "Translated"}
+        mock_client.post.return_value = mock_response
+
+        from flask import Flask
+        app = Flask("test_app")
+        app.config["TRANSLATION_SERVICE_URL"] = "http://localhost:8888"
+
+        with app.app_context():
+            engine = IndicTransEngine("indictrans2")
+            response = engine.translate("Hello", "en", "hi", glossary="administrative")
+            assert response.translated_text == "Translated"
+
+            call_kwargs = mock_client.post.call_args[1]
+            assert call_kwargs["json"]["glossary"] == "administrative"
+
     def test_get_supported_languages(self):
         """Test getting supported languages."""
         engine = IndicTransEngine("indictrans2")
@@ -148,6 +170,37 @@ class TestIndicTransEngine:
         assert "en" in languages
         assert "sa" in languages
         assert "hi" in languages
+
+
+class TestAvailableTranslationEngines:
+    """Test dynamic fetching of translation engines."""
+
+    @patch('httpx.Client')
+    def test_get_available_translation_engines(self, mock_client_class):
+        """Test fetching available engines includes X-API-Key header."""
+        from kalanjiyam.utils.translation_engine import get_available_translation_engines
+        mock_client = Mock()
+        mock_client_class.return_value.__enter__.return_value = mock_client
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = [
+            {"model_name": "ai4bharat/indictrans2-en-indic-1B"}
+        ]
+        mock_client.get.return_value = mock_response
+
+        from flask import Flask
+        app = Flask("test_app")
+        app.config["TRANSLATION_SERVICE_URL"] = "http://localhost:8888"
+        app.config["TRANSLATION_SERVICE_API_KEY"] = "test-api-key"
+
+        with app.app_context():
+            engines = get_available_translation_engines()
+            assert len(engines) == 1
+            assert engines[0]["value"] == "indictrans2"
+
+            mock_client.get.assert_called_once()
+            call_kwargs = mock_client.get.call_args[1]
+            assert call_kwargs["headers"] == {"X-API-Key": "test-api-key"}
 
 
 class TestTranslateTextFunction:

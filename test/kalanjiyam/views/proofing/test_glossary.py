@@ -27,6 +27,24 @@ def test_api_glossaries_proxy(rama_client):
         assert "glossaries" in mock_get.call_args[0][0]
 
 
+def test_api_glossaries_proxy_with_api_key(rama_client, flask_app):
+    """Test that /api/glossaries passes X-API-Key header when configured."""
+    mock_glossaries = [{"name": "admin"}]
+    flask_app.config["TRANSLATION_SERVICE_API_KEY"] = "test-glossary-api-key"
+    
+    with patch("httpx.Client.get") as mock_get:
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = mock_glossaries
+        mock_get.return_value = mock_response
+        
+        r = rama_client.get("/api/glossaries")
+        assert r.status_code == 200
+        mock_get.assert_called_once()
+        headers = mock_get.call_args[1].get("headers", {})
+        assert headers.get("X-API-Key") == "test-glossary-api-key"
+
+
 def test_api_translate_with_glossary(rama_client):
     """Test that the translation API passes the glossary parameter to translate_text."""
     from kalanjiyam.utils.translation_engine import TranslationResponse

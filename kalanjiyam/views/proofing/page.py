@@ -1825,9 +1825,11 @@ def get_glossaries():
     base_url = current_app.config.get("TRANSLATION_SERVICE_URL", "").rstrip("/")
     if not base_url:
         return jsonify([])
+    api_key = current_app.config.get("TRANSLATION_SERVICE_API_KEY", "")
+    headers = {"X-API-Key": api_key} if api_key else {}
     try:
         with httpx.Client(timeout=5.0) as client:
-            resp = client.get(f"{base_url}/glossaries")
+            resp = client.get(f"{base_url}/glossaries", headers=headers)
         if resp.status_code == 200:
             return jsonify(resp.json())
         else:

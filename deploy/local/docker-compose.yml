@@ -19,6 +19,7 @@ services:
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:kalanjiyam@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
       - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
+      - TRANSLATION_SERVICE_API_KEY=${TRANSLATION_SERVICE_API_KEY}
       - FLASK_UPLOAD_FOLDER=/data/uploads
       - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
       - S3_ENDPOINT_URL=http://kalanjiyam-versitygw:7070
@@ -66,6 +67,7 @@ services:
       - BATCH_OCR_SERVICE_URL=${BATCH_OCR_SERVICE_URL}
       - BATCH_OCR_API_KEY=${BATCH_OCR_API_KEY}
       - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
+      - TRANSLATION_SERVICE_API_KEY=${TRANSLATION_SERVICE_API_KEY}
     depends_on:
       - kalanjiyam-db
       - kalanjiyam-redis
@@ -93,6 +95,7 @@ services:
       - BATCH_OCR_SERVICE_URL=${BATCH_OCR_SERVICE_URL}
       - BATCH_OCR_API_KEY=${BATCH_OCR_API_KEY}
       - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
+      - TRANSLATION_SERVICE_API_KEY=${TRANSLATION_SERVICE_API_KEY}
     depends_on:
       - kalanjiyam-db
       - kalanjiyam-redis
