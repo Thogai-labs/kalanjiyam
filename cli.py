@@ -469,24 +469,29 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
 )
 def import_jsonl(jsonl_uri, pdf_uri, org, dry_run, allow_duplicate):
     """Import PDF pages and JSONL OCR records from S3 or local filesystem (JSONL page numbers are 1-based)."""
+    import os
     from kalanjiyam.models.group import Group
     from kalanjiyam.services.jsonl_import import ImportValidationError, run_import
 
+    env_name = os.environ.get("FLASK_ENV") or os.environ.get("KALANJIYAM_ENVIRONMENT") or "development"
+    app = kalanjiyam.create_app(env_name)
+
     org = slugify(org)
-    with Session(engine) as session:
-        if not session.query(Group).filter_by(slug=org).first():
-            raise click.ClickException(f"Organization '{org}' not found.")
-        try:
-            summary = run_import(
-                session,
-                jsonl_uri=jsonl_uri,
-                pdf_uri=pdf_uri,
-                org_slug=org,
-                dry_run=dry_run,
-                allow_duplicate=allow_duplicate,
-            )
-        except ImportValidationError as exc:
-            raise click.ClickException(str(exc)) from exc
+    with app.app_context():
+        with Session(engine) as session:
+            if not session.query(Group).filter_by(slug=org).first():
+                raise click.ClickException(f"Organization '{org}' not found.")
+            try:
+                summary = run_import(
+                    session,
+                    jsonl_uri=jsonl_uri,
+                    pdf_uri=pdf_uri,
+                    org_slug=org,
+                    dry_run=dry_run,
+                    allow_duplicate=allow_duplicate,
+                )
+            except ImportValidationError as exc:
+                raise click.ClickException(str(exc)) from exc
     click.echo(f"JSONL files discovered: {summary.jsonl_files}")
     click.echo(f"Books discovered: {summary.books}")
     click.echo(f"Pages discovered: {summary.pages}")
