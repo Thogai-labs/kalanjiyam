@@ -64,7 +64,15 @@ must exactly match source-PDF positions. PDF filenames must be ``<bookId>.pdf``.
    docker exec -it kalanjiyam-web python cli.py import-jsonl \
      --jsonl-uri s3://my-bucket/imports/jsonl/ \
      --pdf-uri s3://my-bucket/imports/pdfs/ \
-     --org udaan --dry-run
+     --org udaan --allow-duplicate false --dry-run
+
+**Options:**
+
+* ``--jsonl-uri TEXT``: S3 JSONL prefix (required).
+* ``--pdf-uri TEXT``: S3 PDF prefix (required).
+* ``--org TEXT``: Organization slug for imported projects (required).
+* ``--allow-duplicate BOOLEAN``: Allow importing books that already exist in the organization (default: false). Skipped by default unless set to ``true``.
+* ``--dry-run``: Discover and validate without writing DB or storage.
 
 ``--dry-run`` performs discovery and validation only. The importer uses the
 existing 200-DPI PDF rendering behavior; bbox/image alignment is intentionally

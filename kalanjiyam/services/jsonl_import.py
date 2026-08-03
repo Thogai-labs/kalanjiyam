@@ -55,6 +55,7 @@ class ImportSummary:
     malformed_records: int = 0
     duplicate_pages: int = 0
     invalid_books: int = 0
+    skipped_books: int = 0
     importable_books: int = 0
 
 
@@ -166,7 +167,7 @@ def _persist_ocr(session, page, blocks: list[dict], width: int, height: int):
 
 
 def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
-               dry_run: bool = False, client=None) -> ImportSummary:
+               dry_run: bool = False, allow_duplicate: bool = False, client=None) -> ImportSummary:
     """Run a bounded, streaming import. JSONL page numbers are 1-based."""
     client = client or boto3.client("s3")
     summary = ImportSummary()
@@ -201,6 +202,41 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
         if not summary.jsonl_files:
             raise ImportValidationError("no JSONL files discovered")
         summary.books = len(books)
+
+        if not allow_duplicate and org_slug:
+            group = session.query(Group).filter_by(slug=org_slug).first()
+            if group:
+                existing_projects = (
+                    session.query(db.Project)
+                    .join(ProjectGroups, db.Project.id == ProjectGroups.project_id)
+                    .filter(ProjectGroups.group_id == group.id)
+                    .all()
+                )
+                existing_ids = set()
+                for project in existing_projects:
+                    if project.source_book_id:
+                        existing_ids.add(project.source_book_id.strip().lower())
+                    if project.display_title:
+                        existing_ids.add(project.display_title.strip().lower())
+                    if project.slug:
+                        existing_ids.add(project.slug.strip().lower())
+
+                books_to_process = {}
+                for book_id, book in books.items():
+                    b_id_lower = book_id.strip().lower()
+                    b_slug_lower = slugify(book_id).lower()
+                    b_import_slug_lower = slugify(f"import-{book_id}").lower()
+                    if (
+                        b_id_lower in existing_ids
+                        or b_slug_lower in existing_ids
+                        or b_import_slug_lower in existing_ids
+                    ):
+                        summary.skipped_books += 1
+                        LOG.info("Skipping existing book '%s' in organization '%s'", book_id, org_slug)
+                    else:
+                        books_to_process[book_id] = book
+                books = books_to_process
+
         pdfs = _pdf_index(client, pdf_uri)
         for book_id, book in books.items():
             matches = pdfs.get(book_id, [])
@@ -226,7 +262,7 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
                 if document:
                     document.close()
         summary.invalid_books = sum(bool(book.errors) for book in books.values())
-        summary.importable_books = summary.books - summary.invalid_books
+        summary.importable_books = len(books) - summary.invalid_books
         if dry_run:
             return summary
 
@@ -269,6 +305,9 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
                 LOG.exception("JSONL import failed book=%s", book_id)
                 item.status, item.error_message, item.completed_at = "FAILED", str(exc), datetime.utcnow()
             session.commit()
-        job.status, job.completed_at = ("COMPLETED" if completed else "FAILED"), datetime.utcnow()
+        job.status, job.completed_at = (
+            ("COMPLETED" if (completed or (summary.skipped_books > 0 and summary.invalid_books == 0)) else "FAILED"),
+            datetime.utcnow(),
+        )
         session.commit()
     return summary

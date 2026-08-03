@@ -461,7 +461,13 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
 @click.option("--pdf-uri", required=True, help="S3 PDF prefix (s3://bucket/prefix/)")
 @click.option("--org", required=True, help="Organization slug for imported projects")
 @click.option("--dry-run", is_flag=True, help="Discover and validate without writing DB or storage")
-def import_jsonl(jsonl_uri, pdf_uri, org, dry_run):
+@click.option(
+    "--allow-duplicate",
+    default=False,
+    type=bool,
+    help="Allow importing books that already exist in the organization (default: false)",
+)
+def import_jsonl(jsonl_uri, pdf_uri, org, dry_run, allow_duplicate):
     """Import PDF pages and JSONL OCR records from S3 (JSONL page numbers are 1-based)."""
     from kalanjiyam.models.group import Group
     from kalanjiyam.services.jsonl_import import ImportValidationError, run_import
@@ -471,8 +477,14 @@ def import_jsonl(jsonl_uri, pdf_uri, org, dry_run):
         if not session.query(Group).filter_by(slug=org).first():
             raise click.ClickException(f"Organization '{org}' not found.")
         try:
-            summary = run_import(session, jsonl_uri=jsonl_uri, pdf_uri=pdf_uri,
-                                 org_slug=org, dry_run=dry_run)
+            summary = run_import(
+                session,
+                jsonl_uri=jsonl_uri,
+                pdf_uri=pdf_uri,
+                org_slug=org,
+                dry_run=dry_run,
+                allow_duplicate=allow_duplicate,
+            )
         except ImportValidationError as exc:
             raise click.ClickException(str(exc)) from exc
     click.echo(f"JSONL files discovered: {summary.jsonl_files}")
@@ -482,6 +494,7 @@ def import_jsonl(jsonl_uri, pdf_uri, org, dry_run):
     click.echo(f"PDFs missing: {summary.missing_pdfs}")
     click.echo(f"Duplicate pages: {summary.duplicate_pages}")
     click.echo(f"Malformed records: {summary.malformed_records}")
+    click.echo(f"Skipped books (duplicates): {summary.skipped_books}")
     click.echo(f"Importable books: {summary.importable_books}")
     click.echo(f"Invalid books: {summary.invalid_books}")
     if dry_run:
