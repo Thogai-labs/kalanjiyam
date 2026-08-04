@@ -467,6 +467,10 @@ def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
                 item.status, item.completed_at = "COMPLETED", datetime.utcnow()
                 completed = True
                 session.commit()
+                # One index task for the whole book, not one per page.
+                from kalanjiyam.tasks.search_index import enqueue_project
+
+                enqueue_project(project.id)
                 print(f"[{idx}/{total_to_process}] ✓ Completed '{book_id}' ({len(book.pages)} pages)", flush=True)
             except Exception as exc:
                 print(f"[{idx}/{total_to_process}] ✗ Failed '{book_id}': {exc}", flush=True)

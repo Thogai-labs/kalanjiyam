@@ -1037,5 +1037,238 @@ def storage_stats():
     run_stats()
 
 
+# Search index
+# ============
+
+
+def _search_app_context(app_env):
+    """OpenSearch settings come from Flask config, so search commands need one."""
+    from config import create_config_only_app
+
+    return create_config_only_app(app_env).app_context()
+
+
+def _resolve_org_id(session, org_slug):
+    """Turn an --org slug into a group id, or fail loudly."""
+    if not org_slug:
+        return None
+    org = session.query(db.Group).filter_by(slug=org_slug).first()
+    if org is None:
+        raise click.ClickException(f'Organization "{org_slug}" not found.')
+    return org.id
+
+
+def _resolve_project_id(session, project_slug):
+    if not project_slug:
+        return None
+    project = session.query(db.Project).filter_by(slug=project_slug).first()
+    if project is None:
+        raise click.ClickException(f'Project "{project_slug}" not found.')
+    return project.id
+
+
+def _create_search_job(session, *, job_type, org_id=None, project_id=None):
+    from kalanjiyam.models.search import (
+        SCOPE_ALL,
+        SCOPE_ORG,
+        SCOPE_PROJECT,
+        SearchIndexJob,
+    )
+
+    if project_id:
+        scope_kind = SCOPE_PROJECT
+    elif org_id:
+        scope_kind = SCOPE_ORG
+    else:
+        scope_kind = SCOPE_ALL
+
+    job = SearchIndexJob(
+        job_type=job_type,
+        scope_kind=scope_kind,
+        scope_org_id=org_id,
+        scope_project_id=project_id,
+    )
+    session.add(job)
+    # Commit before dispatching: the worker looks the job up by id.
+    session.commit()
+    return job
+
+
+@cli.group("search-index")
+def search_index():
+    """Manage the OpenSearch full-text index."""
+
+
+@search_index.command("init")
+@click.option("--env", "app_env", default="development", help="Application environment")
+def search_index_init(app_env):
+    """Create empty indices and aliases for every organization."""
+    from kalanjiyam.search import indexer
+    from kalanjiyam.search.client import get_client, get_settings, is_enabled
+
+    with _search_app_context(app_env):
+        if not is_enabled():
+            raise click.ClickException("SEARCH_ENABLED is false; nothing to do.")
+        settings = get_settings()
+        client = get_client()
+        with Session(engine) as session:
+            group_ids = indexer.all_group_ids(session)
+            for group_id in group_ids:
+                indexer.ensure_org_indices(client, settings.index_prefix, group_id)
+                click.echo(f"Ready: organization {group_id}")
+            orphans = indexer.ungrouped_project_count(session)
+        click.echo(f"Initialized indices for {len(group_ids)} organization(s).")
+        if orphans:
+            click.echo(
+                f"Warning: {orphans} project(s) belong to no organization and "
+                "will not be indexed. Attach them to a group first."
+            )
+
+
+@search_index.command("rebuild")
+@click.option("--org", "org_slug", help="Rebuild one organization only")
+@click.option("--project", "project_slug", help="Reindex one project only")
+@click.option("--env", "app_env", default="development", help="Application environment")
+@click.option("--now", "run_inline", is_flag=True, help="Run in this process instead of queueing")
+def search_index_rebuild(org_slug, project_slug, app_env, run_inline):
+    """Rebuild the index, swapping aliases only once the build succeeds."""
+    from kalanjiyam.models.search import JOB_REBUILD
+    from kalanjiyam.tasks.search_index import rebuild_index
+
+    with _search_app_context(app_env):
+        with Session(engine) as session:
+            org_id = _resolve_org_id(session, org_slug)
+            project_id = _resolve_project_id(session, project_slug)
+            job = _create_search_job(
+                session, job_type=JOB_REBUILD, org_id=org_id, project_id=project_id
+            )
+            job_id = job.id
+
+        if run_inline:
+            click.echo(f"Running rebuild job {job_id} in this process...")
+            rebuild_index(job_id)
+            click.echo("Done. Check `./cli.py search-index status` for the result.")
+        else:
+            rebuild_index.apply_async(args=[job_id], queue="search_index")
+            click.echo(f"Queued rebuild as job {job_id} on the search_index queue.")
+
+
+@search_index.command("sync")
+@click.option("--org", "org_slug", help="Sync one organization only")
+@click.option("--env", "app_env", default="development", help="Application environment")
+@click.option("--now", "run_inline", is_flag=True, help="Run in this process instead of queueing")
+def search_index_sync(org_slug, app_env, run_inline):
+    """Reconcile the index with the database without a full rebuild."""
+    from kalanjiyam.models.search import JOB_SYNC
+    from kalanjiyam.tasks.search_index import sync_index
+
+    with _search_app_context(app_env):
+        with Session(engine) as session:
+            org_id = _resolve_org_id(session, org_slug)
+            job = _create_search_job(session, job_type=JOB_SYNC, org_id=org_id)
+            job_id = job.id
+
+        if run_inline:
+            click.echo(f"Running sync job {job_id} in this process...")
+            sync_index(job_id)
+            click.echo("Done. Check `./cli.py search-index status` for the result.")
+        else:
+            sync_index.apply_async(args=[job_id], queue="search_index")
+            click.echo(f"Queued sync as job {job_id} on the search_index queue.")
+
+
+@search_index.command("drop")
+@click.option("--org", "org_slug", required=True, help="Organization whose index to delete")
+@click.option("--yes", is_flag=True, help="Skip the confirmation prompt")
+@click.option("--env", "app_env", default="development", help="Application environment")
+def search_index_drop(org_slug, yes, app_env):
+    """Delete an organization's indices. The data can be rebuilt from the database."""
+    from kalanjiyam.search import indexer
+    from kalanjiyam.search.client import get_client, get_settings, is_enabled
+
+    with _search_app_context(app_env):
+        if not is_enabled():
+            raise click.ClickException("SEARCH_ENABLED is false; nothing to do.")
+        with Session(engine) as session:
+            org_id = _resolve_org_id(session, org_slug)
+        if not yes:
+            click.confirm(
+                f'Delete every search index for organization "{org_slug}"?', abort=True
+            )
+        settings = get_settings()
+        removed = indexer.drop_org_indices(get_client(), settings.index_prefix, org_id)
+        click.echo(f"Deleted {len(removed)} index/indices: {', '.join(removed) or '(none)'}")
+
+
+@search_index.command("status")
+@click.option("--job-id", type=int, help="Show one job in detail")
+@click.option("--limit", default=10, type=int, help="Number of recent jobs to list")
+@click.option("--env", "app_env", default="development", help="Application environment")
+def search_index_status(job_id, limit, app_env):
+    """Show cluster health, per-organization document counts, and recent jobs."""
+    from kalanjiyam.models.search import SearchIndexJob
+    from kalanjiyam.search import indexer
+    from kalanjiyam.search.client import get_client, get_settings, health
+
+    with _search_app_context(app_env):
+        info = health()
+        click.echo(f"Search enabled : {info['enabled']}")
+        click.echo(f"Cluster status : {info['status']}")
+        if info.get("error"):
+            click.echo(f"Cluster error  : {info['error']}")
+
+        with Session(engine) as session:
+            if info["enabled"] and info["reachable"]:
+                settings = get_settings()
+                client = get_client()
+                click.echo("")
+                click.echo(f"{'Org':<8} | {'Pages':<10} | {'Projects':<10} | Size")
+                click.echo("-" * 50)
+                for group_id in indexer.all_group_ids(session):
+                    s = indexer.org_stats(client, settings.index_prefix, group_id)
+                    size_mb = (
+                        s["pages_size_bytes"] + s["projects_size_bytes"]
+                    ) / (1024 * 1024)
+                    click.echo(
+                        f"{group_id:<8} | {s['pages_count']:<10} | "
+                        f"{s['projects_count']:<10} | {size_mb:.1f} MB"
+                    )
+                orphans = indexer.ungrouped_project_count(session)
+                if orphans:
+                    click.echo("")
+                    click.echo(
+                        f"Unindexed (no organization): {orphans} project(s)"
+                    )
+
+            click.echo("")
+            query = session.query(SearchIndexJob)
+            if job_id:
+                query = query.filter(SearchIndexJob.id == job_id)
+            jobs = query.order_by(SearchIndexJob.id.desc()).limit(limit).all()
+            if not jobs:
+                click.echo("No index jobs recorded yet.")
+                return
+
+            click.echo(
+                f"{'ID':<5} | {'Type':<14} | {'Scope':<9} | {'Status':<12} | "
+                f"{'Docs':<12} | Duration"
+            )
+            click.echo("-" * 80)
+            for job in jobs:
+                if job.started_at and job.completed_at:
+                    duration = _format_duration(
+                        (job.completed_at - job.started_at).total_seconds()
+                    )
+                else:
+                    duration = "N/A"
+                docs = f"{job.processed_docs}/{job.total_docs}"
+                click.echo(
+                    f"{job.id:<5} | {job.job_type:<14} | {job.scope_kind:<9} | "
+                    f"{job.status:<12} | {docs:<12} | {duration}"
+                )
+                if job.error_message:
+                    click.echo(f"      error: {job.error_message}")
+
+
 if __name__ == "__main__":
     cli()

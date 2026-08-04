@@ -127,6 +127,21 @@ def add_revision(
                 exc_info=True,
             )
 
+    # Keep the search index current. This is the single choke point for
+    # proofing page edits. The revision is already committed above, so this
+    # is strictly best-effort: nothing about search -- not a dead broker, not
+    # a bad import -- may turn a successful save into an error for the user.
+    try:
+        from kalanjiyam.tasks.search_index import enqueue_page
+
+        enqueue_page(page.id)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Could not schedule search indexing for page %s", page.id, exc_info=True
+        )
+
     return new_version
 
 

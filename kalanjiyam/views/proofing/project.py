@@ -322,6 +322,12 @@ def edit(slug):
         form.populate_obj(project_)
         session.commit()
 
+        # Title, author, and visibility are all indexed on every page
+        # document, so a metadata edit means the whole project is stale.
+        from kalanjiyam.tasks.search_index import enqueue_project
+
+        enqueue_project(project_.id)
+
         flash(_l("Saved changes."), "success")
         return redirect(url_for("proofing.project.summary", slug=slug))
 
@@ -405,8 +411,14 @@ def delete_project(slug):
             session = q.get_session()
             from kalanjiyam.models.batch import BatchItem
             session.query(BatchItem).filter_by(project_id=project_.id).update({"project_id": None})
+            deleted_project_id = project_.id
             session.delete(project_)
             session.commit()
+
+            # Drop the project's documents from the search index too.
+            from kalanjiyam.tasks.search_index import enqueue_project_removal
+
+            enqueue_project_removal(deleted_project_id)
 
             from kalanjiyam.utils.storage import get_storage, project_prefix
             get_storage().delete_prefix(project_prefix(slug))
@@ -1490,8 +1502,14 @@ def admin(slug):
             session = q.get_session()
             from kalanjiyam.models.batch import BatchItem
             session.query(BatchItem).filter_by(project_id=project_.id).update({"project_id": None})
+            deleted_project_id = project_.id
             session.delete(project_)
             session.commit()
+
+            # Drop the project's documents from the search index too.
+            from kalanjiyam.tasks.search_index import enqueue_project_removal
+
+            enqueue_project_removal(deleted_project_id)
 
             # Delete the project's files (PDF, page images, editor images)
             # so they don't count against the organization's storage quota.

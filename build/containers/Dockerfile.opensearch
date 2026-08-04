@@ -1,0 +1,8 @@
+# OpenSearch with the ICU analysis plugin.
+#
+# The plugin is not bundled with the base image, and Kalanjiyam's analyzer
+# depends on it: icu_tokenizer is what gives correct word boundaries for Tamil,
+# Devanagari, Telugu, Bengali and Latin text with a single analyzer chain.
+FROM opensearchproject/opensearch:2.17.1
+
+RUN /usr/share/opensearch/bin/opensearch-plugin install --batch analysis-icu

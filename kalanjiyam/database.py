@@ -16,3 +16,4 @@ from kalanjiyam.models.group import *  # NOQA F401,F403
 from kalanjiyam.models.settings import *  # NOQA F401,F403
 from kalanjiyam.models.metrics import *  # NOQA F401,F403
 from kalanjiyam.models.batch import *  # NOQA F401,F403
+from kalanjiyam.models.search import *  # NOQA F401,F403

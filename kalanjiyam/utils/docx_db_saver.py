@@ -89,6 +89,9 @@ def save_original_docx_data_to_db(doc, docx_id: str, original_filename: str = No
             session.add(rev_orig)
 
         session.commit()
+        from kalanjiyam.tasks.search_index import enqueue_project
+
+        enqueue_project(db_project.id)
         LOG.info(f"Successfully saved original DOCX data for '{docx_id}' to DB under project slug '{slug}'.")
         return db_project
     except Exception as e:

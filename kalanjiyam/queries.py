@@ -612,6 +612,7 @@ def add_project_to_group(project_id: int, group_id: int) -> None:
     if not existing:
         session.add(db.ProjectGroups(group_id=group_id, project_id=project_id))
         session.commit()
+        _reindex_project(project_id)
 
 
 def remove_project_from_group(project_id: int, group_id: int) -> None:
@@ -621,6 +622,26 @@ def remove_project_from_group(project_id: int, group_id: int) -> None:
         group_id=group_id, project_id=project_id
     ).delete()
     session.commit()
+    _reindex_project(project_id)
+
+
+def _reindex_project(project_id: int) -> None:
+    """Move a project between search indices after its groups change.
+
+    Search indices are partitioned per organization, so a group change moves
+    a project's documents from one index to another. Best-effort: never let
+    this break a membership edit.
+    """
+    try:
+        from kalanjiyam.tasks.search_index import enqueue_project
+
+        enqueue_project(project_id)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Could not schedule search indexing for project %s", project_id, exc_info=True
+        )
 
 
 def project_belongs_to_group(project_id: int, group_id: int) -> bool:
@@ -646,6 +667,9 @@ def set_project_publicly_viewable(
     project.is_publicly_viewable = is_public
     session.add(project)
     session.commit()
+    # `is_public` is a stored field on every search document and decides
+    # whether anonymous readers can find the book at all.
+    _reindex_project(project_id)
     return project
 
 

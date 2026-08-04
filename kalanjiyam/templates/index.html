@@ -140,12 +140,12 @@
     </p>
 
     <!-- Search Box -->
-    <form action="{{ url_for('public.books.index') }}" method="GET" class="max-w-2xl mx-auto mb-10 relative">
+    <form action="{{ url_for('search.index') }}" method="GET" class="max-w-2xl mx-auto mb-10 relative">
       <div class="relative flex items-center">
         <svg class="w-5 h-5 absolute left-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
         </svg>
-        <input type="text" name="q" class="academic-search-input" placeholder="{{ _('Search by manuscript title, author, or keyword...') }}" />
+        <input type="text" name="q" class="academic-search-input" placeholder="{{ _('Search manuscript text, titles, and authors...') }}" />
         <button type="submit" class="absolute right-2 px-5 py-2.5 bg-royalblue hover:bg-blue-600 text-white font-semibold rounded-md text-sm transition-all shadow-md">
           {{ _('Search Archive') }}
         </button>

@@ -21,6 +21,7 @@ Kalanjiyam locally or contribute to Kalanjiyam's technical work.
    background-tasks-with-celery
    batch-ocr-task-tracking
    batch-cli
+   search
    ocr-api
    ocr-editing
    production-deploy

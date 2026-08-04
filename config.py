@@ -238,6 +238,33 @@ class BaseConfig:
     #: Default OCR engine/model.
     DEFAULT_OCR_ENGINE = _env("DEFAULT_OCR_ENGINE", "tesseract")
 
+    # Full-text search (OpenSearch)
+    # ----------------------------
+
+    #: Master switch. When False, the app never talks to OpenSearch and the
+    #: public search page falls back to a simple SQL query over project
+    #: metadata.
+    SEARCH_ENABLED = _env("SEARCH_ENABLED", "false").lower() in ("true", "1", "yes")
+
+    #: Base URL of the OpenSearch cluster.
+    OPENSEARCH_URL = _env("OPENSEARCH_URL", "http://localhost:9200")
+
+    #: Credentials, if the cluster has its security plugin enabled.
+    OPENSEARCH_USER = _env("OPENSEARCH_USER", "")
+    OPENSEARCH_PASSWORD = _env("OPENSEARCH_PASSWORD", "")
+
+    #: Prefix for all index names, e.g. ``kalanjiyam-pages-org-3``.
+    SEARCH_INDEX_PREFIX = _env("SEARCH_INDEX_PREFIX", "kalanjiyam")
+
+    #: Number of documents per bulk-indexing chunk.
+    SEARCH_BULK_CHUNK_SIZE = int(_env("SEARCH_BULK_CHUNK_SIZE", "500") or "500")
+
+    #: Number of search results per page.
+    SEARCH_RESULTS_PER_PAGE = int(_env("SEARCH_RESULTS_PER_PAGE", "20") or "20")
+
+    #: Timeout in seconds for OpenSearch HTTP requests.
+    SEARCH_REQUEST_TIMEOUT = int(_env("SEARCH_REQUEST_TIMEOUT", "30") or "30")
+
     # Test-only
     # ---------
 
@@ -268,6 +295,8 @@ class UnitTestConfig(BaseConfig):
     STORAGE_BACKEND = "local"
     MULTI_TENANT_MODE = False
     ENFORCE_ORG_ACCESS = False
+    #: Unit tests must never reach for a real cluster, whatever .env says.
+    SEARCH_ENABLED = False
     SECRET_KEY = "insecure unit test secret"
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     UPLOAD_FOLDER = _make_path(Path(__file__).parent / "data" / "file-uploads")
