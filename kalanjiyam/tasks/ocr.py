@@ -108,7 +108,7 @@ def _run_ocr_for_page_inner(
                         # Dummy chunk id or null if allowed, or find chunk
                         ocr_page = BatchOcrPage(
                             batch_item_id=batch_item.id,
-                            chunk_id=0,
+                            chunk_id=None,
                             page_number=p_num,
                             status='PENDING'
                         )
@@ -240,7 +240,7 @@ def run_ocr_for_project(
             for p in unedited_pages:
                 ocr_p = BatchOcrPage(
                     batch_item_id=batch_item.id,
-                    chunk_id=0,
+                    chunk_id=None,
                     page_number=p.order,
                     status='PENDING'
                 )

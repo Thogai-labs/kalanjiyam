@@ -1114,7 +1114,7 @@ def ocr(project_slug, page_slug):
             if not ocr_page:
                 ocr_page = BatchOcrPage(
                     batch_item_id=batch_item.id,
-                    chunk_id=0,
+                    chunk_id=None,
                     page_number=p_num,
                     status='PENDING'
                 )
@@ -1652,7 +1652,7 @@ def translate(project_slug, page_slug):
                     if not ocr_page:
                         ocr_page = BatchOcrPage(
                             batch_item_id=batch_item.id,
-                            chunk_id=0,
+                            chunk_id=None,
                             page_number=p_num,
                             status='PENDING'
                         )

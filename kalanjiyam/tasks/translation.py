@@ -185,7 +185,7 @@ def _run_translation_for_page_inner(
                     if not ocr_page:
                         ocr_page = BatchOcrPage(
                             batch_item_id=batch_item.id,
-                            chunk_id=0,
+                            chunk_id=None,
                             page_number=p_num,
                             status='PENDING'
                         )
@@ -314,7 +314,7 @@ def run_translation_for_project(
             for p in pages_with_revisions:
                 ocr_p = BatchOcrPage(
                     batch_item_id=batch_item.id,
-                    chunk_id=0,
+                    chunk_id=None,
                     page_number=p.order,
                     status='PENDING',
                     source_lang=source_lang,
