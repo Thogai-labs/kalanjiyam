@@ -10,7 +10,7 @@ import sys
 
 import sentry_sdk
 from dotenv import load_dotenv
-from flask import Flask, session
+from flask import Flask, render_template, session
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_babel import Babel, pgettext
 from flask_wtf.csrf import generate_csrf

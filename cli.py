@@ -897,7 +897,15 @@ def migrate_to_s3(batch_size, clear_db, dry_run):
             if page is None or project is None:
                 continue
 
-            key = revision_document_key(project.slug, page.slug, rev.id)
+            from kalanjiyam.utils.document_storage import (
+                derive_revision_tag,
+                get_page_revision_index,
+                save_revision_document,
+            )
+
+            v_num = get_page_revision_index(rev)
+            tag = derive_revision_tag(rev)
+            key = revision_document_key(project.slug, page.slug, v_num, tag=tag)
 
             if storage.exists(key):
                 skipped_rev += 1
@@ -905,13 +913,12 @@ def migrate_to_s3(batch_size, clear_db, dry_run):
 
             if dry_run:
                 click.echo(
-                    f"  [DRY RUN] Would upload document for revision {rev.id}"
+                    f"  [DRY RUN] Would upload document for revision {rev.id} (key: {key})"
                 )
                 migrated_rev += 1
                 continue
 
-            doc_bytes = json.dumps(rev.document, ensure_ascii=False).encode("utf-8")
-            storage.save(key, gzip.compress(doc_bytes))
+            save_revision_document(rev, rev.document)
 
             if clear_db:
                 rev.document = None

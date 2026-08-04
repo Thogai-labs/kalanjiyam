@@ -79,6 +79,24 @@ def load_page_ocr(page: Any) -> str | None:
 # ---------------------------------------------------------------------------
 
 
+def get_page_revision_index(revision: Any) -> int:
+    """Return 1-based page-local revision index (1, 2, 3...) for S3 key naming."""
+    if revision is None:
+        return 1
+
+    page = getattr(revision, "page", None)
+    if page and getattr(page, "revisions", None):
+        for idx, rev in enumerate(page.revisions, start=1):
+            if rev.id == getattr(revision, "id", None):
+                return idx
+
+    pv = getattr(revision, "page_version", None)
+    if pv and getattr(pv, "version", None):
+        return pv.version
+
+    return 1
+
+
 def derive_revision_tag(revision: Any) -> str:
     """Derive a human-readable semantic tag for S3 key naming (e.g. ocr, trans, user-john)."""
     if revision is None:
@@ -116,8 +134,9 @@ def save_revision_document(revision: Any, document: dict) -> bool:
     try:
         page = revision.page
         project = revision.project
+        v_num = get_page_revision_index(revision)
         tag = derive_revision_tag(revision)
-        key = revision_document_key(project.slug, page.slug, revision.id, tag=tag)
+        key = revision_document_key(project.slug, page.slug, v_num, tag=tag)
         get_storage().save_json_gz(key, document)
         return True
     except Exception as err:
@@ -141,20 +160,23 @@ def load_revision_document(revision: Any) -> dict | None:
     project = getattr(revision, "project", None)
     if page is not None and project is not None:
         storage = get_storage()
+        v_num = get_page_revision_index(revision)
         tag = derive_revision_tag(revision)
 
-        # 1. Try tagged key first (e.g. user-john_rev12.json.gz)
+        # 1. Try page-local tagged key first (e.g. user-john_v1.json.gz)
         try:
-            key = revision_document_key(project.slug, page.slug, revision.id, tag=tag)
+            key = revision_document_key(project.slug, page.slug, v_num, tag=tag)
             data = storage.load_json_gz(key)
             if data is not None:
                 return data
         except Exception as err:
             LOG.warning("Failed to fetch revision %s document from S3: %s", revision.id, err)
 
-        # 2. Try legacy/untagged keys (e.g. rev12.json.gz or 12.json.gz)
+        # 2. Try untagged version key & DB ID fallback keys
         fallback_keys = [
-            revision_document_key(project.slug, page.slug, revision.id, tag=""),
+            revision_document_key(project.slug, page.slug, v_num, tag=""),
+            f"projects/{project.slug}/revisions/{page.slug}/{tag}_rev{revision.id}.json.gz",
+            f"projects/{project.slug}/revisions/{page.slug}/rev{revision.id}.json.gz",
             f"projects/{project.slug}/revisions/{page.slug}/{revision.id}.json.gz",
         ]
         for fkey in fallback_keys:
