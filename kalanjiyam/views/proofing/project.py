@@ -469,10 +469,12 @@ def download_as_xml(slug):
         "editor": project_.editor,
     }
     project_meta = {k: v or "TODO" for k, v in project_meta.items()}
+    from kalanjiyam.utils.document_storage import load_revision_document as _load_doc
+
     has_blocks = any(
         p.revisions
         and getattr(p.revisions[-1], "content_format", "plain") == "blocks"
-        and getattr(p.revisions[-1], "document", None)
+        and _load_doc(p.revisions[-1])
         for p in project_.pages
     )
     if has_blocks:

@@ -736,7 +736,9 @@ def enrich_document_from_page_ocr(
     """Fill dimensions and spatial blocks from stored page OCR boxes (Surya JSON)."""
     if page is None:
         return doc
-    raw_boxes = getattr(page, "ocr_bounding_boxes", None)
+    from kalanjiyam.utils.document_storage import load_page_ocr
+
+    raw_boxes = load_page_ocr(page)
     if not raw_boxes:
         return doc
     from kalanjiyam.utils.ocr_client import _parse_bounding_boxes
@@ -797,7 +799,9 @@ def document_for_revision(
     if revision is None:
         doc = PageDocument.empty()
         return enrich_document_from_page_ocr(doc, page)
-    doc_data = getattr(revision, "document", None)
+    from kalanjiyam.utils.document_storage import load_revision_document
+
+    doc_data = load_revision_document(revision)
     if doc_data:
         doc = PageDocument.from_dict(doc_data)
         if doc.blocks:

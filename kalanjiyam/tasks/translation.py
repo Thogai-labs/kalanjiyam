@@ -75,9 +75,12 @@ def _run_translation_for_page_inner(
         content_format = "plain"
         translation_failed = False
 
-        if revision.content_format == "blocks" and revision.document:
+        from kalanjiyam.utils.document_storage import load_revision_document
+
+        rev_doc = load_revision_document(revision)
+        if revision.content_format == "blocks" and rev_doc:
             import copy
-            doc_data = copy.deepcopy(revision.document)
+            doc_data = copy.deepcopy(rev_doc)
             blocks = doc_data.get("blocks", [])
             
             if blocks:

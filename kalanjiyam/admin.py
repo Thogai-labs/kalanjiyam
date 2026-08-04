@@ -457,11 +457,13 @@ class KalanjiyamIndexView(AdminIndexView):
         
         # Export pages
         for page in project.pages:
+            from kalanjiyam.utils.document_storage import load_page_ocr, load_revision_document
+
             page_data = {
                 'slug': page.slug,
                 'order': page.order,
                 'version': page.version,
-                'ocr_bounding_boxes': page.ocr_bounding_boxes,
+                'ocr_bounding_boxes': load_page_ocr(page),
                 'page_width': page.page_width,
                 'page_height': page.page_height,
                 'status_name': page.status.name if page.status else None
@@ -479,7 +481,7 @@ class KalanjiyamIndexView(AdminIndexView):
                     'summary': revision.summary,
                     'content': revision.content,
                     'content_format': getattr(revision, 'content_format', 'plain'),
-                    'document': getattr(revision, 'document', None),
+                    'document': load_revision_document(revision),
                 }
                 project_data['revisions'].append(revision_data)
                 
@@ -660,6 +662,14 @@ class KalanjiyamIndexView(AdminIndexView):
             )
             session.add(page)
             session.flush()
+            # Also persist OCR data to S3/VersityGW
+            if page_data.get('ocr_bounding_boxes'):
+                from kalanjiyam.utils.document_storage import save_page_ocr
+
+                try:
+                    save_page_ocr(page, page_data['ocr_bounding_boxes'])
+                except Exception:
+                    pass
             page_mapping[page_data['slug']] = page
         
         # Create revisions
@@ -685,6 +695,14 @@ class KalanjiyamIndexView(AdminIndexView):
             )
             session.add(revision)
             session.flush()
+            # Also persist document to S3/VersityGW
+            if revision_data.get('document'):
+                from kalanjiyam.utils.document_storage import save_revision_document
+
+                try:
+                    save_revision_document(revision, revision_data['document'])
+                except Exception:
+                    pass
             revision_mapping[revision_data.get('revision_key')] = revision
         
         # Create translations

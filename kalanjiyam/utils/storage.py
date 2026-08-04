@@ -71,6 +71,23 @@ def docx_translation_key(docx_id: str) -> str:
     return f"docx/translations/{docx_id}.docx"
 
 
+def page_ocr_key(project_slug: str, page_slug: str) -> str:
+    """Key for a page's raw OCR bounding-box payload (gzipped JSON)."""
+    return f"projects/{project_slug}/ocr/{page_slug}.json.gz"
+
+
+def revision_document_key(
+    project_slug: str, page_slug: str, revision_id: int
+) -> str:
+    """Key for a revision's structured block document snapshot (gzipped JSON)."""
+    return f"projects/{project_slug}/revisions/{page_slug}/{revision_id}.json.gz"
+
+
+def comparison_result_key(project_slug: str, comparison_id: int) -> str:
+    """Key for detailed per-page OCR comparison results (gzipped JSON)."""
+    return f"projects/{project_slug}/comparisons/{comparison_id}.json.gz"
+
+
 # Storage interface
 # -----------------
 
@@ -123,6 +140,48 @@ class Storage(ABC):
     def total_size(self, prefix: str) -> int:
         """Total size in bytes of all objects under `prefix`."""
         return sum(size for _, size in self.list_keys(prefix))
+
+    # Convenience methods for gzipped JSON payloads
+    # ----------------------------------------------
+
+    def save_json_gz(self, key: str, data: dict | list | str) -> None:
+        """Serialize *data* as gzipped JSON and store under *key*.
+
+        Works across all backends (local, S3/VersityGW, memory).  For the
+        S3 backend the object is stored with ``Content-Encoding: gzip`` so
+        that browsers decompress it transparently.
+
+        *data* may be a dict/list (serialized via ``json.dumps``) or a
+        pre-serialized string.
+        """
+        import gzip as _gzip
+        import json as _json
+
+        raw = (
+            data.encode("utf-8")
+            if isinstance(data, str)
+            else _json.dumps(data, ensure_ascii=False).encode("utf-8")
+        )
+        self.save(key, _gzip.compress(raw))
+
+    def load_json_gz(self, key: str) -> dict | list | str | None:
+        """Fetch a gzipped JSON object and return the deserialized value.
+
+        Returns ``None`` if the key does not exist.
+        """
+        import gzip as _gzip
+        import json as _json
+
+        try:
+            compressed = self.read_bytes(key)
+        except FileNotFoundError:
+            return None
+        decompressed = _gzip.decompress(compressed).decode("utf-8")
+        try:
+            return _json.loads(decompressed)
+        except _json.JSONDecodeError:
+            # The payload was plain text (e.g. bounding-box format), not JSON.
+            return decompressed
 
 
 class LocalStorage(Storage):

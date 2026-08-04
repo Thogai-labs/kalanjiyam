@@ -63,6 +63,13 @@ def apply_ocr_to_page(
         coordinate_space=ocr.coordinate_space,
     )
     page.ocr_bounding_boxes = serialize_bounding_boxes(engine, boxes)
+    # Also persist to S3/VersityGW for the migration.  During the transition
+    # period both locations are written; once all read paths use
+    # document_storage.load_page_ocr() the DB column write above can be
+    # removed.
+    from kalanjiyam.utils.document_storage import save_page_ocr
+
+    save_page_ocr(page, page.ocr_bounding_boxes)
     if pw:
         page.page_width = int(pw)
     elif image_w:

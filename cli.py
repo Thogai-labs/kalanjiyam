@@ -775,6 +775,8 @@ def batch_promote_ocr(job_id):
                     pv_p1 = session.query(db.PageVersion).filter_by(page_id=page.id, version_key="role:p1").first()
                     p1_ver = pv_p1.version if pv_p1 else 0
                     
+                    from kalanjiyam.utils.document_storage import load_revision_document
+
                     add_revision(
                         page=page,
                         summary="Promoted Batch OCR to Default Track",
@@ -782,13 +784,165 @@ def batch_promote_ocr(job_id):
                         status=SitePageStatus.R0,
                         version=p1_ver,
                         author_id=bot_user.id if bot_user else None,
-                        document=rev_ocr.document,
+                        document=load_revision_document(rev_ocr),
                         content_format=rev_ocr.content_format or "plain",
                         version_key="role:p1",
                     )
                     promoted_count += 1
                     
         click.echo(f"Successfully promoted {promoted_count} pages to the default active editor track (role:p1)!")
+
+
+@cli.command("migrate-to-s3")
+@click.option("--batch-size", default=100, help="Commit every N records.")
+@click.option(
+    "--clear-db",
+    is_flag=True,
+    default=False,
+    help="Nullify DB columns after successful S3 upload (saves DB space).",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Show what would be migrated without writing anything.",
+)
+def migrate_to_s3(batch_size, clear_db, dry_run):
+    """Migrate OCR payloads and revision documents from PostgreSQL to S3/VersityGW.
+
+    This command is idempotent: records that already exist in object storage
+    are skipped automatically.
+    """
+    import gzip
+    import json
+
+    from kalanjiyam.utils.storage import (
+        get_storage,
+        page_ocr_key,
+        revision_document_key,
+    )
+
+    app = kalanjiyam.create_app()
+    with app.app_context():
+        storage = get_storage()
+        session = q.get_session()
+
+        # --- Phase 1: Page OCR Bounding Boxes ---
+        pages = (
+            session.query(db.Page)
+            .filter(db.Page.ocr_bounding_boxes.isnot(None))
+            .all()
+        )
+        click.echo(f"[Phase 1] Found {len(pages)} pages with OCR data in Postgres.")
+
+        migrated_ocr = 0
+        skipped_ocr = 0
+        for page in pages:
+            if not page.ocr_bounding_boxes:
+                continue
+
+            project = page.project
+            if project is None:
+                continue
+
+            key = page_ocr_key(project.slug, page.slug)
+
+            if storage.exists(key):
+                skipped_ocr += 1
+                continue
+
+            if dry_run:
+                click.echo(f"  [DRY RUN] Would upload OCR for page {page.slug}")
+                migrated_ocr += 1
+                continue
+
+            raw = page.ocr_bounding_boxes.encode("utf-8")
+            storage.save(key, gzip.compress(raw))
+
+            if clear_db:
+                page.ocr_bounding_boxes = None
+
+            migrated_ocr += 1
+            if migrated_ocr % batch_size == 0:
+                if clear_db:
+                    session.commit()
+                click.echo(
+                    f"  Progress: {migrated_ocr}/{len(pages)} pages migrated."
+                )
+
+        if clear_db and not dry_run:
+            session.commit()
+        click.echo(
+            f"[✓] Phase 1 complete.  Migrated: {migrated_ocr}  Skipped (already in S3): {skipped_ocr}"
+        )
+
+        # --- Phase 2: Revision Document JSON ---
+        revisions = (
+            session.query(db.Revision)
+            .filter(db.Revision.document.isnot(None))
+            .all()
+        )
+        click.echo(
+            f"[Phase 2] Found {len(revisions)} revisions with document JSON in Postgres."
+        )
+
+        migrated_rev = 0
+        skipped_rev = 0
+        for rev in revisions:
+            if not rev.document:
+                continue
+
+            page = rev.page
+            project = rev.project
+            if page is None or project is None:
+                continue
+
+            key = revision_document_key(project.slug, page.slug, rev.id)
+
+            if storage.exists(key):
+                skipped_rev += 1
+                continue
+
+            if dry_run:
+                click.echo(
+                    f"  [DRY RUN] Would upload document for revision {rev.id}"
+                )
+                migrated_rev += 1
+                continue
+
+            doc_bytes = json.dumps(rev.document, ensure_ascii=False).encode("utf-8")
+            storage.save(key, gzip.compress(doc_bytes))
+
+            if clear_db:
+                rev.document = None
+
+            migrated_rev += 1
+            if migrated_rev % batch_size == 0:
+                if clear_db:
+                    session.commit()
+                click.echo(
+                    f"  Progress: {migrated_rev}/{len(revisions)} revisions migrated."
+                )
+
+        if clear_db and not dry_run:
+            session.commit()
+        click.echo(
+            f"[✓] Phase 2 complete.  Migrated: {migrated_rev}  Skipped (already in S3): {skipped_rev}"
+        )
+
+        click.echo()
+        click.echo("Migration summary:")
+        click.echo(f"  OCR pages  — migrated: {migrated_ocr}, skipped: {skipped_ocr}")
+        click.echo(f"  Revisions  — migrated: {migrated_rev}, skipped: {skipped_rev}")
+        if clear_db and not dry_run:
+            click.echo(
+                "\nDB columns have been nullified.  Run VACUUM FULL on proof_pages and "
+                "proof_revisions to reclaim disk space."
+            )
+        elif not clear_db:
+            click.echo(
+                "\nDB columns were NOT cleared (use --clear-db to free DB space after verifying)."
+            )
 
 
 if __name__ == "__main__":

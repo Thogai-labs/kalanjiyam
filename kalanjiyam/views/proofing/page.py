@@ -323,8 +323,12 @@ def _page_document_dict_for_version(cur: db.Page, version_key: str) -> dict:
                 version_key="original"
             ).first()
             orig_rev = orig_version.revisions[-1] if orig_version and orig_version.revisions else None
-            if orig_rev and orig_rev.document:
-                doc = PageDocument.from_dict(orig_rev.document)
+            if orig_rev:
+                from kalanjiyam.utils.document_storage import load_revision_document
+
+                orig_doc = load_revision_document(orig_rev)
+                if orig_doc:
+                    doc = PageDocument.from_dict(orig_doc)
             else:
                 doc = PageDocument.empty()
         else:
@@ -394,8 +398,12 @@ def _editor_template_kwargs(
             version_key="original"
         ).first()
         orig_rev = orig_version.revisions[-1] if orig_version and orig_version.revisions else None
-        if orig_rev and orig_rev.document:
-            doc_data = orig_rev.document
+        if orig_rev:
+            from kalanjiyam.utils.document_storage import load_revision_document as _load_rev_doc
+
+            orig_doc_data = _load_rev_doc(orig_rev)
+            if orig_doc_data:
+                doc_data = orig_doc_data
             blocks = doc_data.get("blocks", [])
             if blocks and doc_data.get("content_format") == "html":
                 original_html = blocks[0].get("content", "")
@@ -413,8 +421,10 @@ def _editor_template_kwargs(
                 if "content" in block and block["content"]:
                     block["content"] = block["content"].replace(f'{prefix}/static/uploads/', '/static/uploads/').replace('/static/uploads/', f'{prefix}/static/uploads/')
 
-    ocr_bounding_boxes = cur.ocr_bounding_boxes or ""
-    has_ocr_content = bool(cur.ocr_bounding_boxes) or bool(page_document.get("blocks"))
+    from kalanjiyam.utils.document_storage import load_page_ocr as _load_ocr
+
+    ocr_bounding_boxes = _load_ocr(cur) or ""
+    has_ocr_content = bool(ocr_bounding_boxes) or bool(page_document.get("blocks"))
 
     # Fetch default OCR engine configuration for restricted users
     system_settings = q.get_system_settings()
@@ -592,10 +602,12 @@ def download_as_xml(project_slug, page_slug):
     project_meta = {k: v or "TODO" for k, v in project_meta.items()}
 
     from kalanjiyam.utils import proofing_utils
+    from kalanjiyam.utils.document_storage import load_revision_document as _load_doc
+
     has_blocks = any(
         p.revisions
         and getattr(p.revisions[-1], "content_format", "plain") == "blocks"
-        and getattr(p.revisions[-1], "document", None)
+        and _load_doc(p.revisions[-1])
         for p in [page_]
     )
     if has_blocks:

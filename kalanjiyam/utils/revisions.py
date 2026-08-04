@@ -109,6 +109,24 @@ def add_revision(
     )
     session.add(revision_)
     session.commit()
+
+    # Persist document snapshot to S3/VersityGW (dual-write during migration).
+    if resolved_document:
+        from kalanjiyam.utils.document_storage import save_revision_document
+
+        try:
+            save_revision_document(revision_, resolved_document)
+        except Exception:
+            # S3/VersityGW write failure must not break the page-save flow;
+            # the data is safely in the DB column as a fallback.
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Failed to persist revision %s document to object storage",
+                revision_.id,
+                exc_info=True,
+            )
+
     return new_version
 
 

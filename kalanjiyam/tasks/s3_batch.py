@@ -134,12 +134,15 @@ def _finalize_batch_item_status(session, batch_item_id: int):
             if project and project.pages:
                 page_ids = [p.id for p in project.pages]
                 revs = session.query(db.Revision).filter(db.Revision.page_id.in_(page_ids)).all()
+                from kalanjiyam.utils.document_storage import load_revision_document
+
                 total_ocr_bytes = 0
                 for rev in revs:
                     if rev.content:
                         total_ocr_bytes += len(rev.content.encode('utf-8'))
-                    if rev.document:
-                        total_ocr_bytes += len(json.dumps(rev.document).encode('utf-8'))
+                    rev_doc = load_revision_document(rev)
+                    if rev_doc:
+                        total_ocr_bytes += len(json.dumps(rev_doc).encode('utf-8'))
                 item.ocr_data_size_bytes = total_ocr_bytes
 
                 # Calculate cropped element images size from storage
@@ -147,8 +150,8 @@ def _finalize_batch_item_status(session, batch_item_id: int):
                 cropped_bytes = 0
                 for p in project.pages:
                     for rev in p.revisions:
-                        doc_dict = rev.document or {}
-                        for block in doc_dict.get("blocks", []):
+                        rev_doc = load_revision_document(rev) or {}
+                        for block in rev_doc.get("blocks", []):
                             blk_id = block.get("id")
                             if blk_id:
                                 crop_key = f"{project.slug}/images/extracted_{blk_id}.png"

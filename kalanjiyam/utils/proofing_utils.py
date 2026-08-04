@@ -176,8 +176,11 @@ def revision_plain_content(revision) -> str:
     """Plain text for a revision, preferring structured document when present."""
     if revision is None:
         return ""
-    if getattr(revision, "document", None):
-        return PageDocument.from_dict(revision.document).to_plain_text()
+    from kalanjiyam.utils.document_storage import load_revision_document
+
+    doc_data = load_revision_document(revision)
+    if doc_data:
+        return PageDocument.from_dict(doc_data).to_plain_text()
     return revision.content or ""
 
 
@@ -202,8 +205,11 @@ def documents_to_tei_xml(project_meta: dict[str, str], pages) -> str:
         buf.append(f'<pb n="{page_number}" />')
         if page.revisions:
             rev = page.revisions[-1]
-            if getattr(rev, "document", None) and rev.content_format == "blocks":
-                doc = PageDocument.from_dict(rev.document)
+            from kalanjiyam.utils.document_storage import load_revision_document
+
+            rev_doc = load_revision_document(rev)
+            if rev_doc and rev.content_format == "blocks":
+                doc = PageDocument.from_dict(rev_doc)
                 buf.append(doc.to_tei_fragment())
             else:
                 blocks = iter_blocks([rev.content or ""])
@@ -226,7 +232,9 @@ def documents_to_html(pages, *, replica: bool = False) -> str:
         parts.append(f'<section class="ocr-export-page" data-page="{page.slug}">')
         if page.revisions:
             rev = page.revisions[-1]
-            if getattr(rev, "document", None):
+            from kalanjiyam.utils.document_storage import load_revision_document
+
+            if load_revision_document(rev):
                 doc = document_for_revision(rev, page)
                 parts.append(doc.to_html(replica=replica))
             else:
@@ -244,19 +252,21 @@ def documents_to_json_bundle(project, pages) -> str:
         "pages": [],
     }
     for page in pages:
+        from kalanjiyam.utils.document_storage import load_page_ocr, load_revision_document
+
         entry = {
             "slug": page.slug,
             "order": page.order,
             "page_width": page.page_width,
             "page_height": page.page_height,
-            "ocr_bounding_boxes": page.ocr_bounding_boxes,
+            "ocr_bounding_boxes": load_page_ocr(page),
         }
         if page.revisions:
             rev = page.revisions[-1]
             entry["revision"] = {
                 "content": rev.content,
                 "content_format": getattr(rev, "content_format", "plain"),
-                "document": getattr(rev, "document", None),
+                "document": load_revision_document(rev),
             }
         payload["pages"].append(entry)
     return json.dumps(payload, ensure_ascii=False, indent=2)
@@ -935,7 +945,9 @@ def documents_to_docx(pages) -> bytes:
             continue
 
         rev = page.revisions[-1]
-        if getattr(rev, "document", None):
+        from kalanjiyam.utils.document_storage import load_revision_document
+
+        if load_revision_document(rev):
             doc_obj = document_for_revision(rev, page)
             html_content = doc_obj.to_html(replica=False)
             parse_html_to_docx(html_content, doc)
@@ -1193,7 +1205,9 @@ def documents_to_pdf(project, pages) -> bytes:
         # Render document content (text blocks, figures, tables) at coordinates
         if page.revisions:
             rev = page.revisions[-1]
-            if getattr(rev, "document", None):
+            from kalanjiyam.utils.document_storage import load_revision_document
+
+            if load_revision_document(rev):
                 doc_obj = document_for_revision(rev, page)
 
                 # Determine if we have a scanned image to extract figures from
