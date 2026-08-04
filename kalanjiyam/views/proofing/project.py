@@ -38,6 +38,7 @@ import redis
 
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
+from kalanjiyam.utils.translation_engine import get_available_translation_engines, get_supported_languages_list
 from kalanjiyam.models.proofing import OCRComparison
 from kalanjiyam.tasks import app as celery_app
 from kalanjiyam.tasks import ocr as ocr_tasks
@@ -1155,7 +1156,19 @@ def _clear_ocr_task_from_redis(task_id):
 @bp.route("/batch-ocr-status/<task_id>")
 def batch_ocr_status(task_id):
     r = GroupResult.restore(task_id, app=celery_app)
-    assert r, task_id
+    if not r or not r.results:
+        return render_template(
+            "include/ocr-progress.html",
+            status="PENDING",
+            current=0,
+            total=0,
+            percent=0,
+            active_tasks=0,
+            pending_tasks=0,
+            failed_tasks=0,
+            engine="google",
+            language="sa",
+        )
 
     # Get task info from Redis to include engine and language
     engine = "google"
@@ -1242,13 +1255,16 @@ def batch_translate(slug):
     if project_ is None:
         abort(404)
 
-    from kalanjiyam.utils.translation_engine import get_available_translation_engines, get_supported_languages_list
     engines = get_available_translation_engines()
     languages = get_supported_languages_list()
 
     # Check if there's an ongoing translation task using Redis
     task_key = f"translation_task:{slug}"
-    task_info = redis_client.get(task_key)
+    try:
+        task_info = redis_client.get(task_key)
+    except Exception as e:
+        LOG.warning(f"Error accessing Redis for task {slug}: {e}")
+        task_info = None
     
     if task_info:
         try:
@@ -1341,7 +1357,10 @@ def batch_translate(slug):
                 'started_at': datetime.utcnow().isoformat(),
                 'project_slug': slug
             }
-            redis_client.setex(task_key, 86400, json.dumps(task_info))
+            try:
+                redis_client.setex(task_key, 86400, json.dumps(task_info))
+            except Exception as redis_err:
+                LOG.warning(f"Error setting Redis key for task {slug}: {redis_err}")
 
             from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
             user_id = get_user_identifier(current_user, request)
@@ -1383,7 +1402,17 @@ def batch_translate(slug):
 @bp.route("/batch-translate-status/<task_id>")
 def batch_translate_status(task_id):
     r = GroupResult.restore(task_id, app=celery_app)
-    assert r, task_id
+    if not r or not r.results:
+        return render_template(
+            "include/translation-progress.html",
+            status="PENDING",
+            current=0,
+            total=0,
+            percent=0,
+            active_tasks=0,
+            pending_tasks=0,
+            failed_tasks=0,
+        )
 
     if r.results:
         current = r.completed_count()
