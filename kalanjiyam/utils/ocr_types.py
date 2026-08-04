@@ -53,12 +53,14 @@ SUPPORTED_ENGINES = [
     "paddle_table",
     "glm_ocr",
     "tesseract_manuscript",
+    "dots_ocr",
 ]
 
 # OCR service ids (hyphenated) ↔ Kalanjiyam internal ids (underscored).
 SERVICE_ENGINE_ALIASES = {
     "surya-table": "surya_table",
     "glm-ocr": "glm_ocr",
+    "dots-ocr": "dots_ocr",
 }
 
 ENGINE_MAP = {
@@ -73,6 +75,7 @@ ENGINE_MAP = {
     "9": "paddle_table",
     "10": "glm_ocr",
     "11": "tesseract_manuscript",
+    "12": "dots_ocr",
 }
 
 
@@ -114,6 +117,7 @@ ENGINE_LABELS = {
     "paddle_table": "Paddle Table OCR",
     "glm_ocr": "GLM OCR",
     "tesseract_manuscript": "Sanskrit Manuscript OCR",
+    "dots_ocr": "Dots OCR",
 }
 
 # Engines that return HTML (not plain text or Markdown)
@@ -123,28 +127,6 @@ HTML_ENGINES = {"nanonets", "chandra"}
 MARKDOWN_ENGINES = {"deepseek", "qwen3"}
 
 
-def is_engine_supported(engine: str) -> bool:
-    """Check if an engine is supported (statically registered or dynamically available from remote OCR service)."""
-    if not engine:
-        return False
-    normalized = normalize_service_engine(engine)
-    if normalized in SUPPORTED_ENGINES or engine in SUPPORTED_ENGINES:
-        return True
-
-    from flask import current_app
-    try:
-        if current_app and current_app.config.get("OCR_BACKEND") == "remote":
-            from kalanjiyam.utils.ocr_client import get_available_engines
-            avail = get_available_engines()
-            if avail.get("status") == "ok":
-                remote_engines = [normalize_service_engine(e) for e in avail.get("engines", [])]
-                if normalized in remote_engines or engine in avail.get("engines", []):
-                    return True
-    except Exception:
-        pass
-    return False
-
-
 def build_engine_choices(
     available_engines: list[str],
     is_super_admin: bool,
@@ -152,7 +134,7 @@ def build_engine_choices(
 ) -> list[dict]:
     """Build the list of engine choices for the OCR form.
 
-    Value is the stable numeric key (matches JS ocrEngines / decodeEngine), or engine name for unlisted engines.
+    Value is the stable numeric key (matches JS ocrEngines / decodeEngine).
     Label is "OCR N" for regular users, real name for super admins.
     Only engines returned by the OCR service ping are included.
     """
@@ -160,9 +142,11 @@ def build_engine_choices(
     seq = 1
     for raw_name in available_engines:
         engine_name = normalize_service_engine(raw_name)
-        numeric_value = REVERSE_ENGINE_MAP.get(engine_name, engine_name)
-        real_name = ENGINE_LABELS.get(engine_name, raw_name.replace("-", " ").replace("_", " ").title())
-        label = real_name if is_super_admin else (f"OCR {numeric_value}" if numeric_value.isdigit() else f"OCR {seq}")
+        if engine_name not in SUPPORTED_ENGINES:
+            continue
+        numeric_value = REVERSE_ENGINE_MAP.get(engine_name, str(seq))
+        real_name = ENGINE_LABELS.get(engine_name, engine_name.capitalize())
+        label = real_name if is_super_admin else f"OCR {numeric_value}"
         is_rec = (engine_name == recommended_engine)
         choices.append({"value": numeric_value, "label": label, "is_recommended": is_rec})
         seq += 1

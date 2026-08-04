@@ -954,7 +954,7 @@ def ocr(project_slug, page_slug):
         engine = settings.default_ocr_engine or "google"
 
     from kalanjiyam.utils.ocr_runner import normalize_engine, run_ocr
-    from kalanjiyam.utils.ocr_types import is_engine_supported
+    from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
 
     original_engine = engine
     engine = normalize_engine(engine)
@@ -967,7 +967,7 @@ def ocr(project_slug, page_slug):
         'remote',
     )
 
-    if not is_engine_supported(engine):
+    if engine not in SUPPORTED_ENGINES:
         abort(400, description=_l("Unsupported OCR engine: %(engine)s", engine=engine))
 
     image_path = get_page_image_filepath(project_slug, page_slug)

@@ -557,7 +557,8 @@ export default () => ({
         "surya_table": "8",
         "paddle_table": "9",
         "glm_ocr": "10",
-        "tesseract_manuscript": "11"
+        "tesseract_manuscript": "11",
+        "dots_ocr": "12"
       };
       const num = engineMap[engine] || engine;
       if (/^\d+$/.test(num)) {
@@ -1216,8 +1217,9 @@ export default () => ({
       '9': 'paddle_table',
       '10': 'glm_ocr',
       '11': 'tesseract_manuscript',
+      '12': 'dots_ocr',
     };
-    return engineMap[engineValue] || engineValue || 'google';
+    return engineMap[engineValue] || 'google';
   },
 
   // Get combined language parameter for bilingual support
