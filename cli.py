@@ -822,10 +822,20 @@ def migrate_to_s3(batch_size, clear_db, dry_run):
         revision_document_key,
     )
 
-    app = kalanjiyam.create_app()
+    import os
+
+    env_name = os.environ.get("KALANJIYAM_ENVIRONMENT", "development")
+    app = kalanjiyam.create_app(env_name)
     with app.app_context():
         storage = get_storage()
         session = q.get_session()
+
+        from kalanjiyam.utils.document_storage import (
+            derive_revision_tag,
+            get_page_revision_index,
+            save_page_ocr,
+            save_revision_document,
+        )
 
         # --- Phase 1: Page OCR Bounding Boxes ---
         pages = (
@@ -837,6 +847,8 @@ def migrate_to_s3(batch_size, clear_db, dry_run):
 
         migrated_ocr = 0
         skipped_ocr = 0
+        failed_ocr = 0
+
         for page in pages:
             if not page.ocr_bounding_boxes:
                 continue
@@ -847,33 +859,51 @@ def migrate_to_s3(batch_size, clear_db, dry_run):
 
             key = page_ocr_key(project.slug, page.slug)
 
-            if storage.exists(key):
-                skipped_ocr += 1
-                continue
+            try:
+                if storage.exists(key):
+                    skipped_ocr += 1
+                    continue
+            except Exception as err:
+                click.echo(f"  [WARNING] Could not check existence of {key}: {err}")
 
             if dry_run:
                 click.echo(f"  [DRY RUN] Would upload OCR for page {page.slug}")
                 migrated_ocr += 1
                 continue
 
-            raw = page.ocr_bounding_boxes.encode("utf-8")
-            storage.save(key, gzip.compress(raw))
+            try:
+                success = save_page_ocr(page, page.ocr_bounding_boxes)
+                if success:
+                    migrated_ocr += 1
+                    if clear_db:
+                        page.ocr_bounding_boxes = None
+                else:
+                    failed_ocr += 1
+                    click.echo(f"  [WARNING] OCR save to storage returned false for page {page.slug}")
+            except Exception as err:
+                failed_ocr += 1
+                click.echo(f"  [ERROR] Failed to migrate OCR for page {page.slug}: {err}")
 
-            if clear_db:
-                page.ocr_bounding_boxes = None
-
-            migrated_ocr += 1
-            if migrated_ocr % batch_size == 0:
-                if clear_db:
-                    session.commit()
+            if (migrated_ocr + skipped_ocr + failed_ocr) % batch_size == 0:
+                if clear_db and migrated_ocr > 0:
+                    try:
+                        session.commit()
+                    except Exception as err:
+                        session.rollback()
+                        click.echo(f"  [ERROR] DB commit failed during batch: {err}")
                 click.echo(
-                    f"  Progress: {migrated_ocr}/{len(pages)} pages migrated."
+                    f"  Progress: {migrated_ocr + skipped_ocr + failed_ocr}/{len(pages)} pages processed."
                 )
 
-        if clear_db and not dry_run:
-            session.commit()
+        if clear_db and not dry_run and migrated_ocr > 0:
+            try:
+                session.commit()
+            except Exception as err:
+                session.rollback()
+                click.echo(f"  [ERROR] Final DB commit failed for Phase 1: {err}")
+
         click.echo(
-            f"[✓] Phase 1 complete.  Migrated: {migrated_ocr}  Skipped (already in S3): {skipped_ocr}"
+            f"[✓] Phase 1 complete. Migrated: {migrated_ocr} | Skipped: {skipped_ocr} | Failed: {failed_ocr}"
         )
 
         # --- Phase 2: Revision Document JSON ---
@@ -888,6 +918,8 @@ def migrate_to_s3(batch_size, clear_db, dry_run):
 
         migrated_rev = 0
         skipped_rev = 0
+        failed_rev = 0
+
         for rev in revisions:
             if not rev.document:
                 continue
@@ -897,19 +929,16 @@ def migrate_to_s3(batch_size, clear_db, dry_run):
             if page is None or project is None:
                 continue
 
-            from kalanjiyam.utils.document_storage import (
-                derive_revision_tag,
-                get_page_revision_index,
-                save_revision_document,
-            )
-
             v_num = get_page_revision_index(rev)
             tag = derive_revision_tag(rev)
             key = revision_document_key(project.slug, page.slug, v_num, tag=tag)
 
-            if storage.exists(key):
-                skipped_rev += 1
-                continue
+            try:
+                if storage.exists(key):
+                    skipped_rev += 1
+                    continue
+            except Exception as err:
+                click.echo(f"  [WARNING] Could not check existence of {key}: {err}")
 
             if dry_run:
                 click.echo(
@@ -918,37 +947,61 @@ def migrate_to_s3(batch_size, clear_db, dry_run):
                 migrated_rev += 1
                 continue
 
-            save_revision_document(rev, rev.document)
+            try:
+                success = save_revision_document(rev, rev.document)
+                if success:
+                    migrated_rev += 1
+                    if clear_db:
+                        rev.document = None
+                else:
+                    failed_rev += 1
+                    click.echo(f"  [WARNING] Document save to storage returned false for revision {rev.id}")
+            except Exception as err:
+                failed_rev += 1
+                click.echo(f"  [ERROR] Failed to migrate revision {rev.id}: {err}")
 
-            if clear_db:
-                rev.document = None
-
-            migrated_rev += 1
-            if migrated_rev % batch_size == 0:
-                if clear_db:
-                    session.commit()
+            if (migrated_rev + skipped_rev + failed_rev) % batch_size == 0:
+                if clear_db and migrated_rev > 0:
+                    try:
+                        session.commit()
+                    except Exception as err:
+                        session.rollback()
+                        click.echo(f"  [ERROR] DB commit failed during batch: {err}")
                 click.echo(
-                    f"  Progress: {migrated_rev}/{len(revisions)} revisions migrated."
+                    f"  Progress: {migrated_rev + skipped_rev + failed_rev}/{len(revisions)} revisions processed."
                 )
 
-        if clear_db and not dry_run:
-            session.commit()
+        if clear_db and not dry_run and migrated_rev > 0:
+            try:
+                session.commit()
+            except Exception as err:
+                session.rollback()
+                click.echo(f"  [ERROR] Final DB commit failed for Phase 2: {err}")
+
         click.echo(
-            f"[✓] Phase 2 complete.  Migrated: {migrated_rev}  Skipped (already in S3): {skipped_rev}"
+            f"[✓] Phase 2 complete. Migrated: {migrated_rev} | Skipped: {skipped_rev} | Failed: {failed_rev}"
         )
 
         click.echo()
-        click.echo("Migration summary:")
-        click.echo(f"  OCR pages  — migrated: {migrated_ocr}, skipped: {skipped_ocr}")
-        click.echo(f"  Revisions  — migrated: {migrated_rev}, skipped: {skipped_rev}")
-        if clear_db and not dry_run:
+        click.echo("=" * 60)
+        click.echo("MIGRATION FINAL SUMMARY:")
+        click.echo(f"  OCR Pages   — Migrated: {migrated_ocr} | Skipped: {skipped_ocr} | Failed: {failed_ocr}")
+        click.echo(f"  Revisions   — Migrated: {migrated_rev} | Skipped: {skipped_rev} | Failed: {failed_rev}")
+        click.echo("=" * 60)
+
+        if clear_db and not dry_run and (failed_ocr == 0 and failed_rev == 0):
             click.echo(
-                "\nDB columns have been nullified.  Run VACUUM FULL on proof_pages and "
-                "proof_revisions to reclaim disk space."
+                "\n[✓] All records migrated cleanly and DB columns nullified.\n"
+                "Run 'VACUUM FULL proof_pages;' and 'VACUUM FULL proof_revisions;' in PostgreSQL to reclaim disk space."
+            )
+        elif clear_db and (failed_ocr > 0 or failed_rev > 0):
+            click.echo(
+                "\n[!] Note: Some records failed to upload. Their data remains safely stored in PostgreSQL DB.\n"
+                "Run 'python cli.py reconcile-storage' later to retry the failed records."
             )
         elif not clear_db:
             click.echo(
-                "\nDB columns were NOT cleared (use --clear-db to free DB space after verifying)."
+                "\n[!] Note: DB columns were NOT cleared (use --clear-db to nullify DB columns after verifying)."
             )
 
 
@@ -958,7 +1011,10 @@ def reconcile_storage(limit):
     """Health check S3/VersityGW and push any temporary DB fallback data to S3."""
     from kalanjiyam.utils.document_storage import is_storage_healthy, reconcile_db_to_storage
 
-    app = kalanjiyam.create_app()
+    import os
+
+    env_name = os.environ.get("KALANJIYAM_ENVIRONMENT", "development")
+    app = kalanjiyam.create_app(env_name)
     with app.app_context():
         click.echo("[*] Checking S3 / VersityGW storage health...")
         if not is_storage_healthy():
