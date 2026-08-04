@@ -76,6 +76,9 @@ class PageHit:
     lang: str | None
     snippets: list[str] = field(default_factory=list)
     score: float = 0.0
+    #: True when the book is readable at /books/; otherwise the result must
+    #: link into /proofing/, which is where non-public books live.
+    is_public: bool = False
 
 
 @dataclass
@@ -87,6 +90,7 @@ class BookGroup:
     page_count: int
     pages: list[PageHit] = field(default_factory=list)
     score: float = 0.0
+    is_public: bool = False
 
 
 @dataclass
@@ -207,6 +211,10 @@ def build_body(request: SearchRequest, scope: acl.SearchScope) -> dict:
             "page_slug",
             "page_order",
             "lang",
+            # Decides where a result links: the public reader at /books/
+            # 404s on a book that is not publicly viewable, so those hits
+            # have to point at /proofing/ instead.
+            "is_public",
         ],
         "from": request.offset,
         "size": request.per_page,
@@ -246,6 +254,11 @@ def _page_hit(hit: dict, *, parent: dict | None = None) -> PageHit:
         lang=source.get("lang"),
         snippets=_snippets(hit),
         score=hit.get("_score") or 0.0,
+        # Nested inner_hits carry a trimmed _source, so fall back to the
+        # collapsed parent document for book-level fields.
+        is_public=bool(
+            source.get("is_public", parent_source.get("is_public", False))
+        ),
     )
 
 
@@ -299,6 +312,7 @@ def parse_response(response: dict, request: SearchRequest) -> SearchResults:
                     project_title=source.get("project_title", ""),
                     project_author=source.get("project_author"),
                     page_count=nested_total,
+                    is_public=bool(source.get("is_public", False)),
                     pages=[_page_hit(h, parent=row) for h in nested],
                     score=row.get("_score") or 0.0,
                 )

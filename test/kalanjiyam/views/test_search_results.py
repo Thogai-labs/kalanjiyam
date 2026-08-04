@@ -11,7 +11,7 @@ from kalanjiyam.search import query as search_query
 from kalanjiyam.views import search as search_view
 
 
-def _hit(page_slug="12", snippet="a <mark>நோய்</mark> b"):
+def _hit(page_slug="12", snippet="a <mark>நோய்</mark> b", is_public=True):
     return search_query.PageHit(
         project_slug="siddha-fixture",
         project_title="Siddha Fixture",
@@ -21,10 +21,11 @@ def _hit(page_slug="12", snippet="a <mark>நோய்</mark> b"):
         lang="ta",
         snippets=[snippet],
         score=3.0,
+        is_public=is_public,
     )
 
 
-def _results(view):
+def _results(view, is_public=True):
     results = search_query.SearchResults(
         total_pages=41,
         total_books=2,
@@ -44,11 +45,18 @@ def _results(view):
                 project_title="Siddha Fixture",
                 project_author="Agastyar",
                 page_count=9,
-                pages=[_hit("12"), _hit("13")],
+                is_public=is_public,
+                pages=[
+                    _hit("12", is_public=is_public),
+                    _hit("13", is_public=is_public),
+                ],
             )
         ]
     else:
-        results.hits = [_hit("12"), _hit("13")]
+        results.hits = [
+            _hit("12", is_public=is_public),
+            _hit("13", is_public=is_public),
+        ]
     return results
 
 
@@ -56,12 +64,16 @@ def _results(view):
 def with_results(monkeypatch):
     """Pretend search is on and returns a fixed result set."""
 
-    def install(view="grouped", results=None):
+    def install(view="grouped", results=None, is_public=True):
         monkeypatch.setattr(search_view, "is_enabled", lambda: True)
         monkeypatch.setattr(
             search_view.search_query,
             "search",
-            lambda user, req: results if results is not None else _results(req.view),
+            lambda user, req: (
+                results
+                if results is not None
+                else _results(req.view, is_public=is_public)
+            ),
         )
 
     return install
@@ -144,3 +156,40 @@ def test_no_matches_renders_an_empty_state(client, with_results):
     body = client.get("/search/?q=நோய்").data.decode()
 
     assert "No pages matched that search." in body
+
+
+# Where results link
+# ------------------
+#
+# /books/ aborts 404 on a book that is not publicly viewable, so a result for
+# such a book has to point into /proofing/ instead. Search has already
+# established the viewer may see it.
+
+
+def test_non_public_books_link_into_proofing(client, with_results):
+    with_results(is_public=False)
+    body = client.get("/search/?q=நோய்&view=grouped").data.decode()
+
+    assert "/proofing/siddha-fixture/" in body
+    assert "/books/siddha-fixture/" not in body
+
+
+def test_non_public_pages_link_into_proofing(client, with_results):
+    with_results(is_public=False)
+    body = client.get("/search/?q=நோய்&view=flat").data.decode()
+
+    assert "/proofing/siddha-fixture/12/" in body
+    assert "/books/siddha-fixture/12/" not in body
+
+
+def test_public_books_still_link_to_the_reader(client, with_results):
+    """Anonymous visitors searching public books must not be sent to proofing."""
+    with_results(is_public=True)
+
+    grouped = client.get("/search/?q=நோய்&view=grouped").data.decode()
+    assert "/books/siddha-fixture/" in grouped
+    assert "/proofing/siddha-fixture/" not in grouped
+
+    flat = client.get("/search/?q=நோய்&view=flat").data.decode()
+    assert "/books/siddha-fixture/12/" in flat
+    assert "/proofing/siddha-fixture/12/" not in flat

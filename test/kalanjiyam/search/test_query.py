@@ -247,6 +247,65 @@ def test_parse_grouped_response():
     assert group.pages[0].snippets == ["<mark>x</mark>"]
 
 
+def test_is_public_is_requested_so_results_can_be_routed(scope):
+    """Without it, every hit would link to /books/, which 404s on private books."""
+    body = query.build_body(query.SearchRequest(q="x"), scope)
+    assert "is_public" in body["_source"]
+
+
+def test_is_public_flows_through_to_flat_hits():
+    response = {
+        "hits": {
+            "total": {"value": 1, "relation": "eq"},
+            "hits": [
+                {
+                    "_source": {
+                        "project_slug": "private-book",
+                        "project_title": "Private",
+                        "page_slug": "4",
+                        "is_public": False,
+                    }
+                }
+            ],
+        },
+        "aggregations": {},
+    }
+    results = query.parse_response(response, query.SearchRequest(q="x", view="flat"))
+    assert results.hits[0].is_public is False
+
+
+def test_nested_hits_inherit_is_public_from_the_collapsed_parent():
+    """inner_hits carry a trimmed _source, so the flag comes from the parent."""
+    response = {
+        "hits": {
+            "total": {"value": 1, "relation": "eq"},
+            "hits": [
+                {
+                    "_source": {
+                        "project_id": 2,
+                        "project_slug": "private-book",
+                        "project_title": "Private",
+                        "is_public": False,
+                    },
+                    "inner_hits": {
+                        "pages": {
+                            "hits": {
+                                "total": {"value": 1},
+                                "hits": [{"_source": {"page_slug": "4"}}],
+                            }
+                        }
+                    },
+                }
+            ],
+        },
+        "aggregations": {},
+    }
+    results = query.parse_response(response, query.SearchRequest(q="x", view="grouped"))
+    group = results.groups[0]
+    assert group.is_public is False
+    assert group.pages[0].is_public is False
+
+
 def test_inexact_totals_are_flagged():
     response = {
         "hits": {"total": {"value": 10000, "relation": "gte"}, "hits": []},

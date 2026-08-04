@@ -14,6 +14,26 @@
 {{- url_for('search.index', **clean) -}}
 {% endmacro %}
 
+{# Where a result links depends on whether the book is public.
+   /books/ 404s on a non-public book, so those results point into the
+   proofing view instead -- which is where a proofer can actually read them,
+   and which search has already confirmed this viewer may see. #}
+{% macro book_url(is_public, project_slug) %}
+{%- if is_public -%}
+  {{ url_for('public.books.book', project_slug=project_slug) }}
+{%- else -%}
+  {{ url_for('proofing.project.summary', slug=project_slug) }}
+{%- endif -%}
+{% endmacro %}
+
+{% macro page_url(is_public, project_slug, page_slug) %}
+{%- if is_public -%}
+  {{ url_for('public.books.page', project_slug=project_slug, page_slug=page_slug, q=req.q) }}
+{%- else -%}
+  {{ url_for('proofing.page.edit', project_slug=project_slug, page_slug=page_slug, q=req.q) }}
+{%- endif -%}
+{% endmacro %}
+
 {% block title %}{% if req.q %}{{ _('%(q)s — Search', q=req.q) }}{% else %}{{ _('Search') }}{% endif %} | Kalanjiyam{% endblock %}
 
 {% block meta_description %}{{ _('Full-text search across digitized Siddha manuscripts, page by page.') }}{% endblock %}
@@ -202,7 +222,7 @@
               <div class="flex items-start justify-between gap-4 mb-3">
                 <div class="min-w-0">
                   <h2 class="font-bold text-slate-900 leading-snug">
-                    <a href="{{ url_for('public.books.book', project_slug=group.project_slug) }}"
+                    <a href="{{ book_url(group.is_public, group.project_slug) }}"
                        class="hover:text-royalblue transition-colors">{{ group.project_title }}</a>
                   </h2>
                   {% if group.project_author %}
@@ -216,7 +236,7 @@
 
               <div class="space-y-3">
                 {% for hit in group.pages %}
-                  <a href="{{ url_for('public.books.page', project_slug=group.project_slug, page_slug=hit.page_slug, q=req.q) }}"
+                  <a href="{{ page_url(hit.is_public, group.project_slug, hit.page_slug) }}"
                      class="block pl-3 border-l-2 border-slate-200 hover:border-royalblue transition-colors">
                     <div class="text-[11px] font-semibold text-royalblue mb-1">
                       {{ _('Page %(slug)s', slug=hit.page_slug) }}
@@ -241,7 +261,7 @@
 
         {% else %}
           {% for hit in results.hits %}
-            <a href="{{ url_for('public.books.page', project_slug=hit.project_slug, page_slug=hit.page_slug, q=req.q) }}"
+            <a href="{{ page_url(hit.is_public, hit.project_slug, hit.page_slug) }}"
                class="result-card block p-5">
               <div class="flex items-baseline justify-between gap-3 mb-2">
                 <h2 class="font-bold text-slate-900 text-sm leading-snug min-w-0 truncate">{{ hit.project_title }}</h2>
