@@ -6,7 +6,7 @@ services:
     container_name: kalanjiyam-web-staging
     ports:
       - host_ip: ${KALANJIYAM_HOST_IP}
-        published: ${KALANJIYAM_HOST_PORT:-5002}
+        published: ${KALANJIYAM_STAGING_HOST_PORT:-5002}
         target: 5000
     env_file:
       - ../../.env

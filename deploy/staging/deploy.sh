@@ -35,7 +35,8 @@ check_env() {
     set -a; source .env; set +a
 
     export KALANJIYAM_HOST_IP="${KALANJIYAM_HOST_IP:-0.0.0.0}"
-    export KALANJIYAM_HOST_PORT="${KALANJIYAM_HOST_PORT:-5002}"
+    export KALANJIYAM_STAGING_HOST_PORT="${KALANJIYAM_STAGING_HOST_PORT:-5002}"
+    export KALANJIYAM_HOST_PORT="${KALANJIYAM_STAGING_HOST_PORT}"
     export FLASK_ENV="${FLASK_ENV:-staging}"
 
     DATA_DIR="${KALANJIYAM_DATA_DIR:-${HOME}/kalanjiyam-data}"

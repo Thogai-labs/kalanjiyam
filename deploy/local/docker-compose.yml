@@ -6,7 +6,7 @@ services:
     container_name: kalanjiyam-web-dev
     ports:
       - host_ip: ${KALANJIYAM_HOST_IP}
-        published: ${KALANJIYAM_HOST_PORT:-5001}
+        published: ${KALANJIYAM_DEV_HOST_PORT:-5001}
         target: 5000
     volumes:
       - ${PWD}/kalanjiyam/static/:/app/kalanjiyam/static/
