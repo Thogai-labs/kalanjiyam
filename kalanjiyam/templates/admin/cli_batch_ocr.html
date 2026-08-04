@@ -18,55 +18,55 @@
 
 <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-8 space-y-6">
   <!-- Sub-Nav Category Tabs & Task Type / Search Controls -->
-  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-    <!-- Category Tabs Navigation -->
-    <nav class="flex items-center space-x-1 bg-slate-100/80 p-1.5 rounded-xl text-xs font-semibold text-slate-600">
+  <div class="space-y-4 border-b border-slate-100 pb-5">
+    <!-- Row 1: Full-Width Category Tabs Navigation -->
+    <nav class="flex items-center space-x-2 bg-slate-100/80 p-1.5 rounded-xl text-xs font-semibold text-slate-600 w-full overflow-x-auto">
       <a href="{{ url_for(view_endpoint, category='all', task_type=current_task_type, q=search_query) }}"
-         class="px-3.5 py-1.5 rounded-lg transition-all {% if current_category == 'all' %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
+         class="flex-1 text-center px-4 py-2 rounded-lg transition-all {% if current_category == 'all' %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
         All Jobs
       </a>
       <a href="{{ url_for(view_endpoint, category='proofer', task_type=current_task_type, q=search_query) }}"
-         class="px-3.5 py-1.5 rounded-lg transition-all {% if current_category == 'proofer' %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
+         class="flex-1 text-center px-4 py-2 rounded-lg transition-all {% if current_category == 'proofer' %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
         Proofer Single Page
       </a>
       <a href="{{ url_for(view_endpoint, category='ui_batch', task_type=current_task_type, q=search_query) }}"
-         class="px-3.5 py-1.5 rounded-lg transition-all {% if current_category == 'ui_batch' %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
+         class="flex-1 text-center px-4 py-2 rounded-lg transition-all {% if current_category == 'ui_batch' %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
         UI Batch
       </a>
       <a href="{{ url_for(view_endpoint, category='cli_batch', task_type=current_task_type, q=search_query) }}"
-         class="px-3.5 py-1.5 rounded-lg transition-all {% if current_category == 'cli_batch' %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
+         class="flex-1 text-center px-4 py-2 rounded-lg transition-all {% if current_category == 'cli_batch' %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
         CLI Batch
       </a>
     </nav>
 
-    <!-- Filters & Search Form -->
-    <form method="GET" action="{{ url_for(view_endpoint) }}" class="flex flex-wrap items-center gap-3">
+    <!-- Row 2: Select Filter & Search Form -->
+    <form method="GET" action="{{ url_for(view_endpoint) }}" class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
       <input type="hidden" name="category" value="{{ current_category }}">
 
       <!-- OCR vs Translation Filter Dropdown -->
-      <div class="relative">
+      <div class="relative min-w-[220px]">
         <select name="task_type" onchange="this.form.submit()"
-                class="appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
+                class="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3.5 py-2.5 pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
           <option value="all" {% if current_task_type == 'all' %}selected{% endif %}>All Types (OCR & Translation)</option>
           <option value="ocr" {% if current_task_type == 'ocr' %}selected{% endif %}>OCR Only</option>
           <option value="translation" {% if current_task_type == 'translation' %}selected{% endif %}>Translation Only</option>
         </select>
-        <svg class="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
         </svg>
       </div>
 
       <!-- Search Input -->
-      <div class="relative flex-1 md:w-64">
-        <input type="text" name="q" value="{{ search_query }}" placeholder="Search URI or Job Type..."
-               class="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-xs rounded-xl pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
+      <div class="relative flex-1">
+        <input type="text" name="q" value="{{ search_query }}" placeholder="Search by URI, document name, or job type..."
+               class="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-xs rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
         <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
         </svg>
       </div>
 
       {% if search_query or current_task_type != 'all' or current_category != 'all' %}
-      <a href="{{ url_for(view_endpoint) }}" class="text-xs text-slate-500 hover:text-slate-800 font-semibold px-2">
+      <a href="{{ url_for(view_endpoint) }}" class="text-xs text-slate-500 hover:text-slate-800 font-semibold px-2 self-center">
         Reset
       </a>
       {% endif %}
@@ -84,7 +84,6 @@
         <tr class="text-left font-semibold text-slate-600 border-b border-slate-100 bg-slate-50/50">
           <th class="px-4 py-3 font-mono text-xs"># Job ID</th>
           <th class="px-4 py-3">{{ _('Job Type') }}</th>
-          <th class="px-4 py-3">{{ _('Target URI / Path') }}</th>
           <th class="px-4 py-3 text-right">{{ _('Files') }}</th>
           <th class="px-4 py-3 text-right">{{ _('Total Pages') }}</th>
           <th class="px-4 py-3 text-center">{{ _('Status') }}</th>
@@ -100,9 +99,6 @@
             <span class="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold border border-slate-200">
               {{ j.job_type }}
             </span>
-          </td>
-          <td class="px-4 py-3 max-w-xs font-mono text-xs text-slate-600 truncate" title="{{ j.target_uri }}">
-            {{ j.target_uri }}
           </td>
           <td class="px-4 py-3 text-right font-mono text-xs text-slate-700 font-semibold">
             {{ j.item_count }}
@@ -163,7 +159,7 @@
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
     </svg>
-    <span>← Back to All Batch Jobs</span>
+    <span>Back to All Batch Jobs</span>
   </a>
 </div>
 

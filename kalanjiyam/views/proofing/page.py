@@ -1062,13 +1062,13 @@ def ocr(project_slug, page_slug):
 
             # Find or create a dedicated SINGLE_PAGE_PROOFING_OCR batch job for this project/book
             batch_job = session.query(BatchJob).filter_by(
-                target_uri=f"single_page_proofing://project/{project_slug}",
+                target_uri=f"single_page_proofing://ocr/{project_slug}",
                 job_type='SINGLE_PAGE_PROOFING_OCR'
             ).order_by(BatchJob.id.desc()).first()
 
             if not batch_job:
                 batch_job = BatchJob(
-                    target_uri=f"single_page_proofing://project/{project_slug}",
+                    target_uri=f"single_page_proofing://ocr/{project_slug}",
                     status='IN_PROGRESS',
                     job_type='SINGLE_PAGE_PROOFING_OCR'
                 )
@@ -1079,13 +1079,23 @@ def ocr(project_slug, page_slug):
             if not batch_item:
                 batch_item = BatchItem(
                     job_id=batch_job.id,
-                    file_path=f"single_page_proofing://project/{project_slug}",
+                    file_path=f"{project_.name} ({project_slug})",
                     project_id=project_.id,
                     status='IN_PROGRESS',
                     total_pages=len(project_.pages),
                 )
                 session.add(batch_item)
                 session.flush()
+
+            # Ensure source_size_bytes is set on batch_item if missing
+            if not batch_item.source_size_bytes:
+                try:
+                    storage = get_storage()
+                    page_key = page_image_key(project_slug, page_slug)
+                    if storage.exists(page_key):
+                        batch_item.source_size_bytes = storage.size(page_key)
+                except Exception:
+                    pass
 
             p_num = int(page_slug) if page_slug.isdigit() else page_.order
             ocr_page = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, page_number=p_num).first()
@@ -1134,11 +1144,11 @@ def ocr(project_slug, page_slug):
             batch_item.cropped_images_size_bytes = sum(p.cropped_image_size_bytes or 0 for p in item_pages)
             batch_item.ocr_data_size_bytes = sum(p.ocr_data_size_bytes or 0 for p in item_pages)
 
-            if len(item_pages) >= (batch_item.total_pages or 1):
-                batch_item.status = 'COMPLETED'
-                batch_item.completed_at = datetime.utcnow()
-                batch_job.status = 'COMPLETED'
-                batch_job.completed_at = datetime.utcnow()
+            # Single page operations are immediately COMPLETED upon output generation
+            batch_item.status = 'COMPLETED'
+            batch_item.completed_at = datetime.utcnow()
+            batch_job.status = 'COMPLETED'
+            batch_job.completed_at = datetime.utcnow()
 
             session.commit()
         except Exception as metric_err:
@@ -1604,7 +1614,7 @@ def translate(project_slug, page_slug):
                     if not batch_item:
                         batch_item = BatchItem(
                             job_id=batch_job.id,
-                            file_path=f"single_page_proofing://translation/{project_slug}",
+                            file_path=f"{project_.name} ({project_slug})",
                             project_id=project_.id,
                             status='IN_PROGRESS',
                             total_pages=len(project_.pages),
@@ -1613,6 +1623,17 @@ def translate(project_slug, page_slug):
                         )
                         session.add(batch_item)
                         session.flush()
+
+                    # Ensure source_size_bytes is set on batch_item if missing
+                    if not batch_item.source_size_bytes:
+                        try:
+                            from kalanjiyam.utils.storage import get_storage, page_image_key
+                            storage = get_storage()
+                            page_key = page_image_key(project_slug, page_slug)
+                            if storage.exists(page_key):
+                                batch_item.source_size_bytes = storage.size(page_key)
+                        except Exception:
+                            pass
 
                     p_num = int(page_slug) if page_slug.isdigit() else page_.order
                     ocr_page = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, page_number=p_num).first()
@@ -1639,11 +1660,11 @@ def translate(project_slug, page_slug):
                     batch_item.source_lang = source_lang
                     batch_item.target_lang = target_lang
 
-                    if len(item_pages) >= (batch_item.total_pages or 1):
-                        batch_item.status = 'COMPLETED'
-                        batch_item.completed_at = datetime.utcnow()
-                        batch_job.status = 'COMPLETED'
-                        batch_job.completed_at = datetime.utcnow()
+                    # Single page translation operations are immediately COMPLETED upon output generation
+                    batch_item.status = 'COMPLETED'
+                    batch_item.completed_at = datetime.utcnow()
+                    batch_job.status = 'COMPLETED'
+                    batch_job.completed_at = datetime.utcnow()
 
                     session.commit()
                 except Exception as metric_err:
