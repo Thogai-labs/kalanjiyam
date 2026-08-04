@@ -1,0 +1,316 @@
+{% extends 'base.html' %}
+
+{# Rebuild the current query string with a few keys overridden. Values that
+   end up falsy are dropped so URLs stay clean. #}
+{% macro qs(overrides) %}
+{%- set params = {'q': req.q, 'view': req.view, 'page': req.page, 'book': req.project_id,
+                  'author': req.author, 'lang': req.lang, 'genre': req.genre,
+                  'advanced': '1' if req.advanced else None} -%}
+{%- set _ = params.update(overrides) -%}
+{%- set clean = {} -%}
+{%- for key, value in params.items() if value -%}
+  {%- set _ = clean.update({key: value}) -%}
+{%- endfor -%}
+{{- url_for('search.index', **clean) -}}
+{% endmacro %}
+
+{% block title %}{% if req.q %}{{ _('%(q)s — Search', q=req.q) }}{% else %}{{ _('Search') }}{% endif %} | Kalanjiyam{% endblock %}
+
+{% block meta_description %}{{ _('Full-text search across digitized Siddha manuscripts, page by page.') }}{% endblock %}
+
+{% block meta_robots %}noindex, follow{% endblock %}
+
+{% block extra_head %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  .font-serif-title { font-family: 'Cinzel', Georgia, serif; }
+
+  .search-hero {
+    background: #0b1120;
+    background-image:
+      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
+      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255,255,255,0.015) 23px, rgba(255,255,255,0.015) 24px),
+      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255,255,255,0.015) 23px, rgba(255,255,255,0.015) 24px);
+    background-size: 100% 100%, 24px 24px, 24px 24px;
+  }
+
+  .result-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    transition: border-color .2s ease, box-shadow .2s ease;
+  }
+  .result-card:hover {
+    border-color: rgba(65, 105, 225, .4);
+    box-shadow: 0 10px 20px -12px rgba(15, 23, 42, .25);
+  }
+
+  /* Snippets come back from OpenSearch wrapped in <mark>. */
+  .snippet mark {
+    background: #fef3c7;
+    color: #78350f;
+    padding: 0 2px;
+    border-radius: 2px;
+    font-weight: 600;
+  }
+  .snippet {
+    font-size: .875rem;
+    line-height: 1.7;
+    color: #475569;
+  }
+</style>
+{% endblock %}
+
+{% block main_class %}bg-slate-50 min-h-screen pb-16{% endblock %}
+
+{% block main %}
+
+<header class="search-hero text-slate-100 py-10 px-4 border-b border-slate-800">
+  <div class="max-w-5xl mx-auto">
+    <h1 class="text-2xl sm:text-3xl font-bold font-serif-title tracking-tight mb-5 text-center">
+      {{ _('Search the Archive') }}
+    </h1>
+
+    <form action="{{ url_for('search.index') }}" method="GET" class="relative">
+      <input type="hidden" name="view" value="{{ req.view }}">
+      {% if req.advanced %}<input type="hidden" name="advanced" value="1">{% endif %}
+      <div class="relative flex items-center">
+        <svg class="w-5 h-5 absolute left-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        </svg>
+        <input type="text" name="q" value="{{ req.q }}" autofocus
+               placeholder="{{ _('Search manuscript text, titles, and authors…') }}"
+               class="w-full bg-slate-900/80 border border-white/20 rounded-xl py-3.5 pl-12 pr-32 text-white text-sm outline-none focus:border-royalblue focus:ring-2 focus:ring-royalblue/30 transition-all" />
+        <button type="submit" class="absolute right-2 px-5 py-2 bg-royalblue hover:bg-blue-600 text-white font-semibold rounded-lg text-sm transition-all">
+          {{ _('Search') }}
+        </button>
+      </div>
+    </form>
+
+    <div class="flex flex-wrap items-center justify-between gap-3 mt-3 text-xs text-slate-400">
+      <a href="{{ qs({'advanced': None if req.advanced else '1', 'page': None}) }}"
+         class="hover:text-blue-300 transition-colors">
+        {% if req.advanced %}
+          {{ _('Using advanced (Lucene) syntax — switch back to simple search') }}
+        {% else %}
+          {{ _('Use advanced (Lucene) syntax') }}
+        {% endif %}
+      </a>
+      {% if req.advanced %}
+        <span class="text-slate-500">{{ _('e.g.') }} <code class="text-slate-300">project_author:"Agastyar" AND content:நோய்</code></span>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+<div class="max-w-6xl mx-auto px-4 mt-8">
+
+  {% if degraded %}
+    <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <p class="font-semibold mb-1">{{ _('Full-text search is unavailable right now.') }}</p>
+      <p>{{ _('Showing matches on book titles and authors only. Page text is not being searched.') }}
+        {% if results and results.error %}<span class="block mt-1 text-amber-700">{{ results.error }}</span>{% endif %}
+      </p>
+    </div>
+  {% endif %}
+
+  {% if not req.q %}
+    <div class="bg-white rounded-2xl p-12 text-center border border-slate-200 max-w-lg mx-auto">
+      <h2 class="text-lg font-bold text-slate-900 mb-2">{{ _('What are you looking for?') }}</h2>
+      <p class="text-sm text-slate-500 leading-relaxed">
+        {{ _('Search across every digitized page — remedies, ingredients, verses, authors, and titles.') }}
+      </p>
+    </div>
+
+  {% elif fallback_projects is not none %}
+    {# Degraded path: metadata matches only. #}
+    {% if fallback_projects %}
+      <p class="text-sm text-slate-500 mb-4">
+        {{ ngettext('%(n)s book matches', '%(n)s books match', fallback_projects|length, n=fallback_projects|length) }}
+        <kbd class="px-1.5 py-0.5 bg-slate-200 rounded text-xs">{{ req.q }}</kbd>.
+      </p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {% for project in fallback_projects %}
+          <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" class="result-card block p-5">
+            <h3 class="font-bold text-slate-900">{{ project.display_title }}</h3>
+            {% if project.author %}<p class="text-xs text-slate-500 mt-1">{{ project.author }}</p>{% endif %}
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-center text-slate-500 py-12">{{ _('No books matched that search.') }}</p>
+    {% endif %}
+
+  {% elif results %}
+    <!-- Result count + view toggle -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+      <p class="text-sm text-slate-600">
+        {% if results.total_pages %}
+          <span class="font-semibold text-slate-900">
+            {% if not results.total_is_exact %}{{ _('More than') }} {% endif %}{{ results.total_pages }}
+          </span>
+          {{ ngettext('page', 'pages', results.total_pages) }}
+          {% if results.total_books %}
+            {{ _('across') }} <span class="font-semibold text-slate-900">{{ results.total_books }}</span>
+            {{ ngettext('book', 'books', results.total_books) }}
+          {% endif %}
+          <span class="text-slate-400">({{ results.took_ms }} ms)</span>
+        {% endif %}
+      </p>
+
+      <div class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs font-semibold self-start">
+        <a href="{{ qs({'view': 'grouped', 'page': None}) }}"
+           class="px-3 py-1.5 rounded-md transition-colors {% if req.view == 'grouped' %}bg-royalblue text-white{% else %}text-slate-600 hover:text-royalblue{% endif %}">
+          {{ _('By book') }}
+        </a>
+        <a href="{{ qs({'view': 'flat', 'page': None}) }}"
+           class="px-3 py-1.5 rounded-md transition-colors {% if req.view == 'flat' %}bg-royalblue text-white{% else %}text-slate-600 hover:text-royalblue{% endif %}">
+          {{ _('By page') }}
+        </a>
+      </div>
+    </div>
+
+    {% if req.has_filters %}
+      <div class="flex flex-wrap items-center gap-2 mb-5 text-xs">
+        <span class="text-slate-500">{{ _('Filtered by:') }}</span>
+        {% for label, key in [(req.author, 'author'), (req.lang, 'lang'), (req.genre, 'genre')] %}
+          {% if label %}
+            <a href="{{ qs({key: None, 'page': None}) }}"
+               class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-royalblue/10 text-royalblue border border-royalblue/20 hover:bg-royalblue/20 transition-colors">
+              {{ label }} <span class="text-royalblue/60">&times;</span>
+            </a>
+          {% endif %}
+        {% endfor %}
+        {% if req.project_id %}
+          <a href="{{ qs({'book': None, 'page': None}) }}"
+             class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-royalblue/10 text-royalblue border border-royalblue/20 hover:bg-royalblue/20 transition-colors">
+            {{ _('This book only') }} <span class="text-royalblue/60">&times;</span>
+          </a>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+      <!-- Results -->
+      <div class="lg:col-span-3 space-y-4">
+
+        {% if req.view == 'grouped' %}
+          {% for group in results.groups %}
+            <div class="result-card p-5">
+              <div class="flex items-start justify-between gap-4 mb-3">
+                <div class="min-w-0">
+                  <h2 class="font-bold text-slate-900 leading-snug">
+                    <a href="{{ url_for('public.books.book', project_slug=group.project_slug) }}"
+                       class="hover:text-royalblue transition-colors">{{ group.project_title }}</a>
+                  </h2>
+                  {% if group.project_author %}
+                    <p class="text-xs text-slate-500 mt-0.5">{{ group.project_author }}</p>
+                  {% endif %}
+                </div>
+                <span class="shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                  {{ ngettext('%(n)s page', '%(n)s pages', group.page_count, n=group.page_count) }}
+                </span>
+              </div>
+
+              <div class="space-y-3">
+                {% for hit in group.pages %}
+                  <a href="{{ url_for('public.books.page', project_slug=group.project_slug, page_slug=hit.page_slug, q=req.q) }}"
+                     class="block pl-3 border-l-2 border-slate-200 hover:border-royalblue transition-colors">
+                    <div class="text-[11px] font-semibold text-royalblue mb-1">
+                      {{ _('Page %(slug)s', slug=hit.page_slug) }}
+                    </div>
+                    {% for snippet in hit.snippets %}
+                      <p class="snippet">…{{ snippet|safe }}…</p>
+                    {% endfor %}
+                  </a>
+                {% endfor %}
+              </div>
+
+              {% if group.page_count > group.pages|length %}
+                <a href="{{ qs({'view': 'flat', 'book': group.project_id, 'page': None}) }}"
+                   class="inline-block mt-3 text-xs font-semibold text-royalblue hover:underline">
+                  {{ _('See all %(n)s matching pages →', n=group.page_count) }}
+                </a>
+              {% endif %}
+            </div>
+          {% else %}
+            <p class="text-center text-slate-500 py-12">{{ _('No pages matched that search.') }}</p>
+          {% endfor %}
+
+        {% else %}
+          {% for hit in results.hits %}
+            <a href="{{ url_for('public.books.page', project_slug=hit.project_slug, page_slug=hit.page_slug, q=req.q) }}"
+               class="result-card block p-5">
+              <div class="flex items-baseline justify-between gap-3 mb-2">
+                <h2 class="font-bold text-slate-900 text-sm leading-snug min-w-0 truncate">{{ hit.project_title }}</h2>
+                <span class="shrink-0 text-[11px] font-semibold text-royalblue">{{ _('Page %(slug)s', slug=hit.page_slug) }}</span>
+              </div>
+              {% if hit.project_author %}
+                <p class="text-xs text-slate-500 mb-2">{{ hit.project_author }}</p>
+              {% endif %}
+              {% for snippet in hit.snippets %}
+                <p class="snippet">…{{ snippet|safe }}…</p>
+              {% endfor %}
+            </a>
+          {% else %}
+            <p class="text-center text-slate-500 py-12">{{ _('No pages matched that search.') }}</p>
+          {% endfor %}
+        {% endif %}
+
+        <!-- Pagination -->
+        {% set shown = results.groups|length if req.view == 'grouped' else results.hits|length %}
+        {% if req.page > 1 or shown == req.per_page %}
+          <nav class="flex items-center justify-between pt-4">
+            {% if req.page > 1 %}
+              <a href="{{ qs({'page': req.page - 1}) }}"
+                 class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:border-royalblue hover:text-royalblue transition-colors">
+                ← {{ _('Previous') }}
+              </a>
+            {% else %}<span></span>{% endif %}
+
+            <span class="text-xs text-slate-500">{{ _('Page %(n)s', n=req.page) }}</span>
+
+            {% if shown == req.per_page %}
+              <a href="{{ qs({'page': req.page + 1}) }}"
+                 class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:border-royalblue hover:text-royalblue transition-colors">
+                {{ _('Next') }} →
+              </a>
+            {% else %}<span></span>{% endif %}
+          </nav>
+        {% endif %}
+      </div>
+
+      <!-- Facets -->
+      <aside class="space-y-5">
+        {% macro facet(title, key, buckets, current) %}
+          {% if buckets %}
+            <div class="bg-white rounded-xl border border-slate-200 p-4">
+              <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5">{{ title }}</h3>
+              <ul class="space-y-1.5 text-sm">
+                {% for bucket in buckets[:8] %}
+                  <li>
+                    <a href="{{ qs({key: None if current == bucket.key|string else bucket.key, 'page': None}) }}"
+                       class="flex items-center justify-between gap-2 group {% if current == bucket.key|string %}text-royalblue font-semibold{% else %}text-slate-600 hover:text-royalblue{% endif %} transition-colors">
+                      <span class="truncate">{{ bucket.label }}</span>
+                      <span class="shrink-0 text-[11px] text-slate-400 group-hover:text-royalblue">{{ bucket.count }}</span>
+                    </a>
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+        {% endmacro %}
+
+        {{ facet(_('Book'), 'book', results.facets.books, req.project_id|string if req.project_id else None) }}
+        {{ facet(_('Author'), 'author', results.facets.authors, req.author) }}
+        {{ facet(_('Language'), 'lang', results.facets.languages, req.lang) }}
+        {{ facet(_('Genre'), 'genre', results.facets.genres, req.genre) }}
+      </aside>
+
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

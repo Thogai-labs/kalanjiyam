@@ -312,7 +312,13 @@ class KalanjiyamIndexView(AdminIndexView):
                 session = q.get_session()
                 result = self._extract_and_import_project(temp_file, session)
                 session.commit()
-                
+
+                # Index the imported book. Enqueued after the commit so the
+                # worker cannot race ahead of the data.
+                from kalanjiyam.tasks.search_index import enqueue_project
+
+                enqueue_project(result['project'].id)
+
                 # Clean up
                 temp_file.unlink()
                 
@@ -378,6 +384,7 @@ class KalanjiyamIndexView(AdminIndexView):
                     # Import all projects
                     session = q.get_session()
                     imported_projects = []
+                    imported_project_ids = []
                     
                     for project_data in all_projects_data['projects']:
                         try:
@@ -401,12 +408,20 @@ class KalanjiyamIndexView(AdminIndexView):
                             else:
                                 project = self._import_project_data(session, project_data)
                             imported_projects.append(project.display_title)
+                            imported_project_ids.append(project.id)
                         except Exception as e:
                             flash(f"Failed to import project {project_data['metadata']['display_title']}: {str(e)}", "error")
                             continue
-                    
+
                     session.commit()
-                    
+
+                    # Index the imported books, after the commit so the
+                    # workers cannot race ahead of the data.
+                    from kalanjiyam.tasks.search_index import enqueue_project
+
+                    for imported_id in imported_project_ids:
+                        enqueue_project(imported_id)
+
                     # Clean up
                     temp_file.unlink()
                     
@@ -1377,6 +1392,169 @@ class PlatformView(AdminBaseView):
 
         return redirect(url_for(".reported_issues"))
 
+    @expose("/search_index", methods=["GET", "POST"])
+    def search_index(self):
+        """Platform-wide search index management."""
+        require_platform_super_admin()
+        session = q.get_session()
+        from kalanjiyam.search import admin_ops
+
+        org_ids = admin_ops.indexable_org_ids(session)
+        if request.method == "POST":
+            _handle_search_index_action(session, org_ids=org_ids, allow_all=True)
+            return redirect(url_for(".search_index"))
+
+        return _render_search_index(
+            session, org_ids=org_ids, is_org_admin=False, org_id=None
+        )
+
+    @expose("/search_index/status")
+    def search_index_status(self):
+        """Job progress and index stats, polled by the dashboard."""
+        require_platform_super_admin()
+        session = q.get_session()
+        from kalanjiyam.search import admin_ops
+
+        org_ids = admin_ops.indexable_org_ids(session)
+        return jsonify(_search_index_status_payload(session, org_ids, org_id=None))
+
+
+def _search_index_status_payload(session, org_ids, *, org_id):
+    from kalanjiyam.search import admin_ops
+
+    state = admin_ops.dashboard_state(session, org_ids)
+    jobs = admin_ops.recent_jobs(session, org_id=org_id, limit=20)
+    return {
+        "health": state["health"],
+        "orgs": state["orgs"],
+        "total_pages": state["total_pages"],
+        "total_projects": state["total_projects"],
+        "total_size_bytes": state["total_size_bytes"],
+        "ungrouped_projects": state["ungrouped_projects"],
+        "jobs": [admin_ops.job_summary(j) for j in jobs],
+    }
+
+
+def _render_search_index(session, *, org_ids, is_org_admin, org_id):
+    from kalanjiyam.search import admin_ops
+
+    state = admin_ops.dashboard_state(session, org_ids)
+    return render_template(
+        "admin/search_index.html",
+        state=state,
+        jobs=admin_ops.recent_jobs(session, org_id=org_id, limit=20),
+        projects=admin_ops.projects_for_picker(session, org_ids),
+        is_org_admin=is_org_admin,
+        csrf_token=generate_csrf(),
+    )
+
+
+def _handle_search_index_action(session, *, org_ids, allow_all, forced_org_id=None):
+    """Run a dashboard action.
+
+    ``org_ids`` is the caller's authorized scope, derived from their identity.
+    Any organization or project named in the form is checked against it, so a
+    forged form value cannot reach another tenant's index.
+    """
+    from kalanjiyam.models.search import JOB_DROP, JOB_REBUILD, JOB_SYNC
+    from kalanjiyam.search import admin_ops
+
+    action = request.form.get("action", "")
+    requested_by_id = current_user.id if current_user.is_authenticated else None
+
+    def resolve_org():
+        if forced_org_id is not None:
+            return forced_org_id
+        raw = request.form.get("org_id", type=int)
+        if raw is None:
+            return None
+        if raw not in org_ids:
+            raise admin_ops.ActionError("You cannot manage that organization's index.")
+        return raw
+
+    try:
+        if action == "create_indices":
+            count = admin_ops.ensure_indices(session, org_ids)
+            flash(f"Search indices are ready for {count} organization(s).", "success")
+
+        elif action == "rebuild":
+            org_id = resolve_org()
+            if org_id is None and not allow_all:
+                raise admin_ops.ActionError("Choose an organization to rebuild.")
+            job = admin_ops.start_job(
+                session,
+                job_type=JOB_REBUILD,
+                org_id=org_id,
+                requested_by_id=requested_by_id,
+            )
+            flash(f"Started rebuild as job #{job.id}.", "success")
+
+        elif action == "reindex_project":
+            project_id = request.form.get("project_id", type=int)
+            if not project_id:
+                raise admin_ops.ActionError("Choose a book to reindex.")
+            if not admin_ops.project_is_in_orgs(session, project_id, org_ids):
+                raise admin_ops.ActionError("You cannot reindex that book.")
+            job = admin_ops.start_job(
+                session,
+                job_type=JOB_REBUILD,
+                project_id=project_id,
+                requested_by_id=requested_by_id,
+            )
+            flash(f"Started reindex as job #{job.id}.", "success")
+
+        elif action == "sync":
+            org_id = resolve_org()
+            if org_id is None and not allow_all:
+                raise admin_ops.ActionError("Choose an organization to sync.")
+            job = admin_ops.start_job(
+                session,
+                job_type=JOB_SYNC,
+                org_id=org_id,
+                requested_by_id=requested_by_id,
+            )
+            flash(f"Started sync as job #{job.id}.", "success")
+
+        elif action == "drop":
+            org_id = resolve_org()
+            if org_id is None:
+                raise admin_ops.ActionError("Choose an organization to drop.")
+            group = q.group(org_id)
+            typed = (request.form.get("confirm") or "").strip()
+            if not group or typed != group.slug:
+                raise admin_ops.ActionError(
+                    "Type the organization's slug exactly to confirm dropping its index."
+                )
+            job = admin_ops.start_job(
+                session,
+                job_type=JOB_DROP,
+                org_id=org_id,
+                requested_by_id=requested_by_id,
+            )
+            flash(f"Dropping the index as job #{job.id}.", "warning")
+
+        elif action == "cancel":
+            job_id = request.form.get("job_id", type=int)
+            from kalanjiyam.models.search import SearchIndexJob
+
+            job = session.query(SearchIndexJob).get(job_id) if job_id else None
+            if job is None:
+                raise admin_ops.ActionError("That job no longer exists.")
+            if job.scope_org_id is not None and job.scope_org_id not in org_ids:
+                raise admin_ops.ActionError("You cannot cancel that job.")
+            if job.scope_org_id is None and not allow_all:
+                raise admin_ops.ActionError("You cannot cancel that job.")
+            if admin_ops.cancel_job(session, job_id):
+                flash(f"Asked job #{job_id} to stop.", "success")
+            else:
+                flash(f"Job #{job_id} had already finished.", "error")
+
+        else:
+            flash("Unknown action.", "error")
+
+    except admin_ops.ActionError as e:
+        flash(str(e), "error")
+
 
 class GroupsView(AdminBaseView):
     """Super-admin group management: list/create/edit/delete groups, manage users and books."""
@@ -1793,6 +1971,30 @@ class OrgAdminView(AdminBaseView):
             user_stats=user_stats,
             is_platform=False
         )
+
+    @expose("/search_index", methods=["GET", "POST"])
+    def search_index(self):
+        """Search index management, scoped to the admin's own organization."""
+        # This return value is the scope. The org is never read from the form.
+        org_id = require_org_admin()
+        session = q.get_session()
+        org_ids = [org_id]
+
+        if request.method == "POST":
+            _handle_search_index_action(
+                session, org_ids=org_ids, allow_all=False, forced_org_id=org_id
+            )
+            return redirect(url_for(".search_index"))
+
+        return _render_search_index(
+            session, org_ids=org_ids, is_org_admin=True, org_id=org_id
+        )
+
+    @expose("/search_index/status")
+    def search_index_status(self):
+        org_id = require_org_admin()
+        session = q.get_session()
+        return jsonify(_search_index_status_payload(session, [org_id], org_id=org_id))
 
     @expose("/cli_batch_ocr")
     @expose("/cli_batch_ocr/<int:job_id>")

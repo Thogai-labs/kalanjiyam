@@ -665,6 +665,10 @@ def create_project_inner(
 
             session.commit()
             add_storage_usage_for_project(slug)
+            # One index task for the finished project, not one per page.
+            from kalanjiyam.tasks.search_index import enqueue_project
+
+            enqueue_project(db_project.id)
         else:
             pdf_path = storage.local_copy(pdf_key)
             if not pdf_path.exists():

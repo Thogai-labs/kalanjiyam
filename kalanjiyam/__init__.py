@@ -34,6 +34,7 @@ from kalanjiyam.views.dictionaries import bp as dictionaries
 from kalanjiyam.views.proofing import bp as proofing
 from kalanjiyam.views.public import bp as public
 from kalanjiyam.views.reader.parses import bp as parses
+from kalanjiyam.views.search import bp as search
 from kalanjiyam.views.site import bp as site
 
 
@@ -161,6 +162,7 @@ def create_app(config_env: str):
     app.register_blueprint(parses, url_prefix=f"{url_prefix}/parses")
     app.register_blueprint(proofing, url_prefix=f"{url_prefix}/proofing")
     app.register_blueprint(public, url_prefix=f"{url_prefix}/books")
+    app.register_blueprint(search, url_prefix=f"{url_prefix}/search")
     app.register_blueprint(site, url_prefix=url_prefix)
     
     # Admin functionality is now integrated into the main Flask-Admin interface

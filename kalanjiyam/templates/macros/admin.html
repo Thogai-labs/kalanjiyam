@@ -29,6 +29,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
 {% elif name == 'help-circle' %}
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+{% elif name == 'search' %}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
 {% elif name == 'gauge' or name == 'speedometer' %}
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
 {% endif %}
@@ -60,6 +62,7 @@
     {{ _nav_link('platform_view.user_analytics', 'user_analytics', _('User Analytics'), active == 'user_analytics', icon_name='bar-chart-3') }}
     {{ _nav_link('platform_view.reported_issues', 'reported_issues', _('Reported Issues'), active == 'reported_issues', icon_name='help-circle') }}
     {{ _nav_link('platform_view.cli_batch_ocr', 'cli_batch_ocr', _('OCR & TR Metrics'), active == 'cli_batch_ocr', icon_name='gauge') }}
+    {{ _nav_link('platform_view.search_index', 'search_index', _('Search Index'), active == 'search_index', icon_name='search') }}
     {{ _nav_link('platform_view.metrics', 'metrics', _('Metrics & Logs'), active == 'metrics', icon_name='activity') }}
     {{ _nav_link('platform_view.settings', 'platform_settings', _('Platform Settings'), active == 'platform_settings', icon_name='settings') }}
   </ul>
@@ -86,6 +89,7 @@
     {{ _nav_link('org_admin_view.index', 'org', _('My organization'), active == 'org', icon_name='building-2') }}
     {{ _nav_link('org_admin_view.user_analytics', 'user_analytics', _('User Analytics'), active == 'user_analytics', icon_name='bar-chart-3') }}
     {{ _nav_link('org_admin_view.cli_batch_ocr', 'cli_batch_ocr', _('OCR & TR Metrics'), active == 'cli_batch_ocr', icon_name='gauge') }}
+    {{ _nav_link('org_admin_view.search_index', 'search_index', _('Search Index'), active == 'search_index', icon_name='search') }}
     {{ _nav_link('admin.export_import_dashboard', 'export', _('Export / Import'), active == 'export', icon_name='arrow-left-right') }}
     {{ _nav_link('proofing.create_project', 'upload', _('Upload book'), active == 'upload', icon_name='upload') }}
   </ul>

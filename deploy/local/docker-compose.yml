@@ -25,6 +25,7 @@ services:
       - S3_BUCKET=${S3_BUCKET:-uploads}
       - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-kalanjiyam}
       - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-kalanjiyam}
+      - OPENSEARCH_URL=http://kalanjiyam-search:9200
     volumes:
       - ${PWD}/kalanjiyam/static/:/app/kalanjiyam/static/
       - ${KALANJIYAM_DATA_DIR:-${HOME}/kalanjiyam-data}/uploads:/data/uploads
@@ -32,6 +33,7 @@ services:
       - kalanjiyam-db
       - kalanjiyam-redis
       - kalanjiyam-versitygw
+      - kalanjiyam-search
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -54,7 +56,7 @@ services:
     container_name: kalanjiyam-celery-dev
     command: >
       celery -A kalanjiyam.tasks worker
-      -Q default,ocr,low_priority
+      -Q default,ocr,low_priority,search_index
       --loglevel=INFO
       --concurrency=1
       --prefetch-multiplier=1
@@ -76,12 +78,14 @@ services:
       - S3_BUCKET=${S3_BUCKET:-uploads}
       - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-kalanjiyam}
       - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-kalanjiyam}
+      - OPENSEARCH_URL=http://kalanjiyam-search:9200
     volumes:
       - ${KALANJIYAM_DATA_DIR:-${HOME}/kalanjiyam-data}/uploads:/data/uploads
     depends_on:
       - kalanjiyam-db
       - kalanjiyam-redis
       - kalanjiyam-versitygw
+      - kalanjiyam-search
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -121,6 +125,28 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # OpenSearch (Lucene) backing the full-text search index.
+  # Not published to the host: reachable only from the compose network.
+  kalanjiyam-search:
+    build:
+      context: ../..
+      dockerfile: build/containers/Dockerfile.opensearch
+    container_name: kalanjiyam-search-dev
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - bootstrap.memory_lock=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - kalanjiyam-search-data:/usr/share/opensearch/data
+
   # S3-compatible gateway over a plain directory (Versity Gateway).
   kalanjiyam-versitygw:
     image: versity/versitygw:latest
@@ -137,3 +163,4 @@ services:
 
 volumes:
   kalanjiyam-data:
+  kalanjiyam-search-data:

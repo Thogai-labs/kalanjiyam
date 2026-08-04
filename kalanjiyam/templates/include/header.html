@@ -46,6 +46,14 @@
         href="{{ url_for('public.books.index') }}">{{ _('Library') }}</a>
     </li>
 
+    {% set is_search_active = request.blueprint == 'search' %}
+    <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+      @mouseenter="moveCursor($el)">
+      <a class="block px-4 py-2 rounded-full {% if is_search_active %}text-white{% else %}text-slate-900{% endif %}" {%
+        if is_search_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+        href="{{ url_for('search.index') }}">{{ _('Search') }}</a>
+    </li>
+
     {% set is_help_active = request.endpoint in ['proofing.help_index', 'proofing.beginners_guide', 'proofing.complete_guide', 'proofing.editor_guide'] %}
     {% set is_proofing_active = request.blueprint and request.blueprint.startswith('proofing') and request.endpoint !=
     'proofing.user.summary' and not is_help_active %}
