@@ -945,5 +945,26 @@ def migrate_to_s3(batch_size, clear_db, dry_run):
             )
 
 
+@cli.command("reconcile-storage")
+@click.option("--limit", default=500, help="Maximum number of items to reconcile per run.")
+def reconcile_storage(limit):
+    """Health check S3/VersityGW and push any temporary DB fallback data to S3."""
+    from kalanjiyam.utils.document_storage import is_storage_healthy, reconcile_db_to_storage
+
+    app = kalanjiyam.create_app()
+    with app.app_context():
+        click.echo("[*] Checking S3 / VersityGW storage health...")
+        if not is_storage_healthy():
+            click.echo("[✗] Storage is currently unreachable or offline. Try again later.")
+            return
+
+        click.echo("[✓] Storage is online. Reconciling DB fallback records to S3...")
+        stats = reconcile_db_to_storage(limit=limit)
+        click.echo(
+            f"[✓] Reconciled {stats['reconciled_ocr']} page OCR records and "
+            f"{stats['reconciled_revisions']} revision documents to S3."
+        )
+
+
 if __name__ == "__main__":
     cli()
