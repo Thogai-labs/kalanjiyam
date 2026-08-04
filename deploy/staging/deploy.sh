@@ -96,7 +96,7 @@ case "${CMD}" in
     KALANJIYAM_IMAGE="${KALANJIYAM_IMAGE}" \
         docker compose -p "${PROJECT}" -f "${COMPOSE_FILE}" up -d
     echo ""
-    echo "✔  Kalanjiyam (Staging) is running at http://${KALANJIYAM_HOST_IP}:${KALANJIYAM_HOST_PORT}"
+    echo "✔  Kalanjiyam (Staging) is running at http://${KALANJIYAM_HOST_IP}:${KALANJIYAM_STAGING_HOST_PORT}"
     echo "   Logs: ./deploy/staging/deploy.sh logs"
     echo "   Stop: ./deploy/staging/deploy.sh stop"
     ;;

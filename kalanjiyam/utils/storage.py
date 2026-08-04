@@ -322,6 +322,11 @@ class S3Storage(Storage):
         elif isinstance(source, bytes):
             self.client.put_object(Bucket=self.bucket, Key=key, Body=source)
         else:
+            if hasattr(source, "seek"):
+                try:
+                    source.seek(0)
+                except (AttributeError, OSError, TypeError):
+                    pass
             self.client.upload_fileobj(source, self.bucket, key)
 
     def read_bytes(self, key: str) -> bytes:
