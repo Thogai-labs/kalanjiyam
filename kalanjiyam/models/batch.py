@@ -83,11 +83,11 @@ class BatchOcrChunk(Base):
 class BatchOcrPage(Base):
     __tablename__ = 'batch_ocr_pages'
     __table_args__ = (
-        UniqueConstraint('chunk_id', 'page_number', name='uq_batch_ocr_page_number'),
+        UniqueConstraint('batch_item_id', 'page_number', name='uq_batch_ocr_page_number'),
     )
 
     id = Column(Integer, primary_key=True)
-    chunk_id = Column(Integer, ForeignKey('batch_ocr_chunks.id', ondelete='CASCADE'), nullable=False, index=True)
+    chunk_id = Column(Integer, ForeignKey('batch_ocr_chunks.id', ondelete='CASCADE'), nullable=True, index=True)
     batch_item_id = Column(Integer, ForeignKey('batch_items.id', ondelete='CASCADE'), nullable=False, index=True)
     page_number = Column(Integer, nullable=False)
     status = Column(String(64), nullable=False, default='PENDING') # PENDING, IN_PROGRESS, COMPLETED, FAILED
