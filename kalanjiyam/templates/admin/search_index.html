@@ -32,7 +32,7 @@
     <span class="text-sm text-slate-500">{{ _('Set SEARCH_ENABLED=true and restart to use search.') }}</span>
   {% elif not health.reachable %}
     <span class="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-100">
-      {{ _('Cluster unreachable') }}
+      {% if health.status == 'misconfigured' %}{{ _('Search misconfigured') }}{% else %}{{ _('Cluster unreachable') }}{% endif %}
     </span>
     <span class="text-sm text-rose-700 font-mono text-xs truncate">{{ health.error }}</span>
   {% else %}

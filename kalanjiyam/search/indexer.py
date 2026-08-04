@@ -712,7 +712,11 @@ def org_stats(client, prefix: str, group_id: int) -> dict[str, Any]:
             count = 0
         size = 0
         try:
-            raw = client.indices.stats(index=name, ignore_unavailable=True)
+            # No ignore_unavailable here: indices.stats() rejects it as an
+            # unknown query param, and a TypeError would be swallowed below
+            # and silently report every index as 0 bytes. A missing index
+            # raises instead, which the handler covers.
+            raw = client.indices.stats(index=name)
             size = (
                 raw.get("_all", {})
                 .get("primaries", {})

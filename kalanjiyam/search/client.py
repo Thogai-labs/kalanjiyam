@@ -123,6 +123,19 @@ def health() -> dict[str, Any]:
 
     try:
         client = get_client()
+    except SearchUnavailableError as e:
+        # The client could not even be built -- a packaging or config problem,
+        # not a down cluster. Say so, or the reader goes hunting the network
+        # for a fault that is on this machine.
+        LOG.warning("OpenSearch client unavailable: %s", e)
+        return {
+            "enabled": True,
+            "reachable": False,
+            "status": "misconfigured",
+            "error": str(e),
+        }
+
+    try:
         info = client.cluster.health()
         return {
             "enabled": True,

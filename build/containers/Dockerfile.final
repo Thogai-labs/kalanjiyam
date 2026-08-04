@@ -20,7 +20,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc python3-dev
     rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+# --locked, not --frozen: --frozen installs the lockfile without checking it
+# still matches pyproject.toml, so a dependency added to pyproject but never
+# locked is silently omitted from the image. --locked fails the build instead.
+RUN uv sync --locked --no-dev --no-install-project
 
 ## 3. Frontend assets
 FROM base AS build-js
