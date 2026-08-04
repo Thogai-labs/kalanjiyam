@@ -236,3 +236,24 @@ def test_run_ocr_remote_parses_v2_contract_fields(flask_app, tmp_path):
         assert result.model == {"name": "surya-rec", "version": "0.6.1"}
         assert result.page_confidence == 0.91
         assert result.blocks[0]["words"][1]["confidence"] == 0.41
+
+
+def test_dynamic_unlisted_engine_choices():
+    from kalanjiyam.utils.ocr_types import build_engine_choices
+
+    choices = build_engine_choices(
+        ["tesseract", "dots-ocr", "glm-ocr"],
+        is_super_admin=True,
+    )
+    labels = {c["label"] for c in choices}
+    values = {c["value"] for c in choices}
+
+    assert "Dots Ocr" in labels
+    assert "dots_ocr" in values
+
+    regular_choices = build_engine_choices(
+        ["tesseract", "dots-ocr", "glm-ocr"],
+        is_super_admin=False,
+    )
+    reg_labels = [c["label"] for c in regular_choices]
+    assert reg_labels == ["OCR 2", "OCR 2", "OCR 10"]

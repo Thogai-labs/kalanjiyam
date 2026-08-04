@@ -1217,7 +1217,7 @@ export default () => ({
       '10': 'glm_ocr',
       '11': 'tesseract_manuscript',
     };
-    return engineMap[engineValue] || 'google';
+    return engineMap[engineValue] || engineValue || 'google';
   },
 
   // Get combined language parameter for bilingual support
