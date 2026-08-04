@@ -1029,5 +1029,13 @@ def reconcile_storage(limit):
         )
 
 
+@cli.command("storage-stats")
+def storage_stats():
+    """Compare storage size of gzipped JSON S3 payloads vs uncompressed DB payloads."""
+    from scripts.compare_storage_savings import main as run_stats
+
+    run_stats()
+
+
 if __name__ == "__main__":
     cli()

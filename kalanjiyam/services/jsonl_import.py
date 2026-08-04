@@ -274,9 +274,26 @@ def _persist_ocr(session, page, blocks: list[dict], width: int, height: int):
         track = db.PageVersion(page_id=page.id, version_key="ocr:jsonl_import", version=1, updated_at=datetime.utcnow())
         session.add(track); session.flush()
     status = session.query(db.PageStatus).filter_by(name="reviewed-0").one()
-    session.add(db.Revision(project_id=page.project_id, page_id=page.id, page_version_id=track.id,
-                status_id=status.id, summary="Imported JSONL OCR", content=document.to_plain_text(),
-                document=document.to_dict(), content_format=document.content_format))
+    rev = db.Revision(
+        project_id=page.project_id,
+        page_id=page.id,
+        page_version_id=track.id,
+        status_id=status.id,
+        summary="Imported JSONL OCR",
+        content=document.to_plain_text(),
+        document=document.to_dict(),
+        content_format=document.content_format,
+    )
+    session.add(rev)
+    session.flush()
+
+    # Also persist JSONL document to S3/VersityGW
+    from kalanjiyam.utils.document_storage import save_revision_document
+
+    try:
+        save_revision_document(rev, document.to_dict())
+    except Exception:
+        pass
 
 
 def run_import(session, *, jsonl_uri: str, pdf_uri: str, org_slug: str,
