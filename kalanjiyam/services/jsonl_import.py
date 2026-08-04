@@ -23,7 +23,7 @@ from kalanjiyam.utils.ocr_types import BLOCK_TYPES, OcrResponse
 from kalanjiyam.utils.storage import get_storage, page_image_key, pdf_key
 
 LOG = logging.getLogger(__name__)
-ID_DELIMITERS = ("↳", "â†³")
+ID_DELIMITERS = ("↳", "â†³", ",")
 CATEGORY_TYPES = {
     "title": "heading", "section-header": "heading", "page-header": "running-header",
     "page-footer": "running-header", "text": "paragraph", "paragraph": "paragraph",
@@ -73,9 +73,57 @@ def parse_record_id(value: object) -> tuple[str, int]:
     for delimiter in ID_DELIMITERS:
         if delimiter in value:
             book_id, page = value.rsplit(delimiter, 1)
+            book_id = book_id.strip()
+            page = page.strip()
             if book_id and page.isdecimal() and int(page) > 0:
                 return book_id, int(page)
-    raise ImportValidationError("id must be <bookId>↳<positive 1-based pageNumber>")
+    raise ImportValidationError("id must be <bookId>↳<positive 1-based pageNumber> or <bookId>,<pageNumber>")
+
+
+def repair_json_string(raw: str | list | dict) -> list | dict:
+    if isinstance(raw, (list, dict)):
+        return raw
+    if not isinstance(raw, str):
+        raise ImportValidationError(f"Invalid generated_text type: {type(raw)}")
+    
+    # 1. Direct JSON parse
+    try:
+        return json.loads(raw)
+    except Exception:
+        pass
+
+    # 2. Handle AST literal representation (e.g. single quotes)
+    import ast
+    try:
+        val = ast.literal_eval(raw)
+        if isinstance(val, (list, dict)):
+            return val
+    except Exception:
+        pass
+
+    # 3. Truncated list: find last complete object closing brace '}'
+    last_brace = raw.rfind("}")
+    if last_brace != -1:
+        truncated_list = raw[:last_brace + 1].strip()
+        if not truncated_list.endswith("]"):
+            truncated_list += "]"
+        try:
+            return json.loads(truncated_list)
+        except Exception:
+            pass
+
+    # 4. Attempt auto-closing unclosed quotes/brackets
+    cleaned = raw.rstrip()
+    if cleaned.count('"') % 2 != 0:
+        cleaned += '"'
+    cleaned += "}" * max(0, cleaned.count("{") - cleaned.count("}"))
+    cleaned += "]" * max(0, cleaned.count("[") - cleaned.count("]"))
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        pass
+
+    raise ImportValidationError("Cannot parse or repair generated_text JSON")
 
 
 def normalize_blocks(raw_blocks: object, book_id: str, page_number: int) -> list[dict]:
@@ -101,10 +149,17 @@ def normalize_blocks(raw_blocks: object, book_id: str, page_number: int) -> list
 
 def parse_jsonl_record(line: str | bytes) -> tuple[str, int, list[dict]]:
     try:
+        if isinstance(line, bytes):
+            line = line.decode("utf-8", errors="replace")
         record = json.loads(line)
+        if not isinstance(record, dict):
+            raise ImportValidationError("JSONL record is not a JSON object")
         book_id, page_number = parse_record_id(record.get("id"))
-        generated = json.loads(record["generated_text"])
-    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        raw_gen = record.get("generated_text")
+        if raw_gen is None:
+            raise ImportValidationError("missing generated_text field")
+        generated = repair_json_string(raw_gen)
+    except (KeyError, TypeError, json.JSONDecodeError, ImportValidationError) as exc:
         raise ImportValidationError(f"malformed JSONL record: {exc}") from exc
     return book_id, page_number, normalize_blocks(generated, book_id, page_number)
 

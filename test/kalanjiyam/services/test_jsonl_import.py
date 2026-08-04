@@ -20,6 +20,23 @@ def test_accepts_legacy_mojibake_identifier_delimiter():
     assert parse_record_id("bookâ†³1") == ("book", 1)
 
 
+def test_accepts_comma_identifier_delimiter():
+    assert parse_record_id("book_123,5") == ("book_123", 5)
+    assert parse_record_id("book_123, 5") == ("book_123", 5)
+
+
+def test_repairs_truncated_generated_text():
+    truncated_gen = '[{"bbox": [1, 2, 3, 4], "category": "Text", "text": "Valid"}, {"bbox": [5, 6, 7, 8], "category": "Text", "text": "Truncated...'
+    record = {
+        "id": "book,1",
+        "generated_text": truncated_gen
+    }
+    book, number, blocks = parse_jsonl_record(json.dumps(record))
+    assert (book, number) == ("book", 1)
+    assert len(blocks) == 1
+    assert blocks[0]["content"] == "Valid"
+
+
 @pytest.mark.parametrize("value", [None, "book", "book↳0", "↳1", "book↳one"])
 def test_rejects_invalid_identifier(value):
     with pytest.raises(ImportValidationError):
