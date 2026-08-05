@@ -107,8 +107,10 @@ def _run_ocr_for_page_inner(
                 if not batch_item:
                     batch_item = session.query(BatchItem).filter_by(project_id=project.id).order_by(BatchItem.id.desc()).first()
                 if batch_item:
-                    p_num = int(page_slug) if page_slug.isdigit() else page.order
+                    p_num = page.order
                     ocr_page = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, page_number=p_num).first()
+                    if not ocr_page and page_slug.isdigit():
+                        ocr_page = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, page_number=int(page_slug)).first()
                     if not ocr_page:
                         # Dummy chunk id or null if allowed, or find chunk
                         ocr_page = BatchOcrPage(
@@ -147,16 +149,19 @@ def _run_ocr_for_page_inner(
                                     pass
                     ocr_page.cropped_image_size_bytes = page_crop_bytes
                     session.add(ocr_page)
+                    session.flush()
 
-                    # Update cumulative item metrics
-                    batch_item.total_ocr_latency_ms = (batch_item.total_ocr_latency_ms or 0) + page_latency_ms
-                    batch_item.extracted_images_size_bytes = (batch_item.extracted_images_size_bytes or 0) + (ocr_page.extracted_image_size_bytes or 0)
-                    batch_item.cropped_images_size_bytes = (batch_item.cropped_images_size_bytes or 0) + page_crop_bytes
-                    batch_item.ocr_data_size_bytes = (batch_item.ocr_data_size_bytes or 0) + ocr_page.ocr_data_size_bytes
+                    # Recalculate cumulative item metrics from all completed pages
+                    item_pages = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, status='COMPLETED').all()
+                    batch_item.total_ocr_latency_ms = sum(p.ocr_latency_ms or 0 for p in item_pages)
+                    batch_item.extracted_images_size_bytes = sum(p.extracted_image_size_bytes or 0 for p in item_pages)
+                    batch_item.cropped_images_size_bytes = sum(p.cropped_image_size_bytes or 0 for p in item_pages)
+                    batch_item.ocr_data_size_bytes = sum(p.ocr_data_size_bytes or 0 for p in item_pages)
                     
-                    # Update status if all completed
-                    completed_count = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, status='COMPLETED').count()
-                    if completed_count >= (batch_item.total_pages or 1):
+                    # Update status if all pages completed
+                    completed_count = len(item_pages)
+                    target_total = batch_item.total_pages or session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id).count() or 1
+                    if completed_count >= target_total:
                         batch_item.status = 'COMPLETED'
                         batch_item.completed_at = datetime.utcnow()
                         if batch_item.job:
@@ -232,9 +237,10 @@ def run_ocr_for_project(
             session.add(batch_job)
             session.flush()
 
+            project_title = getattr(db_project, 'display_title', None) or project.slug
             batch_item = BatchItem(
                 job_id=batch_job.id,
-                file_path=f"ui://project/{project.slug}",
+                file_path=f"{project_title} ({project.slug})",
                 project_id=db_project.id,
                 status='IN_PROGRESS',
                 total_pages=len(unedited_pages),

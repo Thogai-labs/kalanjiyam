@@ -890,6 +890,56 @@ class PlatformView(AdminBaseView):
             is_platform=True
         )
 
+
+def _sync_job_and_item_metrics(session, job):
+    """Sync item metrics and auto-complete jobs/items if all pages have finished processing."""
+    if not job:
+        return
+    from kalanjiyam.models.batch import BatchItem, BatchOcrPage
+    items = session.query(BatchItem).filter_by(job_id=job.id).all()
+    all_completed = True if items else False
+    for item in items:
+        page_records = (
+            session.query(BatchOcrPage)
+            .filter_by(batch_item_id=item.id)
+            .all()
+        )
+        for p in page_records:
+            if p.status == 'PENDING' and (p.ocr_latency_ms or p.translation_latency_ms or p.ocr_data_size_bytes or p.translation_data_size_bytes):
+                p.status = 'COMPLETED'
+                p.completed_at = p.completed_at or datetime.utcnow()
+        completed_pages = [p for p in page_records if p.status == 'COMPLETED']
+        if completed_pages:
+            if not item.total_ocr_latency_ms or item.total_ocr_latency_ms == 0:
+                item.total_ocr_latency_ms = sum(p.ocr_latency_ms or 0 for p in completed_pages if p.ocr_latency_ms)
+            if not item.total_translation_latency_ms or item.total_translation_latency_ms == 0:
+                item.total_translation_latency_ms = sum(p.translation_latency_ms or 0 for p in completed_pages if p.translation_latency_ms)
+            if not item.extracted_images_size_bytes:
+                item.extracted_images_size_bytes = sum(p.extracted_image_size_bytes or 0 for p in completed_pages if p.extracted_image_size_bytes)
+            if not item.cropped_images_size_bytes:
+                item.cropped_images_size_bytes = sum(p.cropped_image_size_bytes or 0 for p in completed_pages if p.cropped_image_size_bytes)
+            if not item.ocr_data_size_bytes:
+                item.ocr_data_size_bytes = sum(p.ocr_data_size_bytes or 0 for p in completed_pages if p.ocr_data_size_bytes)
+            if not item.translation_data_size_bytes:
+                item.translation_data_size_bytes = sum(p.translation_data_size_bytes or 0 for p in completed_pages if p.translation_data_size_bytes)
+
+            target_pages = item.total_pages or len(page_records) or 1
+            if len(completed_pages) >= target_pages or job.job_type.startswith('SINGLE_PAGE_PROOFING'):
+                item.status = 'COMPLETED'
+                item.completed_at = item.completed_at or datetime.utcnow()
+
+        if item.status != 'COMPLETED':
+            all_completed = False
+
+    if all_completed:
+        job.status = 'COMPLETED'
+        job.completed_at = job.completed_at or datetime.utcnow()
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+
+
     @expose("/cli_batch_ocr")
     @expose("/cli_batch_ocr/<int:job_id>")
     def cli_batch_ocr(self, job_id=None):
@@ -934,6 +984,7 @@ class PlatformView(AdminBaseView):
             jobs_query = query.order_by(BatchJob.id.desc()).all()
             jobs_list = []
             for j in jobs_query:
+                _sync_job_and_item_metrics(session, j)
                 item_count = session.query(func.count(BatchItem.id)).filter_by(job_id=j.id).scalar() or 0
                 total_pages_sum = session.query(func.sum(BatchItem.total_pages)).filter_by(job_id=j.id).scalar() or 0
                 jobs_list.append({
@@ -960,6 +1011,8 @@ class PlatformView(AdminBaseView):
         selected_job = session.query(BatchJob).get(job_id)
         if not selected_job:
             abort(404)
+
+        _sync_job_and_item_metrics(session, selected_job)
 
         item_metrics = []
         items = session.query(BatchItem).filter_by(job_id=selected_job.id).all()
@@ -2070,6 +2123,7 @@ class OrgAdminView(AdminBaseView):
 
             jobs_list = []
             for j in jobs_query:
+                _sync_job_and_item_metrics(session, j)
                 item_count = session.query(func.count(BatchItem.id)).filter_by(job_id=j.id).filter(BatchItem.project_id.in_(org_project_ids)).scalar() or 0
                 total_pages_sum = session.query(func.sum(BatchItem.total_pages)).filter_by(job_id=j.id).filter(BatchItem.project_id.in_(org_project_ids)).scalar() or 0
                 jobs_list.append({
@@ -2101,6 +2155,8 @@ class OrgAdminView(AdminBaseView):
         selected_job = session.query(BatchJob).get(job_id)
         if not selected_job:
             abort(404)
+
+        _sync_job_and_item_metrics(session, selected_job)
 
         item_metrics = []
         items = (
