@@ -10,6 +10,7 @@ from flask import (
     abort as flask_abort,
     current_app,
     flash,
+    jsonify,
     make_response,
     render_template,
     request,
@@ -20,6 +21,7 @@ from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from markupsafe import Markup, escape
 from sqlalchemy import orm
+from sqlalchemy.orm.attributes import flag_modified
 from werkzeug.exceptions import abort
 from werkzeug.utils import redirect
 from wtforms import (
@@ -45,6 +47,8 @@ from kalanjiyam.tasks import ocr as ocr_tasks
 from kalanjiyam.tasks.comparison import run_ocr_comparison_task
 from kalanjiyam.tasks import translation as translation_tasks
 from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
+from kalanjiyam.tasks import metadata as metadata_tasks
+from kalanjiyam.utils import project_metadata as pm
 from kalanjiyam.utils import project_utils, proofing_utils
 from kalanjiyam.utils.revisions import add_revision
 from kalanjiyam.views.proofing.decorators import moderator_required, p2_required
@@ -174,6 +178,66 @@ class EditMetadataForm(FlaskForm):
             "placeholder": _l("Internal notes for scholars and other proofreaders."),
         },
     )
+
+
+class ProjectMetadataForm(FlaskForm):
+    """The Metadata tab. Every field is directly editable.
+
+    Extraction only ever *seeds* these values -- what a moderator saves here
+    is canonical, and a later extraction is staged rather than applied.
+    """
+
+    print_title = StringField(_l("Print title"))
+    subtitle = StringField(_l("Subtitle"))
+    author = StringField(_l("Author"))
+    editor = StringField(_l("Editor / translator"))
+    publisher = StringField(_l("Publisher"))
+    place_of_publication = StringField(_l("Place of publication"))
+    publication_year = StringField(_l("Publication year"))
+    edition = StringField(_l("Edition"))
+    series = StringField(_l("Series"))
+    subject = StringField(_l("Subject"))
+    worldcat_link = StringField(_l("Worldcat link"))
+    genre = QuerySelectField(
+        query_factory=q.genres, allow_blank=True, blank_text=_l("(none)")
+    )
+
+    languages = StringField(
+        _l("Languages"),
+        widget=TextArea(),
+        render_kw={
+            "rows": 4,
+            "placeholder": _l("One per line: code, script, role\ne.g. sa, Deva, primary"),
+        },
+    )
+    summary = StringField(
+        _l("Summary"),
+        widget=TextArea(),
+        render_kw={"rows": 6},
+    )
+    keywords = StringField(
+        _l("Keywords"),
+        widget=TextArea(),
+        render_kw={"rows": 2, "placeholder": _l("Comma-separated.")},
+    )
+    toc = StringField(
+        _l("Table of contents"),
+        widget=TextArea(),
+        render_kw={
+            "rows": 8,
+            "placeholder": _l("One entry per line: label | page"),
+        },
+    )
+
+
+class MetadataExtractForm(FlaskForm):
+    """Trigger for a background extraction run."""
+
+    deep = BooleanField(_l("Deep analysis"))
+
+
+class MetadataAcceptForm(FlaskForm):
+    """Promote a staged extraction over the current values."""
 
 
 class MatchForm(Form):
@@ -339,6 +403,139 @@ def edit(slug):
         delete_form=delete_form,
         supported_engines=SUPPORTED_ENGINES,
     )
+
+
+@bp.route("/<slug>/metadata", methods=["GET", "POST"])
+@moderator_required
+def metadata(slug):
+    """View and edit the project's extracted metadata."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    data = project_.extracted_metadata or {}
+    content = data.get("content") or {}
+    form = ProjectMetadataForm(obj=project_)
+
+    if form.validate_on_submit():
+        session = q.get_session()
+        for field in (
+            "print_title",
+            "subtitle",
+            "author",
+            "editor",
+            "publisher",
+            "place_of_publication",
+            "publication_year",
+            "edition",
+            "series",
+            "subject",
+            "worldcat_link",
+        ):
+            setattr(project_, field, (getattr(form, field).data or "").strip())
+        project_.genre = form.genre.data
+
+        merged = dict(data)
+        merged["schema_version"] = metadata_tasks.SCHEMA_VERSION
+        merged["languages"] = pm.parse_languages(form.languages.data)
+        merged["content"] = {
+            **content,
+            "summary": (form.summary.data or "").strip() or None,
+            "keywords": pm.parse_list(form.keywords.data),
+            "toc": pm.parse_toc(form.toc.data),
+        }
+        project_.extracted_metadata = merged
+        # SQLAlchemy does not track in-place mutation of a JSON column.
+        flag_modified(project_, "extracted_metadata")
+        session.commit()
+
+        # Title and author are indexed on every page document.
+        from kalanjiyam.tasks.search_index import enqueue_project
+
+        enqueue_project(project_.id)
+
+        flash(_l("Saved metadata."), "success")
+        return redirect(url_for("proofing.project.metadata", slug=slug))
+
+    if request.method == "GET":
+        form.languages.data = pm.format_languages(data.get("languages"))
+        form.summary.data = content.get("summary") or ""
+        form.keywords.data = pm.format_list(content.get("keywords"))
+        form.toc.data = pm.format_toc(content.get("toc"))
+
+    return render_template(
+        "proofing/projects/metadata.html",
+        project=project_,
+        form=form,
+        metadata=data,
+        derived=data.get("derived") or {},
+        provenance=data.get("provenance") or {},
+        staged=data.get("staged"),
+        entities=(content.get("entities") or {}),
+        colophon=(content.get("colophon") or {}),
+        progress=metadata_tasks.get_progress(project_.id),
+        extract_form=MetadataExtractForm(),
+        accept_form=MetadataAcceptForm(),
+    )
+
+
+@bp.route("/<slug>/metadata/extract", methods=["POST"])
+@moderator_required
+def metadata_extract(slug):
+    """Kick off a background extraction run."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    form = MetadataExtractForm()
+    if not form.validate_on_submit():
+        flash(_l("Could not start extraction. Please try again."), "error")
+        return redirect(url_for("proofing.project.metadata", slug=slug))
+
+    try:
+        metadata_tasks.extract_project_metadata.delay(
+            project_.id, deep=bool(form.deep.data)
+        )
+        flash(
+            _l("Extraction started. This page will update when it finishes."),
+            "success",
+        )
+    except Exception:
+        LOG.exception("could not enqueue metadata extraction for %s", slug)
+        flash(_l("Could not start extraction. Please try again."), "error")
+
+    return redirect(url_for("proofing.project.metadata", slug=slug))
+
+
+@bp.route("/<slug>/metadata/status")
+@moderator_required
+def metadata_status(slug):
+    """Poll the progress of a running extraction."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+    return jsonify(metadata_tasks.get_progress(project_.id) or {"status": "idle"})
+
+
+@bp.route("/<slug>/metadata/accept", methods=["POST"])
+@moderator_required
+def metadata_accept(slug):
+    """Promote a staged extraction over the current values."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    form = MetadataAcceptForm()
+    if not form.validate_on_submit():
+        flash(_l("Could not load the new extraction."), "error")
+        return redirect(url_for("proofing.project.metadata", slug=slug))
+
+    session = q.get_session()
+    if metadata_tasks.accept_staged(session, project_):
+        flash(_l("Loaded the new extraction."), "success")
+    else:
+        flash(_l("There is no pending extraction to load."), "error")
+    return redirect(url_for("proofing.project.metadata", slug=slug))
 
 
 @bp.route("/<slug>/batch")

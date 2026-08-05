@@ -1,0 +1,256 @@
+{% extends 'proofing/base-sidebar.html' %}
+{% import "macros/forms.html" as mf %}
+{% import "macros/proofing.html" as m %}
+
+
+{% block title %}{{ _('Metadata: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
+
+
+{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
+
+
+{% block content %}
+{{ m.project_header_nested(_('Metadata'), project) }}
+{{ m.project_tabs(project=project, active='metadata', is_mod=current_user.is_moderator) }}
+
+{{ mf.show_errors_if_any(form.errors) }}
+
+{# --- Extraction controls ------------------------------------------------ #}
+<div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-8">
+  <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+    <div>
+      <h2 class="text-lg font-bold text-slate-900 mb-1">{{ _('Automatic extraction') }}</h2>
+      <p class="text-sm text-slate-500 max-w-2xl leading-relaxed">
+        {{ _('Reads the front matter and a sample of pages to suggest bibliographic details, languages, and a summary. Everything it produces is editable below, and existing values are never overwritten.') }}
+      </p>
+    </div>
+    <form method="POST" action="{{ url_for('proofing.project.metadata_extract', slug=project.slug) }}" class="shrink-0">
+      {{ extract_form.csrf_token }}
+      <label class="flex items-center gap-2 text-xs text-slate-500 mb-2 cursor-pointer">
+        {{ extract_form.deep(class_="rounded border-slate-300 text-royalblue focus:ring-royalblue") }}
+        {{ _('Deep analysis (slower, better coverage on long books)') }}
+      </label>
+      <button type="submit"
+        class="w-full px-5 py-2.5 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 transition-colors">
+        {{ _('Run extraction') }}
+      </button>
+    </form>
+  </div>
+
+  {% if progress and progress.status == 'running' %}
+    <div id="extraction-progress" class="mt-5 pt-5 border-t border-slate-100 text-sm">
+      <span class="font-semibold text-royalblue">{{ _('Running') }}:</span>
+      <span id="extraction-stage" class="text-slate-600">{{ progress.stage }}</span>
+    </div>
+  {% endif %}
+</div>
+
+{# --- Staged run --------------------------------------------------------- #}
+{% if staged %}
+  <div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-8">
+    <h3 class="font-bold text-amber-900 mb-1">{{ _('A newer extraction is waiting') }}</h3>
+    <p class="text-sm text-amber-800 mb-4">
+      {{ _('It has not been applied, because that would overwrite the values you edited. Loading it replaces the languages, summary, keywords, and table of contents below.') }}
+    </p>
+    <form method="POST" action="{{ url_for('proofing.project.metadata_accept', slug=project.slug) }}">
+      {{ accept_form.csrf_token }}
+      <button type="submit"
+        class="px-4 py-2 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 transition-colors text-sm">
+        {{ _('Load the new extraction') }}
+      </button>
+    </form>
+  </div>
+{% endif %}
+
+{# --- Coverage ----------------------------------------------------------- #}
+{% if provenance %}
+  <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-8 text-sm">
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-slate-600">
+      <span>
+        {{ _('Generated from %(sampled)s of %(total)s pages',
+             sampled=provenance.pages_sampled_count or 0,
+             total=provenance.pages_total or 0) }}
+      </span>
+      {% if provenance.ocr_fallback_pages %}
+        <span class="text-amber-700 font-semibold">
+          {{ _('%(n)s sampled pages used unedited OCR text', n=provenance.ocr_fallback_pages) }}
+        </span>
+      {% endif %}
+      {% if provenance.status and provenance.status != 'ok' %}
+        <span class="text-red-700 font-semibold">{{ _('Status') }}: {{ provenance.status }}</span>
+      {% endif %}
+      {% if provenance.run_at %}
+        <span class="text-slate-400">{{ provenance.run_at[:16]|replace('T', ' ') }}</span>
+      {% endif %}
+      {% if provenance.model %}
+        <span class="text-slate-400 font-mono text-xs">{{ provenance.model }}</span>
+      {% endif %}
+    </div>
+    {% if provenance.errors %}
+      <ul class="mt-3 pt-3 border-t border-slate-200 text-xs text-red-700 space-y-1">
+        {% for error in provenance.errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+{% endif %}
+
+<form method="POST">
+  {{ form.csrf_token }}
+
+  <fieldset>
+    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Bibliographic') }}</legend>
+    <div class="bg-slate-100 p-4">
+      {{ mf.field(form.print_title) }}
+      {{ mf.field(form.subtitle) }}
+      {{ mf.field(form.author) }}
+      {{ mf.field(form.editor) }}
+      {{ mf.field(form.publisher) }}
+      {{ mf.field(form.place_of_publication) }}
+      {{ mf.field(form.publication_year) }}
+      {{ mf.field(form.edition) }}
+      {{ mf.field(form.series) }}
+      {{ mf.field(form.subject) }}
+      {{ mf.field(form.genre) }}
+      {{ mf.field(form.worldcat_link) }}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Languages') }}</legend>
+    <div class="bg-slate-100 p-4">
+      {{ mf.field(form.languages) }}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Content') }}</legend>
+    <div class="bg-slate-100 p-4">
+      {{ mf.field(form.summary) }}
+      {{ mf.field(form.keywords) }}
+      {{ mf.field(form.toc) }}
+    </div>
+  </fieldset>
+
+  {{ mf.submit(_('Save metadata')) }}
+</form>
+
+{# --- Read-only extras --------------------------------------------------- #}
+{% if colophon and (colophon.scribe or colophon.date or colophon.place) %}
+  <section class="mt-10">
+    <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Colophon') }}</h2>
+    <div class="bg-white border border-slate-200 rounded-2xl p-5 text-sm space-y-2">
+      {% for key, label in [('scribe', _('Scribe')), ('date', _('Date')), ('place', _('Place'))] %}
+        {% if colophon[key] %}
+          <div class="flex gap-3">
+            <span class="text-slate-400 font-semibold w-20 shrink-0">{{ label }}</span>
+            <span class="text-slate-800">{{ colophon[key] }}</span>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
+{% if entities %}
+  <section class="mt-10">
+    <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Mentioned in the text') }}</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {% for group, values in entities.items() %}
+        {% if values %}
+          <div class="bg-white border border-slate-200 rounded-2xl p-5">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{{ group }}</h3>
+            <div class="flex flex-wrap gap-1.5">
+              {% for value in values %}
+                <span class="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs font-medium">{{ value }}</span>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
+{% if derived %}
+  <section class="mt-10 mb-10">
+    <h2 class="text-lg font-bold text-slate-900 mb-1">{{ _('Computed from the text') }}</h2>
+    <p class="text-sm text-slate-500 mb-4">{{ _('Measured directly from the project, not generated.') }}</p>
+
+    <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+      <table class="min-w-full divide-y divide-slate-100 text-left text-sm text-slate-700">
+        <tbody class="divide-y divide-slate-100 font-medium">
+          <tr>
+            <th class="px-6 py-3 text-slate-900 font-bold">{{ _('Pages') }}</th>
+            <td class="px-6 py-3 font-mono">{{ derived.pages_total }}</td>
+          </tr>
+          <tr>
+            <th class="px-6 py-3 text-slate-900 font-bold">{{ _('Pages with text') }}</th>
+            <td class="px-6 py-3 font-mono">
+              {{ derived.pages_with_text }}
+              <span class="text-slate-400 font-sans text-xs ml-2">
+                {{ _('%(edited)s edited, %(ocr)s OCR only',
+                     edited=derived.pages_edited, ocr=derived.pages_ocr_only) }}
+              </span>
+            </td>
+          </tr>
+          {% if derived.scripts %}
+            <tr>
+              <th class="px-6 py-3 text-slate-900 font-bold align-top">{{ _('Scripts') }}</th>
+              <td class="px-6 py-3">
+                <div class="flex flex-wrap gap-1.5">
+                  {% for code, share in derived.scripts.items() %}
+                    <span class="px-2.5 py-1 bg-slate-100 rounded-lg text-xs font-semibold">
+                      {{ derived.script_labels.get(code, code) }} {{ "%.0f"|format(share * 100) }}%
+                    </span>
+                  {% endfor %}
+                </div>
+              </td>
+            </tr>
+          {% endif %}
+          {% if derived.ocr_engine_labels %}
+            <tr>
+              <th class="px-6 py-3 text-slate-900 font-bold">{{ _('OCR engines used') }}</th>
+              <td class="px-6 py-3">{{ derived.ocr_engine_labels|join(', ') }}</td>
+            </tr>
+          {% endif %}
+          {% if derived.translation_pairs %}
+            <tr>
+              <th class="px-6 py-3 text-slate-900 font-bold align-top">{{ _('Translations') }}</th>
+              <td class="px-6 py-3">
+                {% for pair in derived.translation_pairs %}
+                  <div class="text-xs">{{ pair.source }} &rarr; {{ pair.target }}
+                    <span class="text-slate-400">({{ pair.pages }} {{ _('pages') }})</span>
+                  </div>
+                {% endfor %}
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endif %}
+
+{% if progress and progress.status == 'running' %}
+<script>
+  (function () {
+    const url = "{{ url_for('proofing.project.metadata_status', slug=project.slug) }}";
+    const stage = document.getElementById('extraction-stage');
+    const poll = setInterval(async function () {
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.status === 'running') {
+          if (stage && data.stage) stage.textContent = data.stage;
+          return;
+        }
+        clearInterval(poll);
+        window.location.reload();
+      } catch (e) {
+        clearInterval(poll);
+      }
+    }, 4000);
+  })();
+</script>
+{% endif %}
+{% endblock %}

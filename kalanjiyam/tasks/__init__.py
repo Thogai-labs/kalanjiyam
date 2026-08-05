@@ -40,6 +40,7 @@ app = Celery(
         "kalanjiyam.tasks.comparison",
         "kalanjiyam.tasks.s3_batch",
         "kalanjiyam.tasks.search_index",
+        "kalanjiyam.tasks.metadata",
     ],
 )
 app.conf.update(
