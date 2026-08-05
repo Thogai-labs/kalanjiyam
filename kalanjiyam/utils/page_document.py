@@ -781,8 +781,11 @@ def enrich_document_from_page_ocr(
         doc.page_height = int(ph)
 
     need_rebuild = rebuild_blocks and (
-        _blocks_lack_spatial_bboxes(doc.blocks) or _blocks_look_like_lines(
-            doc.blocks, doc.page_height
+        _blocks_lack_spatial_bboxes(doc.blocks) or (
+            _blocks_look_like_lines(doc.blocks, doc.page_height)
+            # If blocks carry provenance stamps, they were intentionally
+            # structured by the OCR engine — don't merge them.
+            and not any(b.source for b in doc.blocks)
         )
     )
     if need_rebuild:
