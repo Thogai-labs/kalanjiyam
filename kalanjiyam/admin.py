@@ -813,6 +813,30 @@ def _sync_job_and_item_metrics(session, job):
             .filter_by(batch_item_id=item.id)
             .all()
         )
+        
+        # Retroactively backfill source_size_bytes for old jobs
+        if item.source_size_bytes is None:
+            try:
+                from kalanjiyam.utils.storage import get_storage, pdf_key, project_docx_key
+                from kalanjiyam import queries as q
+                project_slug = session.query(db.Project.slug).filter_by(id=item.project_id).scalar()
+                if project_slug:
+                    storage = get_storage()
+                    
+                    # Check for PDF first
+                    for k, size in storage.list_keys(pdf_key(project_slug)):
+                        if k == pdf_key(project_slug):
+                            item.source_size_bytes = size
+                            break
+                            
+                    # If no PDF, check for DOCX
+                    if item.source_size_bytes is None:
+                        for k, size in storage.list_keys(project_docx_key(project_slug)):
+                            if k == project_docx_key(project_slug):
+                                item.source_size_bytes = size
+                                break
+            except Exception:
+                pass
         # Auto-complete pages that have recorded metrics but are still PENDING
         for p in page_records:
             if p.status == 'PENDING' and (p.ocr_latency_ms or p.translation_latency_ms or p.ocr_data_size_bytes or p.translation_data_size_bytes):

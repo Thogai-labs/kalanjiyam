@@ -325,11 +325,21 @@ def run_translation_for_project(
                 target_lang=target_lang,
             )
             try:
-                from kalanjiyam.utils.storage import get_storage, pdf_key
-                s_key = pdf_key(project.slug)
-                s_path = get_storage().local_copy(s_key)
-                if s_path.exists():
-                    batch_item.source_size_bytes = s_path.stat().st_size
+                from kalanjiyam.utils.storage import get_storage, pdf_key, project_docx_key
+                storage = get_storage()
+                
+                # Check for PDF first
+                for k, size in storage.list_keys(pdf_key(project.slug)):
+                    if k == pdf_key(project.slug):
+                        batch_item.source_size_bytes = size
+                        break
+                        
+                # If no PDF, check for DOCX
+                if batch_item.source_size_bytes is None:
+                    for k, size in storage.list_keys(project_docx_key(project.slug)):
+                        if k == project_docx_key(project.slug):
+                            batch_item.source_size_bytes = size
+                            break
             except Exception:
                 pass
 
