@@ -94,12 +94,28 @@ class Project(Base):
     #: A link to the book's WorldCat entry, if available.
     worldcat_link = string()
 
+    #: The document's subtitle, as printed on the title page.
+    subtitle = string()
+    #: Where this edition was published, e.g. "Madras".
+    place_of_publication = string()
+    #: The edition of this specific printing, e.g. "2nd revised edition".
+    edition = string()
+    #: The series this book belongs to, e.g. "Trivandrum Sanskrit Series No. 42".
+    series = string()
+    #: A free-text subject heading for this book.
+    subject = string()
+
     #: Markdown for this project (to entice contributors, etc.)
     description = text()
     #: Notes about the project, for internal and scholarly use.
     notes = text()
     #: Defines page numbers (e.g. "x", "vii", ...)
     page_numbers = text()
+
+    #: Extracted book metadata: detected languages, LLM content analysis,
+    #: deterministic stats, and extraction provenance. See
+    #: `kalanjiyam.utils.project_metadata` for the document shape.
+    extracted_metadata = Column(JSON, nullable=True)
 
     #: Timestamp at which this project was created.
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
