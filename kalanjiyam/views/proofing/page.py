@@ -1088,11 +1088,12 @@ def ocr(project_slug, page_slug):
                 session.add(batch_job)
                 session.flush()
 
+            project_title = getattr(project_, 'display_title', None) or project_slug
             batch_item = session.query(BatchItem).filter_by(job_id=batch_job.id, project_id=project_.id).first()
             if not batch_item:
                 batch_item = BatchItem(
                     job_id=batch_job.id,
-                    file_path=f"{project_.name} ({project_slug})",
+                    file_path=f"{project_title} ({project_slug})",
                     project_id=project_.id,
                     status='IN_PROGRESS',
                     total_pages=len(project_.pages),
@@ -1623,11 +1624,12 @@ def translate(project_slug, page_slug):
                         session.add(batch_job)
                         session.flush()
 
+                    project_title = getattr(project_, 'display_title', None) or project_slug
                     batch_item = session.query(BatchItem).filter_by(job_id=batch_job.id, project_id=project_.id).first()
                     if not batch_item:
                         batch_item = BatchItem(
                             job_id=batch_job.id,
-                            file_path=f"{project_.name} ({project_slug})",
+                            file_path=f"{project_title} ({project_slug})",
                             project_id=project_.id,
                             status='IN_PROGRESS',
                             total_pages=len(project_.pages),
