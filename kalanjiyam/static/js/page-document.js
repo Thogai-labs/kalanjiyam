@@ -342,6 +342,7 @@ export function fromOcrPayload(payload) {
   }
   if (payload.blocks && payload.blocks.length) {
     return {
+      contract_version: payload.contract_version || null,
       page_width: payload.page_width,
       page_height: payload.page_height,
       content_format: payload.content_format || 'blocks',
@@ -470,6 +471,9 @@ export function overlayBoxesFromPayload(payload, pageDocument) {
   const fromBlocks = boxesFromDocumentBlocks(pageDocument?.blocks);
   if (fromBlocks.length) return fromBlocks;
   const lines = parseBoundingBoxes(payload?.bounding_boxes);
+  if (payload?.contract_version || payload?.blocks?.length) {
+    return lines;
+  }
   return clusterBoxesToParagraphs(lines);
 }
 
@@ -506,6 +510,8 @@ export function blocksLookLikeLines(blocks, pageHeight) {
 export function reclusterDocumentBlocks(doc) {
   if (
     !doc?.blocks?.length
+    || doc.contract_version
+    || doc.blocks.some((b) => b.source)
     || hasStructuredBlocks(doc.blocks)
     || !blocksLookLikeLines(doc.blocks, doc.page_height)
   ) {
