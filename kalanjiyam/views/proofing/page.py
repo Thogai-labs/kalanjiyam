@@ -1041,6 +1041,7 @@ def ocr(project_slug, page_slug):
             source_type=ocr_response.source_type,
             coordinate_space="pixel",
             model=ocr_response.model,
+            contract_version=ocr_response.contract_version,
         )
         doc = PageDocument.from_ocr_response(
             normalized,

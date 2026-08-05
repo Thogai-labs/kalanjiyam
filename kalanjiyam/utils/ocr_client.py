@@ -243,4 +243,5 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
         coordinate_space=coordinate_space,
         model=model,
         page_confidence=_clamp_confidence(payload.get("page_confidence")),
+        contract_version=payload.get("contract_version"),
     )

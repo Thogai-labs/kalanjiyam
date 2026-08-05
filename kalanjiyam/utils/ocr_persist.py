@@ -91,6 +91,7 @@ def apply_ocr_to_page(
         source_type=ocr.source_type,
         coordinate_space="pixel",
         model=ocr.model,
+        contract_version=ocr.contract_version,
     )
     doc = PageDocument.from_ocr_response(
         normalized,
@@ -128,6 +129,7 @@ def ocr_response_to_api_dict(
         page_height=ph or ocr.page_height,
         pipeline=ocr.pipeline,
         coordinate_space="pixel",
+        contract_version=ocr.contract_version,
     )
     doc = PageDocument.from_ocr_response(
         normalized,

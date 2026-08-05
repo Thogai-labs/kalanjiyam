@@ -226,7 +226,11 @@ class PageDocument:
                 if not block.reading_order:
                     block.reading_order = i + 1
             blocks.sort(key=lambda b: b.reading_order)
-            if _blocks_look_like_lines(blocks, ph):
+            # Only attempt line-rebuilding for legacy (pre-v2) engines.
+            # v2 contract engines return intentional block structure that
+            # must be preserved — rebuilding would merge their per-line
+            # bounding boxes into oversized paragraph boxes.
+            if not ocr.contract_version and _blocks_look_like_lines(blocks, ph):
                 line_boxes = boxes or _boxes_from_blocks(blocks)
                 if line_boxes:
                     rebuilt = _blocks_from_bounding_boxes(line_boxes)
