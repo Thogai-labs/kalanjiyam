@@ -109,8 +109,13 @@
 {% if not (current_user.is_authenticated and current_user.is_super_admin) %}
   {% set routes = routes + [("download", _("Download"), url_for("proofing.project.download", slug=project.slug))] %}
 {% endif %}
-{% if is_mod %}{% set routes = routes + [
+{# Metadata is visible to anyone `moderator_required` admits, which includes
+   org admins -- `is_mod` alone would hide the tab from users who can use it. #}
+{% if current_user.is_moderator or current_user.is_org_admin or current_user.is_super_admin %}
+{% set routes = routes + [
 ("metadata", _("Metadata"), url_for("proofing.project.metadata", slug=project.slug)),
+] %}{% endif %}
+{% if is_mod %}{% set routes = routes + [
 ("admin", _("Admin"), url_for("proofing.project.admin", slug=project.slug)),
 ] %}{% endif %}
 

@@ -47,6 +47,44 @@ def test_tab_is_hidden_from_non_moderators(rama_client, moderator_client):
     assert "/metadata" in moderator_client.get("/proofing/test-project/").text
 
 
+def _org_admin_client(flask_app):
+    """An org admin: the ORG_ADMIN role *and* an organization are both needed."""
+    session = get_session()
+    user = session.query(db.User).filter_by(username="u-org-admin").first()
+    if user is None:
+        org = db.Group(slug="test-org", name="Test Org")
+        session.add(org)
+        session.flush()
+
+        # `org_admin` is seeded from SiteRole by conftest's role seeding.
+        role = session.query(db.Role).filter_by(name="org_admin").one()
+        user = db.User(username="u-org-admin", email="u_org_admin@siddhasagaram.in")
+        user.set_password("pass_org_admin")
+        user.organization_id = org.id
+        session.add(user)
+        session.flush()
+        user.roles = [role]
+        session.commit()
+
+    return flask_app.test_client(user=user)
+
+
+def test_metadata__org_admin_can_view(flask_app):
+    """`moderator_required` admits org admins, so the tab must show for them."""
+    with flask_app.app_context():
+        client = _org_admin_client(flask_app)
+    resp = client.get(URL)
+    assert resp.status_code == 200
+
+
+def test_tab_is_visible_to_org_admins(flask_app):
+    """Regression: gating the tab on `is_mod` alone hid it from users who
+    could reach the route by URL."""
+    with flask_app.app_context():
+        client = _org_admin_client(flask_app)
+    assert "/metadata" in client.get("/proofing/test-project/").text
+
+
 # Saving
 # ------
 
