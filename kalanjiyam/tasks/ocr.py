@@ -124,11 +124,9 @@ def _run_ocr_for_page_inner(
                     ocr_page.status = 'COMPLETED'
                     ocr_page.completed_at = datetime.utcnow()
 
-                    storage = get_storage()
-                    page_key = page_image_key(project.slug, page_slug)
                     try:
-                        if storage.exists(page_key):
-                            ocr_page.extracted_image_size_bytes = storage.size(page_key)
+                        if image_path and image_path.exists():
+                            ocr_page.extracted_image_size_bytes = image_path.stat().st_size
                     except Exception:
                         pass
 
@@ -138,13 +136,15 @@ def _run_ocr_for_page_inner(
 
                     page_crop_bytes = 0
                     if ocr_response.blocks:
+                        from kalanjiyam.utils.storage import editor_image_key
                         for block in ocr_response.blocks:
                             blk_id = block.get("id") if isinstance(block, dict) else getattr(block, "id", None)
                             if blk_id:
-                                c_key = f"{project.slug}/images/extracted_{blk_id}.png"
+                                c_key = editor_image_key(project.slug, f"extracted_{blk_id}.png")
                                 try:
-                                    if storage.exists(c_key):
-                                        page_crop_bytes += storage.size(c_key)
+                                    c_path = get_storage().local_copy(c_key)
+                                    if c_path.exists():
+                                        page_crop_bytes += c_path.stat().st_size
                                 except Exception:
                                     pass
                     ocr_page.cropped_image_size_bytes = page_crop_bytes
@@ -245,6 +245,16 @@ def run_ocr_for_project(
                 status='IN_PROGRESS',
                 total_pages=len(unedited_pages),
             )
+            
+            try:
+                from kalanjiyam.utils.storage import get_storage, pdf_key
+                s_key = pdf_key(project.slug)
+                s_path = get_storage().local_copy(s_key)
+                if s_path.exists():
+                    batch_item.source_size_bytes = s_path.stat().st_size
+            except Exception:
+                pass
+
             session.add(batch_item)
             session.flush()
 

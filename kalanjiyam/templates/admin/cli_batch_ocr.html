@@ -210,7 +210,7 @@
           <tr class="text-left font-semibold text-slate-600 border-b border-slate-100 bg-slate-50/50">
             <th class="px-4 py-3 font-mono text-xs">#</th>
             <th class="px-4 py-3">{{ _('Name / File Path') }}</th>
-            <th class="px-4 py-3 text-center">{{ _('Langs') }}</th>
+
             <th class="px-4 py-3 text-right">{{ _('Source Size') }}</th>
             <th class="px-4 py-3 text-right">{{ _('Extracted Images') }}</th>
             <th class="px-4 py-3 text-right">{{ _('Cropped Images') }}</th>
@@ -236,15 +236,7 @@
               </div>
               {% endif %}
             </td>
-            <td class="px-4 py-3 text-center font-mono text-xs">
-              {% if item.source_lang or item.target_lang %}
-                <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px]">
-                  {{ item.source_lang or 'auto' }} ➔ {{ item.target_lang or 'en' }}
-                </span>
-              {% else %}
-                -
-              {% endif %}
-            </td>
+
             <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
               {% if item.size_bytes %}
                 {{ (item.size_bytes / (1024*1024)) | round(2) }} MB
@@ -343,7 +335,7 @@
                     <thead class="bg-slate-100/70 text-left text-[11px] font-bold text-slate-600 uppercase">
                       <tr>
                         <th class="px-3 py-2">Page #</th>
-                        <th class="px-3 py-2 text-center">Langs</th>
+
                         <th class="px-3 py-2 text-right">Extracted Image</th>
                         <th class="px-3 py-2 text-right">Cropped Images</th>
                         <th class="px-3 py-2 text-right">OCR Data</th>
@@ -357,11 +349,7 @@
                       {% for pm in item.page_metrics %}
                       <tr class="hover:bg-slate-50">
                         <td class="px-3 py-2 font-bold text-slate-800">Page {{ pm.page_number }}</td>
-                        <td class="px-3 py-2 text-center font-mono text-[10px]">
-                          {% if pm.source_lang or pm.target_lang %}
-                            {{ pm.source_lang }}➔{{ pm.target_lang }}
-                          {% else %}-{% endif %}
-                        </td>
+
                         <td class="px-3 py-2 text-right font-mono text-slate-600">
                           {% if pm.extracted_image_size_bytes %}
                             {{ (pm.extracted_image_size_bytes / 1024) | round(1) }} KB

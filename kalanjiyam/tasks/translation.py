@@ -324,6 +324,15 @@ def run_translation_for_project(
                 source_lang=source_lang,
                 target_lang=target_lang,
             )
+            try:
+                from kalanjiyam.utils.storage import get_storage, pdf_key
+                s_key = pdf_key(project.slug)
+                s_path = get_storage().local_copy(s_key)
+                if s_path.exists():
+                    batch_item.source_size_bytes = s_path.stat().st_size
+            except Exception:
+                pass
+
             session.add(batch_item)
             session.flush()
 
