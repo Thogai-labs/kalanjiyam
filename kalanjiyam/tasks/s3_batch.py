@@ -681,6 +681,7 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                                 page_width=img_w,
                                 page_height=img_h,
                                 coordinate_space="pixel",
+                                contract_version=ocr_result.get("contract_version") if isinstance(ocr_result, dict) else None,
                             )
 
                             if ocr_resp.blocks:

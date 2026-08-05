@@ -39,6 +39,11 @@ class OcrResponse:
     model: dict | None = None
     #: Aggregate page confidence in [0, 1], if the engine provides one.
     page_confidence: float | None = None
+    #: Contract version from the OCR service response (e.g. "2.0").
+    #: When set, the platform trusts the block structure as-is and skips
+    #: heuristic line-rebuilding that would merge line-level boxes into
+    #: paragraph-level boxes.
+    contract_version: str | None = None
 
 
 SUPPORTED_ENGINES = [
