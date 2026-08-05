@@ -100,7 +100,12 @@ def _run_ocr_for_page_inner(
             # Record UI Batch OCR metrics in BatchItem / BatchOcrPage
             try:
                 page_latency_ms = (time.time() - page_start_time) * 1000.0
-                batch_item = session.query(BatchItem).filter_by(project_id=project.id).order_by(BatchItem.id.desc()).first()
+                batch_item = session.query(BatchItem).join(BatchJob).filter(
+                    BatchItem.project_id == project.id,
+                    BatchJob.job_type == 'UI_BATCH_OCR'
+                ).order_by(BatchItem.id.desc()).first()
+                if not batch_item:
+                    batch_item = session.query(BatchItem).filter_by(project_id=project.id).order_by(BatchItem.id.desc()).first()
                 if batch_item:
                     p_num = int(page_slug) if page_slug.isdigit() else page.order
                     ocr_page = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, page_number=p_num).first()
@@ -267,71 +272,3 @@ def run_ocr_for_project(
     else:
         return None
 
-
-
-
-
-def run_ocr_for_project(
-    app_env: str,
-    project: db.Project,
-    engine: str = '1',  # Default to Google OCR (1)
-    language: str = 'sa',
-    queue: str | None = None,
-) -> GroupResult | None:
-    """Create a `group` task to run OCR on a project.
-
-    Usage:
-
-    >>> r = run_ocr_for_project(...)
-    >>> progress = r.completed_count() / len(r.results)
-
-    :param app_env: Application environment
-    :param project: Project to run OCR on
-    :param engine: OCR engine to use ('google' or 'tesseract')
-    :param language: Language code for OCR (default: 'sa' for Sanskrit)
-    :param queue: The Celery queue name to route tasks to
-    :return: the Celery result, or ``None`` if no tasks were run.
-    """
-    flask_app = create_config_only_app(app_env)
-    with flask_app.app_context():
-        from sqlalchemy import or_
-        session = q.get_session()
-        bot_user = q.user(consts.BOT_USERNAME)
-        bot_user_id = bot_user.id if bot_user else None
-
-        db_project = session.query(db.Project).get(project.id)
-        if not db_project:
-            return None
-
-        # Fetch IDs of all pages in the project that have user-authored revisions
-        # (meaning author_id is None for anonymous edits, or is not the bot user)
-        edited_page_ids = {
-            row[0]
-            for row in session.query(db.Revision.page_id)
-            .filter(db.Revision.project_id == db_project.id)
-            .filter(or_(db.Revision.author_id == None, db.Revision.author_id != bot_user_id))
-            .all()
-        }
-        unedited_pages = [p for p in db_project.pages if p.id not in edited_page_ids]
-
-    if unedited_pages:
-        tasks = group(
-            run_ocr_for_page.s(
-                app_env=app_env,
-                project_slug=project.slug,
-                page_slug=p.slug,
-                engine=engine,
-                language=language,
-            )
-            for p in unedited_pages
-        )
-        if queue:
-            ret = tasks.apply_async(queue=queue)
-        else:
-            ret = tasks.apply_async()
-        # Save the result so that we can poll for it later. If we don't do
-        # this, the result won't be available at all..
-        ret.save()
-        return ret
-    else:
-        return None

@@ -178,7 +178,12 @@ def _run_translation_for_page_inner(
                 trans_latency_ms = (time.time() - start_time) * 1000.0
                 trans_data_bytes = len(translated_content.encode('utf-8'))
                 
-                batch_item = session.query(BatchItem).filter_by(project_id=project.id).order_by(BatchItem.id.desc()).first()
+                batch_item = session.query(BatchItem).join(BatchJob).filter(
+                    BatchItem.project_id == project.id,
+                    BatchJob.job_type == 'UI_BATCH_TRANSLATION'
+                ).order_by(BatchItem.id.desc()).first()
+                if not batch_item:
+                    batch_item = session.query(BatchItem).filter_by(project_id=project.id).order_by(BatchItem.id.desc()).first()
                 if batch_item:
                     p_num = int(page_slug) if page_slug.isdigit() else page.order
                     ocr_page = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, page_number=p_num).first()
