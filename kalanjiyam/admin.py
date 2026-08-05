@@ -799,6 +799,52 @@ class KalanjiyamIndexView(AdminIndexView):
             }
 
 
+def _sync_job_and_item_metrics(session, job):
+    """Auto-heal metrics: sync item/page statuses and re-aggregate totals
+    for jobs whose pages have finished processing but weren't marked COMPLETED."""
+    if not job:
+        return
+    from kalanjiyam.models.batch import BatchItem, BatchOcrPage
+    items = session.query(BatchItem).filter_by(job_id=job.id).all()
+    all_completed = True if items else False
+    for item in items:
+        page_records = (
+            session.query(BatchOcrPage)
+            .filter_by(batch_item_id=item.id)
+            .all()
+        )
+        # Auto-complete pages that have recorded metrics but are still PENDING
+        for p in page_records:
+            if p.status == 'PENDING' and (p.ocr_latency_ms or p.translation_latency_ms or p.ocr_data_size_bytes or p.translation_data_size_bytes):
+                p.status = 'COMPLETED'
+                p.completed_at = p.completed_at or datetime.utcnow()
+        completed_pages = [p for p in page_records if p.status == 'COMPLETED']
+        if completed_pages:
+            # Re-aggregate item-level totals from completed pages
+            item.total_ocr_latency_ms = sum(p.ocr_latency_ms or 0 for p in completed_pages)
+            item.total_translation_latency_ms = sum(p.translation_latency_ms or 0 for p in completed_pages)
+            item.extracted_images_size_bytes = sum(p.extracted_image_size_bytes or 0 for p in completed_pages)
+            item.cropped_images_size_bytes = sum(p.cropped_image_size_bytes or 0 for p in completed_pages)
+            item.ocr_data_size_bytes = sum(p.ocr_data_size_bytes or 0 for p in completed_pages)
+            item.translation_data_size_bytes = sum(p.translation_data_size_bytes or 0 for p in completed_pages)
+
+            target_pages = item.total_pages or len(page_records) or 1
+            if len(completed_pages) >= target_pages or job.job_type.startswith('SINGLE_PAGE_PROOFING'):
+                item.status = 'COMPLETED'
+                item.completed_at = item.completed_at or datetime.utcnow()
+
+        if item.status != 'COMPLETED':
+            all_completed = False
+
+    if all_completed and items:
+        job.status = 'COMPLETED'
+        job.completed_at = job.completed_at or datetime.utcnow()
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+
+
 class PlatformView(AdminBaseView):
     """Super-admin platform overview."""
 
@@ -889,56 +935,6 @@ class PlatformView(AdminBaseView):
             user_stats=user_stats,
             is_platform=True
         )
-
-
-def _sync_job_and_item_metrics(session, job):
-    """Sync item metrics and auto-complete jobs/items if all pages have finished processing."""
-    if not job:
-        return
-    from kalanjiyam.models.batch import BatchItem, BatchOcrPage
-    items = session.query(BatchItem).filter_by(job_id=job.id).all()
-    all_completed = True if items else False
-    for item in items:
-        page_records = (
-            session.query(BatchOcrPage)
-            .filter_by(batch_item_id=item.id)
-            .all()
-        )
-        for p in page_records:
-            if p.status == 'PENDING' and (p.ocr_latency_ms or p.translation_latency_ms or p.ocr_data_size_bytes or p.translation_data_size_bytes):
-                p.status = 'COMPLETED'
-                p.completed_at = p.completed_at or datetime.utcnow()
-        completed_pages = [p for p in page_records if p.status == 'COMPLETED']
-        if completed_pages:
-            if not item.total_ocr_latency_ms or item.total_ocr_latency_ms == 0:
-                item.total_ocr_latency_ms = sum(p.ocr_latency_ms or 0 for p in completed_pages if p.ocr_latency_ms)
-            if not item.total_translation_latency_ms or item.total_translation_latency_ms == 0:
-                item.total_translation_latency_ms = sum(p.translation_latency_ms or 0 for p in completed_pages if p.translation_latency_ms)
-            if not item.extracted_images_size_bytes:
-                item.extracted_images_size_bytes = sum(p.extracted_image_size_bytes or 0 for p in completed_pages if p.extracted_image_size_bytes)
-            if not item.cropped_images_size_bytes:
-                item.cropped_images_size_bytes = sum(p.cropped_image_size_bytes or 0 for p in completed_pages if p.cropped_image_size_bytes)
-            if not item.ocr_data_size_bytes:
-                item.ocr_data_size_bytes = sum(p.ocr_data_size_bytes or 0 for p in completed_pages if p.ocr_data_size_bytes)
-            if not item.translation_data_size_bytes:
-                item.translation_data_size_bytes = sum(p.translation_data_size_bytes or 0 for p in completed_pages if p.translation_data_size_bytes)
-
-            target_pages = item.total_pages or len(page_records) or 1
-            if len(completed_pages) >= target_pages or job.job_type.startswith('SINGLE_PAGE_PROOFING'):
-                item.status = 'COMPLETED'
-                item.completed_at = item.completed_at or datetime.utcnow()
-
-        if item.status != 'COMPLETED':
-            all_completed = False
-
-    if all_completed:
-        job.status = 'COMPLETED'
-        job.completed_at = job.completed_at or datetime.utcnow()
-    try:
-        session.commit()
-    except Exception:
-        session.rollback()
-
 
     @expose("/cli_batch_ocr")
     @expose("/cli_batch_ocr/<int:job_id>")

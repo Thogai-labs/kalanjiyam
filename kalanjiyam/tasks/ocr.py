@@ -29,7 +29,7 @@ def _run_ocr_for_page_inner(
     """Must run in the application context."""
     import time
     import json
-    from kalanjiyam.models.batch import BatchItem, BatchOcrPage
+    from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrPage
     from kalanjiyam.utils.storage import get_storage, page_image_key
 
     page_start_time = time.time()

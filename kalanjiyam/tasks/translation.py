@@ -27,6 +27,11 @@ def _run_translation_for_page_inner(
     glossary: str = None,
 ) -> int:
     """Must run in the application context."""
+    import time
+    from datetime import datetime
+    from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrPage
+    from kalanjiyam.enums import SitePageStatus
+    from kalanjiyam.utils.revisions import add_revision
 
     flask_app = create_config_only_app(app_env)
     with flask_app.app_context():
