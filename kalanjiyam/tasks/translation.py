@@ -35,6 +35,8 @@ def _run_translation_for_page_inner(
 
     flask_app = create_config_only_app(app_env)
     with flask_app.app_context():
+        start_time = time.time()
+        
         bot_user = q.user(consts.BOT_USERNAME)
         if bot_user is None:
             raise ValueError(f'User "{consts.BOT_USERNAME}" is not defined.')
