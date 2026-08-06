@@ -106,7 +106,11 @@ class Storage(ABC):
 
     @abstractmethod
     def exists(self, key: str) -> bool:
-        """Return True if the object exists."""
+        """Return True if `key` exists in storage."""
+
+    @abstractmethod
+    def size(self, key: str) -> int:
+        """Return the size in bytes of the object at `key`."""
 
     @abstractmethod
     def delete(self, key: str) -> bool:
@@ -214,6 +218,12 @@ class LocalStorage(Storage):
 
     def exists(self, key: str) -> bool:
         return self._path(key).is_file()
+
+    def size(self, key: str) -> int:
+        path = self._path(key)
+        if path.is_file():
+            return path.stat().st_size
+        return 0
 
     def delete(self, key: str) -> bool:
         path = self._path(key)
@@ -352,6 +362,13 @@ class S3Storage(Storage):
             return True
         return False
 
+    def size(self, key: str) -> int:
+        try:
+            resp = self.client.head_object(Bucket=self.bucket, Key=key)
+            return resp.get("ContentLength", 0)
+        except Exception:
+            return 0
+
     def list_keys(self, prefix: str) -> Iterator[tuple[str, int]]:
         paginator = self.client.get_paginator("list_objects_v2")
         for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
@@ -433,6 +450,11 @@ class MemoryStorage(Storage):
 
     def exists(self, key: str) -> bool:
         return key in self.files
+
+    def size(self, key: str) -> int:
+        if key in self.files:
+            return len(self.files[key])
+        return 0
 
     def delete(self, key: str) -> bool:
         if key in self.files:

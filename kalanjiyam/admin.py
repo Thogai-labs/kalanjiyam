@@ -837,11 +837,22 @@ def _sync_job_and_item_metrics(session, job):
                                 break
             except Exception:
                 pass
-        # Auto-complete pages that have recorded metrics but are still PENDING
+        # Auto-complete pages that have recorded metrics or existing DB translations but are still PENDING
         for p in page_records:
-            if p.status == 'PENDING' and (p.ocr_latency_ms or p.translation_latency_ms or p.ocr_data_size_bytes or p.translation_data_size_bytes):
-                p.status = 'COMPLETED'
-                p.completed_at = p.completed_at or datetime.utcnow()
+            if p.status == 'PENDING':
+                if p.ocr_latency_ms or p.translation_latency_ms or p.ocr_data_size_bytes or p.translation_data_size_bytes:
+                    p.status = 'COMPLETED'
+                    p.completed_at = p.completed_at or datetime.utcnow()
+                else:
+                    db_p = session.query(db.Page).filter_by(project_id=item.project_id, order=p.page_number).first()
+                    if db_p and (db_p.translations or db_p.revisions):
+                        p.status = 'COMPLETED'
+                        p.completed_at = p.completed_at or datetime.utcnow()
+                        if db_p.translations:
+                            latest_trans = db_p.translations[-1]
+                            trans_content = getattr(latest_trans, 'content', '') or ''
+                            p.translation_data_size_bytes = p.translation_data_size_bytes or len(trans_content.encode('utf-8'))
+
         completed_pages = [p for p in page_records if p.status == 'COMPLETED']
         if completed_pages:
             # Re-aggregate item-level totals from completed pages
@@ -853,7 +864,7 @@ def _sync_job_and_item_metrics(session, job):
             item.translation_data_size_bytes = sum(p.translation_data_size_bytes or 0 for p in completed_pages)
 
             target_pages = item.total_pages or len(page_records) or 1
-            if len(completed_pages) >= target_pages or job.job_type.startswith('SINGLE_PAGE_PROOFING'):
+            if len(completed_pages) >= target_pages or len(completed_pages) >= len(page_records) or job.job_type.startswith('SINGLE_PAGE_PROOFING'):
                 item.status = 'COMPLETED'
                 item.completed_at = item.completed_at or datetime.utcnow()
 

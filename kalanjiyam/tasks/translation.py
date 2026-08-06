@@ -70,6 +70,55 @@ def _run_translation_for_page_inner(
 
         if existing_translation:
             LOG.info(f"Translation already exists for {project_slug}/{page_slug} ({source_lang}->{target_lang})")
+            try:
+                trans_content = existing_translation.content or ""
+                trans_data_bytes = len(trans_content.encode('utf-8'))
+                batch_item = session.query(BatchItem).join(BatchJob).filter(
+                    BatchItem.project_id == project.id,
+                    BatchJob.job_type == 'UI_BATCH_TRANSLATION'
+                ).order_by(BatchItem.id.desc()).first()
+                if not batch_item:
+                    batch_item = session.query(BatchItem).filter_by(project_id=project.id).order_by(BatchItem.id.desc()).first()
+                if batch_item:
+                    p_num = page.order
+                    ocr_page = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, page_number=p_num).first()
+                    if not ocr_page and page_slug.isdigit():
+                        ocr_page = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, page_number=int(page_slug)).first()
+                    if not ocr_page:
+                        ocr_page = BatchOcrPage(
+                            batch_item_id=batch_item.id,
+                            chunk_id=None,
+                            page_number=p_num,
+                            status='PENDING'
+                        )
+
+                    ocr_page.translation_latency_ms = ocr_page.translation_latency_ms or 0
+                    ocr_page.translation_data_size_bytes = trans_data_bytes
+                    ocr_page.source_lang = source_lang
+                    ocr_page.target_lang = target_lang
+                    ocr_page.status = 'COMPLETED'
+                    ocr_page.completed_at = datetime.utcnow()
+                    session.add(ocr_page)
+                    session.flush()
+
+                    item_pages = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, status='COMPLETED').all()
+                    batch_item.total_translation_latency_ms = sum(p.translation_latency_ms or 0 for p in item_pages)
+                    batch_item.translation_data_size_bytes = sum(p.translation_data_size_bytes or 0 for p in item_pages)
+                    batch_item.source_lang = source_lang
+                    batch_item.target_lang = target_lang
+
+                    completed_count = len(item_pages)
+                    target_total = batch_item.total_pages or session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id).count() or 1
+                    if completed_count >= target_total:
+                        batch_item.status = 'COMPLETED'
+                        batch_item.completed_at = datetime.utcnow()
+                        if batch_item.job:
+                            batch_item.job.status = 'COMPLETED'
+                            batch_item.job.completed_at = datetime.utcnow()
+
+                    session.commit()
+            except Exception as metric_err:
+                LOG.warning(f"Error recording UI batch translation metrics for existing translation: {metric_err}")
             return existing_translation.id
 
         ensure_translation_quota_for_project(project)

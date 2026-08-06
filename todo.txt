@@ -1,0 +1,35 @@
+===============================================================================
+IMPLEMENTATION PLAN: STRATEGY B (UNIFIED PAGEDOCUMENT MODEL FOR STORAGE)
+===============================================================================
+
+Goal:
+  Eliminate redundant /ocr/{page_slug}.json.gz storage payloads by deriving 
+  bounding boxes directly from the unified PageDocument revision payload 
+  (stored in /revisions/{page_slug}/{tag}_v{version}.json.gz).
+
+Benefits at 20 Million Pages Scale:
+  - 50% Reduction in S3 Object Count (20M fewer S3 objects)
+  - ~200 GB Storage Savings (eliminates duplicate coordinate payloads)
+  - 50% Reduction in S3 Write IOPS during OCR processing
+  - Single Source of Truth for document layout and coordinates
+
+-------------------------------------------------------------------------------
+Tasks:
+-------------------------------------------------------------------------------
+
+1. [ ] Update OCR Persistence Pipeline
+   - File: kalanjiyam/utils/ocr_persist.py
+   - Task: Remove call to `save_page_ocr(page, page.ocr_bounding_boxes)` in `apply_ocr_to_page()`.
+
+2. [ ] Update Read Path for Bounding Boxes
+   - File: kalanjiyam/utils/document_storage.py
+   - Task: Update `load_page_ocr(page)` to load the latest revision document (`load_revision_document(latest_rev)`) and dynamically derive bounding box JSON from `PageDocument.blocks`.
+
+3. [ ] Deprecate Raw Page OCR Storage Key
+   - File: kalanjiyam/utils/storage.py
+   - Task: Deprecate/remove `page_ocr_key(project_slug, page_slug)` for new write calls.
+
+4. [ ] One-Time Storage Cleanup Script (Optional)
+   - Task: Create a script to prune historical `projects/*/ocr/*.json.gz` keys from S3/VersityGW storage when ready to reclaim disk space.
+
+===============================================================================

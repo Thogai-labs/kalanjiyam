@@ -284,16 +284,22 @@
               {{ item.pages }}
             </td>
             <td class="px-4 py-3 text-right font-mono text-xs text-slate-700">
-              {% if item.time_took_sec is not none %}
-                {{ item.time_took_sec }}s (OCR)
+              {% if item.time_took_sec is not none and item.translation_time_took_sec is not none %}
+                <div>{{ item.time_took_sec }}s <span class="text-[10px] text-slate-400">(OCR)</span></div>
+                <div>{{ item.translation_time_took_sec }}s <span class="text-[10px] text-indigo-500">(Trans)</span></div>
+              {% elif item.time_took_sec is not none %}
+                {{ item.time_took_sec }}s <span class="text-[10px] text-slate-400">(OCR)</span>
               {% elif item.translation_time_took_sec is not none %}
-                {{ item.translation_time_took_sec }}s (Trans)
+                {{ item.translation_time_took_sec }}s <span class="text-[10px] text-indigo-500">(Trans)</span>
               {% else %}
                 -
               {% endif %}
             </td>
             <td class="px-4 py-3 text-right font-mono text-xs text-indigo-600 font-semibold">
-              {% if item.avg_per_page_sec is not none %}
+              {% if item.avg_per_page_sec is not none and item.avg_trans_per_page_sec is not none %}
+                <div>{{ item.avg_per_page_sec }}s/p <span class="text-[10px] text-slate-400">(OCR)</span></div>
+                <div>{{ item.avg_trans_per_page_sec }}s/p <span class="text-[10px] text-indigo-500">(Trans)</span></div>
+              {% elif item.avg_per_page_sec is not none %}
                 {{ item.avg_per_page_sec }}s/p
               {% elif item.avg_trans_per_page_sec is not none %}
                 {{ item.avg_trans_per_page_sec }}s/p
