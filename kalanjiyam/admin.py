@@ -2309,6 +2309,7 @@ class OrgAdminView(AdminBaseView):
         output = io.StringIO()
         writer = csv.writer(output)
 
+        writer.writerow([
             "Item ID",
             "Name / File Path",
             "Source Lang",
@@ -2412,6 +2413,7 @@ class OrgAdminView(AdminBaseView):
         output = io.StringIO()
         writer = csv.writer(output)
 
+        writer.writerow([
             "Item ID",
             "Name / File Path",
             "Page Number",
