@@ -1,7 +1,7 @@
 # Environment. Valid values are: local, staging, prod
 KALANJIYAM_DEPLOYMENT_ENV=local
 KALANJIYAM_HOST_IP=0.0.0.0
-KALANJIYAM_HOST_PORT=5001
+KALANJIYAM_HOST_PORT=5002
 
 # Control the verbosity of messages using a flag
 ifdef mode

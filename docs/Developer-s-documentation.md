@@ -52,11 +52,11 @@
    Container kalanjiyam-web-dev    Started
    Container kalanjiyam-db-dev     Started
    Kalanjiyam WebApp   : ✔ 
-   Kalanjiyam URL      : http://0.0.0.0:5001
+   Kalanjiyam URL      : http://0.0.0.0:5002
    
    To stop, run "make docker-stop".
    ```
-7. Visit the site at [http://localhost:5001](http://localhost:5001).
+7. Visit the site at [http://localhost:5002](http://localhost:5002).
 
 ## Managing Users & Organizations via the CLI
 
@@ -695,7 +695,7 @@ To transition from local development to a live production environment, follow th
 
 ### 1. Deploy the Standalone OCR Service First
 * The OCR service is a resource-intensive standalone service. It must be deployed and running **before** the main Flask application starts processing projects.
-* Ensure it is running on port `5001` (or your configured port).
+* Ensure it is running on port `5002` (or your configured port).
 * Verify that the main Flask application's `.env` configuration has the correct `OCR_SERVICE_URL` and `OCR_SERVICE_API_KEY`.
 
 ### 2. Use PostgreSQL instead of SQLite
