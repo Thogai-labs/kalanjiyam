@@ -29,8 +29,53 @@ LOG = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+def _derive_bounding_boxes_from_document(doc_dict: dict | None) -> str | None:
+    """Dynamically derive bounding box JSON payload from a PageDocument dict's blocks."""
+    if not doc_dict or not isinstance(doc_dict, dict):
+        return None
+    blocks = doc_dict.get("blocks")
+    if not isinstance(blocks, list) or not blocks:
+        return None
+    boxes: list[dict[str, Any]] = []
+    for b in blocks:
+        if not isinstance(b, dict):
+            continue
+        words = b.get("words")
+        if isinstance(words, list) and words:
+            for w in words:
+                if isinstance(w, dict):
+                    wbox = w.get("bbox")
+                    wtext = w.get("text") if w.get("text") is not None else (w.get("content") or "")
+                    if isinstance(wbox, (list, tuple)) and len(wbox) >= 4:
+                        boxes.append({
+                            "x1": float(wbox[0]),
+                            "y1": float(wbox[1]),
+                            "x2": float(wbox[2]),
+                            "y2": float(wbox[3]),
+                            "text": str(wtext),
+                        })
+        else:
+            bbox = b.get("bbox")
+            content = b.get("content") or ""
+            if isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
+                x1, y1, x2, y2 = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
+                if x2 > x1 or y2 > y1 or (x1 != 0 or y1 != 0 or x2 != 0 or y2 != 0):
+                    boxes.append({
+                        "x1": x1,
+                        "y1": y1,
+                        "x2": x2,
+                        "y2": y2,
+                        "text": str(content),
+                    })
+    if not boxes:
+        return None
+    import json
+
+    return json.dumps(boxes, ensure_ascii=False)
+
+
 def save_page_ocr(page: Any, ocr_text: str) -> bool:
-    """Persist OCR bounding-box text to object storage.
+    """[DEPRECATED] Persist OCR bounding-box text to object storage.
 
     If object storage write fails (e.g., S3/VersityGW down), falls back
     to saving in DB column `ocr_bounding_boxes` so data is never lost.
@@ -54,21 +99,44 @@ def save_page_ocr(page: Any, ocr_text: str) -> bool:
 
 
 def load_page_ocr(page: Any) -> str | None:
-    """Load OCR bounding-box text, trying S3/VersityGW first, then DB.
+    """Load OCR bounding-box text for a page.
 
-    Returns ``None`` when no OCR data exists in either location.
+    Under Strategy B (Unified PageDocument Model), this first attempts to load
+    the page's latest revision document (`load_revision_document(latest_rev)`)
+    and dynamically derive bounding box JSON from `PageDocument.blocks`.
+
+    If missing or no revision exists, it falls back to reading the legacy S3/VersityGW
+    `/ocr/{page_slug}.json.gz` key or legacy PostgreSQL column.
+
+    Returns ``None`` when no OCR data exists in any location.
     """
-    from kalanjiyam.utils.storage import get_storage, page_ocr_key
+    revisions = getattr(page, "revisions", None)
+    if revisions:
+        try:
+            latest_rev = revisions[-1] if isinstance(revisions, (list, tuple)) else list(revisions)[-1]
+            doc_dict = load_revision_document(latest_rev)
+            derived = _derive_bounding_boxes_from_document(doc_dict)
+            if derived is not None:
+                return derived
+        except Exception as err:
+            LOG.warning(
+                "Failed to derive bounding boxes from page %s revision: %s",
+                getattr(page, "slug", page),
+                err,
+            )
 
+    # Legacy dual-read fallback: S3 / VersityGW payload
     project = getattr(page, "project", None)
     if project is not None:
         try:
+            from kalanjiyam.utils.storage import get_storage, page_ocr_key
+
             key = page_ocr_key(project.slug, page.slug)
             data = get_storage().load_json_gz(key)
             if data is not None:
                 return data
         except Exception as err:
-            LOG.warning("Failed to fetch page %s OCR from S3: %s", page.slug, err)
+            LOG.warning("Failed to fetch page %s OCR from S3: %s", getattr(page, "slug", page), err)
 
     # Fallback: legacy PostgreSQL column
     return getattr(page, "ocr_bounding_boxes", None)

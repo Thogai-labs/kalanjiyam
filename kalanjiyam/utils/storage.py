@@ -72,7 +72,13 @@ def docx_translation_key(docx_id: str) -> str:
 
 
 def page_ocr_key(project_slug: str, page_slug: str) -> str:
-    """Key for a page's raw OCR bounding-box payload (gzipped JSON)."""
+    """[DEPRECATED for write calls] Key for a page's raw OCR bounding-box payload (gzipped JSON).
+
+    Under Strategy B (Unified PageDocument Model), new OCR processing no longer
+    writes separate `/ocr/{page_slug}.json.gz` storage objects. Bounding boxes
+    are derived dynamically from revision documents (`PageDocument.blocks`).
+    This function remains for legacy read fallback and storage cleanup scripts.
+    """
     return f"projects/{project_slug}/ocr/{page_slug}.json.gz"
 
 
