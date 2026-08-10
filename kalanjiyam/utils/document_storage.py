@@ -166,37 +166,86 @@ def get_page_revision_index(revision: Any) -> int:
 
 
 def derive_revision_tag(revision: Any) -> str:
-    """Derive a human-readable semantic tag for S3 key naming (e.g. ocr, trans, user-john)."""
+    """Derive a human-readable semantic tag for S3 key naming.
+
+    Formats according to requirements:
+      - OCR models: ocr-<model_name> (e.g. ocr-google, ocr-tesseract)
+      - Translation models: translation-<model_name>_<src>-<tgt> (e.g. translation-nayan_sa-en)
+      - User edits: user-<username> (or user-guest)
+    """
     if revision is None:
         return "rev"
 
+    from slugify import slugify
+
+    page_version = getattr(revision, "page_version", None)
+    version_key = getattr(page_version, "version_key", "") if page_version else ""
     summary = (getattr(revision, "summary", "") or "").lower()
 
-    # 1. OCR engine run
+    # 1. Check version_key first
+    if version_key:
+        if version_key.startswith("ocr:"):
+            engine = version_key.split("ocr:", 1)[1]
+            return f"ocr-{slugify(engine)}"
+        elif version_key.startswith("translation:"):
+            parts = version_key.split(":", 2)
+            engine = parts[1] if len(parts) > 1 else "model"
+            langs_str = parts[2] if len(parts) > 2 else ""
+            if "->" in langs_str:
+                src, tgt = langs_str.split("->", 1)
+                return f"translation-{slugify(engine)}_{slugify(src)}-{slugify(tgt)}"
+            elif langs_str:
+                return f"translation-{slugify(engine)}_{slugify(langs_str)}"
+            else:
+                return f"translation-{slugify(engine)}"
+
+    # 2. Check translation relation on revision
+    translations = getattr(revision, "translations", None)
+    if translations:
+        try:
+            trans = translations[0] if isinstance(translations, (list, tuple)) else list(translations)[0]
+            engine = getattr(trans, "translation_engine", None) or "model"
+            src = getattr(trans, "source_language", None) or "src"
+            tgt = getattr(trans, "target_language", None) or "tgt"
+            return f"translation-{slugify(engine)}_{slugify(src)}-{slugify(tgt)}"
+        except Exception:
+            pass
+
+    # 3. Check summary heuristics
     if "ocr" in summary:
+        import re
+        match = re.search(r'ocr[:\s\(\-]+([a-zA-Z0-9_\-]+)', summary, re.IGNORECASE)
+        if match:
+            engine = match.group(1).strip()
+            if engine and engine.lower() != "run":
+                return f"ocr-{slugify(engine)}"
         return "ocr"
 
-    # 2. Translation run
     if "translation" in summary or "translated" in summary:
+        import re
+        match = re.search(r'translation[:\s]+([a-zA-Z0-9_\-]+)\s+([a-z]{2,3})\-\>([a-z]{2,3})', summary, re.IGNORECASE)
+        if match:
+            engine, src, tgt = match.groups()
+            return f"translation-{slugify(engine)}_{slugify(src)}-{slugify(tgt)}"
         return "trans"
 
-    # 3. Registered User Edit
+    # 4. Registered User Edit
     author = getattr(revision, "author", None)
     if author and getattr(author, "username", None):
-        from slugify import slugify
-
         return f"user-{slugify(author.username)}"
 
-    # 4. Guest / Anonymous edit
+    # 5. Guest / Anonymous edit
     return "user-guest"
 
 
 def save_revision_document(revision: Any, document: dict) -> bool:
     """Persist a revision's structured block document to object storage.
 
+    Ensures timestamp is embedded inside user/model document JSON payload.
     If S3/VersityGW write fails, falls back to saving in DB column `document`.
     Returns True if written to S3, False if fell back to DB.
     """
+    from datetime import datetime
     from kalanjiyam.utils.storage import get_project_org_slug, get_storage, revision_document_key
 
     try:
@@ -206,6 +255,16 @@ def save_revision_document(revision: Any, document: dict) -> bool:
         v_num = get_page_revision_index(revision)
         tag = derive_revision_tag(revision)
         key = revision_document_key(project.slug, page.slug, v_num, tag=tag, org_slug=org_slug)
+
+        # Ensure timestamp is inside JSON payload
+        if isinstance(document, dict):
+            if "timestamp" not in document:
+                created_dt = getattr(revision, "created", None) or getattr(revision, "created_at", None)
+                if hasattr(created_dt, "isoformat"):
+                    document["timestamp"] = created_dt.isoformat()
+                else:
+                    document["timestamp"] = datetime.utcnow().isoformat()
+
         get_storage().save_json_gz(key, document)
         return True
     except Exception as err:
@@ -233,23 +292,33 @@ def load_revision_document(revision: Any) -> dict | None:
         v_num = get_page_revision_index(revision)
         tag = derive_revision_tag(revision)
 
-        # 1. Try page-local tagged key first (e.g. user-john_v1.json.gz)
+        # 1. Try page-local model/user tagged key first (e.g. ocr-google_v1.json.gz, translation-nayan_sa-en_v1.json.gz, user-john_v1.json.gz)
         try:
             key = revision_document_key(project.slug, page.slug, v_num, tag=tag, org_slug=org_slug)
             data = storage.load_json_gz(key)
             if data is not None:
                 return data
         except Exception as err:
-            LOG.warning("Failed to fetch revision %s document from S3: %s", revision.id, err)
+            LOG.warning("Failed to fetch revision %s document from S3: %s", getattr(revision, "id", revision), err)
 
-        # 2. Try untagged version key & DB ID fallback keys
-        fallback_keys = [
+        # 2. Try untagged & legacy fallback keys (ocr_v1.json.gz, trans_v1.json.gz, etc.)
+        fallback_tags = []
+        if tag.startswith("ocr-"):
+            fallback_tags.append("ocr")
+        if tag.startswith("translation-"):
+            fallback_tags.append("trans")
+
+        fallback_keys = []
+        for ftag in fallback_tags:
+            fallback_keys.append(revision_document_key(project.slug, page.slug, v_num, tag=ftag, org_slug=org_slug))
+
+        fallback_keys.extend([
             revision_document_key(project.slug, page.slug, v_num, tag="", org_slug=org_slug),
             revision_document_key(project.slug, page.slug, v_num, tag=tag, org_slug="open-tenant"),
-            f"projects/{project.slug}/revisions/{page.slug}/{tag}_rev{revision.id}.json.gz",
-            f"projects/{project.slug}/revisions/{page.slug}/rev{revision.id}.json.gz",
-            f"projects/{project.slug}/revisions/{page.slug}/{revision.id}.json.gz",
-        ]
+            f"projects/{project.slug}/revisions/{page.slug}/{tag}_rev{getattr(revision, 'id', '')}.json.gz",
+            f"projects/{project.slug}/revisions/{page.slug}/rev{getattr(revision, 'id', '')}.json.gz",
+            f"projects/{project.slug}/revisions/{page.slug}/{getattr(revision, 'id', '')}.json.gz",
+        ])
         for fkey in fallback_keys:
             try:
                 data = storage.load_json_gz(fkey)

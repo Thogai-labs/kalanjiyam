@@ -75,10 +75,31 @@ def _promote_org_admin(session, org: db.Group, admin_user_id: int | None) -> Non
 def _schedule_zip_cleanup(zip_path: Path) -> None:
     """Delete export ZIP after the response is sent."""
 
-    @after_this_request
-    def _cleanup(response):
-        zip_path.unlink(missing_ok=True)
-        return response
+def _export_revision_payloads(project: db.Project, files_dir: Path) -> None:
+    """Save model-named .json.gz revision payloads into files/revisions/{page_slug}/."""
+    import gzip
+    from kalanjiyam.utils.document_storage import derive_revision_tag, get_page_revision_index, load_revision_document
+
+    revisions_dir = files_dir / "revisions"
+    for page in project.pages:
+        page_rev_dir = revisions_dir / page.slug
+        for revision in page.revisions:
+            doc = load_revision_document(revision)
+            if doc is not None:
+                page_rev_dir.mkdir(parents=True, exist_ok=True)
+                tag = derive_revision_tag(revision)
+                v_num = get_page_revision_index(revision)
+                filename = f"{tag}_v{v_num}.json.gz"
+                payload_path = page_rev_dir / filename
+                if isinstance(doc, dict) and "timestamp" not in doc:
+                    created_dt = getattr(revision, "created", None)
+                    doc["timestamp"] = created_dt.isoformat() if hasattr(created_dt, "isoformat") else str(created_dt or "")
+                raw = (
+                    doc.encode("utf-8")
+                    if isinstance(doc, str)
+                    else json.dumps(doc, ensure_ascii=False).encode("utf-8")
+                )
+                payload_path.write_bytes(gzip.compress(raw))
 
 
 class KalanjiyamIndexView(AdminIndexView):
@@ -155,6 +176,9 @@ class KalanjiyamIndexView(AdminIndexView):
                 if image_path.exists():
                     image_dest = pages_dir / f"{page.slug}.jpg"
                     image_dest.write_bytes(image_path.read_bytes())
+
+            # Export revision payloads as model-named .json.gz files
+            _export_revision_payloads(project, project_files_dir)
             
             # Create ZIP file
             zip_path = export_dir.parent / f"{project_slug}_export.zip"
@@ -234,6 +258,9 @@ class KalanjiyamIndexView(AdminIndexView):
                     image_path = get_page_image_filepath(project.slug, page.slug)
                     if image_path.exists():
                         (pages_dir / f"{page.slug}.jpg").write_bytes(image_path.read_bytes())
+
+                # Export revision payloads as model-named .json.gz files
+                _export_revision_payloads(project, files_dir)
 
             json_file = export_dir / "all_projects_data.json"
             with open(json_file, 'w', encoding='utf-8') as f:
@@ -434,7 +461,7 @@ class KalanjiyamIndexView(AdminIndexView):
                 return redirect(request.url)
         
         return render_template("admin/import_all.html")
-    
+
     def _export_project_data(self, project: db.Project) -> Dict[str, Any]:
         """Export all data for a single project."""
         session = q.get_session()
@@ -472,7 +499,7 @@ class KalanjiyamIndexView(AdminIndexView):
         
         # Export pages
         for page in project.pages:
-            from kalanjiyam.utils.document_storage import load_page_ocr, load_revision_document
+            from kalanjiyam.utils.document_storage import derive_revision_tag, get_page_revision_index, load_page_ocr, load_revision_document
 
             page_data = {
                 'slug': page.slug,
@@ -487,16 +514,59 @@ class KalanjiyamIndexView(AdminIndexView):
             
             # Export revisions for this page
             for revision in page.revisions:
+                doc_payload = load_revision_document(revision)
+                tag = derive_revision_tag(revision)
+                v_num = get_page_revision_index(revision)
+                page_version = getattr(revision, "page_version", None)
+                version_key = getattr(page_version, "version_key", "") if page_version else ""
+
+                if isinstance(doc_payload, dict) and "timestamp" not in doc_payload:
+                    created_dt = getattr(revision, "created", None)
+                    doc_payload["timestamp"] = created_dt.isoformat() if hasattr(created_dt, "isoformat") else str(created_dt or "")
+
+                ocr_model = None
+                trans_model = None
+                src_lang = None
+                tgt_lang = None
+
+                if version_key.startswith("ocr:"):
+                    ocr_model = version_key.split("ocr:", 1)[1]
+                elif tag.startswith("ocr-"):
+                    ocr_model = tag.split("ocr-", 1)[1]
+
+                if version_key.startswith("translation:"):
+                    parts = version_key.split(":", 2)
+                    if len(parts) >= 2:
+                        trans_model = parts[1]
+                    if len(parts) >= 3 and "->" in parts[2]:
+                        src_lang, tgt_lang = parts[2].split("->", 1)
+                elif revision.translations:
+                    t = revision.translations[0]
+                    trans_model = t.translation_engine
+                    src_lang = t.source_language
+                    tgt_lang = t.target_language
+                elif tag.startswith("translation-"):
+                    trans_model = tag.split("translation-", 1)[1]
+
+                payload_filename = f"{tag}_v{v_num}.json.gz"
+
                 revision_data = {
                     'revision_key': revision.id,
                     'page_slug': page.slug,
+                    'version_key': version_key,
+                    'tag': tag,
+                    'payload_filename': payload_filename,
+                    'ocr_model': ocr_model,
+                    'translation_model': trans_model,
+                    'source_language': src_lang,
+                    'target_language': tgt_lang,
                     'author_username': revision.author.username if revision.author else None,
                     'status_name': revision.status.name if revision.status else None,
-                    'created': revision.created.isoformat(),
+                    'created': revision.created.isoformat() if hasattr(revision.created, "isoformat") else str(revision.created),
                     'summary': revision.summary,
                     'content': revision.content,
                     'content_format': getattr(revision, 'content_format', 'plain'),
-                    'document': load_revision_document(revision),
+                    'document': doc_payload,
                 }
                 project_data['revisions'].append(revision_data)
                 
