@@ -184,6 +184,99 @@ def _assign_projects_to_org(session: Session, org_slug: str, apply: bool) -> int
     return assigned
 
 
+def _migrate_project_storage_folders(session: Session, apply: bool) -> tuple[int, list[str]]:
+    """Migrate historical project folders (projects/<slug> or projects/open-tenant/<slug>) to projects/<org_slug>/<slug>."""
+    from kalanjiyam.utils.storage import get_storage, LocalStorage, S3Storage
+    from kalanjiyam.config import create_config_only_app
+    import os
+
+    app = None
+    env = os.environ.get("FLASK_ENV") or os.environ.get("APP_ENV") or "production"
+    try:
+        app = create_config_only_app(env)
+    except Exception:
+        try:
+            app = create_config_only_app("default")
+        except Exception:
+            pass
+
+    migrated_count = 0
+    logs = []
+
+    def _do_migration():
+        nonlocal migrated_count
+        try:
+            storage = get_storage()
+        except Exception as e:
+            logs.append(f"Storage backend unavailable: {e}")
+            return
+
+        projects = session.query(db.Project).all()
+
+        for project in projects:
+            if not project.groups:
+                continue
+            org_slug = project.groups[0].slug
+            p_slug = project.slug
+
+            if isinstance(storage, LocalStorage):
+                root = storage.root / "projects"
+                legacy_dir = root / p_slug
+                open_tenant_dir = root / "open-tenant" / p_slug
+                target_dir = root / org_slug / p_slug
+
+                source_dir = None
+                if legacy_dir.is_dir() and legacy_dir.resolve() != target_dir.resolve():
+                    source_dir = legacy_dir
+                elif open_tenant_dir.is_dir() and open_tenant_dir.resolve() != target_dir.resolve() and org_slug != "open-tenant":
+                    source_dir = open_tenant_dir
+
+                if source_dir is not None:
+                    msg = f"Move storage folder {source_dir.relative_to(storage.root)} -> projects/{org_slug}/{p_slug}"
+                    logs.append(msg)
+                    migrated_count += 1
+                    if apply:
+                        target_dir.parent.mkdir(parents=True, exist_ok=True)
+                        import shutil
+                        shutil.move(str(source_dir), str(target_dir))
+            elif isinstance(storage, S3Storage):
+                legacy_prefix = f"projects/{p_slug}/"
+                open_tenant_prefix = f"projects/open-tenant/{p_slug}/"
+                target_prefix = f"projects/{org_slug}/{p_slug}/"
+
+                src_prefix = None
+                keys = list(storage.list_keys(legacy_prefix))
+                if keys:
+                    src_prefix = legacy_prefix
+                elif org_slug != "open-tenant":
+                    keys = list(storage.list_keys(open_tenant_prefix))
+                    if keys:
+                        src_prefix = open_tenant_prefix
+
+                if src_prefix and src_prefix != target_prefix:
+                    msg = f"Move S3 prefix {src_prefix} -> {target_prefix} ({len(keys)} objects)"
+                    logs.append(msg)
+                    migrated_count += 1
+                    if apply:
+                        for k, _size in keys:
+                            rel = k[len(src_prefix):]
+                            dest_key = f"{target_prefix}{rel}"
+                            try:
+                                data = storage.read_bytes(k)
+                                storage.save(dest_key, data)
+                                storage.delete(k)
+                            except Exception as e:
+                                logs.append(f"  [ERROR] Copy {k} -> {dest_key}: {e}")
+
+    if app is not None:
+        with app.app_context():
+            _do_migration()
+    else:
+        _do_migration()
+
+    return migrated_count, logs
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -248,6 +341,12 @@ def main() -> int:
                 f"{'Assigned' if args.apply else 'Would assign'} "
                 f"{assigned} ungrouped project(s) to org {args.default_org_slug!r}."
             )
+
+        storage_count, storage_logs = _migrate_project_storage_folders(session, args.apply)
+        if storage_logs:
+            print(f"\n{'Migrated' if args.apply else 'Would migrate'} {storage_count} project storage folder(s):")
+            for log in storage_logs:
+                print(f"  - {log}")
 
         if not args.apply and exit_code:
             print("\nRe-run with --apply to apply safe fixes.")
