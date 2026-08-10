@@ -475,28 +475,25 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
             chunk.error_message = "Parent item or project missing"
             session.commit()
             _finalize_batch_item_status(session, chunk.batch_item_id)
-            return
-
         project = session.query(db.Project).get(item.project_id)
         storage = get_storage()
 
-        # Resolve OCR service endpoint
+        # Resolve OCR service endpoint targets (primary + secondary)
         from flask import current_app
-        batch_ocr_url = (
-            os.environ.get("BATCH_OCR_SERVICE_URL")
-            or current_app.config.get("BATCH_OCR_SERVICE_URL")
-            or os.environ.get("OCR_SERVICE_URL")
-            or current_app.config.get("OCR_SERVICE_URL", "")
-        ).rstrip("/")
+        raw_urls = [
+            os.environ.get("BATCH_OCR_SERVICE_URL") or current_app.config.get("BATCH_OCR_SERVICE_URL"),
+            os.environ.get("OCR_SERVICE_URL") or current_app.config.get("OCR_SERVICE_URL"),
+            os.environ.get("OCR_SERVICE_URL_2") or current_app.config.get("OCR_SERVICE_URL_2"),
+        ]
+        ocr_targets = []
+        for u in raw_urls:
+            if u:
+                u_clean = u.rstrip("/")
+                target_url = u_clean if (u_clean.endswith("/v1/ocr") or u_clean.endswith("/ocr")) else f"{u_clean}/v1/ocr"
+                if target_url not in ocr_targets:
+                    ocr_targets.append(target_url)
 
-        batch_ocr_api_key = (
-            os.environ.get("BATCH_OCR_API_KEY")
-            or current_app.config.get("BATCH_OCR_API_KEY")
-            or os.environ.get("OCR_SERVICE_API_KEY")
-            or current_app.config.get("OCR_SERVICE_API_KEY", "")
-        )
-
-        if not batch_ocr_url:
+        if not ocr_targets:
             chunk.status = 'FAILED'
             chunk.error_message = 'BATCH_OCR_SERVICE_URL / OCR_SERVICE_URL is not configured'
             chunk.completed_at = datetime.utcnow()
@@ -504,14 +501,12 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
             _finalize_batch_item_status(session, chunk.batch_item_id)
             return
 
-        headers = {"Accept": "application/json"}
-        if batch_ocr_api_key:
-            headers["X-API-Key"] = batch_ocr_api_key
-
-        if batch_ocr_url.endswith("/v1/ocr") or batch_ocr_url.endswith("/ocr"):
-            url = batch_ocr_url
-        else:
-            url = f"{batch_ocr_url}/v1/ocr"
+        batch_ocr_api_key = (
+            os.environ.get("BATCH_OCR_API_KEY")
+            or current_app.config.get("BATCH_OCR_API_KEY")
+            or os.environ.get("OCR_SERVICE_API_KEY")
+            or current_app.config.get("OCR_SERVICE_API_KEY", "")
+        )
 
         engine = "tesseract"
         language = language or "eng"
@@ -525,7 +520,7 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
             with tempfile.TemporaryDirectory() as tmp_dir:
                 tmp_dir_path = Path(tmp_dir)
                 timeout_config = httpx.Timeout(300.0, connect=30.0)
-                
+
                 with httpx.Client(timeout=timeout_config) as client:
                     for n in range(chunk.start_page, chunk.end_page + 1):
                         session.expire_all()
@@ -556,32 +551,43 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                         page_key = page_image_key(project.slug, str(n))
                         img_bytes = storage.read_bytes(page_key)
 
-                        retries = 3
-                        backoff = 2
+                        retries = 2
                         ocr_result = None
                         page_start = time.time()
 
-                        for attempt in range(retries):
-                            try:
-                                files = {"file": (f"page_{n}.jpg", img_bytes, "image/jpeg")}
-                                params = {"language": language} if language else {}
-                                resp = client.post(url, files=files, params=params, headers=headers)
-                                resp.raise_for_status()
+                        for target_url in ocr_targets:
+                            headers = {"Accept": "application/json"}
+                            if batch_ocr_api_key:
+                                headers["X-API-Key"] = batch_ocr_api_key
+                            backoff = 2
+
+                            for attempt in range(retries):
                                 try:
-                                    ocr_result = resp.json()
-                                except Exception:
-                                    ocr_result = resp.text
+                                    files = {"image": (f"page_{n}.jpg", img_bytes, "image/jpeg"), "file": (f"page_{n}.jpg", img_bytes, "image/jpeg")}
+                                    data = {"engine": engine, "language": language}
+                                    params = {"language": language} if language else {}
+                                    resp = client.post(target_url, files=files, data=data, params=params, headers=headers)
+                                    resp.raise_for_status()
+                                    try:
+                                        ocr_result = resp.json()
+                                    except Exception:
+                                        ocr_result = resp.text
+                                    break
+                                except Exception as e:
+                                    if attempt == retries - 1:
+                                        LOG.warning(f"OCR HTTP request failed at {target_url} for page {n} after {retries} attempts: {e}")
+                                    else:
+                                        time.sleep(backoff)
+                                        backoff *= 2
+                            if ocr_result:
                                 break
-                            except Exception as e:
-                                if attempt == retries - 1:
-                                    LOG.warning(f"OCR HTTP request failed for page {n} after {retries} attempts: {e}")
-                                    ocr_page.status = 'FAILED'
-                                    ocr_page.error_message = str(e)
-                                    ocr_page.completed_at = datetime.utcnow()
-                                    session.commit()
-                                else:
-                                    time.sleep(backoff)
-                                    backoff *= 2
+
+                        if not ocr_result:
+                            ocr_page.status = 'FAILED'
+                            ocr_page.error_message = "All configured OCR service targets failed"
+                            ocr_page.completed_at = datetime.utcnow()
+                            session.commit()
+                            continue
 
                         page_latency = (time.time() - page_start) * 1000
                         chunk_ocr_latency += page_latency

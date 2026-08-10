@@ -236,3 +236,44 @@ def test_run_ocr_remote_parses_v2_contract_fields(flask_app, tmp_path):
         assert result.model == {"name": "surya-rec", "version": "0.6.1"}
         assert result.page_confidence == 0.91
         assert result.blocks[0]["words"][1]["confidence"] == 0.41
+
+
+def test_run_ocr_remote_fallback_to_secondary_url(flask_app, tmp_path):
+    img = tmp_path / "page.jpg"
+    img.write_bytes(b"fake")
+    with flask_app.app_context():
+        flask_app.config.update(
+            OCR_SERVICE_URL="http://primary-ocr.test",
+            OCR_SERVICE_URL_2="http://fallback-ocr.test",
+            OCR_SERVICE_API_KEY="key1",
+            OCR_SERVICE_API_KEY_2="key2",
+            OCR_SERVICE_TIMEOUT=30,
+        )
+
+        mock_primary_response = MagicMock()
+        mock_primary_response.status_code = 503
+        mock_primary_response.text = "Primary service unavailable"
+
+        mock_secondary_response = MagicMock()
+        mock_secondary_response.status_code = 200
+        mock_secondary_response.json.return_value = {
+            "source_type": "scan",
+            "page_width": 1000,
+            "page_height": 1000,
+            "blocks": [{"id": "b1", "type": "paragraph", "bbox": [0, 0, 100, 100], "reading_order": 1, "content": "fallback text", "confidence": 0.95}],
+        }
+
+        with patch("kalanjiyam.utils.ocr_client.httpx.Client") as client_cls:
+            client = client_cls.return_value.__enter__.return_value
+            client.post.side_effect = [mock_primary_response, mock_secondary_response]
+
+            from kalanjiyam.utils.ocr_client import run_ocr_remote
+
+            result = run_ocr_remote(img, "dots_ocr", "sa")
+
+        assert result.blocks[0]["content"] == "fallback text"
+        assert client.post.call_count == 2
+        first_call = client.post.call_args_list[0]
+        second_call = client.post.call_args_list[1]
+        assert first_call[0][0] == "http://primary-ocr.test/v1/ocr"
+        assert second_call[0][0] == "http://fallback-ocr.test/v1/ocr"

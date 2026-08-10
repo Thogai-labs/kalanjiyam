@@ -129,119 +129,154 @@ def _sanitize_block(block: dict) -> dict:
     return item
 
 
+def _get_ocr_service_targets() -> list[tuple[str, str]]:
+    """Returns list of (base_url, api_key) pairs for primary and fallback OCR services."""
+    targets = []
+    url1 = current_app.config.get("OCR_SERVICE_URL", "").rstrip("/")
+    key1 = current_app.config.get("OCR_SERVICE_API_KEY") or ""
+    if url1:
+        targets.append((url1, key1))
+
+    url2 = current_app.config.get("OCR_SERVICE_URL_2", "").rstrip("/")
+    key2 = current_app.config.get("OCR_SERVICE_API_KEY_2") or key1
+    if url2 and url2 != url1:
+        targets.append((url2, key2))
+
+    return targets
+
+
 def get_available_engines() -> dict:
     """Ping the OCR service and return which engines are ready.
+
+    Tries primary OCR_SERVICE_URL first, falling back to OCR_SERVICE_URL_2
+    if primary is unreachable.
 
     Returns a dict with:
       status: "ok" | "unavailable" | "no_engines"
       engines: list of engine name strings
     """
-    base_url = current_app.config.get("OCR_SERVICE_URL", "").rstrip("/")
-    if not base_url:
+    targets = _get_ocr_service_targets()
+    if not targets:
         return {"status": "unavailable", "engines": []}
 
-    api_key = current_app.config.get("OCR_SERVICE_API_KEY") or ""
-    headers = {"X-API-Key": api_key} if api_key else {}
+    for base_url, api_key in targets:
+        headers = {"X-API-Key": api_key} if api_key else {}
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                response = client.get(f"{base_url}/v1/engines", headers=headers)
+            if response.status_code == 200:
+                raw = response.json().get("engines", [])
+                engines = [normalize_service_engine(e) for e in raw]
+                status = "ok" if engines else "no_engines"
+                return {"status": status, "engines": engines}
+        except Exception as ex:
+            logger.warning("Failed to ping OCR service at %s: %s", base_url, ex)
+            continue
 
-    try:
-        with httpx.Client(timeout=5.0) as client:
-            response = client.get(f"{base_url}/v1/engines", headers=headers)
-        if response.status_code == 200:
-            raw = response.json().get("engines", [])
-            engines = [normalize_service_engine(e) for e in raw]
-            status = "ok" if engines else "no_engines"
-            return {"status": status, "engines": engines}
-        return {"status": "unavailable", "engines": []}
-    except Exception:
-        return {"status": "unavailable", "engines": []}
+    return {"status": "unavailable", "engines": []}
 
 
 def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrResponse:
-    base_url = current_app.config.get("OCR_SERVICE_URL", "").rstrip("/")
-    if not base_url:
+    targets = _get_ocr_service_targets()
+    if not targets:
         raise RuntimeError("OCR_SERVICE_URL is not configured")
 
-    url = f"{base_url}/v1/ocr"
-    api_key = current_app.config.get("OCR_SERVICE_API_KEY") or ""
     timeout = float(current_app.config.get("OCR_SERVICE_TIMEOUT", 300))
-
-    headers = {"X-API-Key": api_key} if api_key else {}
-
-    logger.info("Calling OCR service engine=%s language=%s url=%s", engine_name, language, url)
-
     service_engine = engine_for_service(engine_name)
-    start_time = time.time()
+    last_exception: Exception | None = None
 
-    try:
-        with file_path.open("rb") as image_file:
-            files = {"image": (file_path.name, image_file, "image/jpeg")}
-            data = {"engine": service_engine, "language": language}
-            with httpx.Client(timeout=timeout) as client:
-                response = client.post(url, files=files, data=data, headers=headers)
-        latency_ms = round((time.time() - start_time) * 1000, 2)
+    for idx, (base_url, api_key) in enumerate(targets):
+        url = f"{base_url}/v1/ocr"
+        headers = {"X-API-Key": api_key} if api_key else {}
+
+        logger.info("Calling OCR service engine=%s language=%s url=%s (target %d/%d)", engine_name, language, url, idx + 1, len(targets))
+        start_time = time.time()
 
         try:
-            from kalanjiyam.utils.metrics import record_metric
-            record_metric(
-                category="ocr",
-                name=f"ocr.{engine_name}",
-                latency_ms=latency_ms,
-                status="SUCCESS" if response.status_code < 400 else "FAILED",
-                details={"engine": engine_name, "language": language},
+            with file_path.open("rb") as image_file:
+                files = {"image": (file_path.name, image_file, "image/jpeg")}
+                data = {"engine": service_engine, "language": language}
+                with httpx.Client(timeout=timeout) as client:
+                    response = client.post(url, files=files, data=data, headers=headers)
+            latency_ms = round((time.time() - start_time) * 1000, 2)
+
+            if response.status_code >= 400:
+                detail = response.text
+                try:
+                    detail = response.json().get("detail", detail)
+                except Exception:
+                    pass
+                err_msg = f"OCR service error ({response.status_code}): {detail}"
+                if response.status_code >= 500 and idx < len(targets) - 1:
+                    logger.warning("OCR service at %s failed with %s. Falling back to next endpoint...", base_url, err_msg)
+                    last_exception = RuntimeError(err_msg)
+                    continue
+                raise RuntimeError(err_msg)
+
+            try:
+                from kalanjiyam.utils.metrics import record_metric
+                record_metric(
+                    category="ocr",
+                    name=f"ocr.{engine_name}",
+                    latency_ms=latency_ms,
+                    status="SUCCESS",
+                    details={"engine": engine_name, "language": language, "url": base_url},
+                )
+            except Exception:
+                pass
+
+            payload = response.json()
+            blocks = payload.get("blocks")
+            if blocks is not None and not isinstance(blocks, list):
+                blocks = None
+            if blocks:
+                blocks = [_sanitize_block(b) for b in blocks if isinstance(b, dict)]
+            # Legacy fields: may be absent in new contract — default gracefully
+            text = payload.get("text", "") or ""
+            boxes = _parse_bounding_boxes(payload.get("bounding_boxes"), engine_name)
+            model = payload.get("model")
+            if not isinstance(model, dict):
+                model = None
+            coordinate_space = payload.get("coordinate_space") or "pixel"
+            if coordinate_space not in ("pixel", "normalized"):
+                coordinate_space = "pixel"
+            return OcrResponse(
+                text_content=text,
+                bounding_boxes=boxes,
+                blocks=blocks,
+                content_format="blocks" if blocks else "plain",
+                page_width=payload.get("page_width"),
+                page_height=payload.get("page_height"),
+                pipeline="standard",
+                source_type=payload.get("source_type", "scan"),
+                coordinate_space=coordinate_space,
+                model=model,
+                page_confidence=_clamp_confidence(payload.get("page_confidence")),
+                contract_version=payload.get("contract_version"),
             )
-        except Exception:
-            pass
-    except Exception as ex:
-        latency_ms = round((time.time() - start_time) * 1000, 2)
-        try:
-            from kalanjiyam.utils.metrics import record_metric
-            record_metric(
-                category="ocr",
-                name=f"ocr.{engine_name}",
-                latency_ms=latency_ms,
-                status="FAILED",
-                error_level="ERROR",
-                error_message=str(ex),
-                details={"engine": engine_name, "language": language},
-            )
-        except Exception:
-            pass
-        raise ex
 
-    if response.status_code >= 400:
-        detail = response.text
-        try:
-            detail = response.json().get("detail", detail)
-        except Exception:
-            pass
-        raise RuntimeError(f"OCR service error ({response.status_code}): {detail}")
+        except Exception as ex:
+            latency_ms = round((time.time() - start_time) * 1000, 2)
+            try:
+                from kalanjiyam.utils.metrics import record_metric
+                record_metric(
+                    category="ocr",
+                    name=f"ocr.{engine_name}",
+                    latency_ms=latency_ms,
+                    status="FAILED",
+                    error_level="ERROR",
+                    error_message=str(ex),
+                    details={"engine": engine_name, "language": language, "url": base_url},
+                )
+            except Exception:
+                pass
 
-    payload = response.json()
-    blocks = payload.get("blocks")
-    if blocks is not None and not isinstance(blocks, list):
-        blocks = None
-    if blocks:
-        blocks = [_sanitize_block(b) for b in blocks if isinstance(b, dict)]
-    # Legacy fields: may be absent in new contract — default gracefully
-    text = payload.get("text", "") or ""
-    boxes = _parse_bounding_boxes(payload.get("bounding_boxes"), engine_name)
-    model = payload.get("model")
-    if not isinstance(model, dict):
-        model = None
-    coordinate_space = payload.get("coordinate_space") or "pixel"
-    if coordinate_space not in ("pixel", "normalized"):
-        coordinate_space = "pixel"
-    return OcrResponse(
-        text_content=text,
-        bounding_boxes=boxes,
-        blocks=blocks,
-        content_format="blocks" if blocks else "plain",
-        page_width=payload.get("page_width"),
-        page_height=payload.get("page_height"),
-        pipeline="standard",
-        source_type=payload.get("source_type", "scan"),
-        coordinate_space=coordinate_space,
-        model=model,
-        page_confidence=_clamp_confidence(payload.get("page_confidence")),
-        contract_version=payload.get("contract_version"),
-    )
+            last_exception = ex
+            if idx < len(targets) - 1:
+                logger.warning("OCR service at %s failed: %s. Retrying with fallback OCR target...", base_url, ex)
+                continue
+            raise ex
+
+    if last_exception:
+        raise last_exception
+    raise RuntimeError("All OCR service targets failed")

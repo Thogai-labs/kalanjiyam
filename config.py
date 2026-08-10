@@ -214,8 +214,14 @@ class BaseConfig:
     #: Base URL of the standalone OCR service.
     OCR_SERVICE_URL = _env("OCR_SERVICE_URL", "http://localhost:8000")
 
+    #: Fallback URL of the standalone OCR service if OCR_SERVICE_URL is unreachable.
+    OCR_SERVICE_URL_2 = _env("OCR_SERVICE_URL_2", "")
+
     #: API key for service-to-service OCR requests.
     OCR_SERVICE_API_KEY = _env("OCR_SERVICE_API_KEY", "")
+
+    #: API key for fallback OCR service requests.
+    OCR_SERVICE_API_KEY_2 = _env("OCR_SERVICE_API_KEY_2", "")
 
     #: Dedicated OCR service for CLI batch processing.
     BATCH_OCR_SERVICE_URL = _env("BATCH_OCR_SERVICE_URL", "")
