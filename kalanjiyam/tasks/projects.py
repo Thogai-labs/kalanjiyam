@@ -664,7 +664,45 @@ def create_project_inner(
                 )
                 session.add(rev_target)
 
+            # Record source DOCX size in DB metadata & system metric log, then delete from storage
+            docx_size_bytes = 0
+            if docx_key and storage.exists(docx_key):
+                docx_size_bytes = storage.size(docx_key)
+            elif docx_path.exists():
+                docx_size_bytes = docx_path.stat().st_size
+
+            meta = db_project.extracted_metadata or {}
+            if "source_file" not in meta or not isinstance(meta["source_file"], dict):
+                meta["source_file"] = {}
+            meta["source_file"]["size_bytes"] = docx_size_bytes
+            meta["source_file"]["type"] = "docx"
+            meta["source_file"]["deleted_after_extraction"] = True
+            db_project.extracted_metadata = meta
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(db_project, "extracted_metadata")
             session.commit()
+
+            from kalanjiyam.utils.metrics import record_metric
+            from kalanjiyam.utils.org_access import user_organization_id
+            creator_user = session.query(db.User).filter_by(id=creator_id).first() if creator_id else None
+            org_id = user_organization_id(creator_user) if creator_user else None
+            record_metric(
+                category="project_upload",
+                name="docx_extracted_and_deleted",
+                user_id=creator_id,
+                group_id=org_id,
+                status="SUCCESS",
+                details={
+                    "project_slug": slug,
+                    "docx_key": docx_key,
+                    "source_file_size_bytes": docx_size_bytes,
+                    "num_pages": num_pages,
+                },
+            )
+
+            if docx_key and storage.exists(docx_key):
+                storage.delete(docx_key)
+
             add_storage_usage_for_project(slug)
             # One index task for the finished project, not one per page.
             from kalanjiyam.tasks.search_index import enqueue_project
@@ -674,6 +712,13 @@ def create_project_inner(
             pdf_path = storage.local_copy(pdf_key)
             if not pdf_path.exists():
                 raise ValueError(f'Source PDF not found in storage: "{pdf_key}".')
+
+            # Record source PDF size before extraction and deletion
+            pdf_size_bytes = 0
+            if pdf_key and storage.exists(pdf_key):
+                pdf_size_bytes = storage.size(pdf_key)
+            elif pdf_path.exists():
+                pdf_size_bytes = pdf_path.stat().st_size
 
             num_pages = _split_pdf_into_pages(pdf_path, slug, storage, task_status, org_slug=org_slug)
             require_org = bool(app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True))
@@ -685,6 +730,42 @@ def create_project_inner(
                 require_org=require_org,
                 fingerprint_id=fingerprint_id,
             )
+
+            # Update DB project metadata and metrics log
+            db_project = session.query(db.Project).filter_by(slug=slug).one()
+            meta = db_project.extracted_metadata or {}
+            if "source_file" not in meta or not isinstance(meta["source_file"], dict):
+                meta["source_file"] = {}
+            meta["source_file"]["size_bytes"] = pdf_size_bytes
+            meta["source_file"]["type"] = "pdf"
+            meta["source_file"]["deleted_after_extraction"] = True
+            db_project.extracted_metadata = meta
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(db_project, "extracted_metadata")
+            session.commit()
+
+            from kalanjiyam.utils.metrics import record_metric
+            from kalanjiyam.utils.org_access import user_organization_id
+            creator_user = session.query(db.User).filter_by(id=creator_id).first() if creator_id else None
+            org_id = user_organization_id(creator_user) if creator_user else None
+            record_metric(
+                category="project_upload",
+                name="pdf_extracted_and_deleted",
+                user_id=creator_id,
+                group_id=org_id,
+                status="SUCCESS",
+                details={
+                    "project_slug": slug,
+                    "pdf_key": pdf_key,
+                    "source_file_size_bytes": pdf_size_bytes,
+                    "num_pages": num_pages,
+                },
+            )
+
+            # Delete source PDF from storage
+            if pdf_key and storage.exists(pdf_key):
+                storage.delete(pdf_key)
+
             add_storage_usage_for_project(slug)
 
     task_status.success(num_pages, slug)

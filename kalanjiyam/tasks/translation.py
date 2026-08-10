@@ -701,6 +701,23 @@ def run_docx_translation(
             doc.save(str(tmp_path))
             storage.save(trans_key, tmp_path)
             
+            # Record metrics and delete uploaded source DOCX after standalone translation finishes
+            upload_size_bytes = storage.size(upload_key) if storage.exists(upload_key) else 0
+            from kalanjiyam.utils.metrics import record_metric
+            record_metric(
+                category="docx_translation",
+                name="docx_translated_and_deleted",
+                user_id=creator_id,
+                status="SUCCESS",
+                details={
+                    "docx_id": docx_id,
+                    "source_file_size_bytes": upload_size_bytes,
+                    "estimated_pages": estimated_pages,
+                },
+            )
+            if upload_key and storage.exists(upload_key):
+                storage.delete(upload_key)
+
             # Consume credits after saving successfully
             if creator:
                 consume_translation_credits_for_user(creator, estimated_pages)

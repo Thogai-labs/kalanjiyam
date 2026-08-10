@@ -44,3 +44,8 @@ def test_create_project_inner(flask_app):
         storage = get_storage()
         assert storage.exists(page_image_key("cool-project", "1"))
         assert storage.exists(page_image_key("cool-project", "10"))
+        # Source PDF is deleted after page extraction to save space, and its size is saved in DB
+        assert not storage.exists(source_pdf_key)
+        assert project.extracted_metadata is not None
+        assert project.extracted_metadata["source_file"]["size_bytes"] > 0
+        assert project.extracted_metadata["source_file"]["deleted_after_extraction"] is True
