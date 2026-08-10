@@ -37,16 +37,36 @@ def hashed_static(filename: str) -> str:
     return f"{base_url}?h={hash_prefix}"
 
 
-def get_page_image_filepath(project_slug: str, page_slug: str) -> Path:
+def get_page_image_filepath(project_slug: str, page_slug: str, org_slug: str | None = None) -> Path:
     """Get a local filesystem path for the given page image.
 
     With the local storage backend, this is the image's location on disk.
     With a remote backend (S3), the image is downloaded to a local cache
-    first. Either way, the returned path may not exist if the image is
-    missing; callers should check ``.exists()``.
-
-    This function must run within an app context.
+    first. Dual-read fallback (org_slug, open-tenant, legacy) is supported.
     """
-    from kalanjiyam.utils.storage import get_storage, page_image_key
+    from kalanjiyam.utils.storage import get_storage, page_image_key, get_project_org_slug
+    from kalanjiyam import queries as q, database as db
 
-    return get_storage().local_copy(page_image_key(project_slug, page_slug))
+    storage = get_storage()
+
+    if not org_slug:
+        session = q.get_session()
+        project_ = session.query(db.Project).filter_by(slug=project_slug).first()
+        if project_:
+            org_slug = get_project_org_slug(project_)
+        else:
+            org_slug = "open-tenant"
+
+    primary_key = page_image_key(project_slug, page_slug, org_slug=org_slug)
+    if storage.exists(primary_key):
+        return storage.local_copy(primary_key)
+
+    open_tenant_key = page_image_key(project_slug, page_slug, org_slug="open-tenant")
+    if storage.exists(open_tenant_key):
+        return storage.local_copy(open_tenant_key)
+
+    legacy_key = f"projects/{project_slug}/pages/{page_slug}.jpg"
+    if storage.exists(legacy_key):
+        return storage.local_copy(legacy_key)
+
+    return storage.local_copy(primary_key)

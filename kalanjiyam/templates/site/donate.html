@@ -55,10 +55,7 @@ our mission:
 
 <h2>{{ _('Contact us') }}</h2>
 
-<p>{% trans %}
-If you have questions about donating or would like to discuss other ways to support
-our work, please <a href="{{ url_for('about.contact') }}">contact us</a>.
-{% endtrans %}</p>
+<p>{{ _("If you have questions about donating or would like to discuss other ways to support our work, please") }} <a href="{{ url_for('about.contact') }}">{{ _('contact us') }}</a>.</p>
 
 <p>{% trans %}
 Thank you for your support in preserving and sharing Siddha Knowledge Systems

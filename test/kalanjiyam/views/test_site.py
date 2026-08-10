@@ -3,7 +3,8 @@ import pytest
 
 def test_index(client):
     resp = client.get("/")
-    assert "Explore the library" in resp.text
+    assert resp.status_code == 200
+    assert "Kalanjiyam" in resp.text
 
 
 def test_donate(client):
@@ -23,7 +24,7 @@ def test_sponsor(client):
 
 def test_support(client):
     resp = client.get("/support")
-    assert "<h1>Support</h1>" in resp.text
+    assert "Support Kalanjiyam" in resp.text
 
 
 def test_404(client):

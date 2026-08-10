@@ -41,9 +41,7 @@ We are a 501(c)(3) non-profit organization, so your contributions are tax-deduct
 in the United States.
 {% endtrans %}</p>
 
-<p>{% trans %}
-<a href="{{ url_for('site.donate') }}">Donate now</a> to support our mission.
-{% endtrans %}</p>
+<p><a href="{{ url_for('site.donate') }}">{{ _('Donate now') }}</a> {{ _('to support our mission.') }}</p>
 
 <h2>{{ _('Volunteer contributions') }}</h2>
 
@@ -60,10 +58,7 @@ We welcome volunteers in many areas:
 <li>{{ _("Helping with community outreach and education") }}</li>
 </ul>
 
-<p>{% trans %}
-If you're interested in volunteering, please
-<a href="{{ url_for('about.contact') }}">contact us!</a>
-{% endtrans %}</p>
+<p>{{ _("If you're interested in volunteering, please") }} <a href="{{ url_for('about.contact') }}">{{ _('contact us!') }}</a></p>
 
 <h2>{{ _('Expertise and knowledge') }}</h2>
 
@@ -79,32 +74,18 @@ related fields to help us:
 <li>{{ _("Help develop educational resources and curricula") }}</li>
 </ul>
 
-<p>{% trans %}
-If you have expertise in Siddha Knowledge Systems or related fields, we would love
-to hear from you. Please <a href="{{ url_for('about.contact') }}">contact us!</a>
-{% endtrans %}</p>
+<p>{{ _("If you have expertise in Siddha Knowledge Systems or related fields, we would love to hear from you. Please") }} <a href="{{ url_for('about.contact') }}">{{ _('contact us!') }}</a></p>
 
 <h2>{{ _('Technical contributions') }}</h2>
 
 <p>{% trans %}
 Our platform relies on modern technology to preserve and share Siddha texts. But, these tools still produce many errors, and they need
-constant improvement and refinement.
+human proofreading to make the data accurate.
+If you have experience in Python, web development, OCR, machine learning, or UI design, we would love your help improving our platform.
 {% endtrans %}</p>
 
 <p>{% trans %}
-We welcome contributions from developers, designers, and technical experts who can help us:
-{% endtrans %}</p>
-
-<ul>
-<li>{{ _("Improve our text processing and analysis tools") }}</li>
-<li>{{ _("Develop new features for our platform") }}</li>
-<li>{{ _("Optimize our database and search functionality") }}</li>
-<li>{{ _("Enhance our user interface and user experience") }}</li>
-<li>{{ _("Improve our mobile and accessibility features") }}</li>
-</ul>
-
-<p>{% trans %}
-Our code is open source and available on <a href="https://github.com/kalanjiyam-org/kalanjiyam">GitHub</a>.
+Check out our codebase on GitHub or reach out to see how you can get involved.
 {% endtrans %}</p>
 
 <h2>{{ _('Spread the word') }}</h2>
@@ -139,19 +120,11 @@ We are interested in partnerships with:
 <li>{{ _("Government agencies and international organizations") }}</li>
 </ul>
 
-<p>{% trans %}
-If you represent an organization that might be interested in partnering with us,
-please <a href="{{ url_for('about.contact') }}">contact us</a> to discuss
-potential collaborations.
-{% endtrans %}</p>
+<p>{{ _("If you represent an organization that might be interested in partnering with us, please") }} <a href="{{ url_for('about.contact') }}">{{ _('contact us') }}</a> {{ _("to discuss potential collaborations.") }}</p>
 
 <h2>{{ _('Contact us') }}</h2>
 
-<p>{% trans %}
-If you have questions about supporting Kalanjiyam or would like to discuss specific
-ways you can contribute, please don't hesitate to
-<a href="{{ url_for('about.contact') }}">contact us</a>. We would love to hear from you!
-{% endtrans %}</p>
+<p>{{ _("If you have questions about supporting Kalanjiyam or would like to discuss specific ways you can contribute, please don't hesitate to") }} <a href="{{ url_for('about.contact') }}">{{ _('contact us') }}</a>. {{ _("We would love to hear from you!") }}</p>
 
 <p>{% trans %}
 Thank you for your interest in supporting Kalanjiyam and helping us preserve and share
