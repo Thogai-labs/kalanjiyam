@@ -45,29 +45,51 @@ def get_project_org_slug(project) -> str:
     return "open-tenant"
 
 
-def project_prefix(project_slug: str, org_slug: str = "open-tenant") -> str:
+def resolve_org_slug(project_slug: str, org_slug: str = None) -> str:
+    """Resolve org_slug for a project_slug, querying the DB if omitted or defaulting to 'open-tenant'."""
+    if org_slug and org_slug != "open-tenant":
+        return org_slug
+    try:
+        from kalanjiyam import queries as q, database as db
+        session = q.get_session()
+        project = session.query(db.Project).filter_by(slug=project_slug).first()
+        if project:
+            resolved = get_project_org_slug(project)
+            if resolved:
+                return resolved
+    except Exception:
+        pass
+    return org_slug or "open-tenant"
+
+
+def project_prefix(project_slug: str, org_slug: str = None) -> str:
     """Key prefix that contains every file belonging to a project."""
-    return f"projects/{org_slug}/{project_slug}/"
+    org = resolve_org_slug(project_slug, org_slug)
+    return f"projects/{org}/{project_slug}/"
 
 
-def pdf_key(project_slug: str, org_slug: str = "open-tenant") -> str:
+def pdf_key(project_slug: str, org_slug: str = None) -> str:
     """Key of a project's source PDF."""
-    return f"projects/{org_slug}/{project_slug}/pdf/source.pdf"
+    org = resolve_org_slug(project_slug, org_slug)
+    return f"projects/{org}/{project_slug}/pdf/source.pdf"
 
 
-def page_image_key(project_slug: str, page_slug: str, org_slug: str = "open-tenant") -> str:
+def page_image_key(project_slug: str, page_slug: str, org_slug: str = None) -> str:
     """Key of a single page image."""
-    return f"projects/{org_slug}/{project_slug}/pages/{page_slug}.jpg"
+    org = resolve_org_slug(project_slug, org_slug)
+    return f"projects/{org}/{project_slug}/pages/{page_slug}.jpg"
 
 
-def editor_image_key(project_slug: str, filename: str, org_slug: str = "open-tenant") -> str:
-    """Key of an image uploaded through the rich-text editor."""
-    return f"projects/{org_slug}/{project_slug}/images/{filename}"
+def editor_image_key(project_slug: str, filename: str, org_slug: str = None) -> str:
+    """Key of an image uploaded through the rich-text editor or extracted from OCR."""
+    org = resolve_org_slug(project_slug, org_slug)
+    return f"projects/{org}/{project_slug}/images/{filename}"
 
 
-def project_docx_key(project_slug: str, org_slug: str = "open-tenant") -> str:
+def project_docx_key(project_slug: str, org_slug: str = None) -> str:
     """Key of a project's source DOCX."""
-    return f"projects/{org_slug}/{project_slug}/docx/source.docx"
+    org = resolve_org_slug(project_slug, org_slug)
+    return f"projects/{org}/{project_slug}/docx/source.docx"
 
 
 def docx_upload_key(docx_id: str) -> str:
@@ -85,28 +107,25 @@ def docx_saved_data_key(docx_id: str) -> str:
     return f"docx/saved/{docx_id}.json.gz"
 
 
-def page_ocr_key(project_slug: str, page_slug: str, org_slug: str = "open-tenant") -> str:
-    """[DEPRECATED for write calls] Key for a page's raw OCR bounding-box payload (gzipped JSON).
-
-    Under Strategy B (Unified PageDocument Model), new OCR processing no longer
-    writes separate `/ocr/{page_slug}.json.gz` storage objects. Bounding boxes
-    are derived dynamically from revision documents (`PageDocument.blocks`).
-    This function remains for legacy read fallback and storage cleanup scripts.
-    """
-    return f"projects/{org_slug}/{project_slug}/ocr/{page_slug}.json.gz"
+def page_ocr_key(project_slug: str, page_slug: str, org_slug: str = None) -> str:
+    """[DEPRECATED for write calls] Key for a page's raw OCR bounding-box payload (gzipped JSON)."""
+    org = resolve_org_slug(project_slug, org_slug)
+    return f"projects/{org}/{project_slug}/ocr/{page_slug}.json.gz"
 
 
 def revision_document_key(
-    project_slug: str, page_slug: str, version_num: int, tag: str = "", org_slug: str = "open-tenant"
+    project_slug: str, page_slug: str, version_num: int, tag: str = "", org_slug: str = None
 ) -> str:
     """Key for a revision's structured block document snapshot (gzipped JSON)."""
+    org = resolve_org_slug(project_slug, org_slug)
     prefix = f"{tag}_" if tag else ""
-    return f"projects/{org_slug}/{project_slug}/revisions/{page_slug}/{prefix}v{version_num}.json.gz"
+    return f"projects/{org}/{project_slug}/revisions/{page_slug}/{prefix}v{version_num}.json.gz"
 
 
-def comparison_result_key(project_slug: str, comparison_id: int, org_slug: str = "open-tenant") -> str:
+def comparison_result_key(project_slug: str, comparison_id: int, org_slug: str = None) -> str:
     """Key for detailed per-page OCR comparison results (gzipped JSON)."""
-    return f"projects/{org_slug}/{project_slug}/comparisons/{comparison_id}.json.gz"
+    org = resolve_org_slug(project_slug, org_slug)
+    return f"projects/{org}/{project_slug}/comparisons/{comparison_id}.json.gz"
 
 
 

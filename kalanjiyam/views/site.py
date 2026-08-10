@@ -88,12 +88,15 @@ def editor_image(project_slug, filename):
     org_slug = get_project_org_slug(project_)
     key = editor_image_key(project_slug, filename, org_slug=org_slug)
     if not storage.exists(key):
-        # Fallback to legacy key for existing editor uploads
-        legacy_key = f"projects/{project_slug}/images/{filename}"
-        if storage.exists(legacy_key):
-            key = legacy_key
+        open_tenant_key = editor_image_key(project_slug, filename, org_slug="open-tenant")
+        if storage.exists(open_tenant_key):
+            key = open_tenant_key
         else:
-            abort(404)
+            legacy_key = f"projects/{project_slug}/images/{filename}"
+            if storage.exists(legacy_key):
+                key = legacy_key
+            else:
+                abort(404)
 
     return storage.serve(key)
 
