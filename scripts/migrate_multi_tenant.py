@@ -54,8 +54,8 @@ def _users_without_organization(session: Session) -> list[tuple[int, str]]:
             SELECT u.id, u.username
             FROM users u
             WHERE u.organization_id IS NULL
-              AND u.is_deleted = 0
-              AND u.is_banned = 0
+              AND (u.is_deleted IS FALSE OR u.is_deleted IS NULL)
+              AND (u.is_banned IS FALSE OR u.is_banned IS NULL)
               AND u.id NOT IN (
                 SELECT ur.user_id
                 FROM user_roles ur
