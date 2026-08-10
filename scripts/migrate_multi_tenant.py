@@ -187,7 +187,7 @@ def _assign_projects_to_org(session: Session, org_slug: str, apply: bool) -> int
 def _migrate_project_storage_folders(session: Session, apply: bool) -> tuple[int, list[str]]:
     """Migrate historical project folders (projects/<slug> or projects/open-tenant/<slug>) to projects/<org_slug>/<slug>."""
     from kalanjiyam.utils.storage import get_storage, LocalStorage, S3Storage
-    from kalanjiyam.config import create_config_only_app
+    from config import create_config_only_app
     import os
 
     app = None
