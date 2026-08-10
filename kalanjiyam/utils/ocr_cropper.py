@@ -13,13 +13,18 @@ def save_crop_to_storage(
     cropped_img: Image.Image,
     block_id: Any,
     project_slug: Optional[str] = None,
-    output_dir: Optional[str] = None
+    output_dir: Optional[str] = None,
+    file_prefix: Optional[str] = None,
 ) -> str:
     """
     Save the cropped image either to the application's Storage backend (if project_slug is provided)
     or to a local directory. Returns the path or key where it was saved.
     """
-    filename = f"extracted_{block_id}.png"
+    if file_prefix:
+        clean_prefix = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in str(file_prefix))
+        filename = f"extracted_{clean_prefix}_{block_id}.png"
+    else:
+        filename = f"extracted_{block_id}.png"
 
     if project_slug:
         try:
@@ -62,7 +67,8 @@ def crop_elements_from_image(
     layout_data: Dict[str, Any],
     project_slug: Optional[str] = None,
     output_dir: Optional[str] = None,
-    image_types: set = DEFAULT_IMAGE_TYPES
+    image_types: set = DEFAULT_IMAGE_TYPES,
+    file_prefix: Optional[str] = None,
 ) -> List[str]:
     """
     Scale the source image to match layout coordinates and crop identified visual elements.
@@ -78,6 +84,10 @@ def crop_elements_from_image(
     if not os.path.exists(image_path):
         logger.warning(f"Source image not found: {image_path}. Skipping crop.")
         return []
+
+    if not file_prefix and image_path:
+        from pathlib import Path
+        file_prefix = Path(image_path).stem
 
     try:
         with Image.open(image_path) as img:
@@ -110,7 +120,9 @@ def crop_elements_from_image(
                         continue
 
                     cropped = scaled_img.crop((int(xmin), int(ymin), int(xmax), int(ymax)))
-                    saved_path = save_crop_to_storage(cropped, block_id, project_slug, output_dir)
+                    saved_path = save_crop_to_storage(
+                        cropped, block_id, project_slug=project_slug, output_dir=output_dir, file_prefix=file_prefix
+                    )
                     saved_paths.append(saved_path)
 
                     # Update block content to display the image
@@ -128,7 +140,8 @@ def crop_elements_from_pdf(
     project_slug: Optional[str] = None,
     output_dir: Optional[str] = None,
     page_num: int = 0,
-    image_types: set = DEFAULT_IMAGE_TYPES
+    image_types: set = DEFAULT_IMAGE_TYPES,
+    file_prefix: Optional[str] = None,
 ) -> List[str]:
     """
     Render the PDF page directly at the layout coordinate resolution and crop identified visual elements.
@@ -144,6 +157,10 @@ def crop_elements_from_pdf(
     if not os.path.exists(pdf_path):
         logger.warning(f"Source PDF not found: {pdf_path}. Skipping crop.")
         return []
+
+    if not file_prefix:
+        from pathlib import Path
+        file_prefix = f"{Path(pdf_path).stem}_p{page_num + 1}"
 
     try:
         doc = fitz.open(pdf_path)
@@ -187,7 +204,9 @@ def crop_elements_from_pdf(
                     continue
 
                 cropped = img.crop((int(xmin), int(ymin), int(xmax), int(ymax)))
-                saved_path = save_crop_to_storage(cropped, block_id, project_slug, output_dir)
+                saved_path = save_crop_to_storage(
+                    cropped, block_id, project_slug=project_slug, output_dir=output_dir, file_prefix=file_prefix
+                )
                 saved_paths.append(saved_path)
 
                 # Update block content to display the image
@@ -214,6 +233,9 @@ def crop_ocr_response_elements(
     """
     if not doc_path or not ocr_response:
         return []
+
+    from pathlib import Path
+    file_prefix = Path(doc_path).stem if doc_path else None
 
     # Get blocks list (it could be a list of dicts or custom objects)
     raw_blocks = getattr(ocr_response, "blocks", []) or []
@@ -245,11 +267,11 @@ def crop_ocr_response_elements(
     ext = os.path.splitext(doc_path)[1].lower()
     if ext == ".pdf":
         saved_paths = crop_elements_from_pdf(
-            doc_path, layout_data, project_slug=project_slug, output_dir=output_dir, page_num=page_num
+            doc_path, layout_data, project_slug=project_slug, output_dir=output_dir, page_num=page_num, file_prefix=file_prefix
         )
     else:
         saved_paths = crop_elements_from_image(
-            doc_path, layout_data, project_slug=project_slug, output_dir=output_dir
+            doc_path, layout_data, project_slug=project_slug, output_dir=output_dir, file_prefix=file_prefix
         )
 
     # Sync content back to the original objects in ocr_response.blocks if they were updated
