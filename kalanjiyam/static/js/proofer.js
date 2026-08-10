@@ -1152,55 +1152,79 @@ export default () => ({
       const engineConfig = this.ocrEngines[engine];
       const languageSelect = document.getElementById('language-select');
       const additionalLanguageSelect = document.getElementById('additional-language-select');
-      
-      if (!languageSelect || !engineConfig) {
+
+      if (!languageSelect) {
         return;
       }
-    
-    // Clear existing options
-    languageSelect.innerHTML = '';
-    
-    // Add language options
-    engineConfig.languages.forEach(lang => {
-      const option = document.createElement('option');
-      option.value = lang.value;
-      option.textContent = lang.text;
-      languageSelect.appendChild(option);
-    });
-    
-    // Set default language if current selection is not available
-    if (!engineConfig.languages.find(lang => lang.value === this.selectedLanguage)) {
-      // Try to map the language to the new engine's equivalent
-      const languageMap = {
-        'sa': 'san',  // Google Sanskrit -> Tesseract Sanskrit
-        'san': 'sa',  // Tesseract Sanskrit -> Google Sanskrit
-        'en': 'eng',  // Google English -> Tesseract English
-        'eng': 'en',  // Tesseract English -> Google English
-        'hi': 'hin',  // Google Hindi -> Tesseract Hindi
-        'hin': 'hi',  // Tesseract Hindi -> Google Hindi
-        // Add more mappings as needed
-      };
-      
-      const mappedLanguage = languageMap[this.selectedLanguage];
-      if (mappedLanguage && engineConfig.languages.find(lang => lang.value === mappedLanguage)) {
-        this.selectedLanguage = mappedLanguage;
-      } else {
-        this.selectedLanguage = engineConfig.languages[0].value;
+
+      const languageContainer = languageSelect.closest('li, div.dropdown-item-no-hover, div');
+      const hasLanguages = engineConfig && Array.isArray(engineConfig.languages) && engineConfig.languages.length > 0;
+
+      if (!hasLanguages) {
+        // Hide language selection UI if engine detects languages on the fly or provides no language list
+        if (languageContainer) {
+          languageContainer.style.display = 'none';
+        }
+        languageSelect.innerHTML = '';
+        if (additionalLanguageSelect) {
+          const addContainer = additionalLanguageSelect.closest('li, div.dropdown-item-no-hover, div');
+          if (addContainer) addContainer.style.display = 'none';
+        }
+        return;
       }
-    }
-    
-    // Update additional language options for bilingual support
-    if (additionalLanguageSelect && (engine === '2' || engine === '3')) {
-      additionalLanguageSelect.innerHTML = '<option value="">{{ _("None") }}</option>';
-      
+
+      // Restore visibility when engine has language options
+      if (languageContainer) {
+        languageContainer.style.display = '';
+      }
+
+      // Clear existing options
+      languageSelect.innerHTML = '';
+
+      // Add language options
       engineConfig.languages.forEach(lang => {
         const option = document.createElement('option');
         option.value = lang.value;
         option.textContent = lang.text;
-        additionalLanguageSelect.appendChild(option);
+        languageSelect.appendChild(option);
       });
-    }
-    }, 10); // Small delay to ensure DOM is ready
+
+      // Set default language if current selection is not available
+      if (!engineConfig.languages.find(lang => lang.value === this.selectedLanguage)) {
+        const languageMap = {
+          'sa': 'san',  // Google Sanskrit -> Tesseract Sanskrit
+          'san': 'sa',  // Tesseract Sanskrit -> Google Sanskrit
+          'en': 'eng',  // Google English -> Tesseract English
+          'eng': 'en',  // Tesseract English -> Google English
+          'hi': 'hin',  // Google Hindi -> Tesseract Hindi
+          'hin': 'hi',  // Tesseract Hindi -> Google Hindi
+        };
+
+        const mappedLanguage = languageMap[this.selectedLanguage];
+        if (mappedLanguage && engineConfig.languages.find(lang => lang.value === mappedLanguage)) {
+          this.selectedLanguage = mappedLanguage;
+        } else {
+          this.selectedLanguage = engineConfig.languages[0].value;
+        }
+      }
+
+      // Update additional language options for bilingual support
+      if (additionalLanguageSelect) {
+        const addContainer = additionalLanguageSelect.closest('li, div.dropdown-item-no-hover, div');
+        if (engine === '2' || engine === '3') {
+          if (addContainer) addContainer.style.display = '';
+          additionalLanguageSelect.innerHTML = '<option value="">None</option>';
+          engineConfig.languages.forEach(lang => {
+            const option = document.createElement('option');
+            option.value = lang.value;
+            option.textContent = lang.text;
+            additionalLanguageSelect.appendChild(option);
+          });
+        } else {
+          if (addContainer) addContainer.style.display = 'none';
+        }
+      }
+    }, 0);
   },
 
   // Decode numeric engine values to actual engine names

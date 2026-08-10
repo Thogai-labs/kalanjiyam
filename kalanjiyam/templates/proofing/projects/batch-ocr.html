@@ -137,10 +137,14 @@ const languageOptions = {
     { value: 'nl', text: 'Dutch (nl)' },
     { value: 'pl', text: 'Polish (pl)' },
     { value: 'tr', text: 'Turkish (tr)' },
-    { value: 'vi', text: 'Vietnamese (vi)' },
     { value: 'id', text: 'Indonesian (id)' },
     { value: 'ms', text: 'Malay (ms)' }
-  ]
+  ],
+  '10': [], // GLM OCR auto-detects
+  '11': [ // Sanskrit Manuscript OCR
+    { value: 'san', text: 'Sanskrit (san)' }
+  ],
+  '12': [] // Dots OCR auto-detects
 };
 
 const localizedLanguageLabels = {
@@ -165,18 +169,34 @@ const localizedLanguageLabels = {
 function updateLanguageOptions() {
   const engineSelect = document.getElementById('engine');
   const languageSelect = document.getElementById('language');
+  if (!engineSelect || !languageSelect) return;
+
   const selectedEngine = engineSelect.value;
-  
+  const languageContainer = languageSelect.closest('div');
+  const options = languageOptions[selectedEngine];
+
+  if (!options || options.length === 0) {
+    // Hide language selection UI if engine auto-detects languages on the fly
+    if (languageContainer) {
+      languageContainer.style.display = 'none';
+    }
+    languageSelect.innerHTML = '';
+    return;
+  }
+
+  // Restore visibility when engine has language options
+  if (languageContainer) {
+    languageContainer.style.display = '';
+  }
+
   // Clear current options
   languageSelect.innerHTML = '';
-  
+
   // Add new options based on selected engine
-  const options = languageOptions[selectedEngine] || languageOptions['1'];
   options.forEach(option => {
     const optionElement = document.createElement('option');
     optionElement.value = option.value;
     optionElement.textContent = localizedLanguageLabels[option.value] || option.text;
-    // Set Sanskrit as default for both engines
     if (option.value === 'sa' || option.value === 'san') {
       optionElement.selected = true;
     }
@@ -187,9 +207,9 @@ function updateLanguageOptions() {
 // Add event listener to engine select
 document.addEventListener('DOMContentLoaded', function() {
   const engineSelect = document.getElementById('engine');
-  engineSelect.addEventListener('change', updateLanguageOptions);
-  
-  // Initialize with current engine selection
+  if (engineSelect) {
+    engineSelect.addEventListener('change', updateLanguageOptions);
+  }
   updateLanguageOptions();
 });
 </script>
