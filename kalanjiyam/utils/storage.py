@@ -80,6 +80,11 @@ def docx_translation_key(docx_id: str) -> str:
     return f"docx/translations/{docx_id}.docx"
 
 
+def docx_saved_data_key(docx_id: str) -> str:
+    """Key of saved direct DOCX translation data (gzipped JSON)."""
+    return f"docx/saved/{docx_id}.json.gz"
+
+
 def page_ocr_key(project_slug: str, page_slug: str, org_slug: str = "open-tenant") -> str:
     """[DEPRECATED for write calls] Key for a page's raw OCR bounding-box payload (gzipped JSON).
 

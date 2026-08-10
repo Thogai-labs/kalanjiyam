@@ -88,13 +88,11 @@ def test_docx_translation_env_saving_enabled(flask_app, dummy_docx_file, monkeyp
 
         assert result["status"] == "SUCCESS"
 
-        # Verify Project created in DB
-        session = q.get_session()
-        slug_prefix = f"direct-tr-{docx_id[:8]}"
-        project = session.query(db.Project).filter(db.Project.slug.startswith(slug_prefix)).first()
-        assert project is not None
-        assert len(project.pages) >= 1
-
-        # Clean up created project
-        session.delete(project)
-        session.commit()
+        # Verify saved .json.gz payload in storage under docx/saved/{docx_id}.json.gz
+        from kalanjiyam.utils.storage import docx_saved_data_key
+        saved_key = docx_saved_data_key(docx_id)
+        assert storage.exists(saved_key)
+        payload = storage.load_json_gz(saved_key)
+        assert payload is not None
+        assert payload["docx_id"] == docx_id
+        assert len(payload["pages"]) >= 1

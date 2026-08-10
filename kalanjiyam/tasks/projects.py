@@ -663,6 +663,12 @@ def create_project_inner(
                     document=doc_dict
                 )
                 session.add(rev_target)
+                session.flush()
+
+                # Save structured page block document to .json.gz storage
+                from kalanjiyam.utils.document_storage import save_revision_document
+                save_revision_document(rev_orig, doc_dict)
+                save_revision_document(rev_target, doc_dict)
 
             # Record source DOCX size in DB metadata & system metric log, then delete from storage
             docx_size_bytes = 0
