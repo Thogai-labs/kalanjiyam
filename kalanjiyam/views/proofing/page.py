@@ -147,18 +147,20 @@ def resolve_version_keys(user, page) -> tuple:
     else:
         target_key = "role:p1"
 
-    existing_keys = {v.version_key for v in page.versions}
+    session = q.get_session()
+    page_versions = session.query(db.PageVersion).filter_by(page_id=page.id).all()
+    existing_keys = {v.version_key for v in page_versions}
 
     # 1. Always prefer own changes if user has edited this page
     if getattr(user, "is_authenticated", False) and target_key in existing_keys:
         return target_key, target_key
 
-    if not page.versions:
+    if not page_versions:
         return target_key, target_key
 
     # Fetch users associated with existing user: version tracks for tie-breaking
     user_ids = []
-    for v in page.versions:
+    for v in page_versions:
         if v.version_key.startswith("user:"):
             try:
                 user_ids.append(int(v.version_key.split(":", 1)[1]))
@@ -166,8 +168,6 @@ def resolve_version_keys(user, page) -> tuple:
                 pass
 
     from kalanjiyam.database import User
-    from kalanjiyam.queries import get_session
-    session = get_session()
     users = session.query(User).filter(User.id.in_(user_ids)).all() if user_ids else []
     user_map = {u.id: u for u in users}
 
@@ -201,7 +201,7 @@ def resolve_version_keys(user, page) -> tuple:
 
     # Sort tracks by updated_at descending, then by tier rank ascending (tie-breaker)
     sorted_tracks = sorted(
-        page.versions,
+        page_versions,
         key=lambda v: (v.updated_at, -_track_tier(v)),
         reverse=True
     )
@@ -687,9 +687,11 @@ def edit(project_slug, page_slug):
     status_names = {s.id: s.name for s in q.page_statuses()}
     form.status.data = status_names.get(latest_revision.status_id if latest_revision else cur.status_id)
 
-    # Format available versions list for the selector UI
+    # Format available versions list for the selector UI directly from DB
     available_versions = []
-    for pv in cur.versions:
+    session = q.get_session()
+    page_versions = session.query(db.PageVersion).filter_by(page_id=cur.id).order_by(db.PageVersion.id.asc()).all()
+    for pv in page_versions:
         available_versions.append({
             "version_key": pv.version_key,
             "display_name": get_version_display_name(pv.version_key),
@@ -820,9 +822,10 @@ def edit_post(project_slug, page_slug):
     target_version_val = target_version_record.version if target_version_record else 0
     form.version.data = target_version_val
 
-    # Format available versions list for the selector UI
+    # Format available versions list for the selector UI directly from DB (fetching fresh versions)
     available_versions = []
-    for pv in cur.versions:
+    page_versions = session.query(db.PageVersion).filter_by(page_id=cur.id).order_by(db.PageVersion.id.asc()).all()
+    for pv in page_versions:
         available_versions.append({
             "version_key": pv.version_key,
             "display_name": get_version_display_name(pv.version_key),
