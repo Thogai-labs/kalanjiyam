@@ -320,6 +320,8 @@ def create_project():
 
         slug = slugify(title)
 
+        session = q.get_session()
+
         # Check DB before writing files to storage to prevent overwriting existing project files
         existing_proj = session.query(db.Project).filter_by(slug=slug).first()
         if existing_proj:
