@@ -1206,7 +1206,7 @@ def batch_ocr(slug):
                 total = len(r.results)
                 # Check if task is still in progress (not all tasks completed)
                 if current < total:
-                    percent = current / total if total > 0 else 0
+                    percent = (current / total * 100) if total > 0 else 0
                     
                     # Calculate task status variables
                     active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
@@ -1401,7 +1401,7 @@ def batch_ocr_status(task_id):
     if r.results:
         current = r.completed_count()
         total = len(r.results)
-        percent = current / total if total > 0 else 0
+        percent = (current / total * 100) if total > 0 else 0
 
         # Check if any tasks are actively being processed
         active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
@@ -1487,7 +1487,7 @@ def batch_translate(slug):
                 total = len(r.results)
                 # Check if task is still in progress (not all tasks completed)
                 if current < total:
-                    percent = current / total if total > 0 else 0
+                    percent = (current / total * 100) if total > 0 else 0
                     
                     # Calculate task status variables
                     active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
@@ -1626,7 +1626,7 @@ def batch_translate_status(task_id):
     if r.results:
         current = r.completed_count()
         total = len(r.results)
-        percent = current / total if total > 0 else 0
+        percent = (current / total * 100) if total > 0 else 0
 
         # Check if any tasks are actively being processed
         active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
