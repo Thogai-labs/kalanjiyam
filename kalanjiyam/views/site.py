@@ -56,10 +56,17 @@ def page_image(project_slug, page_slug):
     if not q.user_can_view_project(current_user, project_):
         abort(403)
 
+    from kalanjiyam.utils.storage import get_project_org_slug
     storage = get_storage()
-    key = page_image_key(project_slug, page_slug)
+    org_slug = get_project_org_slug(project_)
+    key = page_image_key(project_slug, page_slug, org_slug=org_slug)
     if not storage.exists(key):
-        abort(404)
+        # Fallback to legacy key for existing uploads
+        legacy_key = f"projects/{project_slug}/pages/{page_slug}.jpg"
+        if storage.exists(legacy_key):
+            key = legacy_key
+        else:
+            abort(404)
 
     return storage.serve(key)
 
@@ -73,10 +80,17 @@ def editor_image(project_slug, filename):
     if not q.user_can_view_project(current_user, project_):
         abort(403)
 
+    from kalanjiyam.utils.storage import get_project_org_slug
     storage = get_storage()
-    key = editor_image_key(project_slug, filename)
+    org_slug = get_project_org_slug(project_)
+    key = editor_image_key(project_slug, filename, org_slug=org_slug)
     if not storage.exists(key):
-        abort(404)
+        # Fallback to legacy key for existing editor uploads
+        legacy_key = f"projects/{project_slug}/images/{filename}"
+        if storage.exists(legacy_key):
+            key = legacy_key
+        else:
+            abort(404)
 
     return storage.serve(key)
 

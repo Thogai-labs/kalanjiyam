@@ -14,12 +14,16 @@ from kalanjiyam.utils.storage import (
 
 
 def test_key_layout_matches_historical_disk_layout():
-    assert project_prefix("my-book") == "projects/my-book/"
-    assert pdf_key("my-book") == "projects/my-book/pdf/source.pdf"
-    assert page_image_key("my-book", "12") == "projects/my-book/pages/12.jpg"
+    assert project_prefix("my-book") == "projects/open-tenant/my-book/"
+    assert pdf_key("my-book") == "projects/open-tenant/my-book/pdf/source.pdf"
+    assert page_image_key("my-book", "12") == "projects/open-tenant/my-book/pages/12.jpg"
     assert editor_image_key("my-book", "fig_1a2b.png") == (
-        "projects/my-book/images/fig_1a2b.png"
+        "projects/open-tenant/my-book/images/fig_1a2b.png"
     )
+
+    # Test explicit organization slug
+    assert project_prefix("my-book", org_slug="ignou") == "projects/ignou/my-book/"
+    assert pdf_key("my-book", org_slug="ignou") == "projects/ignou/my-book/pdf/source.pdf"
 
 
 class TestLocalStorage:

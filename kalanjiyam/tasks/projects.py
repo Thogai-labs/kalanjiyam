@@ -20,7 +20,7 @@ from config import create_config_only_app
 
 
 def _split_pdf_into_pages(
-    pdf_path: Path, slug: str, storage: Storage, task_status: TaskStatus
+    pdf_path: Path, slug: str, storage: Storage, task_status: TaskStatus, org_slug: str = "open-tenant"
 ) -> int:
     """Split the given PDF into N .jpg images, one image per page.
 
@@ -39,7 +39,7 @@ def _split_pdf_into_pages(
             pix = page.get_pixmap(dpi=200)
             tmp_path = Path(tmp_dir) / f"{n}.jpg"
             pix.pil_save(tmp_path, optimize=True)
-            storage.save(page_image_key(slug, str(n)), tmp_path)
+            storage.save(page_image_key(slug, str(n), org_slug=org_slug), tmp_path)
             tmp_path.unlink()
             task_status.progress(n, doc.page_count)
     return doc.page_count
@@ -106,7 +106,7 @@ def _add_project_to_database(
     session.commit()
 
 
-def _extract_docx_images(doc, project_slug, storage) -> dict:
+def _extract_docx_images(doc, project_slug, storage, org_slug: str = "open-tenant") -> dict:
     image_mapping = {}
     for r_id, rel in doc.part.rels.items():
         if "image" in rel.reltype or "image" in rel.target_ref:
@@ -115,7 +115,7 @@ def _extract_docx_images(doc, project_slug, storage) -> dict:
                 ext = rel.target_ref.split(".")[-1]
                 filename = f"image_{r_id}.{ext}"
                 from kalanjiyam.utils.storage import editor_image_key
-                key = editor_image_key(project_slug, filename)
+                key = editor_image_key(project_slug, filename, org_slug=org_slug)
                 storage.save(key, img_bytes)
                 image_mapping[r_id] = filename
             except Exception as ex:
@@ -574,6 +574,7 @@ def create_project_inner(
     creator_id: int | None,
     fingerprint_id: str | None = None,
     task_status: TaskStatus,
+    org_slug: str = "open-tenant",
 ):
     """Split the given PDF or DOCX into pages and register the project on the database."""
     logging.info(f'Received upload task "{display_title}" for key {pdf_key or docx_key}.')
@@ -598,7 +599,7 @@ def create_project_inner(
 
             from docx import Document
             doc = Document(docx_path)
-            image_mapping = _extract_docx_images(doc, slug, storage)
+            image_mapping = _extract_docx_images(doc, slug, storage, org_slug=org_slug)
             pages_list = _segment_docx(doc, slug, image_mapping)
             num_pages = len(pages_list)
 
@@ -674,7 +675,7 @@ def create_project_inner(
             if not pdf_path.exists():
                 raise ValueError(f'Source PDF not found in storage: "{pdf_key}".')
 
-            num_pages = _split_pdf_into_pages(pdf_path, slug, storage, task_status)
+            num_pages = _split_pdf_into_pages(pdf_path, slug, storage, task_status, org_slug=org_slug)
             require_org = bool(app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True))
             _add_project_to_database(
                 display_title=display_title,
@@ -699,6 +700,7 @@ def create_project(
     app_environment: str,
     creator_id: int | None,
     fingerprint_id: str | None = None,
+    org_slug: str = "open-tenant",
 ):
     """Split the given PDF or DOCX into pages and register the project on the database."""
     task_status = CeleryTaskStatus(self)
@@ -710,6 +712,7 @@ def create_project(
         creator_id=creator_id,
         fingerprint_id=fingerprint_id,
         task_status=task_status,
+        org_slug=org_slug,
     )
 
 

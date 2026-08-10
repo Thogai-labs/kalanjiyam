@@ -197,14 +197,15 @@ def save_revision_document(revision: Any, document: dict) -> bool:
     If S3/VersityGW write fails, falls back to saving in DB column `document`.
     Returns True if written to S3, False if fell back to DB.
     """
-    from kalanjiyam.utils.storage import get_storage, revision_document_key
+    from kalanjiyam.utils.storage import get_project_org_slug, get_storage, revision_document_key
 
     try:
         page = revision.page
         project = revision.project
+        org_slug = get_project_org_slug(project)
         v_num = get_page_revision_index(revision)
         tag = derive_revision_tag(revision)
-        key = revision_document_key(project.slug, page.slug, v_num, tag=tag)
+        key = revision_document_key(project.slug, page.slug, v_num, tag=tag, org_slug=org_slug)
         get_storage().save_json_gz(key, document)
         return True
     except Exception as err:
@@ -222,18 +223,19 @@ def load_revision_document(revision: Any) -> dict | None:
 
     Returns ``None`` when no document exists in either location.
     """
-    from kalanjiyam.utils.storage import get_storage, revision_document_key
+    from kalanjiyam.utils.storage import get_project_org_slug, get_storage, revision_document_key
 
     page = getattr(revision, "page", None)
     project = getattr(revision, "project", None)
     if page is not None and project is not None:
         storage = get_storage()
+        org_slug = get_project_org_slug(project)
         v_num = get_page_revision_index(revision)
         tag = derive_revision_tag(revision)
 
         # 1. Try page-local tagged key first (e.g. user-john_v1.json.gz)
         try:
-            key = revision_document_key(project.slug, page.slug, v_num, tag=tag)
+            key = revision_document_key(project.slug, page.slug, v_num, tag=tag, org_slug=org_slug)
             data = storage.load_json_gz(key)
             if data is not None:
                 return data
@@ -242,7 +244,8 @@ def load_revision_document(revision: Any) -> dict | None:
 
         # 2. Try untagged version key & DB ID fallback keys
         fallback_keys = [
-            revision_document_key(project.slug, page.slug, v_num, tag=""),
+            revision_document_key(project.slug, page.slug, v_num, tag="", org_slug=org_slug),
+            revision_document_key(project.slug, page.slug, v_num, tag=tag, org_slug="open-tenant"),
             f"projects/{project.slug}/revisions/{page.slug}/{tag}_rev{revision.id}.json.gz",
             f"projects/{project.slug}/revisions/{page.slug}/rev{revision.id}.json.gz",
             f"projects/{project.slug}/revisions/{page.slug}/{revision.id}.json.gz",

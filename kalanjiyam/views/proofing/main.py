@@ -318,8 +318,22 @@ def create_project():
                 return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
         title = form.local_title.data
 
-        # TODO: add timestamp to slug for extra uniqueness?
         slug = slugify(title)
+
+        # Check DB before writing files to storage to prevent overwriting existing project files
+        existing_proj = session.query(db.Project).filter_by(slug=slug).first()
+        if existing_proj:
+            flash(_l('Project "%(title)s" already exists. Please choose a different title.', title=title), "error")
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
+
+        org_slug = "open-tenant"
+        if current_user.is_authenticated:
+            from kalanjiyam.utils.org_access import user_organization_id
+            org_id = user_organization_id(current_user)
+            if org_id:
+                group = session.query(db.Group).get(org_id)
+                if group:
+                    org_slug = group.slug
 
         filename = form.local_file.raw_data[0].filename
         if not _is_allowed_document_file(filename):
@@ -355,11 +369,11 @@ def create_project():
         source_docx_key = None
 
         if is_uploaded_docx:
-            source_docx_key = project_docx_key(slug)
+            source_docx_key = project_docx_key(slug, org_slug=org_slug)
             form.local_file.data.stream.seek(0)
             get_storage().save(source_docx_key, form.local_file.data.stream)
         else:
-            source_pdf_key = pdf_key(slug)
+            source_pdf_key = pdf_key(slug, org_slug=org_slug)
             form.local_file.data.stream.seek(0)
             get_storage().save(source_pdf_key, form.local_file.data.stream)
 
@@ -383,6 +397,7 @@ def create_project():
                     "app_environment": current_app.config["KALANJIYAM_ENVIRONMENT"],
                     "creator_id": None,
                     "fingerprint_id": request.cookies.get("device_fingerprint"),
+                    "org_slug": org_slug,
                 },
                 queue="low_priority"
             )
@@ -393,6 +408,7 @@ def create_project():
                 docx_key=source_docx_key,
                 app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
                 creator_id=current_user.id,
+                org_slug=org_slug,
             )
 
         from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier

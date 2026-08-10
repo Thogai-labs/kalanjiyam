@@ -36,29 +36,38 @@ from flask import current_app, redirect, send_file
 # -----------
 
 
-def project_prefix(project_slug: str) -> str:
+def get_project_org_slug(project) -> str:
+    """Return org_slug for a project, defaulting to 'open-tenant'."""
+    if project is not None:
+        groups = getattr(project, "groups", None)
+        if groups:
+            return groups[0].slug
+    return "open-tenant"
+
+
+def project_prefix(project_slug: str, org_slug: str = "open-tenant") -> str:
     """Key prefix that contains every file belonging to a project."""
-    return f"projects/{project_slug}/"
+    return f"projects/{org_slug}/{project_slug}/"
 
 
-def pdf_key(project_slug: str) -> str:
+def pdf_key(project_slug: str, org_slug: str = "open-tenant") -> str:
     """Key of a project's source PDF."""
-    return f"projects/{project_slug}/pdf/source.pdf"
+    return f"projects/{org_slug}/{project_slug}/pdf/source.pdf"
 
 
-def page_image_key(project_slug: str, page_slug: str) -> str:
+def page_image_key(project_slug: str, page_slug: str, org_slug: str = "open-tenant") -> str:
     """Key of a single page image."""
-    return f"projects/{project_slug}/pages/{page_slug}.jpg"
+    return f"projects/{org_slug}/{project_slug}/pages/{page_slug}.jpg"
 
 
-def editor_image_key(project_slug: str, filename: str) -> str:
+def editor_image_key(project_slug: str, filename: str, org_slug: str = "open-tenant") -> str:
     """Key of an image uploaded through the rich-text editor."""
-    return f"projects/{project_slug}/images/{filename}"
+    return f"projects/{org_slug}/{project_slug}/images/{filename}"
 
 
-def project_docx_key(project_slug: str) -> str:
+def project_docx_key(project_slug: str, org_slug: str = "open-tenant") -> str:
     """Key of a project's source DOCX."""
-    return f"projects/{project_slug}/docx/source.docx"
+    return f"projects/{org_slug}/{project_slug}/docx/source.docx"
 
 
 def docx_upload_key(docx_id: str) -> str:
@@ -71,7 +80,7 @@ def docx_translation_key(docx_id: str) -> str:
     return f"docx/translations/{docx_id}.docx"
 
 
-def page_ocr_key(project_slug: str, page_slug: str) -> str:
+def page_ocr_key(project_slug: str, page_slug: str, org_slug: str = "open-tenant") -> str:
     """[DEPRECATED for write calls] Key for a page's raw OCR bounding-box payload (gzipped JSON).
 
     Under Strategy B (Unified PageDocument Model), new OCR processing no longer
@@ -79,20 +88,21 @@ def page_ocr_key(project_slug: str, page_slug: str) -> str:
     are derived dynamically from revision documents (`PageDocument.blocks`).
     This function remains for legacy read fallback and storage cleanup scripts.
     """
-    return f"projects/{project_slug}/ocr/{page_slug}.json.gz"
+    return f"projects/{org_slug}/{project_slug}/ocr/{page_slug}.json.gz"
 
 
 def revision_document_key(
-    project_slug: str, page_slug: str, version_num: int, tag: str = ""
+    project_slug: str, page_slug: str, version_num: int, tag: str = "", org_slug: str = "open-tenant"
 ) -> str:
     """Key for a revision's structured block document snapshot (gzipped JSON)."""
     prefix = f"{tag}_" if tag else ""
-    return f"projects/{project_slug}/revisions/{page_slug}/{prefix}v{version_num}.json.gz"
+    return f"projects/{org_slug}/{project_slug}/revisions/{page_slug}/{prefix}v{version_num}.json.gz"
 
 
-def comparison_result_key(project_slug: str, comparison_id: int) -> str:
+def comparison_result_key(project_slug: str, comparison_id: int, org_slug: str = "open-tenant") -> str:
     """Key for detailed per-page OCR comparison results (gzipped JSON)."""
-    return f"projects/{project_slug}/comparisons/{comparison_id}.json.gz"
+    return f"projects/{org_slug}/{project_slug}/comparisons/{comparison_id}.json.gz"
+
 
 
 # Storage interface
