@@ -550,6 +550,7 @@ export default () => ({
     
     // Flow editor is lazy-init when the pane becomes visible (TipTap breaks in display:none).
     this.initPageDocumentEditor();
+    this.checkVersionAndCacheOnLoad();
     if (this.editorMode === 'flow') {
       setTimeout(() => this.ensureFlowEditor(), 0);
     }
@@ -663,7 +664,14 @@ export default () => ({
           } else {
             const key = this._getStorageKey();
             if (key && this.pageDocument) {
-              localStorage.setItem(key, JSON.stringify(this.pageDocument));
+              const serverVer = (typeof window.PAGE_VERSION !== 'undefined') ? parseInt(window.PAGE_VERSION, 10) : 0;
+              const payload = {
+                version: serverVer,
+                document: this.pageDocument,
+                content: html,
+                timestamp: Date.now()
+              };
+              localStorage.setItem(key, JSON.stringify(payload));
             }
           }
         }
@@ -1784,12 +1792,18 @@ export default () => ({
     this._applyContentToEditors(this.yourContent);
     this.showConflictResolver = false;
     this.hasUnsavedChanges = true;
+    const versionField = document.querySelector('input[name="version"]');
+    if (versionField && typeof window.PAGE_VERSION !== 'undefined') {
+      versionField.value = window.PAGE_VERSION;
+    }
   },
 
   useIncomingVersion() {
     this._applyContentToEditors(this.conflictContent);
     this.showConflictResolver = false;
-    this.hasUnsavedChanges = true;
+    this.hasUnsavedChanges = false;
+    const key = this._getStorageKey();
+    if (key) localStorage.removeItem(key);
   },
 
   insertGitConflictMarkers() {
@@ -1797,10 +1811,48 @@ export default () => ({
     this._applyContentToEditors(gitMerged);
     this.showConflictResolver = false;
     this.hasUnsavedChanges = true;
+    const versionField = document.querySelector('input[name="version"]');
+    if (versionField && typeof window.PAGE_VERSION !== 'undefined') {
+      versionField.value = window.PAGE_VERSION;
+    }
   },
 
   dismissConflictResolver() {
     this.showConflictResolver = false;
+  },
+
+  checkVersionAndCacheOnLoad() {
+    const key = this._getStorageKey();
+    if (!key) return;
+    const cachedStr = localStorage.getItem(key);
+    if (!cachedStr) return;
+
+    try {
+      const parsed = JSON.parse(cachedStr);
+      const docData = parsed.document || (parsed.blocks ? parsed : null);
+      if (!docData) return;
+
+      const cachedVer = parsed.version !== undefined ? parseInt(parsed.version, 10) : 0;
+      const serverVer = (typeof window.PAGE_VERSION !== 'undefined') ? parseInt(window.PAGE_VERSION, 10) : 0;
+
+      if (serverVer > cachedVer) {
+        // Server version is higher than local backup version!
+        const localText = parsed.content || (docData ? documentToPlainText(docData) : '');
+        const serverText = (this.pageDocument ? documentToPlainText(this.pageDocument) : '') || this.content;
+
+        if (localText && serverText && localText.trim() !== serverText.trim()) {
+          this.yourContent = localText;
+          this.conflictContent = serverText;
+          this.conflictDiff = (typeof window.CONFLICT_DIFF !== 'undefined' && window.CONFLICT_DIFF)
+            ? window.CONFLICT_DIFF
+            : computeSimpleDiff(serverText, localText);
+          this.showConflictResolver = true;
+          this.conflictViewMode = 'split';
+        }
+      }
+    } catch (e) {
+      console.error('Error checking version and cache on load:', e);
+    }
   },
 
   _applyContentToEditors(text) {
@@ -1883,3 +1935,32 @@ export default () => ({
     }
   },
 });
+
+function computeSimpleDiff(oldText, newText) {
+  if (!oldText && !newText) return '';
+  if (oldText === newText) return escapeHtml(oldText || '');
+  const oldLines = (oldText || '').split('\n');
+  const newLines = (newText || '').split('\n');
+  let result = [];
+  let i = 0, j = 0;
+  while (i < oldLines.length || j < newLines.length) {
+    if (i < oldLines.length && j < newLines.length && oldLines[i] === newLines[j]) {
+      result.push(escapeHtml(oldLines[i]));
+      i++; j++;
+    } else {
+      if (i < oldLines.length) {
+        result.push('<del class="bg-red-900/60 text-red-300 line-through px-1 rounded block mb-0.5">' + escapeHtml(oldLines[i]) + '</del>');
+        i++;
+      }
+      if (j < newLines.length) {
+        result.push('<ins class="bg-emerald-900/60 text-emerald-300 font-bold px-1 rounded block mb-0.5">' + escapeHtml(newLines[j]) + '</ins>');
+        j++;
+      }
+    }
+  }
+  return result.join('\n');
+}
+
+function escapeHtml(str) {
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}

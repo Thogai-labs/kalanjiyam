@@ -201,7 +201,13 @@ export class ReplicaView {
   triggerChange() {
     const key = this._getStorageKey();
     if (key) {
-      localStorage.setItem(key, JSON.stringify(this.document));
+      const serverVer = (typeof window.PAGE_VERSION !== 'undefined') ? parseInt(window.PAGE_VERSION, 10) : 0;
+      const payload = {
+        version: serverVer,
+        document: this.document,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(key, JSON.stringify(payload));
     }
     this.onChange(this.document);
   }
@@ -229,8 +235,12 @@ export class ReplicaView {
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
-          if (parsed && parsed.blocks && parsed.blocks.length > 0) {
-            this.document = parsed;
+          const docData = parsed.document || (parsed.blocks ? parsed : null);
+          const cachedVer = parsed.version !== undefined ? parseInt(parsed.version, 10) : 0;
+          const serverVer = (typeof window.PAGE_VERSION !== 'undefined') ? parseInt(window.PAGE_VERSION, 10) : 0;
+
+          if (docData && docData.blocks && docData.blocks.length > 0 && serverVer <= cachedVer) {
+            this.document = docData;
             this.isRestoredFromCache = true;
             this._render();
             this.onChange(this.document);

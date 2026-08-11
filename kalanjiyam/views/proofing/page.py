@@ -447,7 +447,14 @@ def _editor_template_kwargs(
         if conflict.author:
             conflict_author_name = conflict.author.username or conflict.author.email or ""
 
+    target_version_record = session.query(db.PageVersion).filter_by(
+        page_id=cur.id,
+        version_key=target_version_key
+    ).first()
+    page_version = target_version_record.version if target_version_record else 0
+
     return {
+        "page_version": page_version,
         "conflict": conflict,
         "conflict_diff": conflict_diff,
         "conflict_author_name": conflict_author_name,
