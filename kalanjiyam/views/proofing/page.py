@@ -798,8 +798,12 @@ def edit_post(project_slug, page_slug):
                 }
         else:
             content_format = "blocks" if doc else "plain"
+        session = q.get_session()
+        merge_with_main = request.form.get("merge_with_main") == "1" or not current_user.is_authenticated
+        primary_key = "role:p1" if merge_with_main else (f"user:{current_user.id}" if current_user.is_authenticated else "role:p1")
+
         try:
-            # Dual-Save Model: Save to shared main branch (target_key) with optimistic locking
+            # Save to primary_key (main branch role:p1 or private user track)
             new_version = add_revision(
                 cur,
                 summary=form.summary.data,
@@ -809,12 +813,12 @@ def edit_post(project_slug, page_slug):
                 author_id=current_user.id if current_user.is_authenticated else None,
                 document=doc,
                 content_format=content_format,
-                version_key=target_key,
+                version_key=primary_key,
             )
             form.version.data = new_version
 
-            # Dual-Save Model: Also save personal user track snapshot if authenticated
-            if current_user.is_authenticated and target_key != f"user:{current_user.id}":
+            # Dual-Save Model: Also save personal user track snapshot if merge_with_main is active
+            if merge_with_main and current_user.is_authenticated:
                 user_key = f"user:{current_user.id}"
                 user_ver_rec = session.query(db.PageVersion).filter_by(
                     page_id=cur.id,
@@ -837,14 +841,14 @@ def edit_post(project_slug, page_slug):
                     pass
 
             flash(_l("Saved changes."), "success")
-            active_key = target_key
+            active_key = primary_key
         except EditError:
             flash(_l("Edit conflict. Please incorporate the changes below:"), "error")
-            # Get latest revision of target_key to display as conflict
+            # Get latest revision of primary_key to display as conflict
             session = q.get_session()
             target_version_record = session.query(db.PageVersion).filter_by(
                 page_id=cur.id,
-                version_key=target_key
+                version_key=primary_key
             ).first()
             conflict = target_version_record.revisions[-1] if target_version_record and target_version_record.revisions else None
             form.version.data = target_version_record.version if target_version_record else 0

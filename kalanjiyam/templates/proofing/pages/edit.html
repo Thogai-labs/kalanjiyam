@@ -358,6 +358,25 @@
           </div>
         </div>
 
+        {% if current_user.is_authenticated %}
+        <!-- Merge with Main Branch Checkbox Option -->
+        <div class="mt-5 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-4">
+          <label for="merge_with_main" class="flex items-start gap-3 cursor-pointer select-none">
+            <input type="checkbox" 
+                   name="merge_with_main" 
+                   id="merge_with_main" 
+                   value="1" 
+                   checked 
+                   class="mt-0.5 w-4 h-4 rounded text-royalblue focus:ring-royalblue border-slate-300 transition-all cursor-pointer">
+            <div>
+              <span class="text-xs font-bold text-slate-800 block">{{ _('Merge changes into main branch (role:p1)') }}</span>
+              <span class="text-[11px] text-slate-500 block mt-0.5">{{ _('Updates the shared project document so other proofreaders immediately see your changes.') }}</span>
+            </div>
+          </label>
+          <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-mono font-bold uppercase shrink-0">{{ _('Default') }}</span>
+        </div>
+        {% endif %}
+
         {% if can_save %}
         {% set cc0 = "https://creativecommons.org/publicdomain/zero/1.0/" %}
         <div class="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
