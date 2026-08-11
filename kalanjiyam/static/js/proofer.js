@@ -1836,14 +1836,30 @@ export default () => ({
   openManualResolver() {
     this.conflictViewMode = 'manual';
     setTimeout(() => {
-      if (!this.conflictManualEditor) {
-        const gitMerged = `<<<<<<< YOUR VERSION (Local Edits)\n${this.yourContent}\n=======\n${this.conflictContent}\n>>>>>>> INCOMING VERSION (Server Saved)`;
-        const editorEl = document.getElementById('conflict-tiptap-editor');
-        if (editorEl) {
+      const localText = this.yourContent || (typeof window.YOUR_CONTENT !== 'undefined' ? window.YOUR_CONTENT : '') || (this.pageDocument ? documentToPlainText(this.pageDocument) : '') || this.content || '';
+      const serverText = this.conflictContent || (typeof window.CONFLICT_CONTENT !== 'undefined' ? window.CONFLICT_CONTENT : '');
+      
+      const gitMergedRaw = `<<<<<<< YOUR VERSION (Local Edits)\n${localText}\n=======\n${serverText}\n>>>>>>> INCOMING VERSION (Server Saved)`;
+      
+      const gitMergedHtml = gitMergedRaw
+        .split('\n')
+        .map(line => {
+          const escaped = line
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+          return `<p>${escaped || '<br>'}</p>`;
+        })
+        .join('');
+
+      const editorEl = document.getElementById('conflict-tiptap-editor');
+      if (editorEl) {
+        if (!this.conflictManualEditor) {
           this.conflictManualEditor = createRichEditor('conflict-tiptap-editor', {
-            content: '',
+            content: gitMergedHtml,
           });
-          setEditorText(this.conflictManualEditor, gitMerged);
+        } else {
+          setEditorContent(this.conflictManualEditor, gitMergedHtml);
         }
       }
     }, 50);
@@ -1855,7 +1871,9 @@ export default () => ({
       resolvedText = getEditorText(this.conflictManualEditor) || getEditorContent(this.conflictManualEditor);
       this._destroyConflictManualEditor();
     } else {
-      resolvedText = `<<<<<<< YOUR VERSION (Local Edits)\n${this.yourContent}\n=======\n${this.conflictContent}\n>>>>>>> INCOMING VERSION (Server Saved)`;
+      const localText = this.yourContent || this.content || '';
+      const serverText = this.conflictContent || '';
+      resolvedText = `<<<<<<< YOUR VERSION (Local Edits)\n${localText}\n=======\n${serverText}\n>>>>>>> INCOMING VERSION (Server Saved)`;
     }
     this._applyContentToEditors(resolvedText);
     this.showConflictResolver = false;
