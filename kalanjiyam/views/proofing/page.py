@@ -459,6 +459,23 @@ def _editor_template_kwargs(
     page_rules = project_utils.parse_page_number_spec(ctx.project.page_numbers)
     page_titles = project_utils.apply_rules(len(ctx.project.pages), page_rules)
     pages = list(zip(page_titles, ctx.project.pages))
+    main_version_record = session.query(db.PageVersion).filter_by(
+        page_id=cur.id,
+        version_key="main"
+    ).first()
+    active_version_record = session.query(db.PageVersion).filter_by(
+        page_id=cur.id,
+        version_key=active_version_key
+    ).first()
+
+    # Detect if active track is user draft and main has newer edits from someone else
+    if not conflict and active_version_key.startswith("user:") and main_version_record and active_version_record:
+        if main_version_record.updated_at > active_version_record.updated_at:
+            main_latest = main_version_record.revisions[-1] if main_version_record.revisions else None
+            your_text = form.content.data or page_plain_text or ""
+            if main_latest and main_latest.content and main_latest.content.strip() != your_text.strip():
+                conflict = main_latest
+
     conflict_diff = ""
     conflict_author_name = ""
     your_content = form.content.data or page_plain_text or ""
@@ -820,11 +837,14 @@ def edit_post(project_slug, page_slug):
         merge_with_main = request.form.get("merge_with_main") == "1" or not current_user.is_authenticated
         primary_key = "main" if merge_with_main else (f"user:{current_user.id}" if current_user.is_authenticated else "main")
 
-        primary_ver_rec = session.query(db.PageVersion).filter_by(
-            page_id=cur.id,
-            version_key=primary_key
-        ).first()
-        expected_version = primary_ver_rec.version if primary_ver_rec else int(form.version.data)
+        if merge_with_main:
+            expected_version = int(form.version.data) if form.version.data is not None else 0
+        else:
+            primary_ver_rec = session.query(db.PageVersion).filter_by(
+                page_id=cur.id,
+                version_key=primary_key
+            ).first()
+            expected_version = primary_ver_rec.version if primary_ver_rec else 0
 
         try:
             # Save to primary_key (Main Branch 'main' or private user track)
@@ -844,6 +864,10 @@ def edit_post(project_slug, page_slug):
             # Dual-Save Model: Also save personal user track snapshot if merge_with_main is active
             if merge_with_main and current_user.is_authenticated:
                 user_key = f"user:{current_user.id}"
+                # Re-fetch fresh session state after the main branch commit
+                # to prevent stale version counters causing spurious EditError.
+                session = q.get_session()
+                session.expire_all()
                 user_ver_rec = session.query(db.PageVersion).filter_by(
                     page_id=cur.id,
                     version_key=user_key
@@ -861,8 +885,14 @@ def edit_post(project_slug, page_slug):
                         content_format=content_format,
                         version_key=user_key,
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        "Dual-save to personal track %s failed for page %s: %s",
+                        user_key, cur.slug, exc, exc_info=True,
+                    )
+                    flash(_l("Warning: Your personal draft could not be updated. "
+                             "Main branch was saved successfully."), "warning")
 
             flash(_l("Saved changes."), "success")
             active_key = primary_key

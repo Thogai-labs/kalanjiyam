@@ -15,6 +15,34 @@ from kalanjiyam.utils.storage import get_storage, editor_image_key
 
 DOUBLE_DANDA = "\u0965"
 
+def get_main_revision(page):
+    """Get the latest revision from the main branch, with tiered fallback.
+
+    Prefers the 'main' PageVersion track. Falls back to the most recently
+    updated track, then to the legacy flat revision list.
+    """
+    from datetime import datetime as _dt
+
+    versions = getattr(page, "versions", None)
+    if versions:
+        for pv in versions:
+            if pv.version_key == "main" and pv.revisions:
+                return pv.revisions[-1]
+        # Fallback: most recently updated track with revisions
+        sorted_versions = sorted(
+            versions,
+            key=lambda v: v.updated_at or _dt.min,
+            reverse=True,
+        )
+        for pv in sorted_versions:
+            if pv.revisions:
+                return pv.revisions[-1]
+
+    # Legacy fallback
+    if page.revisions:
+        return page.revisions[-1]
+    return None
+
 TEI_HEADER_BOILERPLATE = """
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- This file was automatically generated. Please review it for markup mistakes
@@ -203,8 +231,8 @@ def documents_to_tei_xml(project_meta: dict[str, str], pages) -> str:
     for i, page in enumerate(pages):
         page_number = i + 1
         buf.append(f'<pb n="{page_number}" />')
-        if page.revisions:
-            rev = page.revisions[-1]
+        rev = get_main_revision(page)
+        if rev:
             from kalanjiyam.utils.document_storage import load_revision_document
 
             rev_doc = load_revision_document(rev)
@@ -230,8 +258,8 @@ def documents_to_html(pages, *, replica: bool = False) -> str:
     ]
     for page in pages:
         parts.append(f'<section class="ocr-export-page" data-page="{page.slug}">')
-        if page.revisions:
-            rev = page.revisions[-1]
+        rev = get_main_revision(page)
+        if rev:
             from kalanjiyam.utils.document_storage import load_revision_document
 
             if load_revision_document(rev):
@@ -261,8 +289,8 @@ def documents_to_json_bundle(project, pages) -> str:
             "page_height": page.page_height,
             "ocr_bounding_boxes": load_page_ocr(page),
         }
-        if page.revisions:
-            rev = page.revisions[-1]
+        rev = get_main_revision(page)
+        if rev:
             entry["revision"] = {
                 "content": rev.content,
                 "content_format": getattr(rev, "content_format", "plain"),

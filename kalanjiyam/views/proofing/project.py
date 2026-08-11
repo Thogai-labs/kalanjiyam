@@ -650,9 +650,12 @@ def download_as_text(slug):
     if project_ is None:
         abort(404)
 
-    content_blobs = [
-        p.revisions[-1].content if p.revisions else "" for p in project_.pages
-    ]
+    from kalanjiyam.utils.proofing_utils import get_main_revision
+    content_blobs = []
+    for p in project_.pages:
+        rev = get_main_revision(p)
+        content_blobs.append(rev.content if rev else "")
+
     raw_text = proofing_utils.to_plain_text(content_blobs)
 
     response = make_response(raw_text, 200)
@@ -681,18 +684,18 @@ def download_as_xml(slug):
     project_meta = {k: v or "TODO" for k, v in project_meta.items()}
     from kalanjiyam.utils.document_storage import load_revision_document as _load_doc
 
+    from kalanjiyam.utils.proofing_utils import get_main_revision
     has_blocks = any(
-        p.revisions
-        and getattr(p.revisions[-1], "content_format", "plain") == "blocks"
-        and _load_doc(p.revisions[-1])
+        (lambda rev: rev and getattr(rev, "content_format", "plain") == "blocks" and _load_doc(rev))(get_main_revision(p))
         for p in project_.pages
     )
     if has_blocks:
         xml_blob = proofing_utils.documents_to_tei_xml(project_meta, project_.pages)
     else:
-        content_blobs = [
-            p.revisions[-1].content if p.revisions else "" for p in project_.pages
-        ]
+        content_blobs = []
+        for p in project_.pages:
+            rev = get_main_revision(p)
+            content_blobs.append(rev.content if rev else "")
         xml_blob = proofing_utils.to_tei_xml(project_meta, content_blobs)
 
     response = make_response(xml_blob, 200)

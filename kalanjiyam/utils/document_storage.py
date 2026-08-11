@@ -110,6 +110,44 @@ def load_page_ocr(page: Any) -> str | None:
 
     Returns ``None`` when no OCR data exists in any location.
     """
+    # Strategy 1: Prefer revisions from explicit OCR tracks (ocr:google, etc.)
+    versions = getattr(page, "versions", None)
+    if versions:
+        from datetime import datetime as _dt
+        ocr_tracks = sorted(
+            [v for v in versions if v.version_key.startswith("ocr:") and v.revisions],
+            key=lambda v: v.updated_at or _dt.min,
+            reverse=True,
+        )
+        for track in ocr_tracks:
+            try:
+                latest_rev = track.revisions[-1]
+                doc_dict = load_revision_document(latest_rev)
+                derived = _derive_bounding_boxes_from_document(doc_dict)
+                if derived is not None:
+                    return derived
+            except Exception as err:
+                LOG.warning(
+                    "Failed to derive bounding boxes from OCR track %s for page %s: %s",
+                    track.version_key, getattr(page, "slug", page), err,
+                )
+
+        # Strategy 2: Fall back to main track
+        main_tracks = [v for v in versions if v.version_key == "main" and v.revisions]
+        for track in main_tracks:
+            try:
+                latest_rev = track.revisions[-1]
+                doc_dict = load_revision_document(latest_rev)
+                derived = _derive_bounding_boxes_from_document(doc_dict)
+                if derived is not None:
+                    return derived
+            except Exception as err:
+                LOG.warning(
+                    "Failed to derive bounding boxes from main track for page %s: %s",
+                    getattr(page, "slug", page), err,
+                )
+
+    # Strategy 3: Legacy flat revision list fallback
     revisions = getattr(page, "revisions", None)
     if revisions:
         try:
@@ -121,8 +159,7 @@ def load_page_ocr(page: Any) -> str | None:
         except Exception as err:
             LOG.warning(
                 "Failed to derive bounding boxes from page %s revision: %s",
-                getattr(page, "slug", page),
-                err,
+                getattr(page, "slug", page), err,
             )
 
     # Legacy dual-read fallback: S3 / VersityGW payload
