@@ -88,8 +88,7 @@ def _export_revision_payloads(project: db.Project, files_dir: Path) -> None:
             if doc is not None:
                 page_rev_dir.mkdir(parents=True, exist_ok=True)
                 tag = derive_revision_tag(revision)
-                v_num = get_page_revision_index(revision)
-                filename = f"{tag}_v{v_num}.json.gz"
+                filename = f"{tag}.json.gz" if tag else f"v{get_page_revision_index(revision)}.json.gz"
                 payload_path = page_rev_dir / filename
                 if isinstance(doc, dict) and "timestamp" not in doc:
                     created_dt = getattr(revision, "created", None)

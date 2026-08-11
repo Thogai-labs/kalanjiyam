@@ -114,12 +114,13 @@ def page_ocr_key(project_slug: str, page_slug: str, org_slug: str = None) -> str
 
 
 def revision_document_key(
-    project_slug: str, page_slug: str, version_num: int, tag: str = "", org_slug: str = None
+    project_slug: str, page_slug: str, version_num: int = 1, tag: str = "", org_slug: str = None
 ) -> str:
     """Key for a revision's structured block document snapshot (gzipped JSON)."""
     org = resolve_org_slug(project_slug, org_slug)
-    prefix = f"{tag}_" if tag else ""
-    return f"projects/{org}/{project_slug}/revisions/{page_slug}/{prefix}v{version_num}.json.gz"
+    if tag:
+        return f"projects/{org}/{project_slug}/revisions/{page_slug}/{tag}.json.gz"
+    return f"projects/{org}/{project_slug}/revisions/{page_slug}/v{version_num}.json.gz"
 
 
 def comparison_result_key(project_slug: str, comparison_id: int, org_slug: str = None) -> str:

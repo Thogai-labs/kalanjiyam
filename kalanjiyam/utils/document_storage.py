@@ -292,7 +292,7 @@ def load_revision_document(revision: Any) -> dict | None:
         v_num = get_page_revision_index(revision)
         tag = derive_revision_tag(revision)
 
-        # 1. Try page-local model/user tagged key first (e.g. ocr-google_v1.json.gz, translation-nayan_sa-en_v1.json.gz, user-john_v1.json.gz)
+        # 1. Try canonical 1-file-per-track tagged key (e.g. ocr-dots-ocr.json.gz, user-admin01.json.gz, translation-nayan_sa-en.json.gz)
         try:
             key = revision_document_key(project.slug, page.slug, v_num, tag=tag, org_slug=org_slug)
             data = storage.load_json_gz(key)
@@ -301,7 +301,7 @@ def load_revision_document(revision: Any) -> dict | None:
         except Exception as err:
             LOG.warning("Failed to fetch revision %s document from S3: %s", getattr(revision, "id", revision), err)
 
-        # 2. Try untagged & legacy fallback keys (ocr_v1.json.gz, trans_v1.json.gz, etc.)
+        # 2. Try legacy version-suffixed & open-tenant fallback keys (ocr-dots-ocr_v1.json.gz, user-admin01_v4.json.gz, etc.)
         fallback_tags = []
         if tag.startswith("ocr-"):
             fallback_tags.append("ocr")
@@ -313,8 +313,10 @@ def load_revision_document(revision: Any) -> dict | None:
             fallback_keys.append(revision_document_key(project.slug, page.slug, v_num, tag=ftag, org_slug=org_slug))
 
         fallback_keys.extend([
-            revision_document_key(project.slug, page.slug, v_num, tag="", org_slug=org_slug),
-            revision_document_key(project.slug, page.slug, v_num, tag=tag, org_slug="open-tenant"),
+            f"projects/{org_slug}/{project.slug}/revisions/{page.slug}/{tag}_v{v_num}.json.gz",
+            f"projects/open-tenant/{project.slug}/revisions/{page.slug}/{tag}_v{v_num}.json.gz",
+            f"projects/{org_slug}/{project.slug}/revisions/{page.slug}/v{v_num}.json.gz",
+            f"projects/open-tenant/{project.slug}/revisions/{page.slug}/v{v_num}.json.gz",
             f"projects/{project.slug}/revisions/{page.slug}/{tag}_rev{getattr(revision, 'id', '')}.json.gz",
             f"projects/{project.slug}/revisions/{page.slug}/rev{getattr(revision, 'id', '')}.json.gz",
             f"projects/{project.slug}/revisions/{page.slug}/{getattr(revision, 'id', '')}.json.gz",
