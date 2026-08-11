@@ -67,8 +67,9 @@ if (!document.getElementById('ocr-replica-styles')) {
     }
     .ocr-replica-resize-handle {
       position: absolute;
-      right: -5px;
-      bottom: -5px;
+      right: 0;
+      bottom: 0;
+      transform: translate(50%, 50%);
       width: 12px;
       height: 12px;
       background-color: #2563eb;
