@@ -437,10 +437,20 @@ def _editor_template_kwargs(
 
     page_rules = project_utils.parse_page_number_spec(ctx.project.page_numbers)
     page_titles = project_utils.apply_rules(len(ctx.project.pages), page_rules)
-    pages = list(zip(page_titles, ctx.project.pages))
+    conflict_diff = ""
+    conflict_author_name = ""
+    your_content = form.content.data or page_plain_text or ""
+    if conflict:
+        from kalanjiyam.utils.diff import revision_diff
+        conflict_diff = str(revision_diff(conflict.content or "", your_content))
+        if conflict.author:
+            conflict_author_name = conflict.author.username or conflict.author.email or ""
 
     return {
         "conflict": conflict,
+        "conflict_diff": conflict_diff,
+        "conflict_author_name": conflict_author_name,
+        "your_content": your_content,
         "cur": cur,
         "form": form,
         "has_edits": has_edits,

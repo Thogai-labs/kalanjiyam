@@ -113,6 +113,13 @@ export default () => ({
   uncertainCount: 0,
   _uncertainCursor: -1,
 
+  // Conflict Resolver state
+  showConflictResolver: (typeof window.HAS_CONFLICT !== 'undefined' && window.HAS_CONFLICT),
+  conflictViewMode: 'split', // 'split' | 'diff'
+  conflictContent: (typeof window.CONFLICT_CONTENT !== 'undefined') ? window.CONFLICT_CONTENT : '',
+  yourContent: (typeof window.YOUR_CONTENT !== 'undefined') ? window.YOUR_CONTENT : '',
+  conflictDiff: (typeof window.CONFLICT_DIFF !== 'undefined') ? window.CONFLICT_DIFF : '',
+
   // Internal-only
   layoutClasses: CLASSES_SIDE_BY_SIDE,
   isRunningOCR: false,
@@ -1773,6 +1780,57 @@ export default () => ({
     navigator.clipboard.writeText(character);
   },
   
+  useYourVersion() {
+    this._applyContentToEditors(this.yourContent);
+    this.showConflictResolver = false;
+    this.hasUnsavedChanges = true;
+  },
+
+  useIncomingVersion() {
+    this._applyContentToEditors(this.conflictContent);
+    this.showConflictResolver = false;
+    this.hasUnsavedChanges = true;
+  },
+
+  insertGitConflictMarkers() {
+    const gitMerged = `<<<<<<< YOUR VERSION (Local Edits)\n${this.yourContent}\n=======\n${this.conflictContent}\n>>>>>>> INCOMING VERSION (Server Saved)`;
+    this._applyContentToEditors(gitMerged);
+    this.showConflictResolver = false;
+    this.hasUnsavedChanges = true;
+  },
+
+  dismissConflictResolver() {
+    this.showConflictResolver = false;
+  },
+
+  _applyContentToEditors(text) {
+    this.content = text;
+    const contentTextarea = document.getElementById('content');
+    if (contentTextarea) {
+      contentTextarea.value = text;
+      contentTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+      contentTextarea.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    if (window.richEditorInstance) {
+      try {
+        this._isProgrammaticUpdate = true;
+        setEditorContent(window.richEditorInstance, text);
+        this._isProgrammaticUpdate = false;
+      } catch (e) {
+        console.warn('Failed to update rich editor content:', e);
+      }
+    }
+    const newBlocks = blocksFromFlowHtml(text, this.pageDocument?.blocks || [], this.pageDocument?.content_format || 'blocks');
+    if (newBlocks.length && this.pageDocument) {
+      this.pageDocument = { ...this.pageDocument, blocks: newBlocks };
+      const docField = document.getElementById('document');
+      if (docField) docField.value = JSON.stringify(this.pageDocument);
+      if (this._replicaView) {
+        this._replicaView.setDocument(this.pageDocument);
+      }
+    }
+  },
+
   _getStorageKey() {
     const pathMatch = window.location.pathname.match(/\/proofing\/([^\/]+)\/([^\/]+)/);
     if (pathMatch) {
