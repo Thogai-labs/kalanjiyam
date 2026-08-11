@@ -48,6 +48,7 @@
   window.CONFLICT_CONTENT = {{ (conflict.content|default('')) | tojson }};
   window.YOUR_CONTENT = {{ (your_content|default('')) | tojson }};
   window.CONFLICT_DIFF = {{ (conflict_diff|default('')) | tojson }};
+  window.CONFLICT_TIME = {{ (conflict_time|default('')) | tojson }};
   {% endif %}
 </script>
 
@@ -121,7 +122,7 @@
                 <span class="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-mono uppercase tracking-wider border border-amber-200 font-semibold">{{ _('Merge Required') }}</span>
               </div>
               <p class="text-xs text-slate-500 mt-0.5">
-                {% trans %}Another user updated this page while you were editing. Choose a resolution strategy below to merge without losing data.{% endtrans %}
+                {% trans %}Another user{% endtrans %}{% if conflict_author_name %} (<strong>{{ conflict_author_name }}</strong>){% endif %}{% if conflict_time %} on <strong>{{ conflict_time }}</strong>{% endif %}{% trans %} saved updates to the main branch while you were editing. Compare the versions below and choose which one to keep.{% endtrans %}
               </p>
             </div>
           </div>
@@ -139,32 +140,25 @@
           <div class="flex items-center gap-2 flex-wrap">
             <button type="button" 
                     @click="useYourVersion()" 
-                    class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1.5">
+                    class="px-4 py-2 rounded-xl bg-[#4169e1] hover:bg-[#3154c4] text-white text-xs font-bold transition-all shadow-md active:scale-95 flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
               <span>{{ _('Keep Yours') }}</span>
             </button>
 
             <button type="button" 
                     @click="useIncomingVersion()" 
-                    class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1.5">
+                    class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
               <span>{{ _('Accept Incoming') }}</span>
-            </button>
-
-            <button type="button" 
-                    @click="insertGitConflictMarkers()" 
-                    class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-mono font-bold transition-all active:scale-95 flex items-center gap-1.5">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
-              <span>{{ _('Insert Git Markers') }}</span>
             </button>
           </div>
 
           <div class="flex items-center gap-2">
             <button type="button" 
                     @click="conflictViewMode = (conflictViewMode === 'split' ? 'diff' : 'split')" 
-                    class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-bold transition-all flex items-center gap-1.5">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
-              <span x-text="conflictViewMode === 'split' ? '{{ _("Show Diff View") }}' : '{{ _("Show Side-by-Side") }}'"></span>
+                    class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-bold transition-all flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
+              <span x-text="conflictViewMode === 'split' ? '{{ _("Show Color-Coded Diff View") }}' : '{{ _("Show Side-by-Side") }}'"></span>
             </button>
           </div>
         </div>
@@ -182,7 +176,7 @@
                   <span class="text-xs font-bold text-emerald-700 uppercase tracking-wider">{{ _('Your Local Edits') }}</span>
                 </div>
                 <button type="button" @click="useYourVersion()" class="text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1">
-                  {{ _('Use This') }} &rarr;
+                  {{ _('Keep This') }} &rarr;
                 </button>
               </div>
               <pre class="font-mono text-xs text-slate-700 leading-relaxed whitespace-pre-wrap break-all flex-1 overflow-auto max-h-56 bg-slate-50 p-3 rounded-lg border border-slate-200/80" x-text="yourContent"></pre>
@@ -192,31 +186,41 @@
             <div class="bg-white border border-slate-200 rounded-xl p-4 flex flex-col shadow-sm">
               <div class="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-100">
                 <div class="flex items-center gap-2">
-                  <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
-                  <span class="text-xs font-bold text-indigo-700 uppercase tracking-wider">{{ _('Incoming Server Version') }}</span>
+                  <span class="w-2.5 h-2.5 rounded-full bg-[#4169e1]"></span>
+                  <span class="text-xs font-bold text-[#4169e1] uppercase tracking-wider">{{ _('Incoming Server Version') }}</span>
                   {% if conflict_author_name %}
-                  <span class="text-[10px] text-slate-500 font-mono">({{ conflict_author_name }})</span>
+                  <span class="text-[10px] text-slate-500 font-mono">({{ conflict_author_name }}{% if conflict_time %} • {{ conflict_time }}{% endif %})</span>
                   {% endif %}
                 </div>
-                <button type="button" @click="useIncomingVersion()" class="text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:underline flex items-center gap-1">
-                  {{ _('Use This') }} &rarr;
+                <button type="button" @click="useIncomingVersion()" class="text-xs font-bold text-[#4169e1] hover:underline flex items-center gap-1">
+                  {{ _('Accept This') }} &rarr;
                 </button>
               </div>
               <pre class="font-mono text-xs text-slate-700 leading-relaxed whitespace-pre-wrap break-all flex-1 overflow-auto max-h-56 bg-slate-50 p-3 rounded-lg border border-slate-200/80" x-text="conflictContent"></pre>
             </div>
           </div>
 
-          <!-- Diff Preview View -->
+          <!-- Color-Coded Visual Diff View -->
           <div x-show="conflictViewMode === 'diff'" class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-            <div class="flex items-center justify-between pb-2.5 mb-3 border-b border-slate-100">
+            <div class="flex items-center justify-between pb-2.5 mb-3 border-b border-slate-100 flex-wrap gap-2">
               <span class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                {{ _('Diff Preview (Deletions in Red, Additions in Green)') }}
+                <svg class="w-4 h-4 text-[#4169e1]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                {{ _('Color-Coded Difference Comparison') }}
               </span>
+              <div class="flex items-center gap-3 text-[11px] font-semibold">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <ins class="no-underline">+ Additions (Your Version)</ins>
+                </span>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+                  <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                  <del class="no-underline">- Deletions (Server Version)</del>
+                </span>
+              </div>
             </div>
             <style>
-              .conflict-diff-box ins { background-color: rgba(16, 185, 129, 0.15); color: #047857; text-decoration: none; border-bottom: 1.5px solid #10b981; padding: 0 3px; border-radius: 3px; }
-              .conflict-diff-box del { background-color: rgba(239, 68, 68, 0.15); color: #b91c1c; text-decoration: line-through; border-bottom: 1.5px solid #ef4444; padding: 0 3px; border-radius: 3px; }
+              .conflict-diff-box ins { background-color: #dcfce7; color: #15803d; text-decoration: none; border-bottom: 2px solid #22c55e; font-weight: 600; padding: 1px 4px; border-radius: 4px; }
+              .conflict-diff-box del { background-color: #fee2e2; color: #b91c1c; text-decoration: line-through; border-bottom: 2px solid #ef4444; padding: 1px 4px; border-radius: 4px; }
             </style>
             <div class="conflict-diff-box font-mono text-xs text-slate-800 leading-relaxed whitespace-pre-wrap break-all max-h-64 overflow-y-auto bg-slate-50 p-3.5 rounded-lg border border-slate-200/80"
                  x-html="conflictDiff">

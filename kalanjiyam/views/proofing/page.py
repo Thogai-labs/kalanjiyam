@@ -478,12 +478,15 @@ def _editor_template_kwargs(
 
     conflict_diff = ""
     conflict_author_name = ""
+    conflict_time = ""
     your_content = form.content.data or page_plain_text or ""
     if conflict:
         from kalanjiyam.utils.diff import revision_diff
         conflict_diff = str(revision_diff(conflict.content or "", your_content))
         if conflict.author:
             conflict_author_name = conflict.author.username or conflict.author.email or ""
+        if getattr(conflict, "created", None):
+            conflict_time = conflict.created.strftime('%b %d, %Y at %H:%M UTC')
 
     target_version_record = session.query(db.PageVersion).filter_by(
         page_id=cur.id,
@@ -498,6 +501,7 @@ def _editor_template_kwargs(
         "conflict": conflict,
         "conflict_diff": conflict_diff,
         "conflict_author_name": conflict_author_name,
+        "conflict_time": conflict_time,
         "your_content": your_content,
         "cur": cur,
         "form": form,
