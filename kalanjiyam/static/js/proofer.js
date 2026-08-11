@@ -115,10 +115,11 @@ export default () => ({
 
   // Conflict Resolver state
   showConflictResolver: (typeof window.HAS_CONFLICT !== 'undefined' && window.HAS_CONFLICT),
-  conflictViewMode: 'split', // 'split' | 'diff'
+  conflictViewMode: 'split', // 'split' | 'diff' | 'manual'
   conflictContent: (typeof window.CONFLICT_CONTENT !== 'undefined') ? window.CONFLICT_CONTENT : '',
   yourContent: (typeof window.YOUR_CONTENT !== 'undefined') ? window.YOUR_CONTENT : '',
   conflictDiff: (typeof window.CONFLICT_DIFF !== 'undefined') ? window.CONFLICT_DIFF : '',
+  conflictManualEditor: null,
 
   // Internal-only
   layoutClasses: CLASSES_SIDE_BY_SIDE,
@@ -1789,7 +1790,19 @@ export default () => ({
     navigator.clipboard.writeText(character);
   },
   
+  _destroyConflictManualEditor() {
+    if (this.conflictManualEditor) {
+      try {
+        destroyEditor(this.conflictManualEditor);
+      } catch (e) {
+        console.warn('Error destroying conflict manual editor:', e);
+      }
+      this.conflictManualEditor = null;
+    }
+  },
+
   useYourVersion() {
+    this._destroyConflictManualEditor();
     this._applyContentToEditors(this.yourContent);
     this.showConflictResolver = false;
     this.hasUnsavedChanges = true;
@@ -1800,6 +1813,7 @@ export default () => ({
   },
 
   useIncomingVersion() {
+    this._destroyConflictManualEditor();
     this._applyContentToEditors(this.conflictContent);
     this.showConflictResolver = false;
     this.hasUnsavedChanges = false;
@@ -1808,6 +1822,7 @@ export default () => ({
   },
 
   insertGitConflictMarkers() {
+    this._destroyConflictManualEditor();
     const gitMerged = `<<<<<<< YOUR VERSION (Local Edits)\n${this.yourContent}\n=======\n${this.conflictContent}\n>>>>>>> INCOMING VERSION (Server Saved)`;
     this._applyContentToEditors(gitMerged);
     this.showConflictResolver = false;
@@ -1818,7 +1833,41 @@ export default () => ({
     }
   },
 
+  openManualResolver() {
+    this.conflictViewMode = 'manual';
+    setTimeout(() => {
+      if (!this.conflictManualEditor) {
+        const gitMerged = `<<<<<<< YOUR VERSION (Local Edits)\n${this.yourContent}\n=======\n${this.conflictContent}\n>>>>>>> INCOMING VERSION (Server Saved)`;
+        const editorEl = document.getElementById('conflict-tiptap-editor');
+        if (editorEl) {
+          this.conflictManualEditor = createRichEditor('conflict-tiptap-editor', {
+            content: '',
+          });
+          setEditorText(this.conflictManualEditor, gitMerged);
+        }
+      }
+    }, 50);
+  },
+
+  applyManualResolution() {
+    let resolvedText = '';
+    if (this.conflictManualEditor) {
+      resolvedText = getEditorText(this.conflictManualEditor) || getEditorContent(this.conflictManualEditor);
+      this._destroyConflictManualEditor();
+    } else {
+      resolvedText = `<<<<<<< YOUR VERSION (Local Edits)\n${this.yourContent}\n=======\n${this.conflictContent}\n>>>>>>> INCOMING VERSION (Server Saved)`;
+    }
+    this._applyContentToEditors(resolvedText);
+    this.showConflictResolver = false;
+    this.hasUnsavedChanges = true;
+    const versionField = document.querySelector('input[name="version"]');
+    if (versionField && typeof window.PAGE_VERSION !== 'undefined') {
+      versionField.value = window.PAGE_VERSION;
+    }
+  },
+
   dismissConflictResolver() {
+    this._destroyConflictManualEditor();
     this.showConflictResolver = false;
   },
 
