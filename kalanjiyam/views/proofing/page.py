@@ -141,20 +141,29 @@ def resolve_version_keys(user, page) -> tuple:
     """Resolve the target version key to save to and the actual version key to load.
 
     In the Dual-Save Model, edits save to the shared Main Branch ('main') as primary target.
-    Active key resolves to the user's own track if present, or the most recently updated track.
+    If the user committed to 'main', 'main' is loaded by default.
+    If the user has an unmerged private draft ('user:<id>') newer than 'main', their draft is loaded.
     :return: a tuple of (target_version_key, active_version_key)
     """
     target_key = "main"
 
     session = q.get_session()
     page_versions = session.query(db.PageVersion).filter_by(page_id=page.id).all()
-    existing_keys = {v.version_key for v in page_versions}
+    version_map = {v.version_key: v for v in page_versions}
+    existing_keys = set(version_map.keys())
 
-    # 1. Always prefer own changes if user has edited this page
+    # 1. If user has an unmerged personal draft newer than main, load user track
     if getattr(user, "is_authenticated", False):
         user_key = f"user:{user.id}"
         if user_key in existing_keys:
-            return target_key, user_key
+            user_ver = version_map[user_key]
+            main_ver = version_map.get("main")
+            if not main_ver or user_ver.updated_at > main_ver.updated_at:
+                return target_key, user_key
+
+    # 2. If main branch exists, load main branch by default
+    if "main" in existing_keys:
+        return target_key, "main"
 
     if not page_versions:
         return target_key, target_key
