@@ -437,6 +437,7 @@ def _editor_template_kwargs(
 
     page_rules = project_utils.parse_page_number_spec(ctx.project.page_numbers)
     page_titles = project_utils.apply_rules(len(ctx.project.pages), page_rules)
+    pages = list(zip(page_titles, ctx.project.pages))
     conflict_diff = ""
     conflict_author_name = ""
     your_content = form.content.data or page_plain_text or ""
