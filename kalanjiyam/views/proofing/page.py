@@ -140,26 +140,24 @@ def _get_page_context(project_slug: str, page_slug: str) -> PageContext | None:
 def resolve_version_keys(user, page) -> tuple:
     """Resolve the target version key to save to and the actual version key to load.
 
-    In the Dual-Save Model, edits save to the shared main branch ('role:p1') as primary target,
-    while also saving a personal user backup snapshot ('user:<id>').
+    In the Dual-Save Model, edits save to the shared Main Branch ('main') as primary target.
+    Active key resolves to the user's own track if present, or the most recently updated track.
     :return: a tuple of (target_version_key, active_version_key)
     """
-    target_key = "role:p1"
+    target_key = "main"
 
     session = q.get_session()
     page_versions = session.query(db.PageVersion).filter_by(page_id=page.id).all()
     existing_keys = {v.version_key for v in page_versions}
 
-    if "role:p1" in existing_keys:
-        return target_key, target_key
-
-    # Fallback to user track if role:p1 has not been initialized yet
+    # 1. Always prefer own changes if user has edited this page
     if getattr(user, "is_authenticated", False):
         user_key = f"user:{user.id}"
         if user_key in existing_keys:
             return target_key, user_key
 
-    return target_key, target_key
+    if not page_versions:
+        return target_key, target_key
 
     # Fetch users associated with existing user: version tracks for tie-breaking
     user_ids = []
@@ -176,7 +174,9 @@ def resolve_version_keys(user, page) -> tuple:
 
     def _track_tier(v):
         """Return tier rank (1 is highest priority) for tie-breaking when updated_at is identical."""
-        if v.version_key.startswith("user:"):
+        if v.version_key == "main":
+            return 1
+        elif v.version_key.startswith("user:"):
             try:
                 uid = int(v.version_key.split(":", 1)[1])
                 u = user_map.get(uid)
@@ -216,7 +216,9 @@ def resolve_version_keys(user, page) -> tuple:
 
 
 def get_version_display_name(version_key: str) -> str:
-    if version_key.startswith("user:"):
+    if version_key == "main":
+        return _l("Main Branch")
+    elif version_key.startswith("user:"):
         try:
             user_id = int(version_key.split(":", 1)[1])
             from kalanjiyam.database import User
@@ -800,7 +802,7 @@ def edit_post(project_slug, page_slug):
             content_format = "blocks" if doc else "plain"
         session = q.get_session()
         merge_with_main = request.form.get("merge_with_main") == "1" or not current_user.is_authenticated
-        primary_key = "role:p1" if merge_with_main else (f"user:{current_user.id}" if current_user.is_authenticated else "role:p1")
+        primary_key = "main" if merge_with_main else (f"user:{current_user.id}" if current_user.is_authenticated else "main")
 
         try:
             # Save to primary_key (main branch role:p1 or private user track)

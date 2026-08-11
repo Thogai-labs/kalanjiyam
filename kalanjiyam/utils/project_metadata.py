@@ -222,7 +222,7 @@ def _track_tier(version_key: str, moderator_ids: set[int]) -> int:
         return TIER_REVIEWED
     if version_key == "role:p2":
         return TIER_P2
-    if version_key in ("role:p1", "original", LEGACY_TRACK):
+    if version_key in ("main", "role:p1", "original", LEGACY_TRACK):
         return TIER_P1
     if version_key.startswith("ocr:"):
         return TIER_OCR

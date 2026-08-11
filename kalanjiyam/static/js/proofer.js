@@ -564,9 +564,10 @@ export default () => ({
     const found = this.availableVersions.find(v => v.version_key === versionKey);
     if (found) return found.display_name;
 
-    if (versionKey === 'role:p1') return 'Consolidated P1';
-    if (versionKey === 'role:p2') return 'Consolidated P2';
-    if (versionKey === 'role:moderator') return 'Moderator';
+    if (versionKey === 'main') return 'Main Branch';
+    if (versionKey === 'role:p1') return 'Legacy Consolidated P1';
+    if (versionKey === 'role:p2') return 'Legacy Consolidated P2';
+    if (versionKey === 'role:moderator') return 'Legacy Consolidated Moderator';
     if (versionKey.startsWith('ocr:')) {
       const engine = versionKey.split(':')[1];
       const engineMap = {

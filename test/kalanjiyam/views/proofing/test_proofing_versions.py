@@ -103,8 +103,8 @@ def test_role_based_fallback_resolution(flask_app):
         try:
             # Case 1: No versions exist.
             target_key, active_key = resolve_version_keys(u_p1, page)
-            assert target_key == "user:2"
-            assert active_key == "user:2"
+            assert target_key == "main"
+            assert active_key == "main"
             
             # Case 2: Only ocr:chandra exists
             pv_ocr = db.PageVersion(page_id=page.id, version_key="ocr:chandra", version=1)
@@ -112,7 +112,7 @@ def test_role_based_fallback_resolution(flask_app):
             session.commit()
             
             target_key, active_key = resolve_version_keys(u_p1, page)
-            assert target_key == "user:2"
+            assert target_key == "main"
             assert active_key == "ocr:chandra"
             
             # Case 3: user:3 (Moderator user) track exists
@@ -122,7 +122,7 @@ def test_role_based_fallback_resolution(flask_app):
             
             # P2 user (u_p1) should fall back to user:3 because Moderator is higher tier
             target_key, active_key = resolve_version_keys(u_p1, page)
-            assert target_key == "user:2"
+            assert target_key == "main"
             assert active_key == "user:3"
         finally:
             session.delete(page)
@@ -217,7 +217,7 @@ def test_timestamp_based_version_resolution(flask_app):
             # User2 should see their own user:2 track
             target_key, active_key = resolve_version_keys(u_basic, page)
             assert active_key == "user:2"
-            assert target_key == "user:2"
+            assert target_key == "main"
         finally:
             session.delete(page)
             session.commit()
