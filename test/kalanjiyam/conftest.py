@@ -159,7 +159,7 @@ def initialize_test_db():
     board.threads = [thread]
 
     project = db.Project(
-        slug="test-project", display_title="Test Project", board_id=board.id
+        slug="test-project", display_title="Test Project", board_id=board.id, is_publicly_viewable=True
     )
     session.add(project)
     session.flush()

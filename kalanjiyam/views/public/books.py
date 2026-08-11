@@ -18,9 +18,10 @@ def get_public_projects():
 
     projects = (
         session.query(db.Project)
-        .filter(db.Project.is_publicly_viewable.is_(True))
-        .join(db.Page)
-        .distinct()
+        .filter(
+            db.Project.is_publicly_viewable.is_(True),
+            db.Project.pages.any(),
+        )
         .all()
     )
     if current_app.config.get("ENFORCE_GROUP_ACCESS_FOR_PROJECTS") or is_multi_tenant_enabled():
@@ -36,7 +37,7 @@ def get_project_stats(project):
     
     # Count pages with revisions (OCR'd)
     ocr_pages = (
-        session.query(db.Page)
+        session.query(db.Page.id)
         .filter(db.Page.project_id == project.id)
         .join(db.Revision)
         .distinct()
@@ -45,7 +46,7 @@ def get_project_stats(project):
     
     # Count pages with translations
     translated_pages = (
-        session.query(db.Page)
+        session.query(db.Page.id)
         .filter(db.Page.project_id == project.id)
         .join(db.Translation)
         .distinct()

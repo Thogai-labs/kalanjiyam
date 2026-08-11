@@ -224,10 +224,8 @@ def projects_for_picker(session, org_ids: list[int]) -> list[db.Project]:
         return []
     return (
         session.query(db.Project)
-        .join(db.ProjectGroups, db.ProjectGroups.project_id == db.Project.id)
-        .filter(db.ProjectGroups.group_id.in_(org_ids))
+        .filter(db.Project.groups.any(db.Group.id.in_(org_ids)))
         .order_by(db.Project.display_title)
-        .distinct()
         .all()
     )
 
