@@ -24,7 +24,7 @@
 {% include "include/header.html" with context %}
 {% endblock %}
 
-{% block body_class %}flex flex-col {% if conflict %}min-h-screen overflow-y-auto{% else %}h-screen overflow-hidden{% endif %}{% endblock %}
+{% block body_class %}flex flex-col h-screen overflow-hidden{% endblock %}
 
 {% block footer %}{% endblock %}
 
@@ -85,12 +85,12 @@
   </div>
 </div>
 
-<article class="book-editor-page{% if conflict %} has-conflict{% endif %}{% if is_docx %} is-docx-project{% endif %}">
+<article class="book-editor-page{% if is_docx %} is-docx-project{% endif %}">
 
   {% set num_images = project.pages|length %}
   {{ mc.flash_messages() }}
 
-  <form x-data="proofer" method="POST" class="book-editor-shell{% if conflict %} has-conflict{% endif %} relative">
+  <form x-data="proofer" method="POST" class="book-editor-shell relative">
     {{ form.csrf_token }}
     {{ form.version }}
     <input type="hidden" name="document" id="document" value="">
@@ -121,7 +121,7 @@
                 <span class="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-mono uppercase tracking-wider border border-amber-200 font-semibold">{{ _('Merge Required') }}</span>
               </div>
               <p class="text-xs text-slate-500 mt-0.5">
-                {% trans %}Another user updated this page while you were editing. Choose a resolution strategy below or resolve manually using the TipTap editor.{% endtrans %}
+                {% trans %}Another user updated this page while you were editing. Choose a resolution strategy below to merge without losing data.{% endtrans %}
               </p>
             </div>
           </div>
@@ -156,13 +156,6 @@
                     class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-mono font-bold transition-all active:scale-95 flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
               <span>{{ _('Insert Git Markers') }}</span>
-            </button>
-
-            <button type="button" 
-                    @click="openManualResolver()" 
-                    class="px-3.5 py-2 rounded-xl bg-[#4169e1] hover:bg-[#3154c4] text-white text-xs font-bold transition-all shadow-md active:scale-95 flex items-center gap-1.5">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-              <span>{{ _('Resolve Manually') }}</span>
             </button>
           </div>
 
@@ -230,28 +223,6 @@
             </div>
           </div>
 
-          <!-- Manual Resolution View with TipTap Editor -->
-          <div x-show="conflictViewMode === 'manual'" class="bg-white border border-slate-200 rounded-xl p-4 flex flex-col shadow-sm gap-4">
-            <div class="flex items-center justify-between pb-2.5 border-b border-slate-100">
-              <div class="flex items-center gap-2">
-                <span class="w-2.5 h-2.5 rounded-full bg-[#4169e1]"></span>
-                <span class="text-xs font-bold text-slate-900 uppercase tracking-wider">{{ _('Manual Conflict Resolution (TipTap Editor)') }}</span>
-              </div>
-              <span class="text-[11px] text-slate-500">{{ _('Edit the text below to resolve conflicts directly') }}</span>
-            </div>
-            
-            <div id="conflict-tiptap-editor" class="border border-slate-200 rounded-xl p-4 bg-slate-50 min-h-[220px] max-h-[350px] overflow-y-auto focus-within:ring-2 focus-within:ring-[#4169e1]/50 transition-all text-slate-900"></div>
-
-            <div class="pt-3 border-t border-slate-100 flex items-center justify-end">
-              <button type="button" 
-                      @click="applyManualResolution()" 
-                      class="px-5 py-2.5 rounded-xl bg-[#4169e1] hover:bg-[#3154c4] text-white text-xs font-bold transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
-                <span>{{ _('Mark as Resolved & Apply') }}</span>
-              </button>
-            </div>
-          </div>
-
         </div>
       </div>
     </div>
@@ -296,7 +267,7 @@
     </p>
     {% endif %}
 
-    <div class="book-editor-workspace{% if conflict %} has-conflict{% endif %}">
+    <div class="book-editor-workspace">
       {% if is_docx %}
       <style>
         .book-editor-image-pane h1 { font-size: 2.25rem; font-weight: 800; margin-top: 1.5rem; margin-bottom: 0.75rem; color: #1e293b; display: block; }

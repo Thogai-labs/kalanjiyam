@@ -115,11 +115,10 @@ export default () => ({
 
   // Conflict Resolver state
   showConflictResolver: (typeof window.HAS_CONFLICT !== 'undefined' && window.HAS_CONFLICT),
-  conflictViewMode: 'split', // 'split' | 'diff' | 'manual'
+  conflictViewMode: 'split', // 'split' | 'diff'
   conflictContent: (typeof window.CONFLICT_CONTENT !== 'undefined') ? window.CONFLICT_CONTENT : '',
   yourContent: (typeof window.YOUR_CONTENT !== 'undefined') ? window.YOUR_CONTENT : '',
   conflictDiff: (typeof window.CONFLICT_DIFF !== 'undefined') ? window.CONFLICT_DIFF : '',
-  conflictManualEditor: null,
 
   // Internal-only
   layoutClasses: CLASSES_SIDE_BY_SIDE,
@@ -1790,20 +1789,9 @@ export default () => ({
     navigator.clipboard.writeText(character);
   },
   
-  _destroyConflictManualEditor() {
-    if (this.conflictManualEditor) {
-      try {
-        destroyEditor(this.conflictManualEditor);
-      } catch (e) {
-        console.warn('Error destroying conflict manual editor:', e);
-      }
-      this.conflictManualEditor = null;
-    }
-  },
-
   useYourVersion() {
-    this._destroyConflictManualEditor();
-    this._applyContentToEditors(this.yourContent);
+    const text = this.yourContent || (typeof window.YOUR_CONTENT !== 'undefined' ? window.YOUR_CONTENT : '') || (this.pageDocument ? documentToPlainText(this.pageDocument) : '') || this.content || '';
+    this._applyContentToEditors(text);
     this.showConflictResolver = false;
     this.hasUnsavedChanges = true;
     const versionField = document.querySelector('input[name="version"]');
@@ -1813,8 +1801,8 @@ export default () => ({
   },
 
   useIncomingVersion() {
-    this._destroyConflictManualEditor();
-    this._applyContentToEditors(this.conflictContent);
+    const text = this.conflictContent || (typeof window.CONFLICT_CONTENT !== 'undefined' ? window.CONFLICT_CONTENT : '') || '';
+    this._applyContentToEditors(text);
     this.showConflictResolver = false;
     this.hasUnsavedChanges = false;
     const key = this._getStorageKey();
@@ -1822,8 +1810,9 @@ export default () => ({
   },
 
   insertGitConflictMarkers() {
-    this._destroyConflictManualEditor();
-    const gitMerged = `<<<<<<< YOUR VERSION (Local Edits)\n${this.yourContent}\n=======\n${this.conflictContent}\n>>>>>>> INCOMING VERSION (Server Saved)`;
+    const yourText = this.yourContent || (typeof window.YOUR_CONTENT !== 'undefined' ? window.YOUR_CONTENT : '') || (this.pageDocument ? documentToPlainText(this.pageDocument) : '') || this.content || '';
+    const incomingText = this.conflictContent || (typeof window.CONFLICT_CONTENT !== 'undefined' ? window.CONFLICT_CONTENT : '') || '';
+    const gitMerged = `<<<<<<< YOUR VERSION (Local Edits)\n${yourText}\n=======\n${incomingText}\n>>>>>>> INCOMING VERSION (Server Saved)`;
     this._applyContentToEditors(gitMerged);
     this.showConflictResolver = false;
     this.hasUnsavedChanges = true;
@@ -1833,59 +1822,7 @@ export default () => ({
     }
   },
 
-  openManualResolver() {
-    this.conflictViewMode = 'manual';
-    setTimeout(() => {
-      const localText = this.yourContent || (typeof window.YOUR_CONTENT !== 'undefined' ? window.YOUR_CONTENT : '') || (this.pageDocument ? documentToPlainText(this.pageDocument) : '') || this.content || '';
-      const serverText = this.conflictContent || (typeof window.CONFLICT_CONTENT !== 'undefined' ? window.CONFLICT_CONTENT : '');
-      
-      const gitMergedRaw = `<<<<<<< YOUR VERSION (Local Edits)\n${localText}\n=======\n${serverText}\n>>>>>>> INCOMING VERSION (Server Saved)`;
-      
-      const gitMergedHtml = gitMergedRaw
-        .split('\n')
-        .map(line => {
-          const escaped = line
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-          return `<p>${escaped || '<br>'}</p>`;
-        })
-        .join('');
-
-      const editorEl = document.getElementById('conflict-tiptap-editor');
-      if (editorEl) {
-        if (!this.conflictManualEditor) {
-          this.conflictManualEditor = createRichEditor('conflict-tiptap-editor', {
-            content: gitMergedHtml,
-          });
-        } else {
-          setEditorContent(this.conflictManualEditor, gitMergedHtml);
-        }
-      }
-    }, 50);
-  },
-
-  applyManualResolution() {
-    let resolvedText = '';
-    if (this.conflictManualEditor) {
-      resolvedText = getEditorText(this.conflictManualEditor) || getEditorContent(this.conflictManualEditor);
-      this._destroyConflictManualEditor();
-    } else {
-      const localText = this.yourContent || this.content || '';
-      const serverText = this.conflictContent || '';
-      resolvedText = `<<<<<<< YOUR VERSION (Local Edits)\n${localText}\n=======\n${serverText}\n>>>>>>> INCOMING VERSION (Server Saved)`;
-    }
-    this._applyContentToEditors(resolvedText);
-    this.showConflictResolver = false;
-    this.hasUnsavedChanges = true;
-    const versionField = document.querySelector('input[name="version"]');
-    if (versionField && typeof window.PAGE_VERSION !== 'undefined') {
-      versionField.value = window.PAGE_VERSION;
-    }
-  },
-
   dismissConflictResolver() {
-    this._destroyConflictManualEditor();
     this.showConflictResolver = false;
   },
 
@@ -1924,23 +1861,24 @@ export default () => ({
   },
 
   _applyContentToEditors(text) {
-    this.content = text;
+    this.content = text || '';
     const contentTextarea = document.getElementById('content');
     if (contentTextarea) {
-      contentTextarea.value = text;
+      contentTextarea.value = text || '';
       contentTextarea.dispatchEvent(new Event('input', { bubbles: true }));
       contentTextarea.dispatchEvent(new Event('change', { bubbles: true }));
     }
     if (window.richEditorInstance) {
       try {
         this._isProgrammaticUpdate = true;
-        setEditorContent(window.richEditorInstance, text);
+        const formattedHtml = convertPlainTextToHtmlParagraphs(text || '');
+        setEditorContent(window.richEditorInstance, formattedHtml);
         this._isProgrammaticUpdate = false;
       } catch (e) {
         console.warn('Failed to update rich editor content:', e);
       }
     }
-    const newBlocks = blocksFromFlowHtml(text, this.pageDocument?.blocks || [], this.pageDocument?.content_format || 'blocks');
+    const newBlocks = blocksFromFlowHtml(text || '', this.pageDocument?.blocks || [], this.pageDocument?.content_format || 'blocks');
     if (newBlocks.length && this.pageDocument) {
       this.pageDocument = { ...this.pageDocument, blocks: newBlocks };
       const docField = document.getElementById('document');
@@ -2028,6 +1966,24 @@ function computeSimpleDiff(oldText, newText) {
     }
   }
   return result.join('\n');
+}
+
+function convertPlainTextToHtmlParagraphs(text) {
+  if (!text) return '<p></p>';
+  const trimmed = text.trim();
+  if (trimmed.startsWith('<') && (trimmed.startsWith('<p') || trimmed.startsWith('<div') || trimmed.startsWith('<section') || trimmed.startsWith('<article') || trimmed.startsWith('<table'))) {
+    return text;
+  }
+  return text
+    .split('\n')
+    .map(line => {
+      const escaped = line
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      return `<p>${escaped || '<br>'}</p>`;
+    })
+    .join('');
 }
 
 function escapeHtml(str) {
