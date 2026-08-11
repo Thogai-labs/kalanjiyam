@@ -471,11 +471,16 @@ export class ReplicaView {
     const doc = this.document;
     const ph = doc.page_height || 1400;
 
+    const handle = el.querySelector('.ocr-replica-resize-handle');
+    if (handle) handle.style.display = 'none';
+
     const currentHeightPx = el.clientHeight;
     const contentHeightPx = el.scrollHeight;
 
-    // Automatically expand the box height if text overflows the current bounds
-    if (contentHeightPx > currentHeightPx) {
+    if (handle) handle.style.display = '';
+
+    // Automatically expand the box height if text overflows the current bounds (with 1px buffer for subpixel rounding)
+    if (contentHeightPx > currentHeightPx + 1) {
       const topPct = parseFloat(el.style.top) || 0;
       const newHeightPct = (contentHeightPx / pageH) * 100;
       
