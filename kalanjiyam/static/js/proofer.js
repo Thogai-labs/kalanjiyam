@@ -916,7 +916,7 @@ export default () => ({
       });
     }
     this._syncDocumentToForm();
-    this.hasUnsavedChanges = true;
+    this.hasUnsavedChanges = false;
   },
 
   setupZoomButtons() {
@@ -1352,7 +1352,7 @@ export default () => ({
         if (this.editorMode === 'flow') {
           this._applyFlowEditorContent();
         }
-        this.hasUnsavedChanges = true;
+        this.hasUnsavedChanges = false;
         
         // Extract plain text for reference translation panel
         const translation = this._flowPlainCache;

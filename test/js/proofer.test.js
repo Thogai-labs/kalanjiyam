@@ -103,6 +103,7 @@ test('runOCR handles a valid server response', async () => {
   window.location = new URL("https://siddhasagaram.in/proofing/my-project/my-page");
   await p.runOCR();
   expect($("#content").value).toBe('text for my-page');
+  expect(p.hasUnsavedChanges).toBe(false);
 });
 
 test('runOCR handles an invalid server response', async () => {
