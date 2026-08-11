@@ -152,14 +152,21 @@ def resolve_version_keys(user, page) -> tuple:
     version_map = {v.version_key: v for v in page_versions}
     existing_keys = set(version_map.keys())
 
-    # 1. If user has an unmerged personal draft newer than main, load user track
+    # 1. If user has an unmerged personal draft with content different from main, load user track
     if getattr(user, "is_authenticated", False):
         user_key = f"user:{user.id}"
         if user_key in existing_keys:
             user_ver = version_map[user_key]
             main_ver = version_map.get("main")
-            if not main_ver or user_ver.updated_at > main_ver.updated_at:
+            if not main_ver:
                 return target_key, user_key
+            else:
+                user_rev = user_ver.revisions[-1] if user_ver.revisions else None
+                main_rev = main_ver.revisions[-1] if main_ver.revisions else None
+                user_content = (user_rev.content or "").strip() if user_rev else ""
+                main_content = (main_rev.content or "").strip() if main_rev else ""
+                if user_ver.updated_at > main_ver.updated_at and user_content != main_content:
+                    return target_key, user_key
 
     # 2. If main branch exists, load main branch by default
     if "main" in existing_keys:
