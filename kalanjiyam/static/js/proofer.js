@@ -493,6 +493,21 @@ export default () => ({
         // Do NOT recluster DOCX blocks — they are a single HTML blob,
         // not OCR word-level boxes.
       }
+      const key = this._getStorageKey();
+      if (key) {
+        const cached = localStorage.getItem(key);
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (parsed && parsed.blocks && parsed.blocks.length > 0) {
+              this.pageDocument = parsed;
+              this.hasUnsavedChanges = true;
+            }
+          } catch (e) {
+            console.error('Error loading cached document from localStorage:', e);
+          }
+        }
+      }
     }
 
     // Initialize content from the textarea if it exists
@@ -635,6 +650,15 @@ export default () => ({
           this._isProgrammaticUpdate = false;
         } else {
           this.hasUnsavedChanges = true;
+          if (this._replicaView) {
+            this._replicaView.document = this.pageDocument;
+            this._replicaView.triggerChange();
+          } else {
+            const key = this._getStorageKey();
+            if (key && this.pageDocument) {
+              localStorage.setItem(key, JSON.stringify(this.pageDocument));
+            }
+          }
         }
       },
       onSelectionUpdate: () => {},
@@ -793,7 +817,14 @@ export default () => ({
           onChange: (doc) => {
             this.pageDocument = doc;
             this._syncDocumentToForm();
-            this.hasUnsavedChanges = true;
+            if (this._replicaView && !this._replicaView.isRestoredFromCache && JSON.stringify(doc) === JSON.stringify(this._replicaView.originalDocument)) {
+              this.hasUnsavedChanges = false;
+            } else {
+              this.hasUnsavedChanges = true;
+            }
+            if (this.editorMode === 'flow' && !this._isProgrammaticUpdate) {
+              this._applyFlowEditorContent();
+            }
           },
           onSelect: (block) => {
             if (this._bboxOverlay) this._bboxOverlay.highlightBlockId(block.id);
@@ -1742,6 +1773,14 @@ export default () => ({
     navigator.clipboard.writeText(character);
   },
   
+  _getStorageKey() {
+    const pathMatch = window.location.pathname.match(/\/proofing\/([^\/]+)\/([^\/]+)/);
+    if (pathMatch) {
+      return `kalanjiyam-replica-doc-${pathMatch[1]}-${pathMatch[2]}`;
+    }
+    return null;
+  },
+
   // Sync editor content to textarea before form submission
   syncContentBeforeSubmit(event) {
     if (event) {
@@ -1774,9 +1813,8 @@ export default () => ({
     this.hasUnsavedChanges = false;
 
     // Clear local storage cache right before programmatically submitting
-    const pathMatch = window.location.pathname.match(/\/proofing\/([^\/]+)\/([^\/]+)/);
-    if (pathMatch) {
-      const key = `kalanjiyam-replica-doc-${pathMatch[1]}-${pathMatch[2]}`;
+    const key = this._getStorageKey();
+    if (key) {
       localStorage.removeItem(key);
     }
 
