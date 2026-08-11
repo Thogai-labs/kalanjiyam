@@ -443,6 +443,19 @@ def _editor_template_kwargs(
     page_rules = project_utils.parse_page_number_spec(ctx.project.page_numbers)
     page_titles = project_utils.apply_rules(len(ctx.project.pages), page_rules)
     pages = list(zip(page_titles, ctx.project.pages))
+    main_version_record = session.query(db.PageVersion).filter_by(
+        page_id=cur.id,
+        version_key="main"
+    ).first()
+
+    # If active track is user draft and main has newer edits, trigger conflict resolver on load
+    if not conflict and active_version_key.startswith("user:") and main_version_record and active_version_record:
+        if main_version_record.updated_at > active_version_record.updated_at:
+            main_latest = main_version_record.revisions[-1] if main_version_record.revisions else None
+            your_text = form.content.data or page_plain_text or ""
+            if main_latest and main_latest.content and main_latest.content.strip() != your_text.strip():
+                conflict = main_latest
+
     conflict_diff = ""
     conflict_author_name = ""
     your_content = form.content.data or page_plain_text or ""
