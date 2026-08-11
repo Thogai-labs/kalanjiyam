@@ -1790,7 +1790,9 @@ export default () => ({
   },
   
   useYourVersion() {
-    const text = this.yourContent || (typeof window.YOUR_CONTENT !== 'undefined' ? window.YOUR_CONTENT : '') || (this.pageDocument ? documentToPlainText(this.pageDocument) : '') || this.content || '';
+    const text = (typeof this.yourContent === 'string' && this.yourContent.length > 0)
+      ? this.yourContent
+      : ((typeof window.YOUR_CONTENT !== 'undefined' && window.YOUR_CONTENT !== null) ? window.YOUR_CONTENT : (this.content || ''));
     this._applyContentToEditors(text);
     this.showConflictResolver = false;
     this.hasUnsavedChanges = true;
@@ -1801,25 +1803,18 @@ export default () => ({
   },
 
   useIncomingVersion() {
-    const text = this.conflictContent || (typeof window.CONFLICT_CONTENT !== 'undefined' ? window.CONFLICT_CONTENT : '') || '';
+    const text = (typeof this.conflictContent === 'string' && this.conflictContent.length > 0)
+      ? this.conflictContent
+      : ((typeof window.CONFLICT_CONTENT !== 'undefined' && window.CONFLICT_CONTENT !== null) ? window.CONFLICT_CONTENT : '');
     this._applyContentToEditors(text);
-    this.showConflictResolver = false;
-    this.hasUnsavedChanges = false;
-    const key = this._getStorageKey();
-    if (key) localStorage.removeItem(key);
-  },
-
-  insertGitConflictMarkers() {
-    const yourText = this.yourContent || (typeof window.YOUR_CONTENT !== 'undefined' ? window.YOUR_CONTENT : '') || (this.pageDocument ? documentToPlainText(this.pageDocument) : '') || this.content || '';
-    const incomingText = this.conflictContent || (typeof window.CONFLICT_CONTENT !== 'undefined' ? window.CONFLICT_CONTENT : '') || '';
-    const gitMerged = `<<<<<<< YOUR VERSION (Local Edits)\n${yourText}\n=======\n${incomingText}\n>>>>>>> INCOMING VERSION (Server Saved)`;
-    this._applyContentToEditors(gitMerged);
     this.showConflictResolver = false;
     this.hasUnsavedChanges = true;
     const versionField = document.querySelector('input[name="version"]');
     if (versionField && typeof window.PAGE_VERSION !== 'undefined') {
       versionField.value = window.PAGE_VERSION;
     }
+    const key = this._getStorageKey();
+    if (key) localStorage.removeItem(key);
   },
 
   dismissConflictResolver() {
@@ -1827,6 +1822,9 @@ export default () => ({
   },
 
   checkVersionAndCacheOnLoad() {
+    // If a server-side conflict is active, do NOT override yourContent/conflictContent with local storage
+    if (typeof window.HAS_CONFLICT !== 'undefined' && window.HAS_CONFLICT) return;
+
     const key = this._getStorageKey();
     if (!key) return;
     const cachedStr = localStorage.getItem(key);
@@ -1886,6 +1884,27 @@ export default () => ({
       if (this._replicaView) {
         this._replicaView.setDocument(this.pageDocument);
       }
+    } else {
+      const format = this.pageDocument?.content_format || (this.isDocx ? 'html' : 'plain');
+      if (format === 'html' || this.isDocx) {
+        this.pageDocument = {
+          content_format: 'html',
+          blocks: [{
+            id: 'b1',
+            type: 'paragraph',
+            bbox: [0, 0, 0, 0],
+            content: text || '',
+            reading_order: 1,
+            manually_edited: true,
+            children: []
+          }]
+        };
+        const docField = document.getElementById('document');
+        if (docField) docField.value = JSON.stringify(this.pageDocument);
+      } else {
+        const docField = document.getElementById('document');
+        if (docField) docField.value = '';
+      }
     }
   },
 
@@ -1913,6 +1932,27 @@ export default () => ({
           textarea.value = htmlContent;
           textarea.dispatchEvent(new Event('input', { bubbles: true }));
           textarea.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        const newBlocks = blocksFromFlowHtml(htmlContent || '', this.pageDocument?.blocks || [], this.pageDocument?.content_format || 'blocks');
+        if (newBlocks.length && this.pageDocument) {
+          this.pageDocument = { ...this.pageDocument, blocks: newBlocks };
+          const docField = document.getElementById('document');
+          if (docField) docField.value = JSON.stringify(this.pageDocument);
+        } else if (this.isDocx || (this.pageDocument && this.pageDocument.content_format === 'html')) {
+          this.pageDocument = {
+            content_format: 'html',
+            blocks: [{
+              id: 'b1',
+              type: 'paragraph',
+              bbox: [0, 0, 0, 0],
+              content: htmlContent || '',
+              reading_order: 1,
+              manually_edited: true,
+              children: []
+            }]
+          };
+          const docField = document.getElementById('document');
+          if (docField) docField.value = JSON.stringify(this.pageDocument);
         }
       }
     } else if (this.pageDocument) {
