@@ -41,6 +41,9 @@
 <script>
   window.IS_DOCX = {{ 'true' if is_docx else 'false' }};
   window.HAS_CONFLICT = {{ 'true' if conflict else 'false' }};
+  window.PAGE_VERSION = {{ page_version|default(0) }};
+  window.TARGET_VERSION_KEY = {{ (target_version_key|default('')) | tojson }};
+  window.ACTIVE_VERSION_KEY = {{ (active_version_key|default('')) | tojson }};
   {% if conflict %}
   window.CONFLICT_CONTENT = {{ (conflict.content|default('')) | tojson }};
   window.YOUR_CONTENT = {{ (your_content|default('')) | tojson }};

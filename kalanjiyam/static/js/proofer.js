@@ -1835,8 +1835,8 @@ export default () => ({
       const cachedVer = parsed.version !== undefined ? parseInt(parsed.version, 10) : 0;
       const serverVer = (typeof window.PAGE_VERSION !== 'undefined') ? parseInt(window.PAGE_VERSION, 10) : 0;
 
-      if (serverVer > cachedVer) {
-        // Server version is higher than local backup version!
+      if (cachedVer !== undefined && cachedVer !== serverVer) {
+        // Version mismatch between local backup (version X) and server (version Y)!
         const localText = parsed.content || (docData ? documentToPlainText(docData) : '');
         const serverText = (this.pageDocument ? documentToPlainText(this.pageDocument) : '') || this.content;
 
@@ -1886,7 +1886,8 @@ export default () => ({
   _getStorageKey() {
     const pathMatch = window.location.pathname.match(/\/proofing\/([^\/]+)\/([^\/]+)/);
     if (pathMatch) {
-      return `kalanjiyam-replica-doc-${pathMatch[1]}-${pathMatch[2]}`;
+      const targetKey = (typeof window.TARGET_VERSION_KEY !== 'undefined' && window.TARGET_VERSION_KEY) ? window.TARGET_VERSION_KEY : 'default';
+      return `kalanjiyam-replica-doc-${pathMatch[1]}-${pathMatch[2]}-${targetKey}`;
     }
     return null;
   },

@@ -193,7 +193,8 @@ export class ReplicaView {
   _getStorageKey() {
     const pathMatch = window.location.pathname.match(/\/proofing\/([^\/]+)\/([^\/]+)/);
     if (pathMatch) {
-      return `kalanjiyam-replica-doc-${pathMatch[1]}-${pathMatch[2]}`;
+      const targetKey = (typeof window.TARGET_VERSION_KEY !== 'undefined' && window.TARGET_VERSION_KEY) ? window.TARGET_VERSION_KEY : 'default';
+      return `kalanjiyam-replica-doc-${pathMatch[1]}-${pathMatch[2]}-${targetKey}`;
     }
     return null;
   }

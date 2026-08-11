@@ -140,23 +140,26 @@ def _get_page_context(project_slug: str, page_slug: str) -> PageContext | None:
 def resolve_version_keys(user, page) -> tuple:
     """Resolve the target version key to save to and the actual version key to load.
 
+    In the Dual-Save Model, edits save to the shared main branch ('role:p1') as primary target,
+    while also saving a personal user backup snapshot ('user:<id>').
     :return: a tuple of (target_version_key, active_version_key)
     """
-    if getattr(user, "is_authenticated", False):
-        target_key = f"user:{user.id}"
-    else:
-        target_key = "role:p1"
+    target_key = "role:p1"
 
     session = q.get_session()
     page_versions = session.query(db.PageVersion).filter_by(page_id=page.id).all()
     existing_keys = {v.version_key for v in page_versions}
 
-    # 1. Always prefer own changes if user has edited this page
-    if getattr(user, "is_authenticated", False) and target_key in existing_keys:
+    if "role:p1" in existing_keys:
         return target_key, target_key
 
-    if not page_versions:
-        return target_key, target_key
+    # Fallback to user track if role:p1 has not been initialized yet
+    if getattr(user, "is_authenticated", False):
+        user_key = f"user:{user.id}"
+        if user_key in existing_keys:
+            return target_key, user_key
+
+    return target_key, target_key
 
     # Fetch users associated with existing user: version tracks for tie-breaking
     user_ids = []
@@ -455,6 +458,8 @@ def _editor_template_kwargs(
 
     return {
         "page_version": page_version,
+        "target_version_key": target_version_key,
+        "active_version_key": active_version_key,
         "conflict": conflict,
         "conflict_diff": conflict_diff,
         "conflict_author_name": conflict_author_name,
@@ -794,7 +799,7 @@ def edit_post(project_slug, page_slug):
         else:
             content_format = "blocks" if doc else "plain"
         try:
-            # We save to target_key
+            # Dual-Save Model: Save to shared main branch (target_key) with optimistic locking
             new_version = add_revision(
                 cur,
                 summary=form.summary.data,
@@ -807,8 +812,31 @@ def edit_post(project_slug, page_slug):
                 version_key=target_key,
             )
             form.version.data = new_version
+
+            # Dual-Save Model: Also save personal user track snapshot if authenticated
+            if current_user.is_authenticated and target_key != f"user:{current_user.id}":
+                user_key = f"user:{current_user.id}"
+                user_ver_rec = session.query(db.PageVersion).filter_by(
+                    page_id=cur.id,
+                    version_key=user_key
+                ).first()
+                user_ver_num = user_ver_rec.version if user_ver_rec else 0
+                try:
+                    add_revision(
+                        cur,
+                        summary=form.summary.data,
+                        content=form.content.data,
+                        status=form.status.data,
+                        version=user_ver_num,
+                        author_id=current_user.id,
+                        document=doc,
+                        content_format=content_format,
+                        version_key=user_key,
+                    )
+                except Exception:
+                    pass
+
             flash(_l("Saved changes."), "success")
-            # Since changes saved successfully, our active key can now become target_key
             active_key = target_key
         except EditError:
             flash(_l("Edit conflict. Please incorporate the changes below:"), "error")
