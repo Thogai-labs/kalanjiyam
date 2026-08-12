@@ -48,6 +48,7 @@ from kalanjiyam.tasks.comparison import run_ocr_comparison_task
 from kalanjiyam.tasks import translation as translation_tasks
 from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
 from kalanjiyam.tasks import metadata as metadata_tasks
+from kalanjiyam.utils import archival_taxonomy as at
 from kalanjiyam.utils import project_metadata as pm
 from kalanjiyam.utils import project_utils, proofing_utils
 from kalanjiyam.utils.revisions import add_revision
@@ -238,6 +239,23 @@ class MetadataExtractForm(FlaskForm):
 
 class MetadataAcceptForm(FlaskForm):
     """Promote a staged extraction over the current values."""
+
+
+class ArchivalTestForm(FlaskForm):
+    """SMOKE TEST: paste an archival-taxonomy document as raw JSON.
+
+    Feeding the tab by hand keeps the experiment independent of the LLM service.
+    """
+
+    document = StringField(
+        _l("Document (JSON)"),
+        widget=TextArea(),
+        render_kw={"rows": 18, "class": "font-mono text-xs"},
+    )
+
+
+class ArchivalResetForm(FlaskForm):
+    """SMOKE TEST: drop the test document, leaving the rest of the JSON alone."""
 
 
 class MatchForm(Form):
@@ -536,6 +554,109 @@ def metadata_accept(slug):
     else:
         flash(_l("There is no pending extraction to load."), "error")
     return redirect(url_for("proofing.project.metadata", slug=slug))
+
+
+# Archival taxonomy smoke test
+# ---------------------------
+#
+# Throwaway. Renders the ISAD(G)/ISAAR(CPF)/RiC taxonomy from a JSON document
+# stored under `extracted_metadata["archival"]`, so we can judge the shape
+# against a real project before deciding whether it becomes a data model.
+#
+# Deliberately does not touch any column, does not reindex, and does not call
+# the LLM service. To remove the experiment, delete these two routes, the two
+# forms above, `utils/archival_taxonomy.py`, the template, and the macro entry.
+
+#: The one key this experiment owns inside `extracted_metadata`.
+ARCHIVAL_KEY = "archival"
+
+
+@bp.route("/<slug>/metadata-test", methods=["GET", "POST"])
+@moderator_required
+def metadata_test(slug):
+    """SMOKE TEST: render the archival taxonomy from a pasted JSON document."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    data = project_.extracted_metadata or {}
+    document = data.get(ARCHIVAL_KEY)
+    form = ArchivalTestForm()
+
+    if form.validate_on_submit():
+        # `None` is a valid JSON value ("null"), so it cannot double as the
+        # parse-failure sentinel.
+        failed = object()
+        try:
+            parsed = json.loads(form.document.data or "{}")
+        except json.JSONDecodeError as e:
+            # Re-render with the pasted text intact -- losing it would make the
+            # tab useless for iterating on a long document.
+            flash(_l("Invalid JSON: %(error)s", error=str(e)), "error")
+            parsed = failed
+
+        if parsed is not failed:
+            if not isinstance(parsed, dict):
+                flash(_l("The document must be a JSON object."), "error")
+            else:
+                merged = dict(data)
+                merged[ARCHIVAL_KEY] = parsed
+                project_.extracted_metadata = merged
+                # SQLAlchemy does not track in-place mutation of a JSON column.
+                flag_modified(project_, "extracted_metadata")
+                q.get_session().commit()
+                flash(_l("Loaded the test document."), "success")
+                return redirect(
+                    url_for("proofing.project.metadata_test", slug=slug)
+                )
+
+    if request.method == "GET":
+        # Fall back to the sample so the tab shows something on first load.
+        form.document.data = json.dumps(
+            document if document is not None else at.SAMPLE,
+            indent=2,
+            ensure_ascii=False,
+        )
+
+    rendered = document if document is not None else at.SAMPLE
+    return render_template(
+        "proofing/projects/metadata_test.html",
+        project=project_,
+        form=form,
+        reset_form=ArchivalResetForm(),
+        groups=at.GROUPS,
+        document=rendered,
+        coverage=at.coverage(rendered),
+        is_sample=document is None,
+        taxonomy=at,
+    )
+
+
+@bp.route("/<slug>/metadata-test/reset", methods=["POST"])
+@moderator_required
+def metadata_test_reset(slug):
+    """SMOKE TEST: remove the test document, leaving every other key intact."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    form = ArchivalResetForm()
+    if not form.validate_on_submit():
+        flash(_l("Could not reset the test document."), "error")
+        return redirect(url_for("proofing.project.metadata_test", slug=slug))
+
+    data = project_.extracted_metadata or {}
+    if ARCHIVAL_KEY in data:
+        merged = dict(data)
+        merged.pop(ARCHIVAL_KEY)
+        project_.extracted_metadata = merged
+        flag_modified(project_, "extracted_metadata")
+        q.get_session().commit()
+        flash(_l("Removed the test document."), "success")
+    else:
+        flash(_l("There is no test document to remove."), "error")
+
+    return redirect(url_for("proofing.project.metadata_test", slug=slug))
 
 
 @bp.route("/<slug>/batch")

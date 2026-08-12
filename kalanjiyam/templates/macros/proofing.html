@@ -114,6 +114,7 @@
 {% if current_user.is_moderator or current_user.is_org_admin or current_user.is_super_admin %}
 {% set routes = routes + [
 ("metadata", _("Metadata"), url_for("proofing.project.metadata", slug=project.slug)),
+("metadata_test", _("Metadata (test)"), url_for("proofing.project.metadata_test", slug=project.slug)),
 ] %}{% endif %}
 {% if is_mod %}{% set routes = routes + [
 ("admin", _("Admin"), url_for("proofing.project.admin", slug=project.slug)),
