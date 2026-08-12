@@ -21,6 +21,18 @@ def test_index(client):
     assert ">Proofing<" in resp.text
 
 
+def test_index_pagination(client):
+    resp = client.get("/proofing/?page=1&per_page=5")
+    assert resp.status_code == 200
+    assert ">Proofing<" in resp.text
+
+
+def test_index_search(client):
+    resp = client.get("/proofing/?q=test&sort=title&order=asc")
+    assert resp.status_code == 200
+    assert ">Proofing<" in resp.text
+
+
 def test_beginners_guide(client):
     resp = client.get("/proofing/help/beginners-guide")
     assert "Beginner's Guide" in resp.text

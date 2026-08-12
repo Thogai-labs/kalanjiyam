@@ -3,6 +3,11 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import json
+import math
+import os
+import redis
+
 from flask import Blueprint, current_app, flash, render_template, request, redirect, url_for
 from flask_babel import lazy_gettext as _l
 from flask_login import current_user
@@ -94,19 +99,75 @@ class CreateProjectForm(FlaskForm):
 
 @bp.route("/")
 def index():
-    """List all available proofing projects."""
+    """List all available proofing projects with full tenant search, pagination, and Redis caching."""
 
-    # Fetch all project data in a single query for better performance.
+    search_query = (request.args.get("q", "") or request.args.get("query", "")).strip()
+    selected_mode = (request.args.get("mode", "all")).strip().lower()
+    sort_field = (request.args.get("sort", "created")).strip().lower()
+    sort_order = (request.args.get("order", "desc")).strip().lower()
+
+    # 1. Parse pagination parameters safely
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except (ValueError, TypeError):
+        page = 1
+    try:
+        per_page = max(1, min(100, int(request.args.get("per_page", 20))))
+    except (ValueError, TypeError):
+        per_page = 20
+
     session = q.get_session()
-    projects = (
+
+    # 2. Eagerly load groups to perform authorization check without N+1 queries
+    all_projects = (
         session.query(db.Project)
-        .options(
-            orm.joinedload(db.Project.pages)
-            .load_only(db.Page.id)
-            .joinedload(db.Page.status)
-        )
+        .options(orm.selectinload(db.Project.groups))
         .all()
     )
+
+    # 3. Filter projects based on user access permissions (tenant scope)
+    projects = [p for p in all_projects if q.user_can_view_proofing_project(current_user, p)]
+
+    # 4. Filter by creator mode if specified
+    if selected_mode and selected_mode != "all":
+        projects = [p for p in projects if getattr(p, "creator_mode", None) == selected_mode]
+
+    # 5. Full tenant search filtering (matching display_title, print_title, author, or slug)
+    if search_query:
+        q_lower = search_query.lower()
+        projects = [
+            p for p in projects
+            if q_lower in (p.display_title or "").lower()
+            or q_lower in (p.print_title or "").lower()
+            or q_lower in (p.author or "").lower()
+            or q_lower in (p.slug or "").lower()
+        ]
+
+    # 6. Server-side sorting
+    reverse = (sort_order == "desc")
+    if sort_field == "title":
+        projects.sort(key=lambda x: (x.display_title or "").lower(), reverse=reverse)
+    else:
+        # Default sort by created_at date
+        projects.sort(key=lambda x: x.created_at, reverse=reverse)
+
+    total_projects = len(projects)
+    total_pages = max(1, math.ceil(total_projects / per_page)) if total_projects else 1
+    if page > total_pages:
+        page = total_pages
+
+    # 7. Slice current page items
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    paginated_projects = projects[start_idx:end_idx]
+
+    # 8. Eagerly load pages & page status for ONLY current page projects
+    paginated_project_ids = [p.id for p in paginated_projects]
+    if paginated_project_ids:
+        session.query(db.Project).options(
+            orm.selectinload(db.Project.pages).joinedload(db.Page.status)
+        ).filter(db.Project.id.in_(paginated_project_ids)).all()
+
     status_classes = {
         SitePageStatus.R2: "bg-green-200",
         SitePageStatus.R1: "bg-yellow-200",
@@ -114,38 +175,83 @@ def index():
         SitePageStatus.SKIP: "bg-slate-100",
     }
 
-    projects = [p for p in q.projects() if q.user_can_view_proofing_project(current_user, p)]
+    # 9. Initialize Redis connection safely
+    r_client = None
+    try:
+        r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+        r_client.ping()
+    except Exception:
+        r_client = None
+
     statuses_per_project = {}
     progress_per_project = {}
     pages_per_project = {}
-    for project in projects:
+
+    for project in paginated_projects:
+        updated_ts = int(project.updated_at.timestamp()) if getattr(project, "updated_at", None) else 0
+        cache_key = f"proofing:proj_stats:{project.id}:{updated_ts}"
+        cached_data = None
+
+        if r_client:
+            try:
+                raw_bytes = r_client.get(cache_key)
+                if raw_bytes:
+                    cached_data = json.loads(raw_bytes.decode("utf-8"))
+            except Exception:
+                cached_data = None
+
+        if cached_data:
+            statuses_per_project[project.id] = cached_data["statuses"]
+            progress_per_project[project.id] = cached_data["progress"]
+            pages_per_project[project.id] = cached_data["pages"]
+            continue
+
         page_statuses = [p.status.name for p in project.pages]
 
         if not page_statuses:
             statuses_per_project[project.id] = {}
             pages_per_project[project.id] = 0
             progress_per_project[project.id] = 0
-            continue
+            cached_payload = {"statuses": {}, "progress": 0, "pages": 0}
+        else:
+            num_pages = len(page_statuses)
+            project_counts = {}
+            progress_val = 0
+            for enum_value, class_ in status_classes.items():
+                fraction = page_statuses.count(enum_value) / num_pages
+                project_counts[class_] = fraction
+                if enum_value == SitePageStatus.R0:
+                    progress_val = 1 - fraction
 
-        num_pages = len(page_statuses)
-        project_counts = {}
-        for enum_value, class_ in status_classes.items():
-            fraction = page_statuses.count(enum_value) / num_pages
-            project_counts[class_] = fraction
-            if enum_value == SitePageStatus.R0:
-                # The more red pages there are, the lower progress is.
-                progress_per_project[project.id] = 1 - fraction
+            statuses_per_project[project.id] = project_counts
+            pages_per_project[project.id] = num_pages
+            progress_per_project[project.id] = progress_val
+            cached_payload = {
+                "statuses": project_counts,
+                "progress": progress_val,
+                "pages": num_pages,
+            }
 
-        statuses_per_project[project.id] = project_counts
-        pages_per_project[project.id] = num_pages
+        if r_client:
+            try:
+                r_client.setex(cache_key, 3600, json.dumps(cached_payload))
+            except Exception:
+                pass
 
-    projects.sort(key=lambda x: x.created_at, reverse=True)
     return render_template(
         "proofing/index.html",
-        projects=projects,
+        projects=paginated_projects,
         statuses_per_project=statuses_per_project,
         progress_per_project=progress_per_project,
         pages_per_project=pages_per_project,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+        total_projects=total_projects,
+        search_query=search_query,
+        selected_mode=selected_mode,
+        sort_field=sort_field,
+        sort_order=sort_order,
     )
 
 

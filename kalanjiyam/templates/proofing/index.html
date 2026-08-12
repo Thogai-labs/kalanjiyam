@@ -56,56 +56,54 @@
   {% if projects %}
   {{ status_legend() }}
 
-  <div x-data="sortableList('created', 'desc')" class="space-y-6">
+  <div class="space-y-6">
 
     <div class="bg-slate-50 rounded-2xl p-5">
-      <form class="flex flex-col md:flex-row items-center gap-4" x-cloak @submit.prevent>
+      <form method="GET" action="{{ url_for('proofing.index') }}" class="flex flex-col md:flex-row items-center gap-4">
         <div class="flex-1 relative w-full">
           <svg class="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" fill="none"
             stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
           </svg>
-          <input type="text" placeholder="{{ _('Search projects...') }}" x-model="query"
+          <input type="text" name="q" value="{{ search_query }}" placeholder="{{ _('Search projects...') }}"
             class="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all"
-            @keyup="filter">
+            @input.debounce.300ms="$el.form.submit()">
         </div>
         {% if current_user.is_super_admin %}
         <div class="flex items-center gap-3 w-full md:w-auto">
           <label class="text-sm font-semibold text-slate-500 whitespace-nowrap">{{ _('Mode:') }}</label>
-          <select
+          <select name="mode"
             class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:border-royalblue outline-none transition-all flex-1"
-            x-model="selectedMode" @change="filter">
-            <option value="all" selected>{{ _('All') }}</option>
-            <option value="unregistered">{{ _('Unregistered') }}</option>
-            <option value="registered">{{ _('Registered') }}</option>
-            <option value="enterprise">{{ _('Enterprise') }}</option>
+            @change="$el.form.submit()">
+            <option value="all" {% if selected_mode == 'all' %}selected{% endif %}>{{ _('All') }}</option>
+            <option value="unregistered" {% if selected_mode == 'unregistered' %}selected{% endif %}>{{ _('Unregistered') }}</option>
+            <option value="registered" {% if selected_mode == 'registered' %}selected{% endif %}>{{ _('Registered') }}</option>
+            <option value="enterprise" {% if selected_mode == 'enterprise' %}selected{% endif %}>{{ _('Enterprise') }}</option>
           </select>
         </div>
         {% endif %}
         <div class="flex items-center gap-3 w-full md:w-auto">
           <label class="text-sm font-semibold text-slate-500 whitespace-nowrap">{{ _('Sort:') }}</label>
-          <select
+          <select name="sort"
             class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:border-royalblue outline-none transition-all flex-1"
-            x-model="field" @change="sort">
-            <option value="title">{{ _('Title') }}</option>
-            <option value="created" selected>{{ _('Creation date') }}</option>
-            <option value="progress">{{ _('Progress') }}</option>
+            @change="$el.form.submit()">
+            <option value="created" {% if sort_field == 'created' %}selected{% endif %}>{{ _('Creation date') }}</option>
+            <option value="title" {% if sort_field == 'title' %}selected{% endif %}>{{ _('Title') }}</option>
           </select>
-          <select
+          <select name="order"
             class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:border-royalblue outline-none transition-all"
-            x-model="order" @change="sort">
-            <option value="asc">{{ _('Asc') }}</option>
-            <option value="desc" selected>{{ _('Desc') }}</option>
+            @change="$el.form.submit()">
+            <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>{{ _('Desc') }}</option>
+            <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>{{ _('Asc') }}</option>
           </select>
         </div>
       </form>
     </div>
  
-    <div x-ref="list" class="grid gap-6">
+    <div class="grid gap-6">
       {% for p in projects %}
-      <div data-key="{{ p.id }}" data-title="{{ p.display_title }}" data-created="{{ p.created_at }}"
-        data-progress="{{ progress_per_project[p.id] }}" data-mode="{{ p.creator_mode }}" x-show="displayed.has('{{ p.id }}')" class="premium-card p-6">
+      <div class="premium-card p-6">
 
         <div class="flex items-start justify-between mb-4">
           <div class="flex-1">
@@ -168,6 +166,29 @@
       </div>
       {% endfor %}
     </div>
+
+    {% if total_pages and total_pages > 1 %}
+    <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-100 text-sm">
+      <div class="text-slate-500 font-medium">
+        {{ _('Showing %(start)d - %(end)d of %(total)d projects', start=((page - 1) * per_page) + 1, end=[page * per_page, total_projects]|min, total=total_projects) }}
+      </div>
+      <div class="flex items-center gap-2">
+        {% if page > 1 %}
+        <a href="{{ url_for('proofing.index', page=page - 1, per_page=per_page, q=search_query, mode=selected_mode, sort=sort_field, order=sort_order) }}" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 transition-colors">
+          {{ _('Previous') }}
+        </a>
+        {% endif %}
+        <span class="px-3 py-2 font-bold text-slate-700">
+          {{ page }} / {{ total_pages }}
+        </span>
+        {% if page < total_pages %}
+        <a href="{{ url_for('proofing.index', page=page + 1, per_page=per_page, q=search_query, mode=selected_mode, sort=sort_field, order=sort_order) }}" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 transition-colors">
+          {{ _('Next') }}
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
   </div>
   {% else %}
   <div class="text-center py-20">
