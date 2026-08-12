@@ -374,6 +374,64 @@ def normalize_relations(value) -> list[dict]:
     return out
 
 
+#: Shape hint per kind, used to build the instruction block.
+_SHAPE = {
+    KIND_TEXT: "string",
+    KIND_PROSE: "string (a paragraph)",
+    KIND_ENTITIES: '[{"label": str, "variants": [str], "dates": str, '
+    '"auth_id": str, "note": str}]',
+    KIND_RELATIONS: '[{"subject": str, "type": str, "object": str, "note": str}]',
+}
+
+
+def build_prompt(codes: list[str] | None = None) -> str:
+    """Build the instruction block prepended to the page text.
+
+    Generated from GROUPS so the prompt cannot drift from what the tab renders.
+
+    This exists because the taxonomy has no persona of its own on the service.
+    Putting the whole instruction in the user message lets us drive *any*
+    registered persona, which is what makes the smoke test runnable today.
+    """
+    wanted = set(codes) if codes else None
+    lines = [
+        "You are an archivist describing a historical record to ISAD(G), "
+        "ISAAR(CPF) and RiC-CM.",
+        "",
+        "Read the document text below and return a SINGLE JSON object keyed by "
+        "the tag codes listed here. No prose, no markdown fences, JSON only.",
+        "",
+    ]
+    for group_name, tags in GROUPS:
+        selected = [t for t in tags if wanted is None or t.code in wanted]
+        if not selected:
+            continue
+        lines.append(f"## {group_name}")
+        for tag in selected:
+            lines.append(
+                f'"{tag.code}": {_SHAPE[tag.kind]}  // {tag.label} '
+                f"({tag.standard}). {tag.definition}"
+            )
+        lines.append("")
+
+    lines += [
+        "Rules:",
+        "- Use null for any tag not supported by the text. Never guess or "
+        "infer values that are not stated -- accuracy over completeness.",
+        "- Omit a tag entirely rather than inventing a plausible value.",
+        "- For access points, put the form used in the record in `label` and "
+        "any other forms seen in `variants`.",
+        '- Only set `auth_id` if an identifier appears in the text itself. '
+        "Do not invent VIAF, LCNAF or Wikidata identifiers.",
+        "- Normalize Hijri dates to ISO 8601 where possible, keeping the "
+        "original in parentheses.",
+        "- The text may be noisy OCR. Note any uncertainty in DESCTRL.",
+        "",
+        "--- DOCUMENT TEXT ---",
+    ]
+    return "\n".join(lines)
+
+
 #: A fully-populated example, so the tab renders something on first load without
 #: needing the LLM service (whose personas are not currently registered). The
 #: material is the Baluchistan Agency / Kalat State correspondence the taxonomy

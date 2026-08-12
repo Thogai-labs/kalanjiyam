@@ -47,8 +47,10 @@ from kalanjiyam.tasks import ocr as ocr_tasks
 from kalanjiyam.tasks.comparison import run_ocr_comparison_task
 from kalanjiyam.tasks import translation as translation_tasks
 from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
+from kalanjiyam.tasks import archival_test
 from kalanjiyam.tasks import metadata as metadata_tasks
 from kalanjiyam.utils import archival_taxonomy as at
+from kalanjiyam.utils import llm_client
 from kalanjiyam.utils import project_metadata as pm
 from kalanjiyam.utils import project_utils, proofing_utils
 from kalanjiyam.utils.revisions import add_revision
@@ -256,6 +258,27 @@ class ArchivalTestForm(FlaskForm):
 
 class ArchivalResetForm(FlaskForm):
     """SMOKE TEST: drop the test document, leaving the rest of the JSON alone."""
+
+
+class ArchivalRunForm(FlaskForm):
+    """SMOKE TEST: run the taxonomy extraction against a chat persona.
+
+    The persona name is an input rather than a constant because the taxonomy
+    has no persona of its own registered server-side. Point it at whatever
+    exists on the service and carry the instructions in the user message.
+    """
+
+    persona = StringField(
+        _l("Persona"),
+        default=llm_client.PERSONA_FRONT_MATTER,
+        render_kw={"class": "font-mono text-xs"},
+    )
+    instructions = StringField(
+        _l("Instructions"),
+        widget=TextArea(),
+        render_kw={"rows": 14, "class": "font-mono text-xs"},
+    )
+    max_chars = StringField(_l("Max characters of page text"), default="6000")
 
 
 class MatchForm(Form):
@@ -567,8 +590,11 @@ def metadata_accept(slug):
 # the LLM service. To remove the experiment, delete these two routes, the two
 # forms above, `utils/archival_taxonomy.py`, the template, and the macro entry.
 
-#: The one key this experiment owns inside `extracted_metadata`.
+#: The two keys this experiment owns inside `extracted_metadata`.
 ARCHIVAL_KEY = "archival"
+ARCHIVAL_RUN_KEY = "archival_run"
+
+#: Sampling and timeout limits live on the task module.
 
 
 @bp.route("/<slug>/metadata-test", methods=["GET", "POST"])
@@ -619,16 +645,70 @@ def metadata_test(slug):
         )
 
     rendered = document if document is not None else at.SAMPLE
+    progress = archival_test.get_progress(project_.id)
     return render_template(
         "proofing/projects/metadata_test.html",
         project=project_,
         form=form,
         reset_form=ArchivalResetForm(),
+        # formdata=None: this render can follow a POST to the *paste* form,
+        # whose fields would otherwise bind here and blank the instructions.
+        run_form=ArchivalRunForm(formdata=None, instructions=at.build_prompt()),
+        run=data.get(ARCHIVAL_RUN_KEY),
+        progress=progress,
+        running=bool(progress and progress.get("status") == "running"),
         groups=at.GROUPS,
         document=rendered,
         coverage=at.coverage(rendered),
         is_sample=document is None,
         taxonomy=at,
+    )
+
+
+@bp.route("/<slug>/metadata-test/run", methods=["POST"])
+@moderator_required
+def metadata_test_run(slug):
+    """SMOKE TEST: enqueue a taxonomy extraction run.
+
+    Runs on Celery like the real pipeline, so the sample is not capped by a
+    worker timeout and the tab can poll for progress.
+    """
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    form = ArchivalRunForm()
+    if not form.validate_on_submit():
+        flash(_l("Could not start the run."), "error")
+        return redirect(url_for("proofing.project.metadata_test", slug=slug))
+
+    persona = (form.persona.data or "").strip() or llm_client.PERSONA_FRONT_MATTER
+    instructions = (form.instructions.data or "").strip() or at.build_prompt()
+
+    try:
+        archival_test.run_archival_test.delay(
+            project_.id,
+            persona=persona,
+            instructions=instructions,
+            max_chars=archival_test.clamp_chars(form.max_chars.data),
+        )
+        flash(_l("Run started. This page updates when it finishes."), "success")
+    except Exception:
+        LOG.exception("could not enqueue archival test for %s", slug)
+        flash(_l("Could not start the run."), "error")
+
+    return redirect(url_for("proofing.project.metadata_test", slug=slug))
+
+
+@bp.route("/<slug>/metadata-test/status")
+@moderator_required
+def metadata_test_status(slug):
+    """Poll the progress of a running smoke test."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+    return jsonify(
+        archival_test.get_progress(project_.id) or {"status": "idle"}
     )
 
 
@@ -646,9 +726,10 @@ def metadata_test_reset(slug):
         return redirect(url_for("proofing.project.metadata_test", slug=slug))
 
     data = project_.extracted_metadata or {}
-    if ARCHIVAL_KEY in data:
+    if ARCHIVAL_KEY in data or ARCHIVAL_RUN_KEY in data:
         merged = dict(data)
-        merged.pop(ARCHIVAL_KEY)
+        merged.pop(ARCHIVAL_KEY, None)
+        merged.pop(ARCHIVAL_RUN_KEY, None)
         project_.extracted_metadata = merged
         flag_modified(project_, "extracted_metadata")
         q.get_session().commit()
