@@ -1212,15 +1212,12 @@ def ocr(project_slug, page_slug):
                 session.add(batch_item)
                 session.flush()
 
-            # Ensure source_size_bytes is set on batch_item if missing
+            # Ensure source_size_bytes is set on batch_item if missing from project extracted_metadata
             if not batch_item.source_size_bytes:
-                try:
-                    storage = get_storage()
-                    page_key = page_image_key(project_slug, page_slug)
-                    if storage.exists(page_key):
-                        batch_item.source_size_bytes = storage.size(page_key)
-                except Exception:
-                    pass
+                meta = getattr(project_, "extracted_metadata", None) or {}
+                meta_src_sz = (meta.get("source_file") or {}).get("size_bytes")
+                if meta_src_sz:
+                    batch_item.source_size_bytes = meta_src_sz
 
             p_num = int(page_slug) if page_slug.isdigit() else page_.order
             ocr_page = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, page_number=p_num).first()
@@ -1765,16 +1762,12 @@ def translate(project_slug, page_slug):
                         session.add(batch_item)
                         session.flush()
 
-                    # Ensure source_size_bytes is set on batch_item if missing
+                    # Ensure source_size_bytes is set on batch_item if missing from project extracted_metadata
                     if not batch_item.source_size_bytes:
-                        try:
-                            from kalanjiyam.utils.storage import get_storage, page_image_key
-                            storage = get_storage()
-                            page_key = page_image_key(project_slug, page_slug)
-                            if storage.exists(page_key):
-                                batch_item.source_size_bytes = storage.size(page_key)
-                        except Exception:
-                            pass
+                        meta = getattr(project_, "extracted_metadata", None) or {}
+                        meta_src_sz = (meta.get("source_file") or {}).get("size_bytes")
+                        if meta_src_sz:
+                            batch_item.source_size_bytes = meta_src_sz
 
                     p_num = int(page_slug) if page_slug.isdigit() else page_.order
                     ocr_page = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, page_number=p_num).first()

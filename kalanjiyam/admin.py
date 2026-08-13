@@ -883,28 +883,33 @@ def _sync_job_and_item_metrics(session, job):
             .all()
         )
         
-        # Retroactively backfill source_size_bytes for old jobs
+        # Retroactively backfill source_size_bytes from Project metadata or Storage
         if item.source_size_bytes is None or item.source_size_bytes == 0:
             try:
                 from kalanjiyam.utils.storage import get_storage, pdf_key, project_docx_key
-                project_slug = session.query(db.Project.slug).filter_by(id=item.project_id).scalar()
-                if project_slug:
-                    storage = get_storage()
+                db_proj = session.query(db.Project).filter_by(id=item.project_id).first()
+                if db_proj:
+                    # 1. Check extracted_metadata stored during PDF upload
+                    meta = db_proj.extracted_metadata or {}
+                    meta_src_sz = (meta.get("source_file") or {}).get("size_bytes")
+                    if meta_src_sz:
+                        item.source_size_bytes = meta_src_sz
                     
-                    # Check for PDF first
-                    for k, size in storage.list_keys(pdf_key(project_slug)):
-                        if k == pdf_key(project_slug):
-                            item.source_size_bytes = size
-                            break
-                            
-                    # If no PDF, check for DOCX
-                    if not item.source_size_bytes:
-                        for k, size in storage.list_keys(project_docx_key(project_slug)):
-                            if k == project_docx_key(project_slug):
+                    # 2. Check active PDF/DOCX storage keys if not deleted
+                    if not item.source_size_bytes and db_proj.slug:
+                        storage = get_storage()
+                        for k, size in storage.list_keys(pdf_key(db_proj.slug)):
+                            if k == pdf_key(db_proj.slug):
                                 item.source_size_bytes = size
                                 break
+                                
+                        if not item.source_size_bytes:
+                            for k, size in storage.list_keys(project_docx_key(db_proj.slug)):
+                                if k == project_docx_key(db_proj.slug):
+                                    item.source_size_bytes = size
+                                    break
 
-                    # If original doc was deleted after conversion, fallback to extracted images total
+                    # 3. Fallback to sum of page extracted images if original uploaded file size missing
                     if not item.source_size_bytes:
                         sum_ext = sum(p.extracted_image_size_bytes or 0 for p in page_records)
                         if sum_ext > 0:
@@ -936,8 +941,6 @@ def _sync_job_and_item_metrics(session, job):
             item.cropped_images_size_bytes = sum(p.cropped_image_size_bytes or 0 for p in completed_pages)
             item.ocr_data_size_bytes = sum(p.ocr_data_size_bytes or 0 for p in completed_pages)
             item.translation_data_size_bytes = sum(p.translation_data_size_bytes or 0 for p in completed_pages)
-            if not item.source_size_bytes and item.extracted_images_size_bytes:
-                item.source_size_bytes = item.extracted_images_size_bytes
             
             engines = [p.engine for p in completed_pages if p.engine]
             item.engine = engines[0] if engines else item.engine

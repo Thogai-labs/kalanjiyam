@@ -281,12 +281,11 @@
             </td>
 
             <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
-              {% set src_sz = item.size_bytes or item.extracted_images_size_bytes %}
-              {% if src_sz %}
-                {% if src_sz >= 1048576 %}
-                  {{ (src_sz / (1024*1024)) | round(2) }} MB
+              {% if item.size_bytes %}
+                {% if item.size_bytes >= 1048576 %}
+                  {{ (item.size_bytes / (1024*1024)) | round(2) }} MB
                 {% else %}
-                  {{ (src_sz / 1024) | round(1) }} KB
+                  {{ (item.size_bytes / 1024) | round(1) }} KB
                 {% endif %}
               {% else %}
                 -
