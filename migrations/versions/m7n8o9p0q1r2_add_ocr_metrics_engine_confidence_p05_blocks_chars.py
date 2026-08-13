@@ -23,8 +23,12 @@ def upgrade():
         op.add_column("batch_items", sa.Column("engine", sa.String(64), nullable=True))
     if "avg_confidence" not in columns:
         op.add_column("batch_items", sa.Column("avg_confidence", sa.Float(), nullable=True))
+    if "min_confidence" not in columns:
+        op.add_column("batch_items", sa.Column("min_confidence", sa.Float(), nullable=True))
     if "avg_p05" not in columns:
         op.add_column("batch_items", sa.Column("avg_p05", sa.Float(), nullable=True))
+    if "low_conf_page_count" not in columns:
+        op.add_column("batch_items", sa.Column("low_conf_page_count", sa.Integer(), nullable=True))
     if "total_blocks" not in columns:
         op.add_column("batch_items", sa.Column("total_blocks", sa.Integer(), nullable=True))
     if "total_chars" not in columns:

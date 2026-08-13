@@ -65,24 +65,39 @@ When processing `1.jpg`, the OCR API must return a single JSON object containing
 
 ---
 
-## 3. Required Fields & Metrics Mapping
+## 3. Per-Page Metrics Collected from Response
 
-From this single response payload, Kalanjiyam automatically extracts and stores the **6 core metrics**:
+From each single page response payload, Kalanjiyam automatically extracts and stores per-page metrics:
 
-| Core Metric | API Response Field | Data Type | Value Range / Format | Description |
+| Per-Page Metric | API Response Field | Data Type | Value Range / Format | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | **`Engine`** | `engine` | String | e.g., `"surya"`, `"google"`, `"tesseract"` | Identifier of the OCR engine used. |
 | **`Confidence`** | `page_confidence` | Float | `0.0` to `1.0` (e.g. `0.942` = `94.2%`) | Overall page recognition accuracy score. |
 | **`p05`** | `words[].confidence` | Float | `0.0` to `1.0` | 5th percentile confidence cutoff (Quality Floor). |
-| **`Blocks`** | `blocks` | Array | Count of items in `blocks` array | Total structural layout blocks detected. |
-| **`Chars`** | `blocks[].content` | String | Character length sum of block contents | Total extracted character count. |
-| **`Latency`** | `engine_latency_ms` | Float | Milliseconds (e.g. `342.5`) | Pure OCR model processing latency for `1.jpg`. |
+| **`Blocks`** | `blocks` | Array | Count of items in `blocks` array | Total structural layout blocks detected on page. |
+| **`Chars`** | `blocks[].content` | String | Character length sum of block contents | Total extracted character count on page. |
+| **`Engine-Latency`** | `engine_latency_ms` | Float | Milliseconds (e.g. `342.5`) | Pure OCR model processing latency for `1.jpg`. |
 
 ---
 
-## 4. Field Specification Checklist
+## 4. Full Document & Project Level Aggregated Metrics
 
-### Top-Level Fields
+As pages complete, Kalanjiyam aggregates per-page metrics into **Document / Project Level Rollups** (`BatchItem` table, Admin UI Summary & CSV Exports):
+
+| Document / Project Metric | DB Field / Aggregation Method | UI Header | Description |
+| :--- | :--- | :--- | :--- |
+| **`Pages`** | `item.pages` / `count(completed_pages)` | `Pages` | Total count of pages in document/project. |
+| **`Avg Conf.`** | `item.avg_confidence` = $\frac{\sum \text{conf}}{\text{pages}}$ | `Avg Conf.` | Mean confidence score across all completed pages (e.g. `94.2%`). |
+| **`Min Conf.`** | `item.min_confidence` = $\min(\text{page.confidence})$ | `Min Conf.` | Lowest page confidence score in the document (pinpoints weakest page). |
+| **`Pages <0.7`** | `item.low_conf_page_count` = $\text{count}(\text{conf} < 0.7)$ | `Pages <0.7` | Number of pages in document with confidence/quality below 70%. |
+| **`Avg Engine Latency`**| `avg_engine_latency_sec` = $\frac{\text{total\_engine\_latency}}{\text{pages}}$ | `Avg Engine Latency` | Average engine processing time per page in seconds (e.g. `0.34s/p`). |
+| **`Chars`** | `item.total_chars` = $\sum \text{page.chars}$ | `Chars` | Cumulative total character count extracted across all pages. |
+
+---
+
+## 5. Field Specification Checklist
+
+### Top-Level Required Fields
 * `contract_version` (String, Required): Must be `"2.1"`.
 * `engine` (String, Required): OCR engine name.
 * `model` (Object, Optional): `{"name": "...", "version": "..."}` metadata.

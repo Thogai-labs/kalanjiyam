@@ -211,19 +211,21 @@
             <th class="px-4 py-3 font-mono text-xs">#</th>
             <th class="px-4 py-3">{{ _('Name / File Path') }}</th>
             <th class="px-4 py-3 text-center">{{ _('Engine') }}</th>
+            <th class="px-4 py-3 text-right">{{ _('Pages') }}</th>
             <th class="px-4 py-3 text-right">{{ _('Avg Conf.') }}</th>
+            <th class="px-4 py-3 text-right">{{ _('Min Conf.') }}</th>
+            <th class="px-4 py-3 text-right">{{ _('Pages <0.7') }}</th>
             <th class="px-4 py-3 text-right">{{ _('Avg p05') }}</th>
             <th class="px-4 py-3 text-right">{{ _('Blocks') }}</th>
             <th class="px-4 py-3 text-right">{{ _('Chars') }}</th>
 
             <th class="px-4 py-3 text-right">{{ _('Source Size') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('Extracted Images') }}</th>
+            <th class="px-4 py-3 text-right">{{ _('PDF -> JPG Size') }}</th>
             <th class="px-4 py-3 text-right">{{ _('Cropped Images') }}</th>
             <th class="px-4 py-3 text-right">{{ _('OCR Data') }}</th>
             <th class="px-4 py-3 text-right">{{ _('Trans Data') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('Pages') }}</th>
             <th class="px-4 py-3 text-right">{{ _('OCR / Trans Time') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('Engine Latency') }}</th>
+            <th class="px-4 py-3 text-right">{{ _('Avg Engine Latency') }}</th>
             <th class="px-4 py-3 text-right">{{ _('Avg / Page') }}</th>
             <th class="px-4 py-3 text-center">{{ _('Status') }}</th>
           </tr>
@@ -250,8 +252,23 @@
                 </span>
               {% else %}-{% endif %}
             </td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">
+              {{ item.pages }}
+            </td>
             <td class="px-4 py-3 text-right font-mono text-xs text-emerald-600 font-semibold">
               {% if item.avg_confidence is not none %}{{ item.avg_confidence }}%{% else %}-{% endif %}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs text-rose-600 font-semibold">
+              {% if item.min_confidence is not none %}{{ item.min_confidence }}%{% else %}-{% endif %}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs font-semibold">
+              {% if item.low_conf_page_count %}
+                <span class="inline-flex px-1.5 py-0.5 rounded text-[11px] bg-rose-50 text-rose-700 border border-rose-200 font-bold">
+                  {{ item.low_conf_page_count }}
+                </span>
+              {% else %}
+                <span class="text-slate-400">0</span>
+              {% endif %}
             </td>
             <td class="px-4 py-3 text-right font-mono text-xs text-amber-600 font-semibold">
               {% if item.avg_p05 is not none %}{{ item.avg_p05 }}%{% else %}-{% endif %}
@@ -264,22 +281,35 @@
             </td>
 
             <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
-              {% if item.size_bytes %}
-                {{ (item.size_bytes / (1024*1024)) | round(2) }} MB
+              {% set src_sz = item.size_bytes or item.extracted_images_size_bytes %}
+              {% if src_sz %}
+                {% if src_sz >= 1048576 %}
+                  {{ (src_sz / (1024*1024)) | round(2) }} MB
+                {% else %}
+                  {{ (src_sz / 1024) | round(1) }} KB
+                {% endif %}
               {% else %}
                 -
               {% endif %}
             </td>
             <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
               {% if item.extracted_images_size_bytes %}
-                {{ (item.extracted_images_size_bytes / (1024*1024)) | round(2) }} MB
+                {% if item.extracted_images_size_bytes >= 1048576 %}
+                  {{ (item.extracted_images_size_bytes / (1024*1024)) | round(2) }} MB
+                {% else %}
+                  {{ (item.extracted_images_size_bytes / 1024) | round(1) }} KB
+                {% endif %}
               {% else %}
                 -
               {% endif %}
             </td>
             <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
               {% if item.cropped_images_size_bytes %}
-                {{ (item.cropped_images_size_bytes / (1024*1024)) | round(2) }} MB
+                {% if item.cropped_images_size_bytes >= 1048576 %}
+                  {{ (item.cropped_images_size_bytes / (1024*1024)) | round(2) }} MB
+                {% else %}
+                  {{ (item.cropped_images_size_bytes / 1024) | round(1) }} KB
+                {% endif %}
               {% else %}
                 -
               {% endif %}
@@ -306,9 +336,6 @@
                 -
               {% endif %}
             </td>
-            <td class="px-4 py-3 text-right font-bold text-slate-800">
-              {{ item.pages }}
-            </td>
             <td class="px-4 py-3 text-right font-mono text-xs text-slate-700">
               {% if item.time_took_sec is not none and item.translation_time_took_sec is not none %}
                 <div>{{ item.time_took_sec }}s <span class="text-[10px] text-slate-400">(OCR)</span></div>
@@ -322,8 +349,8 @@
               {% endif %}
             </td>
             <td class="px-4 py-3 text-right font-mono text-xs text-cyan-700 font-semibold">
-              {% if item.total_engine_latency_sec is not none %}
-                {{ item.total_engine_latency_sec }}s
+              {% if item.avg_engine_latency_sec is not none %}
+                {{ item.avg_engine_latency_sec }}s/p
               {% else %}-{% endif %}
             </td>
             <td class="px-4 py-3 text-right font-mono text-xs text-indigo-600 font-semibold">
@@ -358,7 +385,7 @@
           <!-- Expandable Per-Page Metrics Details -->
           {% if item.page_metrics %}
           <tr class="bg-slate-50/40">
-            <td colspan="17" class="px-6 py-3">
+            <td colspan="19" class="px-6 py-3">
               <details class="group">
                 <summary class="cursor-pointer text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 select-none py-1">
                   <svg class="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -378,7 +405,7 @@
                         <th class="px-3 py-2 text-right">Blocks</th>
                         <th class="px-3 py-2 text-right">Chars</th>
 
-                        <th class="px-3 py-2 text-right">Extracted Image</th>
+                        <th class="px-3 py-2 text-right">PDF -> JPG Size</th>
                         <th class="px-3 py-2 text-right">Cropped Images</th>
                         <th class="px-3 py-2 text-right">OCR Data</th>
                         <th class="px-3 py-2 text-right">Trans Data</th>
