@@ -54,8 +54,6 @@ class OcrResponse:
     chars_count: int | None = None
     #: Engine API latency in milliseconds.
     engine_latency_ms: float | None = None
-    #: Page type ("original" or "synthetic").
-    page_type: str | None = "original"
 
 
 def calculate_p05_confidence(

@@ -251,10 +251,6 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
             except (TypeError, ValueError):
                 engine_latency = latency_ms
 
-            page_type = str(payload.get("page_type", "original")).lower()
-            if page_type not in ("original", "synthetic"):
-                page_type = "original"
-
             return OcrResponse(
                 text_content=text,
                 bounding_boxes=boxes,
@@ -273,7 +269,6 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
                 blocks_count=blocks_count,
                 chars_count=chars_count,
                 engine_latency_ms=engine_latency,
-                page_type=page_type,
             )
 
         except Exception as ex:

@@ -34,7 +34,6 @@ When processing `1.jpg`, the OCR API must return a single JSON object containing
     "name": "surya-rec",
     "version": "0.6.1"
   },
-  "page_type": "original",
   "page_confidence": 0.942,
   "engine_latency_ms": 342.5,
   "page_width": 1240,
@@ -78,7 +77,6 @@ From each single page response payload, Kalanjiyam automatically extracts and st
 | **`Blocks`** | `blocks` | Array | Count of items in `blocks` array | Total structural layout blocks detected on page. |
 | **`Chars`** | `blocks[].content` | String | Character length sum of block contents | Total extracted character count on page. |
 | **`Engine-Latency`** | `engine_latency_ms` | Float | Milliseconds (e.g. `342.5`) | Pure OCR model processing latency for `1.jpg`. |
-| **`Page Type`** | `page_type` | String | `"original"` or `"synthetic"` | Document origin (`"original"` for real scans, `"synthetic"` for AI generated pages). |
 
 ---
 
@@ -94,7 +92,6 @@ As pages complete, Kalanjiyam aggregates per-page metrics into **Document / Proj
 | **`Pages <0.7`** | `item.low_conf_page_count` = $\text{count}(\text{conf} < 0.7)$ | `Pages <0.7` | Number of pages in document with confidence/quality below 70%. |
 | **`Avg Engine Latency`**| `avg_engine_latency_sec` = $\frac{\text{total\_engine\_latency}}{\text{pages}}$ | `Avg Engine Latency` | Average engine processing time per page in seconds (e.g. `0.34s/p`). |
 | **`Chars`** | `item.total_chars` = $\sum \text{page.chars}$ | `Chars` | Cumulative total character count extracted across all pages. |
-| **`Page Type`** | `item.page_type` | `Page Type` | Document classification badge (`Original` vs `Synthetic`). |
 
 ---
 
@@ -104,7 +101,6 @@ As pages complete, Kalanjiyam aggregates per-page metrics into **Document / Proj
 * `contract_version` (String, Required): Must be `"2.1"`.
 * `engine` (String, Required): OCR engine name.
 * `model` (Object, Optional): `{"name": "...", "version": "..."}` metadata.
-* `page_type` (String, Optional): `"original"` (default) or `"synthetic"`.
 * `page_confidence` (Float, Required): Overall page accuracy (`0.0` to `1.0`).
 * `engine_latency_ms` (Float, Required): OCR processing time in milliseconds.
 * `page_width`, `page_height` (Integers, Required): Image pixel dimensions.
