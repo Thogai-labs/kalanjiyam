@@ -307,8 +307,8 @@ def cleanup_uploads(days, force, app_env):
 @click.option("--pdf", is_flag=True, help="Process PDF files only")
 @click.option("--image", is_flag=True, help="Process image directories only")
 @click.option("--lang", "--language", "lang", default="en", help="OCR Language code (default: 'en', e.g. 'en', 'ta', 'hi')")
-@click.option("--engine", default="surya", help="OCR Engine (e.g. 'surya', 'google', 'deepseek', '1', '3')")
-def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, engine):
+@click.option("--engine", "ocr_engine", default="surya", help="OCR Engine (e.g. 'surya', 'google', 'deepseek', '1', '3')")
+def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, ocr_engine):
     """Start a Batch OCR process for PDFs and Image folders from S3 or Local."""
     import boto3
     import os
@@ -318,7 +318,7 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, engine):
     from kalanjiyam.utils.ocr_types import normalize_engine
     import mimetypes
     
-    norm_engine = normalize_engine(engine)
+    norm_engine = normalize_engine(ocr_engine)
     
     if not s3_uri and not local_uri:
         raise click.UsageError("You must provide either --s3-uri or --local-uri")
