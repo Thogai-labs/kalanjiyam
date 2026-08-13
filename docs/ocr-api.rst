@@ -1,55 +1,49 @@
-OCR Service API (v2)
-====================
+OCR Service API (v2.1)
+======================
 
-Kalanjiyam delegates OCR to an external service. The editor expects **v2** responses
-with structured blocks for layout-faithful editing.
+Kalanjiyam delegates OCR to external microservices. The editor expects **v2.1** responses
+with structured blocks, quality confidence metrics, and processing latency.
 
-Base URL
---------
+Base URLs & Fallback
+--------------------
 
-Configured in Kalanjiyam via ``OCR_SERVICE_URL`` (see ``.env.example``).
+Primary and fallback microservice endpoints are configured in Kalanjiyam (via ``.env``):
 
-Endpoints
----------
+- ``OCR_SERVICE_URL`` — Primary OCR service endpoint (e.g. ``http://<primary-ocr-host>:8000``).
+- ``OCR_SERVICE_URL_2`` — Secondary fallback endpoint (e.g. ``http://<secondary-ocr-host>:8887``). Used automatically if the primary endpoint is unreachable or returns a 5xx error.
+
+Endpoints & Formats
+-------------------
 
 ``GET /v1/engines``
-  Returns ``{"engines": ["google", "tesseract", ...]}``.
+  Returns ``{"status": "ok", "engines": ["google", "tesseract", "surya", "deepseek", "glm-ocr", "dots-ocr"]}``.
 
 ``POST /v1/ocr``
-  Multipart form: ``image`` (file), ``engine`` (string), ``language`` (string).
+  Multipart form fields:
+  - ``image`` (file, required): Image binary stream (`image/jpeg` or `image/png`).
+  - ``engine`` (string, required): Accepts both canonical unmasked names (e.g. ``surya``, ``deepseek``, ``glm_ocr``) and numeric masked keys (e.g. ``"1"``, ``"3"``, ``"5"``). Kalanjiyam normalizes the value and sends the unmasked service identifier to the API.
+  - ``language`` (string, required): BCP-47 / ISO language code (e.g. ``sa``, ``ta``, ``hi``, ``eng``).
 
-  Headers: ``X-API-Key`` when ``OCR_SERVICE_API_KEY`` is set.
+  Headers: ``X-API-Key`` when ``OCR_SERVICE_API_KEY`` (or ``OCR_SERVICE_API_KEY_2``) is set.
 
-Response (v2)
--------------
+Response (v2.1)
+---------------
 
-Legacy fields remain for older clients:
-
-+------------------+----------+------------------------------------------+
-| Field            | Type     | Description                              |
-+==================+==========+==========================================+
-| ``text``         | string   | Plain-text fallback                      |
-+------------------+----------+------------------------------------------+
-| ``bounding_boxes`` | string | TSV lines ``x1 y1 x2 y2 text`` or Surya JSON |
-+------------------+----------+------------------------------------------+
-
-New fields:
-
-+------------------+----------+------------------------------------------+
-| Field            | Type     | Description                              |
-+==================+==========+==========================================+
-| ``layout_html``  | string   | Optional HTML layout from VLM engines    |
-+------------------+----------+------------------------------------------+
-| ``content_format`` | string | ``plain``, ``html``, or ``blocks``       |
-+------------------+----------+------------------------------------------+
-| ``page_width``   | integer  | Image width in pixels                    |
-+------------------+----------+------------------------------------------+
-| ``page_height``  | integer  | Image height in pixels                   |
-+------------------+----------+------------------------------------------+
-| ``pipeline``     | string   | ``vlm``, ``hybrid``, or ``standard``     |
-+------------------+----------+------------------------------------------+
-| ``blocks``       | array    | Structured blocks (see below)            |
-+------------------+----------+------------------------------------------+
++--------------------+----------+--------------------------------------------------------------+
+| Field              | Type     | Description                                                  |
++====================+==========+==============================================================+
+| ``contract_version``| string  | Must be ``"2.1"`` or ``"2.0"``                               |
++--------------------+----------+--------------------------------------------------------------+
+| ``engine``         | string   | Engine identifier (e.g. ``"surya"``, ``"google"``)           |
++--------------------+----------+--------------------------------------------------------------+
+| ``model``          | object   | Model provenance metadata (e.g. ``{"name": "...", "version": "..."}``) |
++--------------------+----------+--------------------------------------------------------------+
+| ``page_confidence``| float    | Aggregate page recognition accuracy in ``[0.0, 1.0]``        |
++--------------------+----------+--------------------------------------------------------------+
+| ``engine_latency_ms``| float  | OCR engine microservice processing time in milliseconds       |
++--------------------+----------+--------------------------------------------------------------+
+| ``blocks``         | array    | Structured layout blocks (see below)                         |
++--------------------+----------+--------------------------------------------------------------+
 
 Block object
 ~~~~~~~~~~~~

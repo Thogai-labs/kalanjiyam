@@ -743,7 +743,10 @@ To log server exceptions in production:
 
 ## OCR Integration & Editing Mechanics
 
-Kalanjiyam delegates optical character recognition to an external OCR service (configured via `OCR_SERVICE_URL` and optional `OCR_SERVICE_API_KEY` in the `.env` file). The platform processes scans and extracts structured document layout data dynamically to present a layout-faithful editing experience.
+Kalanjiyam delegates optical character recognition to an external OCR microservice architecture:
+- **Primary Endpoint**: Configured via `OCR_SERVICE_URL` and `OCR_SERVICE_API_KEY`.
+- **Fallback Endpoint**: Configured via `OCR_SERVICE_URL_2` and `OCR_SERVICE_API_KEY_2`. If the primary endpoint is unreachable or returns a 5xx error, the client automatically failovers to the fallback target.
+- **Engine Resolution**: Engine selection supports both canonical unmasked identifiers (`surya`, `google`, `tesseract`, `deepseek`, `glm_ocr`, `dots_ocr`) and numeric masked keys (`"1"`, `"3"`, `"5"`). The system normalizes input and sends the unmasked technical service name to the microservice.
 
 ### 1. Frontend Editing Modes
 
@@ -761,7 +764,7 @@ When proofreaders open a page, the editing interface supports two primary views 
 
 ---
 
-### 2. OCR Service Response Contract (v2)
+### 2. OCR Service Response Contract (v2.1)
 
 To ensure loose coupling, Kalanjiyam communicates with the external OCR service via a strict engine-agnostic API contract. The external OCR service MUST return a JSON payload with a `Content-Type: application/json` header. 
 
@@ -772,7 +775,7 @@ The JSON payload must include the following top-level and block-level properties
 
 ```json
 {
-  "contract_version": "2.0",
+  "contract_version": "2.1",
   "engine": "surya",
   "model": {
     "name": "surya-rec",
@@ -782,7 +785,8 @@ The JSON payload must include the following top-level and block-level properties
   "coordinate_space": "pixel",
   "page_width": 1240,
   "page_height": 1754,
-  "page_confidence": 0.91,
+  "page_confidence": 0.942,
+  "engine_latency_ms": 342.5,
   "blocks": [
     {
       "id": "b1a2c3d4",

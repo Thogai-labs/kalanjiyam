@@ -233,7 +233,7 @@ class BaseConfig:
     OCR_SERVICE_TIMEOUT = int(_env("OCR_SERVICE_TIMEOUT", "300") or "300")
 
     #: Base URL of the standalone translation service.
-    TRANSLATION_SERVICE_URL = _env("TRANSLATION_SERVICE_URL", "http://10.129.6.170:8888")
+    TRANSLATION_SERVICE_URL = _env("TRANSLATION_SERVICE_URL", "http://localhost:8888")
 
     #: API key for service-to-service translation requests.
     TRANSLATION_SERVICE_API_KEY = _env("TRANSLATION_SERVICE_API_KEY", "")

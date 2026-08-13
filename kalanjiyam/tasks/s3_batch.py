@@ -134,8 +134,10 @@ def _finalize_batch_item_status(session, batch_item_id: int):
         item.engine = engines[0] if engines else None
         conf_list = [p.confidence for p in pages if p.confidence is not None]
         item.avg_confidence = (sum(conf_list) / len(conf_list)) if conf_list else None
+        item.min_confidence = min(conf_list) if conf_list else None
         p05_list = [p.p05 for p in pages if p.p05 is not None]
         item.avg_p05 = (sum(p05_list) / len(p05_list)) if p05_list else None
+        item.low_conf_page_count = sum(1 for p in pages if (p.confidence is not None and p.confidence < 0.70) or (p.p05 is not None and p.p05 < 0.70))
         item.total_blocks = sum(p.blocks or 0 for p in pages)
         item.total_chars = sum(p.chars or 0 for p in pages)
         item.total_engine_latency_ms = sum(p.engine_latency_ms or 0 for p in pages)
@@ -521,8 +523,11 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
             or current_app.config.get("OCR_SERVICE_API_KEY", "")
         )
 
-        engine = "tesseract"
-        language = language or "eng"
+        from kalanjiyam.utils.ocr_types import normalize_engine, engine_for_service
+        raw_engine = kwargs.get("engine") or getattr(item, "engine", None) or "surya"
+        engine = normalize_engine(raw_engine)
+        service_engine = engine_for_service(engine)
+        language = language or getattr(item, "source_lang", None) or "eng"
         version_key = f"ocr:{engine}"
         bot_user = q.user("kalanjiyam-bot")
 
@@ -577,7 +582,7 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                             for attempt in range(retries):
                                 try:
                                     files = {"image": (f"page_{n}.jpg", img_bytes, "image/jpeg"), "file": (f"page_{n}.jpg", img_bytes, "image/jpeg")}
-                                    data = {"engine": engine, "language": language}
+                                    data = {"engine": service_engine, "language": language}
                                     params = {"language": language} if language else {}
                                     resp = client.post(target_url, files=files, data=data, params=params, headers=headers)
                                     resp.raise_for_status()
