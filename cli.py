@@ -307,14 +307,18 @@ def cleanup_uploads(days, force, app_env):
 @click.option("--pdf", is_flag=True, help="Process PDF files only")
 @click.option("--image", is_flag=True, help="Process image directories only")
 @click.option("--lang", "--language", "lang", default="en", help="OCR Language code (default: 'en', e.g. 'en', 'ta', 'hi')")
-def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
+@click.option("--engine", default="surya", help="OCR Engine (e.g. 'surya', 'google', 'deepseek', '1', '3')")
+def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, engine):
     """Start a Batch OCR process for PDFs and Image folders from S3 or Local."""
     import boto3
     import os
     from urllib.parse import urlparse
     from kalanjiyam.models.batch import BatchJob, BatchItem
     from kalanjiyam.tasks.s3_batch import process_s3_batch_item
+    from kalanjiyam.utils.ocr_types import normalize_engine
     import mimetypes
+    
+    norm_engine = normalize_engine(engine)
     
     if not s3_uri and not local_uri:
         raise click.UsageError("You must provide either --s3-uri or --local-uri")
@@ -360,7 +364,10 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
                     
                 mime_type, _ = mimetypes.guess_type(key)
                 if not mime_type:
-                    continue
+                    if key.lower().endswith('.pdf'):
+                        mime_type = 'application/pdf'
+                    else:
+                        continue
                     
                 if mime_type == 'application/pdf' and process_pdfs:
                     items_to_process.append({
@@ -369,27 +376,29 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
                         'type': 'pdf'
                     })
                 elif mime_type.startswith('image/') and process_images:
-                    parent_path = key.rsplit('/', 1)[0] if '/' in key else ''
-                    if parent_path not in image_groups:
-                        image_groups[parent_path] = []
-                    image_groups[parent_path].append(key)
+                    parent_prefix = os.path.dirname(key)
+                    if parent_prefix not in image_groups:
+                        image_groups[parent_prefix] = []
+                    image_groups[parent_prefix].append(key)
                     
         if process_images:
-            for parent_path, image_keys in image_groups.items():
+            for parent_prefix, keys in image_groups.items():
                 items_to_process.append({
-                    'path': f"s3://{bucket_name}/{parent_path}/",
+                    'path': f"s3://{bucket_name}/{parent_prefix}",
                     'mime_type': 'image_folder',
                     'type': 'image_folder',
-                    'count': len(image_keys)
+                    'count': len(keys)
                 })
                 
     elif local_uri:
-        click.echo(f"Scanning Local Directory {local_uri} recursively...")
+        # Local processing
+        local_path = os.path.abspath(local_uri)
+        if not os.path.exists(local_path):
+            raise click.ClickException(f"Local path '{local_path}' does not exist.")
+            
+        click.echo(f"Scanning local path {local_path} recursively...")
         
-        if not os.path.isdir(local_uri):
-             raise click.ClickException(f"Local path does not exist or is not a directory: {local_uri}")
-             
-        for root, dirs, files in os.walk(local_uri):
+        for root, dirs, files in os.walk(local_path):
             for file in files:
                 file_path = os.path.join(root, file)
                 # Convert Windows paths to forward slashes for consistency if needed, but not strictly necessary for file://
@@ -397,7 +406,10 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
                 mime_type, _ = mimetypes.guess_type(file_path_clean)
                 
                 if not mime_type:
-                    continue
+                    if file_path_clean.lower().endswith('.pdf'):
+                        mime_type = 'application/pdf'
+                    else:
+                        continue
                     
                 if mime_type == 'application/pdf' and process_pdfs:
                     items_to_process.append({
@@ -437,6 +449,7 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
                 job_id=job.id,
                 file_path=item_data['path'],
                 mime_type=item_data['mime_type'],
+                engine=norm_engine,
                 status='PENDING'
             )
             session.add(item)
@@ -449,7 +462,8 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang):
         for item in db_items:
             # Dispatch to Celery
             process_s3_batch_item.apply_async(
-                args=[item.id, org, lang], 
+                args=[item.id, org, lang],
+                kwargs={"engine": norm_engine},
                 queue='s3_batch'
             )
             
