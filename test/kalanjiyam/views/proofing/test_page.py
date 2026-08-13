@@ -15,16 +15,24 @@ def test_edit__unauth(client):
 
 def test_edit__guest_owner(flask_app, client):
     from kalanjiyam import queries as q
-    with flask_app.app_context():
-        project = q.project("test-project")
-        project.fingerprint_id = "test-guest-fp"
-        session = q.get_session()
-        session.add(project)
-        session.commit()
+    try:
+        with flask_app.app_context():
+            project = q.project("test-project")
+            project.fingerprint_id = "test-guest-fp"
+            session = q.get_session()
+            session.add(project)
+            session.commit()
 
-    client.set_cookie("device_fingerprint", "test-guest-fp")
-    r = client.get("/proofing/test-project/1/")
-    assert "Publish changes" in r.text
+        client.set_cookie("device_fingerprint", "test-guest-fp")
+        r = client.get("/proofing/test-project/1/")
+        assert "Publish changes" in r.text
+    finally:
+        with flask_app.app_context():
+            project = q.project("test-project")
+            project.fingerprint_id = None
+            session = q.get_session()
+            session.add(project)
+            session.commit()
 
 
 def test_edit__auth(rama_client):

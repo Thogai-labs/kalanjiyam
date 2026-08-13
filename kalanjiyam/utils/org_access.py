@@ -40,11 +40,12 @@ def user_can_access_project(user, project: db.Project) -> bool:
     if getattr(user, "is_admin", False) and not is_multi_tenant_enabled():
         return True
 
-    # 1. Device fingerprint check for guest-owned projects
-    device_fp = request.cookies.get("device_fingerprint") if request else None
-    if getattr(project, "fingerprint_id", None) and device_fp:
-        if project.fingerprint_id == device_fp:
-            return True
+    # 1. Device fingerprint check for guest-owned projects (only if user is not signed in)
+    if not getattr(user, "is_authenticated", False):
+        device_fp = request.cookies.get("device_fingerprint") if request else None
+        if getattr(project, "fingerprint_id", None) and device_fp:
+            if project.fingerprint_id == device_fp:
+                return True
 
     if not is_multi_tenant_enabled():
         from kalanjiyam import queries as q
@@ -141,16 +142,20 @@ def user_can_view_proofing_project(user, project: db.Project) -> bool:
     if getattr(user, "is_super_admin", False):
         return True
 
+    if not is_multi_tenant_enabled():
+        return user_can_access_project(user, project)
+
     # 2. If it is made public, we enforce the extra proofing restriction:
     if getattr(project, "is_publicly_viewable", False):
         # Allow creator (registered user)
         if getattr(user, "is_authenticated", False) and project.creator_id == getattr(user, "id", None):
             return True
             
-        # Allow creator (guest fingerprint)
-        device_fp = request.cookies.get("device_fingerprint") if request else None
-        if project.fingerprint_id and device_fp and project.fingerprint_id == device_fp:
-            return True
+        # Allow creator (guest fingerprint, only if user is not signed in)
+        if not getattr(user, "is_authenticated", False):
+            device_fp = request.cookies.get("device_fingerprint") if request else None
+            if project.fingerprint_id and device_fp and project.fingerprint_id == device_fp:
+                return True
             
         # Allow user of the same organization
         org_id = user_organization_id(user)

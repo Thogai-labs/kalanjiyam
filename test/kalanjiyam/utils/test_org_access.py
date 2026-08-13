@@ -29,8 +29,11 @@ def _make_user(session, username: str, org: db.Group | None, roles: list[str]) -
     return user
 
 
-def _make_project(session, slug: str, org: db.Group | None, creator_id: int) -> db.Project:
-    project = db.Project(slug=slug, display_title=slug.title(), creator_id=creator_id)
+def _make_project(session, slug: str, org: db.Group | None, creator_id: int | None = None, fingerprint_id: str | None = None) -> db.Project:
+    board = db.Board(title=f"{slug} discussion board")
+    session.add(board)
+    session.flush()
+    project = db.Project(slug=slug, display_title=slug.title(), creator_id=creator_id, board_id=board.id, fingerprint_id=fingerprint_id)
     session.add(project)
     session.flush()
     if org is not None:
@@ -39,8 +42,8 @@ def _make_project(session, slug: str, org: db.Group | None, creator_id: int) -> 
     return project
 
 
-def test_org_admin_requires_organization_id(app):
-    with app.app_context():
+def test_org_admin_requires_organization_id(flask_app):
+    with flask_app.app_context():
         session = q.get_session()
         org = _make_org(session, "alpha")
         user = _make_user(session, "orgadmin", org=None, roles=[SiteRole.ORG_ADMIN.value])
@@ -51,11 +54,11 @@ def test_org_admin_requires_organization_id(app):
         session.commit()
 
 
-def test_user_can_access_project_scoped_by_org(app):
-    app.config["MULTI_TENANT_MODE"] = True
-    app.config["ENFORCE_ORG_ACCESS"] = True
+def test_user_can_access_project_scoped_by_org(flask_app):
+    flask_app.config["MULTI_TENANT_MODE"] = True
+    flask_app.config["ENFORCE_ORG_ACCESS"] = True
 
-    with app.app_context():
+    with flask_app.app_context():
         session = q.get_session()
         org_a = _make_org(session, "org-a")
         org_b = _make_org(session, "org-b")
@@ -75,12 +78,12 @@ def test_user_can_access_project_scoped_by_org(app):
         assert user_can_access_project(KalanjiyamAnonymousUser(), project) is True
 
 
-def test_user_can_view_proofing_project(app):
+def test_user_can_view_proofing_project(flask_app):
     from kalanjiyam.utils.org_access import user_can_view_proofing_project
-    app.config["MULTI_TENANT_MODE"] = True
-    app.config["ENFORCE_ORG_ACCESS"] = True
+    flask_app.config["MULTI_TENANT_MODE"] = True
+    flask_app.config["ENFORCE_ORG_ACCESS"] = True
 
-    with app.app_context():
+    with flask_app.app_context():
         session = q.get_session()
         org_a = _make_org(session, "org-a-view")
         org_b = _make_org(session, "org-b-view")
@@ -106,4 +109,39 @@ def test_user_can_view_proofing_project(app):
         assert user_can_view_proofing_project(other, project) is False
         # 5. Anonymous user cannot see
         assert user_can_view_proofing_project(KalanjiyamAnonymousUser(), project) is False
+
+
+def test_unregistered_guest_project_access_only_when_not_signed_in(flask_app):
+    from kalanjiyam.utils.org_access import user_can_access_project, user_can_view_proofing_project
+
+    flask_app.config["MULTI_TENANT_MODE"] = True
+    flask_app.config["ENFORCE_ORG_ACCESS"] = True
+
+    with flask_app.app_context():
+        session = q.get_session()
+        open_tenant = q.get_or_create_open_tenant()
+        org = _make_org(session, "test-guest-org")
+        signed_in_user = _make_user(session, "signed_in_user", org, roles=[SiteRole.P1.value])
+
+        guest_project = _make_project(
+            session,
+            slug="guest-book",
+            org=open_tenant,
+            creator_id=None,
+            fingerprint_id="device-fp-123",
+        )
+        session.commit()
+
+        anonymous_user = KalanjiyamAnonymousUser()
+
+        # Test with request context containing device fingerprint cookie
+        with flask_app.test_request_context(headers={"Cookie": "device_fingerprint=device-fp-123"}):
+            # 1. Unregistered (not signed in) user WITH matching fingerprint CAN view/access
+            assert user_can_access_project(anonymous_user, guest_project) is True
+            assert user_can_view_proofing_project(anonymous_user, guest_project) is True
+
+            # 2. Signed-in user WITH matching fingerprint CANNOT view/access guest project
+            assert user_can_access_project(signed_in_user, guest_project) is False
+            assert user_can_view_proofing_project(signed_in_user, guest_project) is False
+
 

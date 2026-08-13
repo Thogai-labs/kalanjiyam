@@ -109,23 +109,28 @@ def test_batch_translate_view_queue_routing(rama_client, client):
 
         mock_run_translation.reset_mock()
 
-        # Update the project's fingerprint to allow unauthenticated access (guest)
-        project.fingerprint_id = "test-fingerprint"
-        session.add(project)
-        session.commit()
+        try:
+            # Update the project's fingerprint to allow unauthenticated access (guest)
+            project.fingerprint_id = "test-fingerprint"
+            session.add(project)
+            session.commit()
 
-        # Set cookies on unauthenticated client to match fingerprint
-        client.set_cookie("device_fingerprint", "test-fingerprint")
+            # Set cookies on unauthenticated client to match fingerprint
+            client.set_cookie("device_fingerprint", "test-fingerprint")
 
-        r_guest = client.post(
-            "/proofing/test-project/batch-translate",
-            data={
-                "source_lang": "sa",
-                "target_lang": "en",
-                "engine": "indictrans2"
-            }
-        )
-        # Check that it called run_translation_for_project with queue='low_priority'
-        mock_run_translation.assert_called_once()
-        args, kwargs = mock_run_translation.call_args
-        assert kwargs.get("queue") == "low_priority"
+            r_guest = client.post(
+                "/proofing/test-project/batch-translate",
+                data={
+                    "source_lang": "sa",
+                    "target_lang": "en",
+                    "engine": "indictrans2"
+                }
+            )
+            # Check that it called run_translation_for_project with queue='low_priority'
+            mock_run_translation.assert_called_once()
+            args, kwargs = mock_run_translation.call_args
+            assert kwargs.get("queue") == "low_priority"
+        finally:
+            project.fingerprint_id = None
+            session.add(project)
+            session.commit()

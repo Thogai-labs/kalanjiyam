@@ -35,14 +35,15 @@ def p2_required(func: Callable):
         if current_user.is_authenticated and is_open_tenant:
             return current_app.ensure_sync(func)(*args, **kwargs)
 
-        # 3. Allow guest user if they own this project
-        slug = request.view_args.get("slug") or request.view_args.get("project_slug") if request.view_args else None
-        if slug:
-            project = q.project(slug)
-            if project and project.fingerprint_id:
-                device_fp = request.cookies.get("device_fingerprint")
-                if device_fp and project.fingerprint_id == device_fp:
-                    return current_app.ensure_sync(func)(*args, **kwargs)
+        # 3. Allow guest user if they own this project (only if user is not signed in)
+        if not getattr(current_user, "is_authenticated", False):
+            slug = request.view_args.get("slug") or request.view_args.get("project_slug") if request.view_args else None
+            if slug:
+                project = q.project(slug)
+                if project and project.fingerprint_id:
+                    device_fp = request.cookies.get("device_fingerprint")
+                    if device_fp and project.fingerprint_id == device_fp:
+                        return current_app.ensure_sync(func)(*args, **kwargs)
 
         flash(_l("Sorry, you aren't authorized to use this feature."), "error")
         return redirect(url_for("proofing.index"))
