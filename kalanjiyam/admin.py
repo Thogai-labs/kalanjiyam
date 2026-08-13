@@ -931,6 +931,16 @@ def _sync_job_and_item_metrics(session, job):
             item.cropped_images_size_bytes = sum(p.cropped_image_size_bytes or 0 for p in completed_pages)
             item.ocr_data_size_bytes = sum(p.ocr_data_size_bytes or 0 for p in completed_pages)
             item.translation_data_size_bytes = sum(p.translation_data_size_bytes or 0 for p in completed_pages)
+            
+            engines = [p.engine for p in completed_pages if p.engine]
+            item.engine = engines[0] if engines else item.engine
+            conf_list = [p.confidence for p in completed_pages if p.confidence is not None]
+            item.avg_confidence = (sum(conf_list) / len(conf_list)) if conf_list else item.avg_confidence
+            p05_list = [p.p05 for p in completed_pages if p.p05 is not None]
+            item.avg_p05 = (sum(p05_list) / len(p05_list)) if p05_list else item.avg_p05
+            item.total_blocks = sum(p.blocks or 0 for p in completed_pages)
+            item.total_chars = sum(p.chars or 0 for p in completed_pages)
+            item.total_engine_latency_ms = sum(p.engine_latency_ms or 0 for p in completed_pages)
 
             target_pages = item.total_pages or len(page_records) or 1
             if len(completed_pages) >= target_pages or len(completed_pages) >= len(page_records) or job.job_type.startswith('SINGLE_PAGE_PROOFING'):
@@ -1139,6 +1149,7 @@ class PlatformView(AdminBaseView):
             for p_rec in page_records:
                 p_time_sec = (p_rec.ocr_latency_ms / 1000.0) if p_rec.ocr_latency_ms else None
                 p_trans_time_sec = (p_rec.translation_latency_ms / 1000.0) if p_rec.translation_latency_ms else None
+                p_eng_lat_sec = (p_rec.engine_latency_ms / 1000.0) if p_rec.engine_latency_ms else None
                 page_metrics_list.append({
                     "id": p_rec.id,
                     "page_number": p_rec.page_number,
@@ -1151,10 +1162,17 @@ class PlatformView(AdminBaseView):
                     "translation_data_size_bytes": p_rec.translation_data_size_bytes,
                     "source_lang": p_rec.source_lang,
                     "target_lang": p_rec.target_lang,
+                    "engine": p_rec.engine,
+                    "confidence": round(p_rec.confidence * 100, 1) if p_rec.confidence is not None else None,
+                    "p05": round(p_rec.p05 * 100, 1) if p_rec.p05 is not None else None,
+                    "blocks": p_rec.blocks,
+                    "chars": p_rec.chars,
+                    "engine_latency_sec": round(p_eng_lat_sec, 2) if p_eng_lat_sec is not None else None,
                     "attempt_count": p_rec.attempt_count,
                     "error_message": p_rec.error_message,
                 })
 
+            total_eng_lat_sec = (item.total_engine_latency_ms / 1000.0) if item.total_engine_latency_ms else None
             item_metrics.append({
                 "id": item.id,
                 "name": item.file_path,
@@ -1165,6 +1183,12 @@ class PlatformView(AdminBaseView):
                 "translation_data_size_bytes": item.translation_data_size_bytes,
                 "source_lang": item.source_lang,
                 "target_lang": item.target_lang,
+                "engine": item.engine,
+                "avg_confidence": round(item.avg_confidence * 100, 1) if item.avg_confidence is not None else None,
+                "avg_p05": round(item.avg_p05 * 100, 1) if item.avg_p05 is not None else None,
+                "total_blocks": item.total_blocks,
+                "total_chars": item.total_chars,
+                "total_engine_latency_sec": round(total_eng_lat_sec, 2) if total_eng_lat_sec is not None else None,
                 "pages": pages,
                 "time_took_sec": round(time_sec, 2) if time_sec is not None else None,
                 "translation_time_took_sec": round(trans_time_sec, 2) if trans_time_sec is not None else None,
@@ -1206,8 +1230,13 @@ class PlatformView(AdminBaseView):
         writer.writerow([
             "Item ID",
             "Name / File Path",
+            "Engine",
             "Source Lang",
             "Target Lang",
+            "Avg Confidence (%)",
+            "Avg p05 (%)",
+            "Total Blocks",
+            "Total Chars",
             "Source Size (Bytes)",
             "Extracted Images Size (Bytes)",
             "Cropped Images Size (Bytes)",
@@ -1215,6 +1244,7 @@ class PlatformView(AdminBaseView):
             "Translation Data Size (Bytes)",
             "Total Pages",
             "OCR Time Took (Sec)",
+            "Engine Latency (Sec)",
             "Translation Time Took (Sec)",
             "Avg Per Page OCR Time (Sec)",
             "Avg Per Page Translation Time (Sec)",
@@ -1231,14 +1261,20 @@ class PlatformView(AdminBaseView):
             ) or 0
             pages = item.total_pages or page_count_db
             time_sec = (item.total_ocr_latency_ms / 1000.0) if item.total_ocr_latency_ms else None
+            eng_lat_sec = (item.total_engine_latency_ms / 1000.0) if item.total_engine_latency_ms else None
             trans_time_sec = (item.total_translation_latency_ms / 1000.0) if item.total_translation_latency_ms else None
             avg_per_page_sec = (time_sec / pages) if (time_sec is not None and pages > 0) else None
 
             writer.writerow([
                 item.id,
                 item.file_path,
+                item.engine or "",
                 item.source_lang or "",
                 item.target_lang or "",
+                round(item.avg_confidence * 100, 1) if item.avg_confidence is not None else "",
+                round(item.avg_p05 * 100, 1) if item.avg_p05 is not None else "",
+                item.total_blocks if item.total_blocks is not None else "",
+                item.total_chars if item.total_chars is not None else "",
                 item.source_size_bytes or 0,
                 item.extracted_images_size_bytes or 0,
                 item.cropped_images_size_bytes or 0,
@@ -1246,6 +1282,7 @@ class PlatformView(AdminBaseView):
                 item.translation_data_size_bytes or 0,
                 pages,
                 round(time_sec, 2) if time_sec is not None else "",
+                round(eng_lat_sec, 2) if eng_lat_sec is not None else "",
                 round(trans_time_sec, 2) if trans_time_sec is not None else "",
                 round(avg_per_page_sec, 2) if avg_per_page_sec is not None else "",
                 round(trans_time_sec / pages, 2) if (trans_time_sec is not None and pages > 0) else "",
@@ -1291,6 +1328,11 @@ class PlatformView(AdminBaseView):
             "Item ID",
             "Name / File Path",
             "Page Number",
+            "Engine",
+            "Confidence (%)",
+            "p05 (%)",
+            "Blocks",
+            "Chars",
             "Source Lang",
             "Target Lang",
             "Extracted Image Size (Bytes)",
@@ -1298,6 +1340,7 @@ class PlatformView(AdminBaseView):
             "OCR Data Size (Bytes)",
             "Translation Data Size (Bytes)",
             "OCR Time Took (Sec)",
+            "Engine Latency (Sec)",
             "Translation Time Took (Sec)",
             "Status",
             "Attempt Count",
@@ -1308,11 +1351,17 @@ class PlatformView(AdminBaseView):
 
         for p in p_records:
             p_time = (p.ocr_latency_ms / 1000.0) if p.ocr_latency_ms else None
+            p_eng_lat = (p.engine_latency_ms / 1000.0) if p.engine_latency_ms else None
             p_trans_time = (p.translation_latency_ms / 1000.0) if p.translation_latency_ms else None
             writer.writerow([
                 p.batch_item_id,
                 item_path_map.get(p.batch_item_id, ""),
                 p.page_number,
+                p.engine or "",
+                round(p.confidence * 100, 1) if p.confidence is not None else "",
+                round(p.p05 * 100, 1) if p.p05 is not None else "",
+                p.blocks if p.blocks is not None else "",
+                p.chars if p.chars is not None else "",
                 p.source_lang or "",
                 p.target_lang or "",
                 p.extracted_image_size_bytes or 0,
@@ -1320,6 +1369,7 @@ class PlatformView(AdminBaseView):
                 p.ocr_data_size_bytes or 0,
                 p.translation_data_size_bytes or 0,
                 round(p_time, 2) if p_time is not None else "",
+                round(p_eng_lat, 2) if p_eng_lat is not None else "",
                 round(p_trans_time, 2) if p_trans_time is not None else "",
                 p.status,
                 p.attempt_count,
@@ -2292,6 +2342,7 @@ class OrgAdminView(AdminBaseView):
             for p_rec in page_records:
                 p_time_sec = (p_rec.ocr_latency_ms / 1000.0) if p_rec.ocr_latency_ms else None
                 p_trans_time_sec = (p_rec.translation_latency_ms / 1000.0) if p_rec.translation_latency_ms else None
+                p_eng_lat_sec = (p_rec.engine_latency_ms / 1000.0) if p_rec.engine_latency_ms else None
                 page_metrics_list.append({
                     "id": p_rec.id,
                     "page_number": p_rec.page_number,
@@ -2304,10 +2355,17 @@ class OrgAdminView(AdminBaseView):
                     "translation_data_size_bytes": p_rec.translation_data_size_bytes,
                     "source_lang": p_rec.source_lang,
                     "target_lang": p_rec.target_lang,
+                    "engine": p_rec.engine,
+                    "confidence": round(p_rec.confidence * 100, 1) if p_rec.confidence is not None else None,
+                    "p05": round(p_rec.p05 * 100, 1) if p_rec.p05 is not None else None,
+                    "blocks": p_rec.blocks,
+                    "chars": p_rec.chars,
+                    "engine_latency_sec": round(p_eng_lat_sec, 2) if p_eng_lat_sec is not None else None,
                     "attempt_count": p_rec.attempt_count,
                     "error_message": p_rec.error_message,
                 })
 
+            total_eng_lat_sec = (item.total_engine_latency_ms / 1000.0) if item.total_engine_latency_ms else None
             item_metrics.append({
                 "id": item.id,
                 "name": item.file_path,
@@ -2318,6 +2376,12 @@ class OrgAdminView(AdminBaseView):
                 "translation_data_size_bytes": item.translation_data_size_bytes,
                 "source_lang": item.source_lang,
                 "target_lang": item.target_lang,
+                "engine": item.engine,
+                "avg_confidence": round(item.avg_confidence * 100, 1) if item.avg_confidence is not None else None,
+                "avg_p05": round(item.avg_p05 * 100, 1) if item.avg_p05 is not None else None,
+                "total_blocks": item.total_blocks,
+                "total_chars": item.total_chars,
+                "total_engine_latency_sec": round(total_eng_lat_sec, 2) if total_eng_lat_sec is not None else None,
                 "pages": pages,
                 "time_took_sec": round(time_sec, 2) if time_sec is not None else None,
                 "translation_time_took_sec": round(trans_time_sec, 2) if trans_time_sec is not None else None,
@@ -2381,15 +2445,21 @@ class OrgAdminView(AdminBaseView):
         writer.writerow([
             "Item ID",
             "Name / File Path",
+            "Engine",
             "Source Lang",
             "Target Lang",
+            "Avg Confidence (%)",
+            "Avg p05 (%)",
+            "Total Blocks",
+            "Total Chars",
             "Source Size (Bytes)",
             "Extracted Images Size (Bytes)",
             "Cropped Images Size (Bytes)",
             "OCR Data Size (Bytes)",
             "Translation Data Size (Bytes)",
             "Total Pages",
-            "Time Took to OCR (Sec)",
+            "OCR Time Took (Sec)",
+            "Engine Latency (Sec)",
             "Translation Time Took (Sec)",
             "Avg Per Page OCR Time (Sec)",
             "Avg Per Page Translation Time (Sec)",
@@ -2406,14 +2476,20 @@ class OrgAdminView(AdminBaseView):
             ) or 0
             pages = item.total_pages or page_count_db
             time_sec = (item.total_ocr_latency_ms / 1000.0) if item.total_ocr_latency_ms else None
+            eng_lat_sec = (item.total_engine_latency_ms / 1000.0) if item.total_engine_latency_ms else None
             trans_time_sec = (item.total_translation_latency_ms / 1000.0) if item.total_translation_latency_ms else None
             avg_per_page_sec = (time_sec / pages) if (time_sec is not None and pages > 0) else None
 
             writer.writerow([
                 item.id,
                 item.file_path,
+                item.engine or "",
                 item.source_lang or "",
                 item.target_lang or "",
+                round(item.avg_confidence * 100, 1) if item.avg_confidence is not None else "",
+                round(item.avg_p05 * 100, 1) if item.avg_p05 is not None else "",
+                item.total_blocks if item.total_blocks is not None else "",
+                item.total_chars if item.total_chars is not None else "",
                 item.source_size_bytes or 0,
                 item.extracted_images_size_bytes or 0,
                 item.cropped_images_size_bytes or 0,
@@ -2421,6 +2497,7 @@ class OrgAdminView(AdminBaseView):
                 item.translation_data_size_bytes or 0,
                 pages,
                 round(time_sec, 2) if time_sec is not None else "",
+                round(eng_lat_sec, 2) if eng_lat_sec is not None else "",
                 round(trans_time_sec, 2) if trans_time_sec is not None else "",
                 round(avg_per_page_sec, 2) if avg_per_page_sec is not None else "",
                 round(trans_time_sec / pages, 2) if (trans_time_sec is not None and pages > 0) else "",
@@ -2486,6 +2563,11 @@ class OrgAdminView(AdminBaseView):
             "Item ID",
             "Name / File Path",
             "Page Number",
+            "Engine",
+            "Confidence (%)",
+            "p05 (%)",
+            "Blocks",
+            "Chars",
             "Source Lang",
             "Target Lang",
             "Extracted Image Size (Bytes)",
@@ -2493,6 +2575,7 @@ class OrgAdminView(AdminBaseView):
             "OCR Data Size (Bytes)",
             "Translation Data Size (Bytes)",
             "OCR Time Took (Sec)",
+            "Engine Latency (Sec)",
             "Translation Time Took (Sec)",
             "Status",
             "Attempt Count",
@@ -2503,11 +2586,17 @@ class OrgAdminView(AdminBaseView):
 
         for p in p_records:
             p_time = (p.ocr_latency_ms / 1000.0) if p.ocr_latency_ms else None
+            p_eng_lat = (p.engine_latency_ms / 1000.0) if p.engine_latency_ms else None
             p_trans_time = (p.translation_latency_ms / 1000.0) if p.translation_latency_ms else None
             writer.writerow([
                 p.batch_item_id,
                 item_path_map.get(p.batch_item_id, ""),
                 p.page_number,
+                p.engine or "",
+                round(p.confidence * 100, 1) if p.confidence is not None else "",
+                round(p.p05 * 100, 1) if p.p05 is not None else "",
+                p.blocks if p.blocks is not None else "",
+                p.chars if p.chars is not None else "",
                 p.source_lang or "",
                 p.target_lang or "",
                 p.extracted_image_size_bytes or 0,
@@ -2515,6 +2604,7 @@ class OrgAdminView(AdminBaseView):
                 p.ocr_data_size_bytes or 0,
                 p.translation_data_size_bytes or 0,
                 round(p_time, 2) if p_time is not None else "",
+                round(p_eng_lat, 2) if p_eng_lat is not None else "",
                 round(p_trans_time, 2) if p_trans_time is not None else "",
                 p.status,
                 p.attempt_count,

@@ -130,10 +130,18 @@ def ocr_response_to_api_dict(
         image_height=ph or image_height,
     )
     _stamp_provenance(doc, engine, ocr.model)
+    blocks_count = ocr.blocks_count if ocr.blocks_count is not None else len(doc.blocks)
+    chars_count = ocr.chars_count if ocr.chars_count is not None else len(doc.to_plain_text() or "")
     return {
+        "engine": engine or ocr.engine,
         "source_type": ocr.source_type,
         "page_width": doc.page_width,
         "page_height": doc.page_height,
         "page_confidence": ocr.page_confidence,
+        "confidence": ocr.page_confidence,
+        "p05": ocr.p05,
+        "blocks_count": blocks_count,
+        "chars_count": chars_count,
+        "engine_latency_ms": ocr.engine_latency_ms,
         "blocks": [b.to_dict() for b in doc.blocks],
     }

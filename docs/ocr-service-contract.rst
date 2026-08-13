@@ -1,5 +1,5 @@
-OCR Service Response Contract (v2)
-===================================
+OCR Service Response Contract (v2.1)
+=====================================
 
 This document is the authoritative, **engine-agnostic** contract between the
 Kalanjiyam editing frontend and any OCR engine or model served through the OCR
@@ -7,13 +7,14 @@ service.  Hand this to the OCR agent / service / model team.  Any engine that
 emits this shape — classical OCR, layout models, or VLM-based OCR — plugs into
 the editor with no frontend changes.
 
-Changes from v1:
+Changes from v1 & v2.0:
 
 - ``contract_version``, ``engine``, and ``model`` fields for provenance.
+- ``engine_latency_ms`` field for recording microservice execution time.
+- Automated server-side extraction of core metrics: **Engine**, **Confidence**, **p05 (5th percentile floor)**, **Blocks**, **Chars**, and **Engine-Latency**.
 - Block-level ``confidence`` is now **required whenever the engine produces
   any internal score** (v1 treated it as fully optional).
-- Optional **word-level granularity** via ``words`` inside each block
-  (v1 forbade word-level data; that restriction is lifted).
+- Optional **word-level granularity** via ``words`` inside each block.
 - Explicit ``coordinate_space`` declaration instead of frontend heuristics.
 
 ----
@@ -28,7 +29,7 @@ return JSON with ``Content-Type: application/json``.
 .. code-block:: json
 
     {
-      "contract_version": "2.0",
+      "contract_version": "2.1",
       "engine": "surya",
       "model": {"name": "surya-rec", "version": "0.6.1"},
       "source_type": "scan",
@@ -36,6 +37,7 @@ return JSON with ``Content-Type: application/json``.
       "page_width": 1240,
       "page_height": 1754,
       "page_confidence": 0.91,
+      "engine_latency_ms": 342.5,
       "blocks": [
         {
           "id": "b1a2c3d4",

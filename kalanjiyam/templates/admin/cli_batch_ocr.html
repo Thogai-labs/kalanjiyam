@@ -210,6 +210,11 @@
           <tr class="text-left font-semibold text-slate-600 border-b border-slate-100 bg-slate-50/50">
             <th class="px-4 py-3 font-mono text-xs">#</th>
             <th class="px-4 py-3">{{ _('Name / File Path') }}</th>
+            <th class="px-4 py-3 text-center">{{ _('Engine') }}</th>
+            <th class="px-4 py-3 text-right">{{ _('Avg Conf.') }}</th>
+            <th class="px-4 py-3 text-right">{{ _('Avg p05') }}</th>
+            <th class="px-4 py-3 text-right">{{ _('Blocks') }}</th>
+            <th class="px-4 py-3 text-right">{{ _('Chars') }}</th>
 
             <th class="px-4 py-3 text-right">{{ _('Source Size') }}</th>
             <th class="px-4 py-3 text-right">{{ _('Extracted Images') }}</th>
@@ -218,6 +223,7 @@
             <th class="px-4 py-3 text-right">{{ _('Trans Data') }}</th>
             <th class="px-4 py-3 text-right">{{ _('Pages') }}</th>
             <th class="px-4 py-3 text-right">{{ _('OCR / Trans Time') }}</th>
+            <th class="px-4 py-3 text-right">{{ _('Engine Latency') }}</th>
             <th class="px-4 py-3 text-right">{{ _('Avg / Page') }}</th>
             <th class="px-4 py-3 text-center">{{ _('Status') }}</th>
           </tr>
@@ -235,6 +241,26 @@
                 ⚠️ {{ item.error_message }}
               </div>
               {% endif %}
+            </td>
+
+            <td class="px-4 py-3 text-center">
+              {% if item.engine %}
+                <span class="inline-flex px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                  {{ item.engine }}
+                </span>
+              {% else %}-{% endif %}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs text-emerald-600 font-semibold">
+              {% if item.avg_confidence is not none %}{{ item.avg_confidence }}%{% else %}-{% endif %}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs text-amber-600 font-semibold">
+              {% if item.avg_p05 is not none %}{{ item.avg_p05 }}%{% else %}-{% endif %}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs text-slate-700 font-semibold">
+              {% if item.total_blocks is not none %}{{ item.total_blocks }}{% else %}-{% endif %}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs text-slate-700 font-semibold">
+              {% if item.total_chars is not none %}{{ item.total_chars }}{% else %}-{% endif %}
             </td>
 
             <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
@@ -295,6 +321,11 @@
                 -
               {% endif %}
             </td>
+            <td class="px-4 py-3 text-right font-mono text-xs text-cyan-700 font-semibold">
+              {% if item.total_engine_latency_sec is not none %}
+                {{ item.total_engine_latency_sec }}s
+              {% else %}-{% endif %}
+            </td>
             <td class="px-4 py-3 text-right font-mono text-xs text-indigo-600 font-semibold">
               {% if item.avg_per_page_sec is not none and item.avg_trans_per_page_sec is not none %}
                 <div>{{ item.avg_per_page_sec }}s/p <span class="text-[10px] text-slate-400">(OCR)</span></div>
@@ -327,7 +358,7 @@
           <!-- Expandable Per-Page Metrics Details -->
           {% if item.page_metrics %}
           <tr class="bg-slate-50/40">
-            <td colspan="12" class="px-6 py-3">
+            <td colspan="17" class="px-6 py-3">
               <details class="group">
                 <summary class="cursor-pointer text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 select-none py-1">
                   <svg class="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -341,12 +372,18 @@
                     <thead class="bg-slate-100/70 text-left text-[11px] font-bold text-slate-600 uppercase">
                       <tr>
                         <th class="px-3 py-2">Page #</th>
+                        <th class="px-3 py-2 text-center">Engine</th>
+                        <th class="px-3 py-2 text-right">Conf.</th>
+                        <th class="px-3 py-2 text-right">p05</th>
+                        <th class="px-3 py-2 text-right">Blocks</th>
+                        <th class="px-3 py-2 text-right">Chars</th>
 
                         <th class="px-3 py-2 text-right">Extracted Image</th>
                         <th class="px-3 py-2 text-right">Cropped Images</th>
                         <th class="px-3 py-2 text-right">OCR Data</th>
                         <th class="px-3 py-2 text-right">Trans Data</th>
                         <th class="px-3 py-2 text-right">OCR Time</th>
+                        <th class="px-3 py-2 text-right">Engine Latency</th>
                         <th class="px-3 py-2 text-right">Trans Time</th>
                         <th class="px-3 py-2 text-center">Status</th>
                       </tr>
@@ -355,6 +392,22 @@
                       {% for pm in item.page_metrics %}
                       <tr class="hover:bg-slate-50">
                         <td class="px-3 py-2 font-bold text-slate-800">Page {{ pm.page_number }}</td>
+
+                        <td class="px-3 py-2 text-center font-mono text-slate-600">
+                          {% if pm.engine %}{{ pm.engine }}{% else %}-{% endif %}
+                        </td>
+                        <td class="px-3 py-2 text-right font-mono text-emerald-700 font-semibold">
+                          {% if pm.confidence is not none %}{{ pm.confidence }}%{% else %}-{% endif %}
+                        </td>
+                        <td class="px-3 py-2 text-right font-mono text-amber-700 font-semibold">
+                          {% if pm.p05 is not none %}{{ pm.p05 }}%{% else %}-{% endif %}
+                        </td>
+                        <td class="px-3 py-2 text-right font-mono text-slate-700">
+                          {% if pm.blocks is not none %}{{ pm.blocks }}{% else %}-{% endif %}
+                        </td>
+                        <td class="px-3 py-2 text-right font-mono text-slate-700">
+                          {% if pm.chars is not none %}{{ pm.chars }}{% else %}-{% endif %}
+                        </td>
 
                         <td class="px-3 py-2 text-right font-mono text-slate-600">
                           {% if pm.extracted_image_size_bytes %}
@@ -387,6 +440,11 @@
                         <td class="px-3 py-2 text-right font-mono text-indigo-700 font-semibold">
                           {% if pm.time_took_sec is not none %}
                             {{ pm.time_took_sec }}s
+                          {% else %}-{% endif %}
+                        </td>
+                        <td class="px-3 py-2 text-right font-mono text-cyan-700 font-semibold">
+                          {% if pm.engine_latency_sec is not none %}
+                            {{ pm.engine_latency_sec }}s
                           {% else %}-{% endif %}
                         </td>
                         <td class="px-3 py-2 text-right font-mono text-emerald-700 font-semibold">

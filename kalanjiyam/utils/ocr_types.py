@@ -44,6 +44,45 @@ class OcrResponse:
     #: heuristic line-rebuilding that would merge line-level boxes into
     #: paragraph-level boxes.
     contract_version: str | None = None
+    #: OCR engine name used.
+    engine: str | None = None
+    #: 5th percentile confidence score (p05 quality floor).
+    p05: float | None = None
+    #: Total count of visual/text layout blocks.
+    blocks_count: int | None = None
+    #: Total character count of extracted text.
+    chars_count: int | None = None
+    #: Engine API latency in milliseconds.
+    engine_latency_ms: float | None = None
+
+
+def calculate_p05_confidence(
+    blocks: list[dict] | None,
+    page_confidence: float | None = None,
+) -> float | None:
+    """Calculate the 5th percentile (p05) confidence score across all words/blocks."""
+    scores: list[float] = []
+    if blocks and isinstance(blocks, list):
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            b_conf = block.get("confidence")
+            if b_conf is not None and isinstance(b_conf, (int, float)):
+                scores.append(float(b_conf))
+            words = block.get("words")
+            if isinstance(words, list):
+                for w in words:
+                    if isinstance(w, dict) and w.get("confidence") is not None:
+                        try:
+                            scores.append(float(w["confidence"]))
+                        except (ValueError, TypeError):
+                            pass
+    if not scores:
+        return page_confidence
+    scores.sort()
+    idx = max(0, min(len(scores) - 1, int(0.05 * len(scores))))
+    return round(scores[idx], 4)
+
 
 
 SUPPORTED_ENGINES = [

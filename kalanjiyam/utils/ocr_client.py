@@ -12,6 +12,7 @@ from flask import current_app
 
 from kalanjiyam.utils.ocr_types import (
     OcrResponse,
+    calculate_p05_confidence,
     engine_for_service,
     normalize_service_engine,
 )
@@ -240,6 +241,16 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
             coordinate_space = payload.get("coordinate_space") or "pixel"
             if coordinate_space not in ("pixel", "normalized"):
                 coordinate_space = "pixel"
+            page_confidence = _clamp_confidence(payload.get("page_confidence"))
+            p05 = calculate_p05_confidence(blocks, page_confidence)
+            blocks_count = len(blocks) if blocks else len(boxes)
+            chars_count = len(text)
+            engine_latency = payload.get("engine_latency_ms") or payload.get("latency_ms") or latency_ms
+            try:
+                engine_latency = float(engine_latency)
+            except (TypeError, ValueError):
+                engine_latency = latency_ms
+
             return OcrResponse(
                 text_content=text,
                 bounding_boxes=boxes,
@@ -251,8 +262,13 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
                 source_type=payload.get("source_type", "scan"),
                 coordinate_space=coordinate_space,
                 model=model,
-                page_confidence=_clamp_confidence(payload.get("page_confidence")),
+                page_confidence=page_confidence,
                 contract_version=payload.get("contract_version"),
+                engine=engine_name,
+                p05=p05,
+                blocks_count=blocks_count,
+                chars_count=chars_count,
+                engine_latency_ms=engine_latency,
             )
 
         except Exception as ex:
