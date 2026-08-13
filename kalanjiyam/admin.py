@@ -944,6 +944,8 @@ def _sync_job_and_item_metrics(session, job):
             
             engines = [p.engine for p in completed_pages if p.engine]
             item.engine = engines[0] if engines else item.engine
+            page_types = [p.page_type for p in completed_pages if p.page_type]
+            item.page_type = page_types[0] if page_types else (item.page_type or "original")
             conf_list = [p.confidence for p in completed_pages if p.confidence is not None]
             item.avg_confidence = (sum(conf_list) / len(conf_list)) if conf_list else item.avg_confidence
             item.min_confidence = min(conf_list) if conf_list else item.min_confidence
@@ -1180,6 +1182,7 @@ class PlatformView(AdminBaseView):
                     "blocks": p_rec.blocks,
                     "chars": p_rec.chars,
                     "engine_latency_sec": round(p_eng_lat_sec, 2) if p_eng_lat_sec is not None else None,
+                    "page_type": p_rec.page_type or "original",
                     "attempt_count": p_rec.attempt_count,
                     "error_message": p_rec.error_message,
                 })
@@ -1204,6 +1207,7 @@ class PlatformView(AdminBaseView):
                 "total_chars": item.total_chars,
                 "total_engine_latency_sec": round(total_eng_lat_sec, 2) if total_eng_lat_sec is not None else None,
                 "avg_engine_latency_sec": round((total_eng_lat_sec / pages), 2) if (total_eng_lat_sec is not None and pages > 0) else None,
+                "page_type": item.page_type or "original",
                 "pages": pages,
                 "time_took_sec": round(time_sec, 2) if time_sec is not None else None,
                 "translation_time_took_sec": round(trans_time_sec, 2) if trans_time_sec is not None else None,
@@ -1267,6 +1271,7 @@ class PlatformView(AdminBaseView):
             "Avg Per Page OCR Time (Sec)",
             "Avg Per Page Translation Time (Sec)",
             "Status",
+            "Page Type",
             "Extraction Latency (ms)",
             "Error Message",
         ])
@@ -1309,6 +1314,7 @@ class PlatformView(AdminBaseView):
                 round(avg_per_page_sec, 2) if avg_per_page_sec is not None else "",
                 round(trans_time_sec / pages, 2) if (trans_time_sec is not None and pages > 0) else "",
                 item.status,
+                item.page_type or "original",
                 round(item.extraction_latency_ms, 2) if item.extraction_latency_ms else "",
                 item.error_message or "",
             ])
@@ -1365,6 +1371,7 @@ class PlatformView(AdminBaseView):
             "Engine Latency (Sec)",
             "Translation Time Took (Sec)",
             "Status",
+            "Page Type",
             "Attempt Count",
             "Error Message",
         ])
@@ -2383,6 +2390,7 @@ class OrgAdminView(AdminBaseView):
                     "blocks": p_rec.blocks,
                     "chars": p_rec.chars,
                     "engine_latency_sec": round(p_eng_lat_sec, 2) if p_eng_lat_sec is not None else None,
+                    "page_type": p_rec.page_type or "original",
                     "attempt_count": p_rec.attempt_count,
                     "error_message": p_rec.error_message,
                 })
@@ -2407,6 +2415,7 @@ class OrgAdminView(AdminBaseView):
                 "total_chars": item.total_chars,
                 "total_engine_latency_sec": round(total_eng_lat_sec, 2) if total_eng_lat_sec is not None else None,
                 "avg_engine_latency_sec": round((total_eng_lat_sec / pages), 2) if (total_eng_lat_sec is not None and pages > 0) else None,
+                "page_type": item.page_type or "original",
                 "pages": pages,
                 "time_took_sec": round(time_sec, 2) if time_sec is not None else None,
                 "translation_time_took_sec": round(trans_time_sec, 2) if trans_time_sec is not None else None,
@@ -2492,6 +2501,7 @@ class OrgAdminView(AdminBaseView):
             "Avg Per Page OCR Time (Sec)",
             "Avg Per Page Translation Time (Sec)",
             "Status",
+            "Page Type",
             "Extraction Latency (ms)",
             "Error Message",
         ])
@@ -2534,6 +2544,7 @@ class OrgAdminView(AdminBaseView):
                 round(avg_per_page_sec, 2) if avg_per_page_sec is not None else "",
                 round(trans_time_sec / pages, 2) if (trans_time_sec is not None and pages > 0) else "",
                 item.status,
+                item.page_type or "original",
                 round(item.extraction_latency_ms, 2) if item.extraction_latency_ms else "",
                 item.error_message or "",
             ])
@@ -2610,6 +2621,7 @@ class OrgAdminView(AdminBaseView):
             "Engine Latency (Sec)",
             "Translation Time Took (Sec)",
             "Status",
+            "Page Type",
             "Attempt Count",
             "Error Message",
         ])
@@ -2639,6 +2651,7 @@ class OrgAdminView(AdminBaseView):
                 round(p_eng_lat, 2) if p_eng_lat is not None else "",
                 round(p_trans_time, 2) if p_trans_time is not None else "",
                 p.status,
+                p.page_type or "original",
                 p.attempt_count,
                 p.error_message or "",
             ])

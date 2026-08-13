@@ -228,6 +228,7 @@
             <th class="px-4 py-3 text-right">{{ _('Avg Engine Latency') }}</th>
             <th class="px-4 py-3 text-right">{{ _('Avg / Page') }}</th>
             <th class="px-4 py-3 text-center">{{ _('Status') }}</th>
+            <th class="px-4 py-3 text-center">{{ _('Page Type') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
@@ -379,12 +380,23 @@
               </span>
               {% endif %}
             </td>
+            <td class="px-4 py-3 text-center">
+              {% if item.page_type == 'synthetic' %}
+                <span class="inline-flex px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                  Synthetic
+                </span>
+              {% else %}
+                <span class="inline-flex px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                  Original
+                </span>
+              {% endif %}
+            </td>
           </tr>
 
           <!-- Expandable Per-Page Metrics Details -->
           {% if item.page_metrics %}
           <tr class="bg-slate-50/40">
-            <td colspan="19" class="px-6 py-3">
+            <td colspan="20" class="px-6 py-3">
               <details class="group">
                 <summary class="cursor-pointer text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 select-none py-1">
                   <svg class="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -412,6 +424,7 @@
                         <th class="px-3 py-2 text-right">Engine Latency</th>
                         <th class="px-3 py-2 text-right">Trans Time</th>
                         <th class="px-3 py-2 text-center">Status</th>
+                        <th class="px-3 py-2 text-center">Page Type</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -485,6 +498,13 @@
                           <span class="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200" title="{{ pm.error_message }}">Failed</span>
                           {% else %}
                           <span class="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">{{ pm.status }}</span>
+                          {% endif %}
+                        </td>
+                        <td class="px-3 py-2 text-center">
+                          {% if pm.page_type == 'synthetic' %}
+                            <span class="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">Synthetic</span>
+                          {% else %}
+                            <span class="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">Original</span>
                           {% endif %}
                         </td>
                       </tr>

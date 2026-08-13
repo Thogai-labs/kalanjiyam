@@ -769,6 +769,7 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                             ocr_page.blocks = getattr(ocr_resp, "blocks_count", None) or (len(doc.blocks) if doc else None)
                             ocr_page.chars = getattr(ocr_resp, "chars_count", None) or (len(plain_text) if plain_text else None)
                             ocr_page.engine_latency_ms = getattr(ocr_resp, "engine_latency_ms", None) or page_latency
+                            ocr_page.page_type = getattr(ocr_resp, "page_type", "original") or "original"
                             
                             # Extracted page image size from storage
                             try:

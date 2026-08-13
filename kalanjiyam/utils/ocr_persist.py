@@ -143,5 +143,6 @@ def ocr_response_to_api_dict(
         "blocks_count": blocks_count,
         "chars_count": chars_count,
         "engine_latency_ms": ocr.engine_latency_ms,
+        "page_type": ocr.page_type or "original",
         "blocks": [b.to_dict() for b in doc.blocks],
     }

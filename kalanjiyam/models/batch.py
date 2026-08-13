@@ -52,6 +52,7 @@ class BatchItem(Base):
     total_blocks = Column(Integer, nullable=True)
     total_chars = Column(Integer, nullable=True)
     total_engine_latency_ms = Column(Float, nullable=True)
+    page_type = Column(String(32), default='original', nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
@@ -115,6 +116,7 @@ class BatchOcrPage(Base):
     blocks = Column(Integer, nullable=True)
     chars = Column(Integer, nullable=True)
     engine_latency_ms = Column(Float, nullable=True)
+    page_type = Column(String(32), default='original', nullable=True)
     
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

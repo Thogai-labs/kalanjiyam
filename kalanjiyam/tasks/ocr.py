@@ -129,6 +129,7 @@ def _run_ocr_for_page_inner(
                     ocr_page.blocks = getattr(ocr_response, "blocks_count", None) or (len(doc.blocks) if doc else None)
                     ocr_page.chars = getattr(ocr_response, "chars_count", None) or (len(plain_text) if plain_text else None)
                     ocr_page.engine_latency_ms = getattr(ocr_response, "engine_latency_ms", None)
+                    ocr_page.page_type = getattr(ocr_response, "page_type", "original") or "original"
 
                     try:
                         if image_path and image_path.exists():
