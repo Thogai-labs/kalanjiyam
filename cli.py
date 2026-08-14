@@ -660,6 +660,12 @@ def batch_retry(job_id, org, lang, ocr_engine, force):
             if resolved_engine:
                 item.engine = resolved_engine
 
+            if force:
+                for ocr_p in item.ocr_pages:
+                    ocr_p.status = 'PENDING'
+                    ocr_p.error_message = None
+                    ocr_p.completed_at = None
+
             if item.project_id and item.chunks:
                 item.status = 'IN_PROGRESS'
                 item.error_message = None
@@ -679,7 +685,11 @@ def batch_retry(job_id, org, lang, ocr_engine, force):
                                 ocr_p.completed_at = None
                                 
                         session.commit()
-                        dispatch_kwargs = {"engine": item.engine} if item.engine else {}
+                        dispatch_kwargs = {}
+                        if item.engine:
+                            dispatch_kwargs["engine"] = item.engine
+                        if force:
+                            dispatch_kwargs["force"] = True
                         process_s3_batch_chunk.apply_async(
                             args=[chunk.id, org, lang],
                             kwargs=dispatch_kwargs,
@@ -690,7 +700,11 @@ def batch_retry(job_id, org, lang, ocr_engine, force):
                 item.status = 'PENDING'
                 item.error_message = None
                 session.commit()
-                dispatch_kwargs = {"engine": item.engine} if item.engine else {}
+                dispatch_kwargs = {}
+                if item.engine:
+                    dispatch_kwargs["engine"] = item.engine
+                if force:
+                    dispatch_kwargs["force"] = True
                 process_s3_batch_item.apply_async(
                     args=[item.id, org, lang],
                     kwargs=dispatch_kwargs,

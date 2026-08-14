@@ -435,7 +435,7 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
             return
 
         # Idempotency Guard
-        if chunk.status == 'COMPLETED':
+        if not kwargs.get("force") and chunk.status == 'COMPLETED':
             LOG.info(f"BatchOcrChunk #{chunk_id} is already COMPLETED. Skipping.")
             return
         if chunk.status == 'FAILED' and chunk.error_message == 'Cancelled by user':
@@ -554,7 +554,7 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                             session.flush()
 
                         # Durable Page-Level Idempotency Check
-                        if ocr_page.status == 'COMPLETED':
+                        if not kwargs.get("force") and ocr_page.status == 'COMPLETED':
                             LOG.info(f"Page {n} of project {project.slug} is already COMPLETED. Skipping.")
                             continue
 
@@ -799,6 +799,7 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                             )
                             
                             # Record page-level metrics
+                            plain_text = doc.to_plain_text() or ocr_resp.text_content or ""
                             ocr_page.ocr_latency_ms = page_latency
                             ocr_page.engine = engine
                             ocr_page.confidence = getattr(ocr_resp, "page_confidence", None)
@@ -815,7 +816,6 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                                 pass
 
                             # OCR data size (content + document JSON payload)
-                            plain_text = doc.to_plain_text() or ocr_resp.text_content or ""
                             doc_json_str = json.dumps(doc.to_dict()) if doc else ""
                             ocr_page.ocr_data_size_bytes = len(plain_text.encode('utf-8')) + len(doc_json_str.encode('utf-8'))
 
