@@ -411,12 +411,16 @@ def normalize_geometry(
         sy = out_h / ref_h
 
     if scaled and out_w and out_h:
-        max_x = max(b[2] for b in scaled)
-        max_y = max(b[3] for b in scaled)
-        if max_x > out_w * 1.02:
-            sx *= out_w / max_x
-        if max_y > out_h * 1.02:
-            sy *= out_h / max_y
+        # Filter out malformed entries (strings or tuples with < 4 elements)
+        valid = [b for b in scaled if isinstance(b, (list, tuple)) and len(b) >= 4]
+        if valid:
+            max_x = max(b[2] for b in valid)
+            max_y = max(b[3] for b in valid)
+            if max_x > out_w * 1.02:
+                sx *= out_w / max_x
+            if max_y > out_h * 1.02:
+                sy *= out_h / max_y
+            scaled = valid
 
     if sx != 1.0 or sy != 1.0:
         scaled = [

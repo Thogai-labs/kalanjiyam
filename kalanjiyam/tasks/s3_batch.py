@@ -477,8 +477,7 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                 heartbeat = chunk.heartbeat_at or now
                 wait_seconds = max(1, int((heartbeat + CHUNK_LEASE_TIMEOUT - now).total_seconds()))
                 LOG.info(f"Chunk #{chunk_id} has an active lease; checking again in {wait_seconds}s.")
-                raise self.retry(countdown=wait_seconds, max_retries=None,
-                                 kwargs={"chunk_id": chunk_id, "org_slug": org_slug, "language": language})
+                raise self.retry(countdown=wait_seconds, max_retries=None)
             return
         session.expire_all()
         chunk = session.query(BatchOcrChunk).get(chunk_id)
@@ -611,8 +610,13 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                         chunk_ocr_latency += page_latency
 
                         if ocr_result:
+                            from kalanjiyam.utils.ocr_client import _parse_bounding_boxes, _sanitize_block, _clamp_confidence
+                            from kalanjiyam.utils.ocr_types import calculate_p05_confidence
+
                             if isinstance(ocr_result, dict):
-                                results_list = ocr_result.get("results") or ocr_result.get("blocks") or []
+                                # --- Parse using the same approach as ocr_client.run_ocr_remote() ---
+
+                                # 1. Text extraction
                                 txt = (
                                     ocr_result.get("text")
                                     or ocr_result.get("text_content")
@@ -621,18 +625,42 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                                     or ocr_result.get("ocr_text")
                                     or ""
                                 )
-                                boxes = ocr_result.get("bounding_boxes", [])
-                                blks = ocr_result.get("blocks", [])
+
+                                # 2. Blocks — sanitize just like proofing path
+                                blks = ocr_result.get("blocks")
+                                if blks is not None and not isinstance(blks, list):
+                                    blks = None
+                                if blks:
+                                    blks = [_sanitize_block(b) for b in blks if isinstance(b, dict)]
+
+                                # 3. Bounding boxes — parse just like proofing path
+                                boxes = _parse_bounding_boxes(ocr_result.get("bounding_boxes"), engine)
+
+                                # 4. Layout HTML
                                 html = ocr_result.get("layout_html", "")
 
-                                if isinstance(results_list, list) and results_list:
+                                # 5. Coordinate space
+                                coordinate_space = ocr_result.get("coordinate_space") or "pixel"
+                                if coordinate_space not in ("pixel", "normalized"):
+                                    coordinate_space = "pixel"
+
+                                # 6. Metrics from response
+                                page_confidence = _clamp_confidence(ocr_result.get("page_confidence"))
+                                p05_val = calculate_p05_confidence(blks, page_confidence)
+                                resp_engine_latency = ocr_result.get("engine_latency_ms") or ocr_result.get("latency_ms") or page_latency
+                                try:
+                                    resp_engine_latency = float(resp_engine_latency)
+                                except (TypeError, ValueError):
+                                    resp_engine_latency = page_latency
+
+                                # 7. Fallback: if no blocks, try "results" key (legacy services)
+                                results_list = ocr_result.get("results") or []
+                                if not blks and isinstance(results_list, list) and results_list:
                                     parsed_blks = []
-                                    parsed_boxes = []
                                     text_parts = []
                                     for idx, p_item in enumerate(results_list):
                                         if isinstance(p_item, dict):
                                             bbox = p_item.get("bbox", [0, 0, 0, 0])
-                                            parsed_boxes.append(bbox)
                                             val = (
                                                 p_item.get("text")
                                                 or p_item.get("content")
@@ -642,7 +670,7 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                                                 or ""
                                             )
                                             cat = str(p_item.get("category", "paragraph")).lower()
-                                            
+
                                             md_heading_match = re.match(r'^(#{1,6})\s+(.*)', val, flags=re.DOTALL)
                                             if md_heading_match:
                                                 level = len(md_heading_match.group(1))
@@ -660,7 +688,6 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
 
                                             if val:
                                                 text_parts.append(val)
-
                                             parsed_blks.append({
                                                 "id": f"page-{n}-block-{idx+1}",
                                                 "type": blk_type,
@@ -680,15 +707,16 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
 
                                     if not txt and text_parts:
                                         txt = "\n\n".join(text_parts)
-                                    if not blks and parsed_blks:
-                                        blks = parsed_blks
-                                    if not boxes and parsed_boxes:
-                                        boxes = parsed_boxes
+                                    blks = parsed_blks
                             else:
                                 txt = str(ocr_result)
                                 boxes = []
                                 blks = []
                                 html = ""
+                                coordinate_space = "pixel"
+                                page_confidence = None
+                                p05_val = None
+                                resp_engine_latency = page_latency
 
                             tmp_crop_src = tmp_dir_path / f"tmp_crop_{n}.jpg"
                             tmp_crop_src.write_bytes(img_bytes)
@@ -701,11 +729,18 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                                 text_content=txt,
                                 bounding_boxes=boxes,
                                 blocks=blks,
-                                layout_html=html,
+                                layout_html=html if html else None,
+                                content_format="blocks" if blks else "plain",
                                 page_width=img_w,
                                 page_height=img_h,
-                                coordinate_space="pixel",
+                                coordinate_space=coordinate_space,
                                 contract_version=ocr_result.get("contract_version") if isinstance(ocr_result, dict) else None,
+                                engine=engine,
+                                page_confidence=page_confidence,
+                                p05=p05_val,
+                                blocks_count=len(blks) if blks else len(boxes),
+                                chars_count=len(txt),
+                                engine_latency_ms=resp_engine_latency,
                             )
 
                             if ocr_resp.blocks:
@@ -833,7 +868,7 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                     chunk.status = 'PENDING'
                     chunk.error_message = str(e)
                     session.commit()
-                    raise self.retry(exc=e, countdown=60, kwargs={"chunk_id": chunk_id, "org_slug": org_slug, "language": language})
+                    raise self.retry(exc=e, countdown=60)
                 else:
                     chunk.status = 'FAILED'
                     chunk.error_message = str(e)
