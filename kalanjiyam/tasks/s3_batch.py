@@ -495,7 +495,6 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
         # Resolve OCR service endpoint targets (primary + secondary)
         from flask import current_app
         raw_urls = [
-            os.environ.get("BATCH_OCR_SERVICE_URL") or current_app.config.get("BATCH_OCR_SERVICE_URL"),
             os.environ.get("OCR_SERVICE_URL") or current_app.config.get("OCR_SERVICE_URL"),
             os.environ.get("OCR_SERVICE_URL_2") or current_app.config.get("OCR_SERVICE_URL_2"),
         ]
@@ -509,16 +508,14 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
 
         if not ocr_targets:
             chunk.status = 'FAILED'
-            chunk.error_message = 'BATCH_OCR_SERVICE_URL / OCR_SERVICE_URL is not configured'
+            chunk.error_message = 'OCR_SERVICE_URL is not configured'
             chunk.completed_at = datetime.utcnow()
             session.commit()
             _finalize_batch_item_status(session, chunk.batch_item_id)
             return
 
-        batch_ocr_api_key = (
-            os.environ.get("BATCH_OCR_API_KEY")
-            or current_app.config.get("BATCH_OCR_API_KEY")
-            or os.environ.get("OCR_SERVICE_API_KEY")
+        ocr_api_key = (
+            os.environ.get("OCR_SERVICE_API_KEY")
             or current_app.config.get("OCR_SERVICE_API_KEY", "")
         )
 
@@ -574,8 +571,8 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
 
                         for target_url in ocr_targets:
                             headers = {"Accept": "application/json"}
-                            if batch_ocr_api_key:
-                                headers["X-API-Key"] = batch_ocr_api_key
+                            if ocr_api_key:
+                                headers["X-API-Key"] = ocr_api_key
                             backoff = 2
 
                             for attempt in range(retries):

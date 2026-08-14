@@ -927,8 +927,6 @@ Kalanjiyam supports ingesting and running OCR on massive batches of PDFs and raw
 
 ### Prerequisites
 Before running the batch process, ensure the following `.env` variables are configured:
-* `BATCH_OCR_SERVICE_URL`: The URL of the dedicated batch OCR API.
-* `BATCH_OCR_API_KEY`: The API key (if required) for the batch OCR API.
 
 Ensure the Celery worker (`s3_batch` queue) is running to process the jobs:
 ```bash

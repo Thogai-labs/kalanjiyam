@@ -223,12 +223,6 @@ class BaseConfig:
     #: API key for fallback OCR service requests.
     OCR_SERVICE_API_KEY_2 = _env("OCR_SERVICE_API_KEY_2", "")
 
-    #: Dedicated OCR service for CLI batch processing.
-    BATCH_OCR_SERVICE_URL = _env("BATCH_OCR_SERVICE_URL", "")
-
-    #: API key for batch OCR requests.
-    BATCH_OCR_API_KEY = _env("BATCH_OCR_API_KEY", "")
-
     #: Timeout in seconds for OCR service HTTP requests.
     OCR_SERVICE_TIMEOUT = int(_env("OCR_SERVICE_TIMEOUT", "300") or "300")
 
