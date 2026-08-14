@@ -608,11 +608,20 @@ def batch_cancel(job_id):
 @click.option("--job-id", required=True, type=int, help="Batch Job ID to retry")
 @click.option("--org", required=False, help="Organization slug to attach the processed projects to")
 @click.option("--lang", "--language", "lang", default="en", help="OCR Language code (default: 'en')")
-def batch_retry(job_id, org, lang):
-    """Retry failed or stuck items/chunks in a Batch OCR job without re-scanning."""
+@click.option("--engine", "ocr_engine", default=None, help="OCR engine name or masked ID (e.g. 'surya', 'dots_ocr', '12')")
+@click.option("--force", is_flag=True, help="Force rerun OCR on ALL pages including already COMPLETED ones")
+def batch_retry(job_id, org, lang, ocr_engine, force):
+    """Retry failed or stuck items/chunks in a Batch OCR job without re-scanning.
+
+    Use --force to re-run OCR on all pages (including completed ones)
+    without deleting projects.
+    """
     from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrChunk, BatchOcrPage
     from kalanjiyam.tasks.s3_batch import process_s3_batch_item, process_s3_batch_chunk
-    
+    from kalanjiyam.utils.ocr_types import normalize_engine as _norm_eng
+
+    resolved_engine = _norm_eng(ocr_engine) if ocr_engine else None
+
     if org:
         org = slugify(org)
         from kalanjiyam.models.group import Group
@@ -624,15 +633,19 @@ def batch_retry(job_id, org, lang):
         job = session.query(BatchJob).get(job_id)
         if not job:
             raise click.ClickException(f"BatchJob ID {job_id} not found.")
-            
-        items_to_retry = [
-            item for item in job.items
-            if item.status in ('FAILED', 'PENDING', 'IN_PROGRESS', 'IMAGES_EXTRACTED')
-            or any(page.status == 'FAILED' for page in item.ocr_pages)
-        ]
+
+        if force:
+            # --force: retry everything, including completed items
+            items_to_retry = list(job.items)
+        else:
+            items_to_retry = [
+                item for item in job.items
+                if item.status in ('FAILED', 'PENDING', 'IN_PROGRESS', 'IMAGES_EXTRACTED')
+                or any(page.status == 'FAILED' for page in item.ocr_pages)
+            ]
         
         if not items_to_retry:
-            click.echo(f"Job #{job_id} has no items to retry.")
+            click.echo(f"Job #{job_id} has no items to retry. Use --force to rerun completed pages.")
             return
             
         job.status = 'IN_PROGRESS'
@@ -643,6 +656,10 @@ def batch_retry(job_id, org, lang):
         items_dispatched = 0
         
         for item in items_to_retry:
+            # Override engine if specified
+            if resolved_engine:
+                item.engine = resolved_engine
+
             if item.project_id and item.chunks:
                 item.status = 'IN_PROGRESS'
                 item.error_message = None
@@ -650,20 +667,22 @@ def batch_retry(job_id, org, lang):
                 
                 for chunk in item.chunks:
                     has_failed_pages = any(page.status == 'FAILED' for page in chunk.pages)
-                    if chunk.status in ('FAILED', 'PENDING', 'IN_PROGRESS') or has_failed_pages:
+                    if force or chunk.status in ('FAILED', 'PENDING', 'IN_PROGRESS') or has_failed_pages:
                         chunk.status = 'PENDING'
                         chunk.error_message = None
                         chunk.completed_at = None
                         
                         for ocr_p in chunk.pages:
-                            if ocr_p.status != 'COMPLETED':
+                            if force or ocr_p.status != 'COMPLETED':
                                 ocr_p.status = 'PENDING'
                                 ocr_p.error_message = None
                                 ocr_p.completed_at = None
                                 
                         session.commit()
+                        dispatch_kwargs = {"engine": item.engine} if item.engine else {}
                         process_s3_batch_chunk.apply_async(
                             args=[chunk.id, org, lang],
+                            kwargs=dispatch_kwargs,
                             queue='s3_batch'
                         )
                         chunks_dispatched += 1
@@ -671,14 +690,17 @@ def batch_retry(job_id, org, lang):
                 item.status = 'PENDING'
                 item.error_message = None
                 session.commit()
+                dispatch_kwargs = {"engine": item.engine} if item.engine else {}
                 process_s3_batch_item.apply_async(
                     args=[item.id, org, lang],
+                    kwargs=dispatch_kwargs,
                     queue='s3_batch'
                 )
                 items_dispatched += 1
             
         session.commit()
-        click.echo(f"Re-dispatched {chunks_dispatched} chunk tasks and {items_dispatched} preparation tasks for BatchJob #{job.id} successfully!")
+        mode = "FORCE rerun (all pages)" if force else "retry (failed only)"
+        click.echo(f"[{mode}] Re-dispatched {chunks_dispatched} chunk tasks and {items_dispatched} preparation tasks for BatchJob #{job.id} successfully!")
 
 
 @cli.command()
