@@ -280,6 +280,15 @@ class DescriptionCurateForm(FlaskForm):
             raise ValidationError(_l("This tag cannot be edited as text."))
 
 
+class DescriptionSaveForm(FlaskForm):
+    """CSRF for the whole-description form.
+
+    The editable tags vary with the taxonomy, so the fields are read off the
+    request by prefix rather than declared here. `DescriptionCurateForm` still
+    handles a single tag, which is what the per-tag validation lives on.
+    """
+
+
 class MatchForm(Form):
     selected = BooleanField()
     replace = HiddenField(validators=[DataRequired()])
@@ -571,7 +580,8 @@ def description(slug):
         "proofing/projects/description.html",
         project=project_,
         extract_form=DescriptionExtractForm(),
-        curate_form=DescriptionCurateForm(formdata=None),
+        save_form=DescriptionSaveForm(formdata=None),
+        field_prefix=_CURATE_PREFIX,
         progress=progress,
         running=bool(
             progress and progress.get("status") == archival_tasks.STATUS_RUNNING
@@ -650,6 +660,72 @@ def description_curate(slug):
         flash(_l("There was nothing to clear."), "error")
 
     session.commit()
+    return redirect(url_for("proofing.project.description", slug=slug))
+
+
+#: Prefix for the per-tag inputs of the whole-description form. Tag codes contain
+#: spaces, so the code is carried in the field name rather than a parallel list.
+_CURATE_PREFIX = "tag__"
+
+
+@bp.route("/<slug>/description/save", methods=["POST"])
+@moderator_required
+def description_save(slug):
+    """Save every edited tag of the description in one submit.
+
+    Only tags whose box actually changed are written. Restamping all twenty-two
+    rows on each save would make `curated_by` and `curated_at` meaningless -- they
+    are meant to say who wrote *this* value, not who last pressed Save.
+
+    Unknown codes and non-text tags are ignored rather than rejected: the form is
+    generated from the taxonomy, so anything else in the payload did not come from
+    this page, and failing the whole save would lose the archivist's other edits.
+    """
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    if not DescriptionSaveForm().validate_on_submit():
+        flash(_l("Could not save the description."), "error")
+        return redirect(url_for("proofing.project.description", slug=slug))
+
+    session = q.get_session()
+    view = ad.describe(session, project_.id)["views"]
+    user_id = current_user.id if current_user.is_authenticated else None
+    saved = cleared = 0
+
+    for name, raw in request.form.items():
+        if not name.startswith(_CURATE_PREFIX):
+            continue
+        code = name[len(_CURATE_PREFIX) :]
+        tag = at.BY_CODE.get(code)
+        if tag is None or tag.kind not in (at.KIND_TEXT, at.KIND_PROSE):
+            continue
+
+        # Compared against what the box was *rendered* with, which for an
+        # untouched tag is the extractor's own value. Comparing against the
+        # curated value instead would turn every generated value into a curated
+        # one the first time anybody pressed Save.
+        value = (raw or "").strip()
+        current = view[code].value
+        if value == (current or "").strip():
+            continue
+
+        if value:
+            ad.set_curated(session, project_.id, code, value, user_id)
+            saved += 1
+        elif ad.clear_curated(session, project_.id, code):
+            cleared += 1
+
+    session.commit()
+
+    if saved or cleared:
+        flash(
+            _l("Saved %(saved)s, cleared %(cleared)s.", saved=saved, cleared=cleared),
+            "success",
+        )
+    else:
+        flash(_l("Nothing changed."), "success")
     return redirect(url_for("proofing.project.description", slug=slug))
 
 

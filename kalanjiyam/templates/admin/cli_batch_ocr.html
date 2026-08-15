@@ -16,6 +16,28 @@
 <!-- PAGE 1: STANDALONE BATCH JOBS LIST -->
 {{ admin.page_header(_('OCR & Translation Metrics'), _('Filter, search, and inspect batch OCR, translation, and proofer jobs.')) }}
 
+{# Archival extraction is not a batch job, so it has no row in the table below:
+   a run belongs to a project, a BatchItem belongs to a job, and there is no
+   honest single row for both. Its metrics are their own export, linked here
+   because this is where anyone looking for extraction metrics will look. #}
+{% if not is_org_admin %}
+<div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 mb-6 flex flex-wrap items-center justify-between gap-4">
+  <div>
+    <h2 class="text-sm font-bold text-slate-900">{{ _('Archival metadata extraction') }}</h2>
+    <p class="text-xs text-slate-500 mt-0.5 max-w-2xl">
+      {{ _('Per-document runs of the description extractor: page coverage, field coverage, evidence-verified rate, token cost. Tracked per project rather than per batch job, so it is not in the table below.') }}
+    </p>
+  </div>
+  <a href="{{ url_for('platform_view.metadata_metrics_export_csv') }}"
+     class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors shadow-sm shrink-0">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+    </svg>
+    {{ _('Export Extraction Metrics CSV') }}
+  </a>
+</div>
+{% endif %}
+
 <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-8 space-y-6">
   <!-- Sub-Nav Category Tabs & Task Type / Search Controls -->
   <div class="space-y-4 border-b border-slate-100 pb-5">

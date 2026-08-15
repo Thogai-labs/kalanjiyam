@@ -199,3 +199,159 @@ def test_the_locked_tags_are_offered_for_entry(moderator_client):
     body = moderator_client.get(URL).text
     for code in at.WRITE_LOCKED:
         assert code in body
+
+
+# Saving the whole form
+# ---------------------
+
+
+def _save(client, **tags):
+    return client.post(
+        f"{URL}/save",
+        data={f"tag__{code}": value for code, value in tags.items()},
+        follow_redirects=True,
+    )
+
+
+def test_save__writes_several_tags_at_once(moderator_client, flask_app):
+    resp = _save(
+        moderator_client,
+        REFERENCE="IOR/R/1/1/2345",
+        ACCESS="Open.",
+    )
+    assert resp.status_code == 200
+    assert _curated(flask_app, "REFERENCE").curated_value == "IOR/R/1/1/2345"
+    assert _curated(flask_app, "ACCESS").curated_value == "Open."
+
+
+def test_save__does_not_curate_a_value_it_did_not_change(moderator_client, flask_app):
+    """The boxes render pre-filled with the extractor's own values.
+
+    Submitting the form unchanged must therefore write nothing. Otherwise merely
+    pressing Save would convert every generated value into a curated one and
+    freeze it against the next run.
+    """
+    with flask_app.app_context():
+        session = get_session()
+        project = session.query(db.Project).filter_by(slug="test-project").first()
+        run = db.MetadataExtractionRun(
+            project_id=project.id,
+            status="COMPLETED",
+            taxonomy_version=at.TAXONOMY_VERSION,
+        )
+        session.add(run)
+        session.flush()
+        session.add(
+            db.MetadataField(
+                run_id=run.id,
+                project_id=project.id,
+                tag_code="TITLE",
+                value="Generated title",
+            )
+        )
+        session.commit()
+
+    _save(moderator_client, TITLE="Generated title")
+    assert _curated(flask_app, "TITLE") is None
+
+    _save(moderator_client, TITLE="Corrected title")
+    assert _curated(flask_app, "TITLE").curated_value == "Corrected title"
+
+
+def test_save__an_emptied_box_clears_the_curation(moderator_client, flask_app):
+    _save(moderator_client, ACCESS="Open.")
+    _save(moderator_client, ACCESS="")
+    assert _curated(flask_app, "ACCESS") is None
+
+
+def test_save__ignores_tags_it_cannot_store_as_text(moderator_client, flask_app):
+    """The form never renders a box for these, so anything here is not from it."""
+    _save(moderator_client, **{"PERSON NAME": "Ahmad Yar Khan", "NOT A TAG": "x"})
+    assert _curated(flask_app, "PERSON NAME") is None
+    assert _curated(flask_app, "NOT A TAG") is None
+
+
+def test_save__one_bad_field_does_not_lose_the_good_ones(moderator_client, flask_app):
+    _save(moderator_client, **{"PERSON NAME": "rejected", "ACCESS": "Open."})
+    assert _curated(flask_app, "ACCESS").curated_value == "Open."
+
+
+def test_save__is_moderator_only(rama_client, flask_app):
+    resp = _save(rama_client, ACCESS="Open.")
+    assert _curated(flask_app, "ACCESS") is None
+    assert resp.status_code == 200  # redirected to the login page
+
+
+# Rendering a description that actually has something in it
+# ---------------------------------------------------------
+
+
+def test_a_filled_description_renders(moderator_client, flask_app):
+    """Every value kind on one page: text, entities with evidence, relations.
+
+    The access-control tests above all run against an empty project, so without
+    this the entity and relation branches of the template are never executed by
+    the suite at all.
+    """
+    with flask_app.app_context():
+        session = get_session()
+        project = session.query(db.Project).filter_by(slug="test-project").first()
+        run = db.MetadataExtractionRun(
+            project_id=project.id,
+            status="COMPLETED",
+            taxonomy_version=at.TAXONOMY_VERSION,
+            pages_total=10,
+            pages_read=8,
+            pages_without_confidence=3,
+        )
+        session.add(run)
+        session.flush()
+
+        title = db.MetadataField(
+            run_id=run.id,
+            project_id=project.id,
+            tag_code="TITLE",
+            value="Grant of an honorary commission",
+            confidence=0.91,
+        )
+        people = db.MetadataField(
+            run_id=run.id,
+            project_id=project.id,
+            tag_code="PERSON NAME",
+            value=[
+                {"label": "Ahmad Yar Khan", "variants": ["the Shahzada"]},
+                {"label": "An uncited clerk"},
+            ],
+            confidence=0.6,
+        )
+        relations = db.MetadataField(
+            run_id=run.id,
+            project_id=project.id,
+            tag_code="RELATION",
+            value=[
+                {"subject": "Ahmad Yar Khan", "type": "governed by", "object": "Kalat"}
+            ],
+        )
+        session.add_all([title, people, relations])
+        session.flush()
+        session.add(
+            db.MetadataEvidence(
+                field_id=people.id,
+                value_index=0,
+                page_slug="62",
+                quote="the Shahzada",
+                verified=True,
+            )
+        )
+        session.commit()
+
+    body = moderator_client.get(URL).text
+
+    assert "Grant of an honorary commission" in body
+    assert "Ahmad Yar Khan" in body
+    assert "governed by" in body
+    # The uncited entity has to be visibly marked, not silently equal to a
+    # value the document actually supports.
+    assert "uncited" in body
+    # A partial run must say so rather than reading as a finished description.
+    assert "8" in body and "10" in body

@@ -1,8 +1,15 @@
 {# The archival description: twenty-two tags to ISAD(G)/ISAAR(CPF)/RiC.
 
-   Generated values and curated ones are merged before they reach here, but they
-   are never merged *visually* -- an archivist has to be able to see which facts
-   a machine produced, what it cited, and whether the citation checked out. #}
+   Laid out as a form an archivist fills in, not as a report. Two rules shape it:
+
+   * A tag with a value is a form field with that value in it, editable in place.
+     Tags with nothing in them are real -- an archival description is judged by
+     its gaps -- but they are folded away so they do not bury the fifteen that
+     matter. The archivist-only tags are the exception: they are always shown,
+     because nothing else will ever fill them.
+   * Generated and curated values merge before they reach here, but never merge
+     *visually*. Whether a machine wrote a value, and whether its citation checked
+     out, stays visible without being in the way. #}
 {% extends 'proofing/base-sidebar.html' %}
 {% import "macros/forms.html" as mf %}
 {% import "macros/proofing.html" as m %}
@@ -14,14 +21,14 @@
 {% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
 
-{% macro stat(label, value, suffix='') %}
+{% macro stat(label, value) %}
   <div class="bg-slate-800 rounded-xl px-3 py-2">
     <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ label }}</div>
     <div class="font-mono text-slate-200 truncate">
       {%- if value is none -%}
         <span class="text-slate-500">{{ _('none') }}</span>
       {%- else -%}
-        {{ value }}{{ suffix }}
+        {{ value }}
       {%- endif -%}
     </div>
   </div>
@@ -32,7 +39,7 @@
 
 
 {# One evidence span. `verified` is tri-state: true, false, or "not applicable"
-   for values that cite a page range rather than a quote. #}
+   for a value that cites a page range rather than a quote. #}
 {% macro span_chip(span) %}
   <div class="flex items-start gap-2 text-[11px] leading-snug">
     {% if span.verified is sameas true %}
@@ -54,38 +61,124 @@
 {% endmacro %}
 
 
-{% macro entity_chip(item, spans) %}
+{% macro entity_chip(item, spans, taxonomy) %}
   {% set enriched = item.source == taxonomy.SOURCE_ENRICHMENT %}
-  <div class="px-3 py-2 rounded-xl text-xs
-    {% if enriched %}bg-amber-50 border border-dashed border-amber-300{% else %}bg-slate-100 border border-slate-200{% endif %}">
-    <span class="font-semibold text-slate-800">{{ item.label }}</span>
-    {% if item.dates %}<span class="text-slate-500 ml-1">({{ item.dates }})</span>{% endif %}
-    {% if item.auth_id %}
-      <span class="ml-1 font-mono text-[10px] text-royalblue">{{ item.auth_id }}</span>
-    {% endif %}
-    {% if item.kind %}
-      <span class="ml-1 text-[10px] uppercase tracking-wide text-slate-400">{{ item.kind }}</span>
-    {% endif %}
-    {% if item.variants %}
-      <div class="text-slate-500 mt-1 leading-snug">{{ _('also') }}: {{ item.variants|join('; ') }}</div>
-    {% endif %}
-    {% if item.note %}
-      <div class="text-slate-400 mt-1 leading-snug italic">{{ item.note }}</div>
-    {% endif %}
+  <span class="inline-flex items-baseline gap-1 px-2 py-1 rounded-lg text-xs
+    {% if enriched %}bg-amber-50 border border-dashed border-amber-300{% else %}bg-slate-100 border border-slate-200{% endif %}"
+    title="{% if item.variants %}{{ _('also') }}: {{ item.variants|join('; ') }}{% endif %}{% if item.note %} &mdash; {{ item.note }}{% endif %}">
+    <span class="font-medium text-slate-800">{{ item.label }}</span>
+    {% if item.dates %}<span class="text-slate-500">({{ item.dates }})</span>{% endif %}
+    {% if item.auth_id %}<span class="font-mono text-[10px] text-royalblue">{{ item.auth_id }}</span>{% endif %}
+    {% if item.kind %}<span class="text-[10px] uppercase tracking-wide text-slate-400">{{ item.kind }}</span>{% endif %}
     {% if enriched %}
-      <div class="text-amber-700 mt-1 font-semibold uppercase tracking-wide text-[10px]">
-        {{ _('enrichment, not in the record') }}
-      </div>
+      <span class="text-[10px] uppercase tracking-wide text-amber-700 font-semibold"
+        title="{{ _('From an authority file, not stated in the record') }}">{{ _('ext') }}</span>
+    {% elif not spans %}
+      <span class="text-[10px] uppercase tracking-wide text-red-600 font-semibold"
+        title="{{ _('Nothing in the document was cited for this') }}">{{ _('uncited') }}</span>
     {% endif %}
-    {% if spans %}
-      <div class="mt-2 pt-2 border-t border-slate-200 space-y-1">
-        {% for span in spans %}{{ span_chip(span) }}{% endfor %}
+  </span>
+{% endmacro %}
+
+
+{# One row of the form: the tag on the left, its value on the right. #}
+{% macro field_row(view, taxonomy, prefix) %}
+  {% set tag = view.tag %}
+  <div class="p-4 md:grid md:grid-cols-[16rem_1fr] md:gap-6">
+
+    {# Label column #}
+    <div class="mb-2 md:mb-0">
+      <label for="{{ prefix }}{{ tag.code }}" class="block font-semibold text-slate-900 text-sm">
+        {{ tag.label }}
+      </label>
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+        <span class="font-mono text-[10px] text-slate-400">{{ tag.code }}</span>
+        <span class="text-[10px] text-slate-400">{{ tag.standard }}</span>
+        <button type="button" class="text-[10px] text-royalblue underline decoration-dotted"
+          title="{{ tag.definition }}">{{ _('what is this?') }}</button>
       </div>
-    {% elif not enriched %}
-      <div class="mt-2 pt-2 border-t border-slate-200 text-[10px] font-semibold uppercase tracking-wide text-red-600">
-        {{ _('uncited') }}
+      {% if view.is_locked %}
+        <span class="inline-block mt-2 px-2 py-0.5 bg-slate-800 text-white rounded text-[10px] font-bold uppercase tracking-wide"
+          title="{{ _('Never sent to the extractor -- it comes from the accession record') }}">
+          {{ _('archivist only') }}
+        </span>
+      {% endif %}
+    </div>
+
+    {# Value column #}
+    <div>
+      {% if tag.kind in ('text', 'prose') %}
+        {% if tag.kind == 'prose' %}
+          <textarea id="{{ prefix }}{{ tag.code }}" name="{{ prefix }}{{ tag.code }}" rows="5"
+            class="w-full rounded-xl border-slate-300 text-sm"
+            placeholder="{{ _('Nothing recorded') }}">{{ view.value or '' }}</textarea>
+        {% else %}
+          <input type="text" id="{{ prefix }}{{ tag.code }}" name="{{ prefix }}{{ tag.code }}"
+            value="{{ view.value or '' }}" class="w-full rounded-xl border-slate-300 text-sm"
+            placeholder="{{ _('Nothing recorded') }}">
+        {% endif %}
+      {% elif view.is_empty %}
+        <p class="text-sm text-slate-400 italic">{{ _('Nothing recorded.') }}</p>
+      {% elif tag.kind == 'entities' %}
+        <div class="flex flex-wrap gap-1.5">
+          {% for item in taxonomy.normalize_entities(view.value) %}
+            {{ entity_chip(item, view.evidence_for(loop.index0), taxonomy) }}
+          {% endfor %}
+        </div>
+      {% elif tag.kind == 'relations' %}
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm text-left">
+            <tbody class="divide-y divide-slate-100">
+              {% for rel in taxonomy.normalize_relations(view.value) %}
+                <tr>
+                  <td class="py-1.5 pr-4 text-slate-800">{{ rel.subject }}</td>
+                  <td class="py-1.5 pr-4"><span class="font-mono text-xs text-royalblue">{{ rel.type }}</span></td>
+                  <td class="py-1.5 text-slate-800">
+                    {{ rel.object }}
+                    {% if rel.note %}<span class="block text-xs text-slate-400 italic">{{ rel.note }}</span>{% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+
+      {# Provenance, kept to one quiet line unless the archivist opens it. #}
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[11px]">
+        {% if view.is_curated %}
+          <span class="text-royalblue font-semibold uppercase tracking-wide">{{ _('entered by hand') }}</span>
+        {% elif view.confidence is not none %}
+          <span class="{% if view.confidence < 0.7 %}text-amber-700 font-semibold{% else %}text-slate-400{% endif %}"
+            title="{{ _('The model\'s own confidence, which is not independently checked') }}">
+            {{ _('confidence') }} {{ '%.2f'|format(view.confidence) }}
+          </span>
+        {% endif %}
+
+        {% set spans = view.evidence %}
+        {% if spans %}
+          <details class="inline">
+            <summary class="cursor-pointer text-slate-400 hover:text-slate-600">
+              {{ _('%(n)s citations', n=spans|length) }}
+            </summary>
+            <div class="mt-1.5 space-y-1 bg-slate-50 rounded-lg p-2">
+              {% for span in spans %}{{ span_chip(span) }}{% endfor %}
+            </div>
+          </details>
+        {% endif %}
+
+        {# What a curated value stands in front of. Hiding it would make an
+           override indistinguishable from an extraction that found nothing. #}
+        {% if view.superseded %}
+          <details class="inline">
+            <summary class="cursor-pointer text-slate-400 hover:text-slate-600">
+              {{ _('the extraction said something else') }}
+            </summary>
+            <p class="mt-1.5 text-xs text-slate-500 italic bg-slate-50 rounded-lg p-2">{{ view.superseded }}</p>
+          </details>
+        {% endif %}
       </div>
-    {% endif %}
+    </div>
   </div>
 {% endmacro %}
 
@@ -94,33 +187,48 @@
 {{ m.project_header_nested(_('Description'), project) }}
 {{ m.project_tabs(project=project, active='description', is_mod=current_user.is_moderator) }}
 
-{# --- Extraction control ------------------------------------------------- #}
-<div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-8">
-  <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+{# --- Status strip -------------------------------------------------------- #}
+<div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 mb-6">
+  <div class="flex flex-wrap items-center gap-x-5 gap-y-3">
     <div>
-      <h2 class="text-lg font-bold text-slate-900 mb-1">{{ _('Extract the description') }}</h2>
-      <p class="text-sm text-slate-500 max-w-2xl leading-relaxed">
-        {{ _('Reads every page in overlapping windows and asks for each tag the text can support. Windows whose text has not changed since the last run are reused, so a re-run after a proofreading fix costs a call or two rather than a whole document.') }}
-      </p>
-      <p class="text-sm text-slate-500 max-w-2xl leading-relaxed mt-2">
-        {{ _('Reference code, custodial history and access conditions are never asked for. They come from the accession record, and a model asked for them would invent them.') }}
-      </p>
+      <span class="text-2xl font-bold text-slate-900">{{ filled }} / {{ total }}</span>
+      <span class="text-sm text-slate-500 ml-1">{{ _('tags filled') }}</span>
     </div>
-    <form method="POST" action="{{ url_for('proofing.project.description_extract', slug=project.slug) }}" class="shrink-0">
+    {% if curated_count %}
+      <span class="px-2 py-1 bg-royalblue/10 text-royalblue rounded-lg text-xs font-semibold">
+        {{ _('%(n)s by hand', n=curated_count) }}
+      </span>
+    {% endif %}
+    {% if run %}
+      {% if run.status == 'COMPLETED' %}
+        <span class="px-2 py-1 bg-green-100 text-green-800 rounded-lg text-xs font-semibold uppercase tracking-wide">{{ _('last run complete') }}</span>
+      {% else %}
+        <span class="px-2 py-1 bg-amber-100 text-amber-800 rounded-lg text-xs font-semibold uppercase tracking-wide">
+          {{ _('last run partial') }} &mdash; {{ run.windows_failed or 0 }} {{ _('windows failed') }}
+        </span>
+      {% endif %}
+      <span class="text-xs text-slate-500">
+        {{ _('read %(read)s of %(total)s pages', read=run.pages_read or 0, total=run.pages_total or 0) }}
+      </span>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('proofing.project.description_extract', slug=project.slug) }}"
+      class="ml-auto flex items-center gap-3">
       {{ extract_form.csrf_token }}
-      <label class="flex items-center gap-2 text-xs text-slate-500 mb-2 cursor-pointer">
+      <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer"
+        title="{{ _('Ignore the cache and re-read every window, even ones whose text has not changed') }}">
         {{ extract_form.force(class_="rounded border-slate-300 text-royalblue focus:ring-royalblue") }}
-        {{ _('Re-read every window (ignore the cache)') }}
+        {{ _('re-read everything') }}
       </label>
       <button type="submit" {% if running %}disabled{% endif %}
-        class="w-full px-5 py-2.5 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50">
-        {{ _('Run extraction') }}
+        class="px-4 py-2 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm">
+        {% if run %}{{ _('Re-run extraction') }}{% else %}{{ _('Run extraction') }}{% endif %}
       </button>
     </form>
   </div>
 
   {% if running %}
-    <div id="extraction-progress" class="mt-5 pt-5 border-t border-slate-100 text-sm">
+    <div id="extraction-progress" class="mt-4 pt-4 border-t border-slate-100 text-sm">
       <span class="font-semibold text-royalblue">{{ _('Running') }}:</span>
       <span id="extraction-stage" class="text-slate-600">{{ progress.stage }}</span>
       {% if progress.total %}
@@ -128,197 +236,113 @@
       {% endif %}
     </div>
   {% endif %}
+
+  {% if run %}
+    <details class="mt-4 pt-4 border-t border-slate-100">
+      <summary class="cursor-pointer text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600">
+        {{ _('Run details & quality') }}
+      </summary>
+
+      <div class="bg-slate-900 text-slate-100 rounded-2xl p-5 mt-3">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4 text-xs">
+          {% if run.completed_at %}
+            <span class="text-slate-400">{{ run.completed_at.strftime('%Y-%m-%d %H:%M') }} UTC</span>
+          {% endif %}
+          {% if run.model_name %}<span class="font-mono text-slate-400">{{ run.model_name }}</span>{% endif %}
+          <span class="font-mono text-slate-500">{{ run.taxonomy_version }}</span>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mb-4">
+          {{ stat(_('Pages read'), '%s / %s'|format(run.pages_read or 0, run.pages_total or 0)) }}
+          {{ stat(_('Page coverage'), percent(run.extraction_coverage) or None) }}
+          {{ stat(_('Tags filled'), '%s / %s'|format(run.fields_filled or 0, run.fields_total or 0)) }}
+          {{ stat(_('Windows'), '%s / %s'|format(run.windows_completed or 0, run.windows_total or 0)) }}
+          {{ stat(_('Evidence verified'), percent(run.evidence_verified_rate) or None) }}
+          {{ stat(_('Mean confidence'), '%.2f'|format(run.avg_field_confidence) if run.avg_field_confidence is not none else None) }}
+          {{ stat(_('Source OCR conf.'), '%.2f'|format(run.avg_source_ocr_confidence) if run.avg_source_ocr_confidence is not none else None) }}
+          {{ stat(_('Tokens'), (run.total_prompt_tokens or 0) + (run.total_completion_tokens or 0)) }}
+        </div>
+
+        {% if run.extraction_coverage is not none and run.extraction_coverage < 0.99 %}
+          <p class="text-xs text-amber-300 leading-relaxed max-w-3xl">
+            {{ _('%(missed)s of %(total)s pages were never read, because the windows covering them failed. Tags that ask "what appears anywhere in this file" -- people, places, subjects, formats -- are missing whatever was on those pages. Re-run to pick them up; windows that already succeeded are reused, so it only re-reads the failures.',
+                 missed=(run.pages_total or 0) - (run.pages_read or 0), total=run.pages_total or 0) }}
+          </p>
+        {% endif %}
+        {% if run.pages_without_confidence %}
+          <p class="text-xs text-slate-400 leading-relaxed max-w-3xl mt-2">
+            {{ _('%(n)s of the pages read carry no OCR confidence score, so "Source OCR conf." is averaged over the rest. Three of the OCR engines in service report no score at all -- that is expected, not a fault, and it is why the count is shown rather than the average being padded with zeroes. For those pages the citation checks above are the only quality signal there is.',
+                 n=run.pages_without_confidence) }}
+          </p>
+        {% endif %}
+      </div>
+    </details>
+  {% endif %}
 </div>
 
-{# --- A failure the run table would otherwise hide ------------------------ #}
+{# --- A failure the status strip would otherwise hide --------------------- #}
 {% if attempt and attempt.status == 'FAILED' %}
-  <div class="bg-red-50 border border-red-200 rounded-2xl p-5 mb-8">
+  <div class="bg-red-50 border border-red-200 rounded-2xl p-5 mb-6">
     <h3 class="font-bold text-red-900 mb-1">{{ _('The last extraction failed') }}</h3>
     <p class="text-sm text-red-800">{{ attempt.error_message or _('No reason was recorded.') }}</p>
   </div>
 {% endif %}
 
-{# --- Run metrics --------------------------------------------------------- #}
-{% if run %}
-  <div class="bg-slate-900 text-slate-100 rounded-2xl p-6 mb-8">
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4">
-      <span class="font-bold text-sm">{{ _('Last run') }}</span>
-      {% if run.status == 'COMPLETED' %}
-        <span class="px-2 py-0.5 bg-green-500/20 text-green-300 rounded text-xs font-bold uppercase tracking-wide">{{ _('complete') }}</span>
-      {% else %}
-        <span class="px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded text-xs font-bold uppercase tracking-wide">
-          {{ _('partial') }} &mdash; {{ run.windows_failed or 0 }} {{ _('windows failed') }}
-        </span>
-      {% endif %}
-      {% if run.completed_at %}
-        <span class="text-xs text-slate-500">{{ run.completed_at.strftime('%Y-%m-%d %H:%M') }} UTC</span>
-      {% endif %}
-      {% if run.model_name %}<span class="font-mono text-xs text-slate-400">{{ run.model_name }}</span>{% endif %}
-      <span class="font-mono text-xs text-slate-500">{{ run.taxonomy_version }}</span>
-    </div>
-
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mb-4">
-      {{ stat(_('Pages read'), '%s / %s'|format(run.pages_read or 0, run.pages_total or 0)) }}
-      {{ stat(_('Page coverage'), percent(run.extraction_coverage) or None) }}
-      {{ stat(_('Tags filled'), '%s / %s'|format(run.fields_filled or 0, run.fields_total or 0)) }}
-      {{ stat(_('Windows'), '%s / %s'|format(run.windows_completed or 0, run.windows_total or 0)) }}
-      {{ stat(_('Evidence verified'), percent(run.evidence_verified_rate) or None) }}
-      {{ stat(_('Mean confidence'), '%.2f'|format(run.avg_field_confidence) if run.avg_field_confidence is not none else None) }}
-      {{ stat(_('Source OCR conf.'), '%.2f'|format(run.avg_source_ocr_confidence) if run.avg_source_ocr_confidence is not none else None) }}
-      {{ stat(_('Tokens'), (run.total_prompt_tokens or 0) + (run.total_completion_tokens or 0)) }}
-    </div>
-
-    {% if run.extraction_coverage is not none and run.extraction_coverage < 0.99 %}
-      <p class="text-xs text-amber-300">
-        {{ _('Not every page was read. Tags that are recall problems -- who is named anywhere in this file -- are incomplete until page coverage is 100%%.') }}
-      </p>
-    {% endif %}
-    {% if run.pages_without_confidence %}
-      <p class="text-xs text-slate-400 mt-2">
-        {{ _('%(n)s pages carry no OCR confidence score. Three of the OCR engines produce none at all, so evidence verification is the only quality signal for those pages.',
-             n=run.pages_without_confidence) }}
-      </p>
-    {% endif %}
-  </div>
-{% elif not running %}
-  <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-8 text-sm text-slate-600">
-    {{ _('Nothing has been extracted yet. You can still enter the archivist-only tags below.') }}
+{% if not run and not running %}
+  <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-6 text-sm text-slate-600">
+    {{ _('Nothing has been extracted yet. The archivist-only tags below can still be filled in now.') }}
   </div>
 {% endif %}
 
-{# --- Coverage ------------------------------------------------------------ #}
-<div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-8">
-  <div class="flex flex-wrap items-baseline gap-x-4 gap-y-2">
-    <span class="text-2xl font-bold text-slate-900">{{ filled }} / {{ total }}</span>
-    <span class="text-sm text-slate-500">{{ _('tags filled') }}</span>
-    {% if curated_count %}
-      <span class="px-2 py-1 bg-royalblue/10 text-royalblue rounded-lg text-xs font-semibold">
-        {{ _('%(n)s entered by hand', n=curated_count) }}
-      </span>
-    {% endif %}
-  </div>
-</div>
+{# --- The description, as a form ------------------------------------------ #}
+<form method="POST" action="{{ url_for('proofing.project.description_save', slug=project.slug) }}">
+  {{ save_form.csrf_token }}
 
-{# --- The description ----------------------------------------------------- #}
-{% for group_name, views in groups %}
-  <section class="mb-8">
-    <h2 class="text-lg font-bold text-slate-900 mb-3">{{ group_name }}</h2>
-    <div class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden">
-      {% for view in views %}
-        {% set tag = view.tag %}
-        <div class="p-5 {% if view.is_empty %}bg-slate-50/50{% endif %}">
-          <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2">
-            <span class="font-mono text-xs font-bold text-royalblue">{{ tag.code }}</span>
-            <span class="font-bold text-slate-900 text-sm">{{ tag.label }}</span>
-            <span class="text-xs text-slate-400">{{ tag.standard }}</span>
-
-            {% if view.is_locked %}
-              <span class="px-2 py-0.5 bg-slate-800 text-white rounded text-[10px] font-bold uppercase tracking-wide">
-                {{ _('archivist only') }}
-              </span>
-            {% endif %}
-            {% if view.is_curated %}
-              <span class="px-2 py-0.5 bg-royalblue/10 text-royalblue rounded text-[10px] font-bold uppercase tracking-wide">
-                {{ _('entered by hand') }}
-              </span>
-            {% elif view.confidence is not none %}
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide
-                {% if view.confidence < 0.7 %}bg-amber-100 text-amber-800{% else %}bg-slate-100 text-slate-500{% endif %}">
-                {{ '%.2f'|format(view.confidence) }}
-              </span>
-            {% endif %}
-            {% if view.source and not view.is_curated %}
-              <span class="text-[10px] uppercase tracking-wide text-slate-400">{{ view.source }}</span>
-            {% endif %}
-          </div>
-          <p class="text-xs text-slate-400 leading-relaxed mb-3 max-w-3xl">{{ tag.definition }}</p>
-
-          {% set value = view.value %}
-          {% if view.is_empty %}
-            <span class="text-slate-300 text-sm">&mdash;</span>
-          {% elif tag.kind == 'text' %}
-            <p class="text-slate-800 font-medium">{{ value }}</p>
-            <div class="mt-2 space-y-1">
-              {% for span in view.unindexed_evidence %}{{ span_chip(span) }}{% endfor %}
-            </div>
-          {% elif tag.kind == 'prose' %}
-            <p class="text-slate-700 leading-relaxed max-w-3xl whitespace-pre-line">{{ value }}</p>
-            <div class="mt-2 space-y-1">
-              {% for span in view.unindexed_evidence %}{{ span_chip(span) }}{% endfor %}
-            </div>
-          {% elif tag.kind == 'entities' %}
-            <div class="flex flex-wrap gap-2">
-              {% for item in taxonomy.normalize_entities(value) %}
-                {{ entity_chip(item, view.evidence_for(loop.index0)) }}
-              {% endfor %}
-            </div>
-          {% elif tag.kind == 'relations' %}
-            <div class="overflow-x-auto">
-              <table class="min-w-full text-sm text-left">
-                <thead>
-                  <tr class="text-xs text-slate-400 uppercase tracking-wider">
-                    <th class="py-2 pr-4 font-semibold">{{ _('Subject') }}</th>
-                    <th class="py-2 pr-4 font-semibold">{{ _('Relation') }}</th>
-                    <th class="py-2 pr-4 font-semibold">{{ _('Object') }}</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                  {% for rel in taxonomy.normalize_relations(value) %}
-                    <tr>
-                      <td class="py-2 pr-4 text-slate-800">{{ rel.subject }}</td>
-                      <td class="py-2 pr-4"><span class="font-mono text-xs text-royalblue">{{ rel.type }}</span></td>
-                      <td class="py-2 pr-4 text-slate-800">
-                        {{ rel.object }}
-                        {% if rel.note %}<span class="block text-xs text-slate-400 italic">{{ rel.note }}</span>{% endif %}
-                      </td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          {% endif %}
-
-          {# What a curated value is standing in front of. Hiding it would make an
-             override indistinguishable from an extraction that found nothing. #}
-          {% if view.superseded %}
-            <details class="mt-3">
-              <summary class="cursor-pointer text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                {{ _('The extraction said something else') }}
-              </summary>
-              <p class="mt-1 text-xs text-slate-500 italic max-w-3xl">{{ view.superseded }}</p>
-            </details>
-          {% endif %}
-
-          {# Only text and prose tags are editable here. An entity list is a set of
-             structured access points; a textarea cannot express one. #}
-          {% if tag.kind in ('text', 'prose') %}
-            <details class="mt-3" {% if view.is_locked and view.is_empty %}open{% endif %}>
-              <summary class="cursor-pointer text-[11px] font-semibold uppercase tracking-wider text-royalblue">
-                {% if view.is_curated %}{{ _('Edit') }}{% else %}{{ _('Enter a value') }}{% endif %}
-              </summary>
-              <form method="POST" action="{{ url_for('proofing.project.description_curate', slug=project.slug) }}"
-                class="mt-2 max-w-3xl">
-                {{ curate_form.csrf_token }}
-                <input type="hidden" name="tag_code" value="{{ tag.code }}">
-                <textarea name="value" rows="{% if tag.kind == 'prose' %}6{% else %}2{% endif %}"
-                  class="w-full rounded-xl border-slate-300 text-sm">{% if view.is_curated %}{{ view.value }}{% endif %}</textarea>
-                <div class="flex items-center gap-3 mt-2">
-                  <button type="submit"
-                    class="px-4 py-2 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 transition-colors text-sm">
-                    {{ _('Save') }}
-                  </button>
-                  <span class="text-xs text-slate-400">
-                    {{ _('An empty box clears your value and restores what the extraction found.') }}
-                  </span>
-                </div>
-              </form>
-            </details>
-          {% endif %}
+  {% for group_name, views in groups %}
+    {% set shown = views | rejectattr('is_empty') | list %}
+    {% set locked_empty = views | selectattr('is_empty') | selectattr('is_locked') | list %}
+    {% set visible = shown + locked_empty %}
+    {% if visible %}
+      <section class="mb-6">
+        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ group_name }}</h2>
+        <div class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden">
+          {% for view in visible %}{{ field_row(view, taxonomy, field_prefix) }}{% endfor %}
         </div>
-      {% endfor %}
-    </div>
-  </section>
-{% endfor %}
+      </section>
+    {% endif %}
+  {% endfor %}
+
+  {# Empty tags are folded away, not dropped. A description is judged by its
+     gaps, so they stay reachable and countable. #}
+  {% set empties = [] %}
+  {% for group_name, views in groups %}
+    {% for view in views %}
+      {% if view.is_empty and not view.is_locked %}{% set _ = empties.append(view) %}{% endif %}
+    {% endfor %}
+  {% endfor %}
+
+  {% if empties %}
+    <details class="mb-6">
+      <summary class="cursor-pointer bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-semibold text-slate-500 hover:text-slate-700">
+        {{ _('%(n)s tags with nothing in them', n=empties|length) }}
+        <span class="font-normal text-slate-400">&mdash; {{ _('open to fill one in by hand') }}</span>
+      </summary>
+      <div class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden mt-2">
+        {% for view in empties %}{{ field_row(view, taxonomy, field_prefix) }}{% endfor %}
+      </div>
+    </details>
+  {% endif %}
+
+  <div class="sticky bottom-0 bg-white/95 backdrop-blur border-t border-slate-200 py-3 flex items-center gap-4">
+    <button type="submit"
+      class="px-6 py-2.5 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 transition-colors">
+      {{ _('Save description') }}
+    </button>
+    <span class="text-xs text-slate-500">
+      {{ _('Only boxes you changed are saved, and a re-run never overwrites them. Emptying a box you filled restores what the extraction found.') }}
+    </span>
+  </div>
+</form>
 
 {% if running %}
 <script>
