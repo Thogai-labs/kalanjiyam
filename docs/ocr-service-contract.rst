@@ -1,4 +1,4 @@
-OCR Service Response Contract (v2.1)
+OCR Service Response Contract (v2.2)
 =====================================
 
 This document is the authoritative, **engine-agnostic** contract between the
@@ -6,6 +6,24 @@ Kalanjiyam editing frontend and any OCR engine or model served through the OCR
 service.  Hand this to the OCR agent / service / model team.  Any engine that
 emits this shape — classical OCR, layout models, or VLM-based OCR — plugs into
 the editor with no frontend changes.
+
+Changes from v2.1:
+
+- ``page_p05`` is a new **required key with a nullable value**.  Emit ``words``
+  on text-bearing blocks where your engine has sub-block scores, or send a
+  top-level ``page_p05``.  An engine with no confidence signal at all sends
+  ``"page_p05": null`` and ``"page_confidence": null`` — the *key* is still
+  required, because ``null`` declares "confidence-blind" while an absent key is
+  indistinguishable from a bug.  See "Confidence-blind engines" below.
+- ``blocks[].id`` must be **stable** for a given (image, engine, model version).
+  Descriptive metadata cites block ids as evidence, linking a catalogue fact back
+  to a region of the page image; ids that reshuffle between runs silently
+  repoint those citations.  Declare ``stable_block_ids: false`` if your engine
+  cannot guarantee this.
+- ``running-header``, ``page-number`` and ``footnote`` blocks must carry their
+  true ``type`` when emitted at all.  Omitting them remains fine; mislabelling
+  them as ``paragraph`` is not, because repeated headers then read as document
+  titles to downstream extraction.
 
 Changes from v1 & v2.0:
 
@@ -29,7 +47,7 @@ return JSON with ``Content-Type: application/json``.
 .. code-block:: json
 
     {
-      "contract_version": "2.1",
+      "contract_version": "2.2",
       "engine": "surya",
       "model": {"name": "surya-rec", "version": "0.6.1"},
       "source_type": "scan",
@@ -203,11 +221,12 @@ Per-block fields
   ``null`` is acceptable for figures or blocks with no text.  Drives the
   ``lang`` attribute on block elements (font selection and spell-checking).
 
-``words`` (array, optional — word/line-level granularity)
-  Fine-grained recognition spans inside the block, in reading order.  Emit
-  this **if your engine produces word- or line-level results** — the editor
+``words`` (array, required on text-bearing blocks where sub-block scores exist)
+  Fine-grained recognition spans inside the block, in reading order.  The editor
   uses it for in-block confidence highlighting ("show me the exact words the
-  model was unsure about").  Each item:
+  model was unsure about"), and the platform derives **p05** from it.  An engine
+  with no sub-block scores sends a top-level ``page_p05`` instead; one with no
+  confidence signal at all sends ``page_p05: null``.  Each item:
 
   .. code-block:: json
 
@@ -228,6 +247,34 @@ Per-block fields
 
 ----
 
+Confidence-blind engines
+------------------------
+
+Several engines in service (``chandra``, ``glm-ocr``, ``dots-ocr``) are
+VLM-based and expose no per-token or per-word probability.  They are not
+"usually missing" confidence — they are structurally incapable of producing it,
+and nothing on the service side can invent it honestly.
+
+Such an engine sends ``page_confidence: null``, ``page_p05: null``, block
+``confidence: null``, and no ``words``.  Keep the keys; only the values are
+null.  Do not substitute ``0.0`` (which would exclude every page from
+downstream processing) or ``0.9`` (which claims quality nothing measured).
+
+The cost is real and is recorded rather than hidden: the OCR-quality gate that
+decides whether a page's text is trustworthy enough for descriptive-metadata
+extraction cannot run on these engines.  Kalanjiyam propagates the ``null``
+through its rollups — averaging only over pages that have a score and reporting
+how many did not — and notes the absence in the description's ``DESCRIPTION``
+element (ISAD(G) Area 7), which exists precisely to say where the evidence is
+weak.  Evidence verification is unaffected: it checks quotes against the OCR
+text itself, so it works identically on every engine, and on these engines it
+is the only quality signal there is.
+
+Deriving confidence from vLLM token logprobs would restore the gate, but that is
+engine-level work outside this contract and is **not** required by v2.2.
+
+----
+
 What NOT to include
 -------------------
 
@@ -235,7 +282,8 @@ What NOT to include
   ``content`` for non-table blocks.  OCR engines are unreliable about
   formatting and it shows as literal HTML tags in the editor.
 - Do not include ``running-header`` or ``page-number`` blocks if the content
-  adds no value for the transcription (e.g. repeated "Page 12").
+  adds no value for the transcription (e.g. repeated "Page 12").  If you do
+  include them, type them as such — never as ``paragraph``.
 - Do not emit ``words`` without per-word ``confidence`` — geometry alone is
   not useful to the editor and bloats the payload.
 - Do not invent confidence values.  ``null`` is always better than a

@@ -607,6 +607,10 @@ def metadata_test(slug):
 
     data = project_.extracted_metadata or {}
     document = data.get(ARCHIVAL_KEY)
+    if document is not None:
+        # Documents stored before the codes were renamed are keyed by the old
+        # short tags; rewrite on read so they still render.
+        document = at.migrate_document(document)
     form = ArchivalTestForm()
 
     if form.validate_on_submit():

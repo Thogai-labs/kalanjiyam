@@ -22,6 +22,7 @@ The two pieces worth understanding:
 
 from __future__ import annotations
 
+import hashlib
 import html
 import math
 import re
@@ -87,6 +88,21 @@ SAMPLING_TIERS = (
 #: Number of short samples handed to the language-id persona.
 LANGUAGE_ID_SAMPLES = 3
 LANGUAGE_ID_SAMPLE_CHARS = 1_000
+
+#: Token budget for page text in one archival-extraction window.
+#:
+#: Derived from the 32,768-token context: roughly 3,000 for the taxonomy
+#: instruction, 4,500 reserved for output (entity lists carrying an evidence
+#: quote per value are verbose), and a safety margin. Unlike the sampling
+#: budgets above, this one is spent repeatedly until the whole document has been
+#: read, so it governs how *many* calls a document costs, not how much of it is
+#: seen.
+WINDOW_TOKEN_BUDGET = 20_000
+
+#: Pages repeated between consecutive windows. Entities and dates straddle page
+#: breaks -- a letter's signature block routinely lands on the following page --
+#: so without an overlap the reduce loses exactly the values that sit on a seam.
+WINDOW_OVERLAP_PAGES = 1
 
 #: Batch size for streaming page text out of the database.
 _STREAM_BATCH = 250
@@ -603,6 +619,266 @@ def sample_for_language_id(
         LANGUAGE_ID_SAMPLE_CHARS * max(1, len(unique)),
     )
     return _assemble(session, unique, budget)
+
+
+# --------------------------------------------------------------------------
+# Full-text windowing (archival extraction)
+#
+# Sampling answers "what is this book about?" from a fraction of it. Archival
+# description asks "who and what is named anywhere in it?", which is a recall
+# problem: the one letter on folio 187 naming a person is exactly what sampling
+# drops. So the whole document is read, in budget-sized windows.
+# --------------------------------------------------------------------------
+
+
+@dataclass
+class Window:
+    """One unit of work for the extraction service."""
+
+    #: 1-based, matching `window.index` in the request.
+    index: int
+    #: Total windows in the plan, so a request can say "3 of 24".
+    total: int
+    rows: list[TrackRow] = field(default_factory=list)
+    #: Request-shaped page objects: page_slug, ocr_confidence, blocks.
+    pages: list[dict] = field(default_factory=list)
+    #: SHA-256 over the window's block text, for incremental re-runs.
+    text_hash: str = ""
+    chars: int = 0
+
+    @property
+    def page_slugs(self) -> list[str]:
+        return [row.slug for row in self.rows]
+
+
+def plan_windows(
+    rows: list[TrackRow], budget_chars: int, overlap: int = WINDOW_OVERLAP_PAGES
+) -> list[list[TrackRow]]:
+    """Group ordered pages into budget-sized windows.
+
+    Planned from `TrackRow.char_len`, which `latest_revisions_by_track` already
+    selected, so a 2,000-page document can be planned without loading any text.
+
+    A page is never split across windows: a page cut mid-letter destroys the
+    context that makes a signature or a date attributable. A single page larger
+    than the budget therefore gets a window to itself and is truncated at send
+    time rather than silently dropped.
+    """
+    usable = _usable(rows)
+    if not usable:
+        return []
+
+    windows: list[list[TrackRow]] = []
+    current: list[TrackRow] = []
+    used = 0
+
+    for row in usable:
+        if current and used + row.char_len > budget_chars:
+            windows.append(current)
+            # Carry the tail pages forward so values on the seam are seen twice.
+            carry = current[-overlap:] if overlap else []
+            current = list(carry)
+            used = sum(r.char_len for r in current)
+        current.append(row)
+        used += row.char_len
+
+    if current:
+        windows.append(current)
+    return windows
+
+
+def _stream_documents(session, rows: list[TrackRow]):
+    """Yield (row, content, document) in batches, holding one batch in memory."""
+    by_revision = {r.revision_id: r for r in rows}
+    revision_ids = list(by_revision)
+    for i in range(0, len(revision_ids), _STREAM_BATCH):
+        chunk = revision_ids[i : i + _STREAM_BATCH]
+        results = session.query(
+            db.Revision.id, db.Revision.content, db.Revision.document
+        ).filter(db.Revision.id.in_(chunk))
+        for revision_id, content, document in results:
+            yield by_revision[revision_id], content, document
+
+
+def blocks_for_request(row: TrackRow, content: str, document) -> list[dict]:
+    """The typed blocks for one page, as the extraction request wants them.
+
+    Block ids are the anchor an evidence span cites, and the join back to the
+    bbox stored in `Revision.document` -- which is what lets a catalogue fact
+    link to a region of the page image. A page with no structured document still
+    yields one synthetic block so its text is not lost; evidence against it can
+    still be verified by quote, it just cannot resolve to an image region.
+    """
+    blocks = (document or {}).get("blocks") if isinstance(document, dict) else None
+
+    if not blocks:
+        text = to_plain_text(content or "", row.content_format, row.version_key)
+        if not text:
+            return []
+        return [{"id": "", "type": "paragraph", "reading_order": 1, "text": text}]
+
+    out = []
+    for index, block in enumerate(blocks, start=1):
+        if not isinstance(block, dict):
+            continue
+        text = to_plain_text(
+            block.get("content") or "", row.content_format, row.version_key
+        )
+        if not text:
+            continue
+        out.append(
+            {
+                "id": str(block.get("id") or ""),
+                "type": str(block.get("type") or "paragraph"),
+                "reading_order": block.get("reading_order") or index,
+                "text": text,
+            }
+        )
+    out.sort(key=lambda b: b["reading_order"])
+    return out
+
+
+def load_window(
+    session,
+    index: int,
+    total: int,
+    rows: list[TrackRow],
+    ocr_confidence: dict | None = None,
+    budget_chars: int | None = None,
+) -> Window:
+    """Fetch the text for one planned window and shape it for the request.
+
+    `ocr_confidence` maps page slug -> confidence, and a missing or None entry is
+    passed through as None. Three of the OCR engines in service produce no
+    confidence at all, so null is a legitimate value that must reach the request
+    unchanged rather than being defaulted.
+    """
+    confidences = ocr_confidence or {}
+    loaded = {
+        row.revision_id: (content, document)
+        for row, content, document in _stream_documents(session, rows)
+    }
+
+    pages, kept, used = [], [], 0
+    for row in rows:
+        content, document = loaded.get(row.revision_id, ("", None))
+        blocks = blocks_for_request(row, content, document)
+        if not blocks:
+            continue
+
+        if budget_chars is not None:
+            room = budget_chars - used
+            if room <= 0:
+                break
+            blocks = _fit_blocks(blocks, room)
+            if not blocks:
+                break
+
+        used += sum(len(b["text"]) for b in blocks)
+        kept.append(row)
+        pages.append(
+            {
+                "page_slug": row.slug,
+                "ocr_confidence": confidences.get(row.slug),
+                "blocks": blocks,
+            }
+        )
+
+    window = Window(index=index, total=total, rows=kept, pages=pages, chars=used)
+    window.text_hash = window_hash(pages)
+    return window
+
+
+def _fit_blocks(blocks: list[dict], room: int) -> list[dict]:
+    """Take whole blocks until `room` runs out, truncating at most the last one."""
+    out, used = [], 0
+    for block in blocks:
+        length = len(block["text"])
+        if used + length <= room:
+            out.append(block)
+            used += length
+            continue
+        remaining = room - used
+        if remaining > 0:
+            out.append({**block, "text": block["text"][:remaining]})
+        break
+    return out
+
+
+def window_hash(pages: list[dict]) -> str:
+    """Stable digest of a window's text, for skipping unchanged work on re-run.
+
+    Covers page slugs and block ids as well as text, so a page reordered or
+    re-OCR'd into different blocks counts as changed even if the words did not.
+    """
+    digest = hashlib.sha256()
+    for page in pages:
+        digest.update(b"\x00")
+        digest.update(str(page.get("page_slug") or "").encode("utf-8", "replace"))
+        for block in page.get("blocks") or []:
+            digest.update(b"\x01")
+            digest.update(str(block.get("id") or "").encode("utf-8", "replace"))
+            digest.update(b"\x02")
+            digest.update(str(block.get("text") or "").encode("utf-8", "replace"))
+    return digest.hexdigest()
+
+
+def iter_windows(
+    session,
+    tracks: dict[int, TrackRow],
+    scripts: dict,
+    ocr_confidence: dict | None = None,
+):
+    """Yield every `Window` needed to read a project end to end.
+
+    Windows are planned up front from the page lengths already in hand, then
+    loaded one at a time, so peak memory is one window rather than one document.
+    """
+    budget = math.floor(WINDOW_TOKEN_BUDGET * _chars_per_token(scripts))
+    plan = plan_windows(list(tracks.values()), budget)
+    total = len(plan)
+    for index, rows in enumerate(plan, start=1):
+        window = load_window(
+            session, index, total, rows, ocr_confidence, budget_chars=budget
+        )
+        if window.pages:
+            yield window
+
+
+def page_ocr_confidence(session, project_id: int) -> dict:
+    """Page slug -> OCR confidence, for the pages that have one.
+
+    Reads `BatchOcrPage`, which is keyed by (batch item, 1-based page number)
+    rather than by page id, so it is joined to slugs through page order.
+
+    Pages OCR'd by a confidence-blind engine map to None. That None is
+    meaningful and is preserved end to end: coercing it to 0.0 would quarantine
+    every page those engines touch, and 1.0 would assert quality nothing
+    measured.
+    """
+    orders = {
+        order: slug
+        for order, slug in session.query(db.Page.order, db.Page.slug).filter(
+            db.Page.project_id == project_id
+        )
+    }
+    if not orders:
+        return {}
+
+    # Page.order is 0-based in some projects and 1-based in others; anchor on
+    # the lowest order present rather than assuming.
+    base = min(orders)
+    out: dict = {}
+    rows = (
+        session.query(db.BatchOcrPage.page_number, db.BatchOcrPage.confidence)
+        .join(db.BatchItem, db.BatchOcrPage.batch_item_id == db.BatchItem.id)
+        .filter(db.BatchItem.project_id == project_id)
+    )
+    for page_number, confidence in rows:
+        slug = orders.get(base + (page_number or 1) - 1)
+        if slug is not None:
+            out[slug] = confidence
+    return out
 
 
 # --------------------------------------------------------------------------

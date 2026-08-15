@@ -254,9 +254,17 @@ def _run(project_id: int, *, persona: str, instructions: str, max_chars: int) ->
     if result.ok:
         # Keys the model invented are quarantined rather than written into the
         # document, so the tab shows the taxonomy and not the model's guesses.
-        document = {k: v for k, v in result.data.items() if k in at.BY_CODE}
+        # Write-locked tags are dropped here too: the prompt never asks for them,
+        # so anything arriving under those keys was fabricated.
+        document = {
+            k: v
+            for k, v in result.data.items()
+            if k in at.BY_CODE and k not in at.WRITE_LOCKED
+        }
         run["parsed_keys"] = sorted(document)
         run["unknown_keys"] = sorted(set(result.data) - set(at.BY_CODE))
+        run["locked_keys_returned"] = sorted(set(result.data) & at.WRITE_LOCKED)
+        run["taxonomy_version"] = at.TAXONOMY_VERSION
         LOG.info(
             "archival test ok: project=%s tags=%s/%s model=%s",
             project_id, len(document), len(at.TAGS), result.model,

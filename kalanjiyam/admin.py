@@ -1320,6 +1320,125 @@ class PlatformView(AdminBaseView):
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
 
+    @expose("/metadata_metrics/export_csv")
+    def metadata_metrics_export_csv(self):
+        """Per-document archival extraction metrics, one row per run.
+
+        Deliberately its own export rather than extra columns on the batch-OCR
+        CSV: an extraction run belongs to a project, while a `BatchItem` belongs
+        to a job, so there is no honest single row for both.
+
+        Every confidence column can legitimately be blank. Three of the OCR
+        engines in service produce no confidence signal, so a document read with
+        one has nothing to average -- which is why "Pages w/o Confidence" sits
+        beside the average rather than the average being quietly reported as 0.
+        """
+        require_platform_super_admin()
+        session = q.get_session()
+        import csv
+        import io
+        from flask import Response
+        from kalanjiyam.models.archival import MetadataExtractionRun
+        from kalanjiyam.models.proofing import Project
+
+        runs = (
+            session.query(MetadataExtractionRun, Project.slug)
+            .outerjoin(Project, MetadataExtractionRun.project_id == Project.id)
+            .order_by(MetadataExtractionRun.id.desc())
+            .all()
+        )
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "Run ID",
+            "Project",
+            "Status",
+            "Engine",
+            "Model",
+            "Model Version",
+            "Taxonomy Version",
+            "Windows",
+            "Windows Failed",
+            "Pages Read",
+            "Pages Total",
+            "Extraction Coverage (%)",
+            "Fields Filled",
+            "Fields Total",
+            "Field Coverage (%)",
+            "Avg Field Conf (%)",
+            "Min Field Conf (%)",
+            "Fields <0.7",
+            "Evidence Spans",
+            "Evidence Verified",
+            "Evidence Verified (%)",
+            "Avg Source OCR Conf (%)",
+            "Pages w/o Confidence",
+            "Prompt Tokens",
+            "Completion Tokens",
+            "Total Engine Latency (Sec)",
+            "Avg Engine Latency (Sec)",
+            "Metadata Size (Bytes)",
+            "Created At",
+            "Completed At",
+            "Error Message",
+        ])
+
+        def pct(value):
+            # "" rather than 0 for a missing score: the two mean different
+            # things and a spreadsheet average must not conflate them.
+            return round(value * 100, 1) if value is not None else ""
+
+        for run, slug in runs:
+            windows = run.windows_completed or 0
+            total_latency = run.total_engine_latency_ms
+            latency_sec = (total_latency / 1000.0) if total_latency else None
+            writer.writerow([
+                run.id,
+                slug or "",
+                run.status,
+                run.engine or "",
+                run.model_name or "",
+                run.model_version or "",
+                run.taxonomy_version or "",
+                run.windows_total if run.windows_total is not None else "",
+                run.windows_failed if run.windows_failed is not None else "",
+                run.pages_read if run.pages_read is not None else "",
+                run.pages_total if run.pages_total is not None else "",
+                pct(run.extraction_coverage),
+                run.fields_filled if run.fields_filled is not None else "",
+                run.fields_total if run.fields_total is not None else "",
+                pct(run.field_coverage),
+                pct(run.avg_field_confidence),
+                pct(run.min_field_confidence),
+                run.low_conf_field_count if run.low_conf_field_count is not None else "",
+                run.evidence_spans if run.evidence_spans is not None else "",
+                run.evidence_verified if run.evidence_verified is not None else "",
+                pct(run.evidence_verified_rate),
+                pct(run.avg_source_ocr_confidence),
+                run.pages_without_confidence
+                if run.pages_without_confidence is not None
+                else "",
+                run.total_prompt_tokens or 0,
+                run.total_completion_tokens or 0,
+                round(latency_sec, 2) if latency_sec is not None else "",
+                round(latency_sec / windows, 2)
+                if (latency_sec is not None and windows > 0)
+                else "",
+                run.metadata_data_size_bytes or 0,
+                run.created_at,
+                run.completed_at or "",
+                run.error_message or "",
+            ])
+
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={
+                "Content-Disposition": "attachment; filename=metadata_extraction_metrics.csv"
+            },
+        )
+
     @expose("/cli_batch_ocr/<int:job_id>/export_pages_csv")
     def cli_batch_ocr_export_pages_csv(self, job_id):
         require_platform_super_admin()

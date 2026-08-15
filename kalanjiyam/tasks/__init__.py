@@ -41,6 +41,7 @@ app = Celery(
         "kalanjiyam.tasks.s3_batch",
         "kalanjiyam.tasks.search_index",
         "kalanjiyam.tasks.metadata",
+        "kalanjiyam.tasks.archival_extract",
         # SMOKE TEST: delete with the rest of the archival taxonomy experiment.
         "kalanjiyam.tasks.archival_test",
     ],
@@ -66,6 +67,10 @@ app.conf.update(
         'kalanjiyam.tasks.comparison.*': {'queue': 'ocr', 'routing_key': 'ocr'},
         'kalanjiyam.tasks.s3_batch.*': {'queue': 's3_batch', 'routing_key': 's3_batch'},
         'kalanjiyam.tasks.search_index.*': {'queue': 'search_index', 'routing_key': 'search_index'},
+        # Its own queue: a full-text pass is many minutes of continuous GPU on
+        # the same service that answers live OCR. On the `ocr` queue it would
+        # starve the editor.
+        'kalanjiyam.tasks.archival_extract.*': {'queue': 'metadata', 'routing_key': 'metadata'},
     },
     # Queue configuration
     task_default_queue='default',
