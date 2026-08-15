@@ -7,6 +7,7 @@ import logging
 import re
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 
 from flask import (
     Blueprint,
@@ -1089,7 +1090,7 @@ def ocr(project_slug, page_slug):
         consume_ocr_credit_for_project(project_)
 
         # Extract visual elements if blocks are returned
-        if ocr_response.blocks:
+        if ocr_response.blocks and image_path:
             from kalanjiyam.utils.ocr_cropper import crop_ocr_response_elements
             try:
                 crop_ocr_response_elements(
@@ -1229,6 +1230,9 @@ def ocr(project_slug, page_slug):
                     status='PENDING'
                 )
 
+            plain_text = doc.to_plain_text() if doc else (ocr_response.text_content or "")
+            doc_json_str = json.dumps(doc.to_dict()) if doc else ""
+
             ocr_page.ocr_latency_ms = page_ocr_latency_ms
             ocr_page.status = 'COMPLETED'
             ocr_page.completed_at = datetime.utcnow()
@@ -1236,7 +1240,7 @@ def ocr(project_slug, page_slug):
             ocr_page.confidence = getattr(ocr_response, "page_confidence", None)
             ocr_page.p05 = getattr(ocr_response, "p05", None)
             ocr_page.blocks = getattr(ocr_response, "blocks_count", None) or (len(doc.blocks) if doc else None)
-            ocr_page.chars = getattr(ocr_response, "chars_count", None) or (len(plain_text) if plain_text else None)
+            ocr_page.chars = getattr(ocr_response, "chars_count", None) or len(plain_text)
             ocr_page.engine_latency_ms = getattr(ocr_response, "engine_latency_ms", None)
 
             storage = get_storage()
@@ -1247,8 +1251,6 @@ def ocr(project_slug, page_slug):
             except Exception:
                 pass
 
-            plain_text = doc.to_plain_text() or ocr_response.text_content or ""
-            doc_json_str = json.dumps(doc.to_dict()) if doc else ""
             ocr_page.ocr_data_size_bytes = len(plain_text.encode('utf-8')) + len(doc_json_str.encode('utf-8'))
 
             page_crop_bytes = 0
@@ -1264,6 +1266,7 @@ def ocr(project_slug, page_slug):
                             pass
             ocr_page.cropped_image_size_bytes = page_crop_bytes
             session.add(ocr_page)
+            session.flush()
 
             # Combine and aggregate all completed single-page metrics for the PDF / book
             item_pages = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, status='COMPLETED').all()
@@ -1275,8 +1278,10 @@ def ocr(project_slug, page_slug):
             
             conf_list = [p.confidence for p in item_pages if p.confidence is not None]
             batch_item.avg_confidence = (sum(conf_list) / len(conf_list)) if conf_list else None
+            batch_item.min_confidence = min(conf_list) if conf_list else None
             p05_list = [p.p05 for p in item_pages if p.p05 is not None]
             batch_item.avg_p05 = (sum(p05_list) / len(p05_list)) if p05_list else None
+            batch_item.low_conf_page_count = sum(1 for p in item_pages if (p.confidence is not None and p.confidence < 0.70) or (p.p05 is not None and p.p05 < 0.70))
             batch_item.total_blocks = sum(p.blocks or 0 for p in item_pages)
             batch_item.total_chars = sum(p.chars or 0 for p in item_pages)
             batch_item.total_engine_latency_ms = sum(p.engine_latency_ms or 0 for p in item_pages)
@@ -1786,6 +1791,7 @@ def translate(project_slug, page_slug):
                     ocr_page.status = 'COMPLETED'
                     ocr_page.completed_at = datetime.utcnow()
                     session.add(ocr_page)
+                    session.flush()
 
                     # Recalculate combined totals for the single PDF / project translation
                     item_pages = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, status='COMPLETED').all()
