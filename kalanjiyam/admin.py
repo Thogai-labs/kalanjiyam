@@ -1320,138 +1320,25 @@ class PlatformView(AdminBaseView):
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
 
-    @expose("/metadata_metrics/export_csv")
-    def metadata_metrics_export_csv(self):
-        """Per-document archival extraction metrics, one row per run.
-
-        Deliberately its own export rather than extra columns on the batch-OCR
-        CSV: an extraction run belongs to a project, while a `BatchItem` belongs
-        to a job, so there is no honest single row for both.
-
-        Every confidence column can legitimately be blank. Three of the OCR
-        engines in service produce no confidence signal, so a document read with
-        one has nothing to average -- which is why "Pages w/o Confidence" sits
-        beside the average rather than the average being quietly reported as 0.
-        """
+    @expose("/metadata_metrics")
+    def metadata_metrics(self):
+        """Extraction runs across every document, the OCR dashboard's sibling."""
         require_platform_super_admin()
         session = q.get_session()
-        import csv
-        import io
-        from flask import Response
-        from kalanjiyam.models.archival import MetadataExtractionRun
-        from kalanjiyam.models.proofing import Project
-
-        runs = (
-            session.query(MetadataExtractionRun, Project.slug)
-            .outerjoin(Project, MetadataExtractionRun.project_id == Project.id)
-            .order_by(MetadataExtractionRun.id.desc())
-            .all()
+        return render_template(
+            "admin/metadata_metrics.html",
+            **_metadata_metrics_payload(
+                session,
+                status=request.args.get("status", "all"),
+                search=request.args.get("q", "").strip(),
+            ),
         )
 
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow([
-            "Run ID",
-            "Project",
-            "Status",
-            "Engine",
-            "Model",
-            "Model Version",
-            "Taxonomy Version",
-            "Windows",
-            "Windows Failed",
-            "Pages Read",
-            "Pages Total",
-            "Extraction Coverage (%)",
-            "Fields Filled",
-            "Fields Total",
-            "Field Coverage (%)",
-            "Avg Field Conf (%)",
-            "Min Field Conf (%)",
-            "Fields <0.7",
-            "Evidence Spans",
-            "Evidence Verified",
-            "Evidence Verified (%)",
-            "Avg Source OCR Conf (%)",
-            "Pages w/o Confidence",
-            "Prompt Tokens (In)",
-            "Completion Tokens (Out)",
-            "Total Tokens",
-            "Tokens / Window",
-            "Tokens / Page Read",
-            "Total Engine Latency (Sec)",
-            "Avg Engine Latency (Sec)",
-            "Metadata Size (Bytes)",
-            "Created At",
-            "Completed At",
-            "Error Message",
-        ])
+    @expose("/metadata_metrics/export_csv")
+    def metadata_metrics_export_csv(self):
+        require_platform_super_admin()
+        return _metadata_metrics_csv_response(q.get_session())
 
-        def pct(value):
-            # "" rather than 0 for a missing score: the two mean different
-            # things and a spreadsheet average must not conflate them.
-            return round(value * 100, 1) if value is not None else ""
-
-        for run, slug in runs:
-            windows = run.windows_completed or 0
-            total_latency = run.total_engine_latency_ms
-            latency_sec = (total_latency / 1000.0) if total_latency else None
-            writer.writerow([
-                run.id,
-                slug or "",
-                run.status,
-                run.engine or "",
-                run.model_name or "",
-                run.model_version or "",
-                run.taxonomy_version or "",
-                run.windows_total if run.windows_total is not None else "",
-                run.windows_failed if run.windows_failed is not None else "",
-                run.pages_read if run.pages_read is not None else "",
-                run.pages_total if run.pages_total is not None else "",
-                pct(run.extraction_coverage),
-                run.fields_filled if run.fields_filled is not None else "",
-                run.fields_total if run.fields_total is not None else "",
-                pct(run.field_coverage),
-                pct(run.avg_field_confidence),
-                pct(run.min_field_confidence),
-                run.low_conf_field_count if run.low_conf_field_count is not None else "",
-                run.evidence_spans if run.evidence_spans is not None else "",
-                run.evidence_verified if run.evidence_verified is not None else "",
-                pct(run.evidence_verified_rate),
-                pct(run.avg_source_ocr_confidence),
-                run.pages_without_confidence
-                if run.pages_without_confidence is not None
-                else "",
-                # "" rather than 0 when the service reported no usage at all --
-                # a run that cost nothing and a run that did not say what it cost
-                # must not average together.
-                run.total_prompt_tokens if run.total_prompt_tokens is not None else "",
-                run.total_completion_tokens
-                if run.total_completion_tokens is not None
-                else "",
-                run.total_tokens if run.total_tokens is not None else "",
-                round(run.tokens_per_window, 1)
-                if run.tokens_per_window is not None
-                else "",
-                # An average over an uneven divisor -- see `tokens_per_page`.
-                round(run.tokens_per_page, 1) if run.tokens_per_page is not None else "",
-                round(latency_sec, 2) if latency_sec is not None else "",
-                round(latency_sec / windows, 2)
-                if (latency_sec is not None and windows > 0)
-                else "",
-                run.metadata_data_size_bytes or 0,
-                run.created_at,
-                run.completed_at or "",
-                run.error_message or "",
-            ])
-
-        return Response(
-            output.getvalue(),
-            mimetype="text/csv",
-            headers={
-                "Content-Disposition": "attachment; filename=metadata_extraction_metrics.csv"
-            },
-        )
 
     @expose("/cli_batch_ocr/<int:job_id>/export_pages_csv")
     def cli_batch_ocr_export_pages_csv(self, job_id):
@@ -1916,6 +1803,238 @@ def _handle_search_index_action(session, *, org_ids, allow_all, forced_org_id=No
         flash(str(e), "error")
 
 
+# Archival metadata extraction metrics
+# ------------------------------------
+#
+# The OCR/translation dashboard is organised by batch job because that is the
+# unit those pipelines run in. Extraction has no jobs: it runs per project, one
+# run at a time, so the unit here is the run and the list is a list of documents.
+# Everything else -- filters, summary cards, CSV export, org scoping -- follows
+# the same shape, because it answers the same question about a different pipeline.
+
+
+def _org_project_ids(session, org_id: int) -> list[int]:
+    """Project ids belonging to one organization."""
+    from kalanjiyam.models.group import ProjectGroups
+
+    return [
+        pg.project_id
+        for pg in session.query(ProjectGroups.project_id)
+        .filter_by(group_id=org_id)
+        .all()
+    ]
+
+
+def _metadata_runs(session, project_ids=None, status="all", search=""):
+    """Extraction runs, newest first, joined to the project they describe.
+
+    `project_ids=None` means every project; an empty list means none, which is
+    not the same thing and must not silently widen to everything.
+    """
+    from sqlalchemy import or_
+
+    from kalanjiyam.models.archival import MetadataExtractionRun as Run
+    from kalanjiyam.models.proofing import Project
+
+    query = session.query(Run, Project).outerjoin(
+        Project, Run.project_id == Project.id
+    )
+
+    if project_ids is not None:
+        if not project_ids:
+            return []
+        query = query.filter(Run.project_id.in_(project_ids))
+
+    if status == "completed":
+        query = query.filter(Run.status == "COMPLETED")
+    elif status == "partial":
+        query = query.filter(Run.status == "PARTIAL")
+    elif status == "failed":
+        query = query.filter(Run.status == "FAILED")
+    elif status == "running":
+        query = query.filter(Run.status.in_(["PENDING", "IN_PROGRESS"]))
+
+    if search:
+        query = query.filter(
+            or_(
+                Project.slug.ilike(f"%{search}%"),
+                Project.display_title.ilike(f"%{search}%"),
+            )
+        )
+
+    return query.order_by(Run.id.desc()).all()
+
+
+def _metadata_metrics_payload(
+    session, *, project_ids=None, is_org_admin=False, org=None, status="all", search=""
+):
+    """Rows and totals for the extraction dashboard."""
+    rows = _metadata_runs(session, project_ids, status, search)
+
+    def _mean(values):
+        values = [v for v in values if v is not None]
+        return (sum(values) / len(values)) if values else None
+
+    # Token totals skip runs that reported no usage rather than counting them as
+    # zero -- the same rule the CSV and the per-run panel follow.
+    tokens_in = [r.total_prompt_tokens for r, _ in rows if r.total_prompt_tokens]
+    tokens_out = [r.total_completion_tokens for r, _ in rows if r.total_completion_tokens]
+
+    return {
+        "runs": [
+            {
+                "run": run,
+                "project": project,
+                "slug": project.slug if project else None,
+                "title": (
+                    project.display_title or project.slug if project else _("(deleted)")
+                ),
+            }
+            for run, project in rows
+        ],
+        "summary": {
+            "runs": len(rows),
+            "documents": len({r.project_id for r, _ in rows}),
+            "pages_read": sum(r.pages_read or 0 for r, _ in rows),
+            "pages_total": sum(r.pages_total or 0 for r, _ in rows),
+            "failed": sum(1 for r, _ in rows if r.status == "FAILED"),
+            "partial": sum(1 for r, _ in rows if r.status == "PARTIAL"),
+            "tokens_in": sum(tokens_in) if tokens_in else None,
+            "tokens_out": sum(tokens_out) if tokens_out else None,
+            "avg_evidence_verified": _mean(
+                [r.evidence_verified_rate for r, _ in rows]
+            ),
+            "avg_field_confidence": _mean([r.avg_field_confidence for r, _ in rows]),
+        },
+        "current_status": status,
+        "search_query": search,
+        "is_org_admin": is_org_admin,
+        "org": org,
+    }
+
+
+def _metadata_metrics_csv_response(session, project_ids=None):
+    """Per-document extraction metrics, one row per run.
+
+    Deliberately its own export rather than extra columns on the batch-OCR CSV:
+    an extraction run belongs to a project, while a `BatchItem` belongs to a job,
+    so there is no honest single row for both.
+
+    Every confidence column can legitimately be blank. Three of the OCR engines
+    in service produce no confidence signal, so a document read with one has
+    nothing to average -- which is why "Pages w/o Confidence" sits beside the
+    average rather than the average being quietly reported as 0.
+    """
+    import csv
+    import io
+
+    from flask import Response
+
+    rows = _metadata_runs(session, project_ids)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Run ID",
+        "Project",
+        "Status",
+        "Engine",
+        "Model",
+        "Model Version",
+        "Taxonomy Version",
+        "Windows",
+        "Windows Failed",
+        "Pages Read",
+        "Pages Total",
+        "Extraction Coverage (%)",
+        "Fields Filled",
+        "Fields Total",
+        "Field Coverage (%)",
+        "Avg Field Conf (%)",
+        "Min Field Conf (%)",
+        "Fields <0.7",
+        "Evidence Spans",
+        "Evidence Verified",
+        "Evidence Verified (%)",
+        "Avg Source OCR Conf (%)",
+        "Pages w/o Confidence",
+        "Prompt Tokens (In)",
+        "Completion Tokens (Out)",
+        "Total Tokens",
+        "Tokens / Window",
+        "Tokens / Page Read",
+        "Total Engine Latency (Sec)",
+        "Avg Engine Latency (Sec)",
+        "Metadata Size (Bytes)",
+        "Created At",
+        "Completed At",
+        "Error Message",
+    ])
+
+    def pct(value):
+        # "" rather than 0 for a missing score: the two mean different things
+        # and a spreadsheet average must not conflate them.
+        return round(value * 100, 1) if value is not None else ""
+
+    def num(value):
+        return value if value is not None else ""
+
+    for run, project in rows:
+        windows = run.windows_completed or 0
+        total_latency = run.total_engine_latency_ms
+        latency_sec = (total_latency / 1000.0) if total_latency else None
+        writer.writerow([
+            run.id,
+            project.slug if project else "",
+            run.status,
+            run.engine or "",
+            run.model_name or "",
+            run.model_version or "",
+            run.taxonomy_version or "",
+            num(run.windows_total),
+            num(run.windows_failed),
+            num(run.pages_read),
+            num(run.pages_total),
+            pct(run.extraction_coverage),
+            num(run.fields_filled),
+            num(run.fields_total),
+            pct(run.field_coverage),
+            pct(run.avg_field_confidence),
+            pct(run.min_field_confidence),
+            num(run.low_conf_field_count),
+            num(run.evidence_spans),
+            num(run.evidence_verified),
+            pct(run.evidence_verified_rate),
+            pct(run.avg_source_ocr_confidence),
+            num(run.pages_without_confidence),
+            # "" rather than 0 when the service reported no usage at all -- a run
+            # that cost nothing and a run that did not say must not average
+            # together.
+            num(run.total_prompt_tokens),
+            num(run.total_completion_tokens),
+            num(run.total_tokens),
+            round(run.tokens_per_window, 1) if run.tokens_per_window is not None else "",
+            # An average over an uneven divisor -- see `tokens_per_page`.
+            round(run.tokens_per_page, 1) if run.tokens_per_page is not None else "",
+            round(latency_sec, 2) if latency_sec is not None else "",
+            round(latency_sec / windows, 2)
+            if (latency_sec is not None and windows > 0)
+            else "",
+            run.metadata_data_size_bytes or 0,
+            run.created_at,
+            run.completed_at or "",
+            run.error_message or "",
+        ])
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=metadata_extraction_metrics.csv"
+        },
+    )
+
+
 class GroupsView(AdminBaseView):
     """Super-admin group management: list/create/edit/delete groups, manage users and books."""
 
@@ -2355,6 +2474,43 @@ class OrgAdminView(AdminBaseView):
         org_id = require_org_admin()
         session = q.get_session()
         return jsonify(_search_index_status_payload(session, [org_id], org_id=org_id))
+
+    @expose("/metadata_metrics")
+    def metadata_metrics(self):
+        """Extraction runs for this organization's documents only.
+
+        Scoped through `ProjectGroups`, the same join the batch dashboard uses.
+        An org with no projects gets an empty list rather than everyone's runs --
+        `_metadata_runs` distinguishes "no projects" from "all projects".
+        """
+        org_id = require_org_admin()
+        org = q.group(org_id)
+        if org is None:
+            abort(404)
+
+        session = q.get_session()
+        return render_template(
+            "admin/metadata_metrics.html",
+            **_metadata_metrics_payload(
+                session,
+                project_ids=_org_project_ids(session, org.id),
+                is_org_admin=True,
+                org=org,
+                status=request.args.get("status", "all"),
+                search=request.args.get("q", "").strip(),
+            ),
+        )
+
+    @expose("/metadata_metrics/export_csv")
+    def metadata_metrics_export_csv(self):
+        org_id = require_org_admin()
+        org = q.group(org_id)
+        if org is None:
+            abort(404)
+        session = q.get_session()
+        return _metadata_metrics_csv_response(
+            session, _org_project_ids(session, org.id)
+        )
 
     @expose("/cli_batch_ocr")
     @expose("/cli_batch_ocr/<int:job_id>")

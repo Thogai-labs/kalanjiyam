@@ -1,0 +1,169 @@
+{# Archival metadata extraction metrics, across every document.
+
+   The sibling of the OCR & translation dashboard, and organised the same way
+   except for the unit: OCR runs in batch jobs, extraction runs per project, so
+   a row here is one run of one document rather than one job over many. #}
+{% extends 'admin/master.html' %}
+{% import 'macros/admin.html' as admin %}
+
+{% block title %}{{ _('Metadata Extraction Metrics') }} | {{ _('Admin') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('metadata_metrics', current_user) }}
+{% endblock %}
+
+{% block content %}
+{% set view_endpoint = 'org_admin_view.metadata_metrics' if is_org_admin else 'platform_view.metadata_metrics' %}
+{% set export_endpoint = 'org_admin_view.metadata_metrics_export_csv' if is_org_admin else 'platform_view.metadata_metrics_export_csv' %}
+
+{{ admin.page_header(_('Metadata Extraction Metrics'),
+    _('Per-document runs of the archival description extractor: coverage, citation quality, and token cost.')) }}
+
+{# --- Summary ------------------------------------------------------------- #}
+<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+  {{ admin.stat_card(_('Runs'), summary.runs) }}
+  {{ admin.stat_card(_('Documents'), summary.documents) }}
+  {{ admin.stat_card(_('Pages read'), '%s / %s'|format(summary.pages_read, summary.pages_total)) }}
+  {{ admin.stat_card(_('Failed / partial'), '%s / %s'|format(summary.failed, summary.partial)) }}
+  {# Token totals skip runs whose service reported no usage, rather than
+     counting them as zero -- see `_metadata_metrics_payload`. #}
+  {{ admin.stat_card(_('Tokens in / out'),
+      '%s / %s'|format(summary.tokens_in if summary.tokens_in is not none else '—',
+                       summary.tokens_out if summary.tokens_out is not none else '—')) }}
+  {{ admin.stat_card(_('Evidence verified'),
+      ('%.0f%%'|format(summary.avg_evidence_verified * 100)) if summary.avg_evidence_verified is not none else '—') }}
+</div>
+
+{# --- Filters ------------------------------------------------------------- #}
+<div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 mb-6">
+  <div class="flex flex-wrap items-center gap-3">
+    <nav class="flex items-center gap-1 bg-slate-100/80 p-1.5 rounded-xl text-xs font-semibold text-slate-600">
+      {% for key, label in [('all', _('All')), ('completed', _('Complete')), ('partial', _('Partial')),
+                            ('failed', _('Failed')), ('running', _('Running'))] %}
+        <a href="{{ url_for(view_endpoint, status=key, q=search_query) }}"
+           class="px-4 py-2 rounded-lg transition-all {% if current_status == key %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
+          {{ label }}
+        </a>
+      {% endfor %}
+    </nav>
+
+    <form method="GET" action="{{ url_for(view_endpoint) }}" class="flex items-center gap-2">
+      <input type="hidden" name="status" value="{{ current_status }}">
+      <input type="text" name="q" value="{{ search_query }}" placeholder="{{ _('Search by project') }}"
+             class="rounded-xl border-slate-200 text-xs px-3 py-2 w-56">
+      <button type="submit" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700">
+        {{ _('Search') }}
+      </button>
+    </form>
+
+    <a href="{{ url_for(export_endpoint) }}"
+       class="ml-auto inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors shadow-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+      </svg>
+      {{ _('Export CSV') }}
+    </a>
+  </div>
+</div>
+
+{# --- Runs ---------------------------------------------------------------- #}
+{% if not runs %}
+  <div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 text-center text-sm text-slate-500">
+    {{ _('No extraction runs match this filter.') }}
+  </div>
+{% else %}
+<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm text-left">
+      <thead class="bg-slate-50 text-[10px] text-slate-500 uppercase tracking-wider">
+        <tr>
+          <th class="px-4 py-3 font-bold">{{ _('Run') }}</th>
+          <th class="px-4 py-3 font-bold">{{ _('Document') }}</th>
+          <th class="px-4 py-3 font-bold">{{ _('Status') }}</th>
+          <th class="px-4 py-3 font-bold">{{ _('Model') }}</th>
+          <th class="px-4 py-3 font-bold text-right" title="{{ _('Pages actually sent, of pages with text') }}">{{ _('Pages') }}</th>
+          <th class="px-4 py-3 font-bold text-right">{{ _('Windows') }}</th>
+          <th class="px-4 py-3 font-bold text-right" title="{{ _('Tags filled of the 22 in the schema') }}">{{ _('Tags') }}</th>
+          <th class="px-4 py-3 font-bold text-right" title="{{ _('Quotes found verbatim in the text we sent') }}">{{ _('Cited') }}</th>
+          <th class="px-4 py-3 font-bold text-right">{{ _('Tok in') }}</th>
+          <th class="px-4 py-3 font-bold text-right">{{ _('Tok out') }}</th>
+          <th class="px-4 py-3 font-bold text-right" title="{{ _('An average: tokens are charged per window, not per page') }}">{{ _('Tok/pg') }}</th>
+          <th class="px-4 py-3 font-bold">{{ _('When') }}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for row in runs %}
+          {% set r = row.run %}
+          <tr class="hover:bg-slate-50 transition-colors {% if r.status == 'FAILED' %}bg-red-50/40{% endif %}">
+            <td class="px-4 py-3 font-mono text-xs text-slate-400">#{{ r.id }}</td>
+            <td class="px-4 py-3">
+              {% if row.slug %}
+                <a href="{{ url_for('proofing.project.description_log', slug=row.slug, run_id=r.id) }}"
+                   class="font-semibold text-indigo-600 hover:text-indigo-800">{{ row.title }}</a>
+                <div class="font-mono text-[10px] text-slate-400">{{ row.slug }}</div>
+              {% else %}
+                <span class="text-slate-400 italic">{{ row.title }}</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              {% if r.status == 'COMPLETED' %}
+                <span class="px-2 py-0.5 rounded bg-green-100 text-green-800 text-[10px] font-bold uppercase tracking-wide">{{ _('complete') }}</span>
+              {% elif r.status == 'PARTIAL' %}
+                <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wide">{{ _('partial') }}</span>
+              {% elif r.status == 'FAILED' %}
+                <span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-[10px] font-bold uppercase tracking-wide">{{ _('failed') }}</span>
+              {% else %}
+                <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-wide">{{ r.status|lower }}</span>
+              {% endif %}
+              {% if r.windows_failed %}
+                <span class="ml-1 text-[10px] text-red-700 font-semibold">{{ _('%(n)s w. failed', n=r.windows_failed) }}</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 font-mono text-[11px] text-slate-500">
+              {{ r.model_name or '—' }}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs">
+              {{ r.pages_read or 0 }}<span class="text-slate-300">/{{ r.pages_total or 0 }}</span>
+              {% if r.extraction_coverage is not none and r.extraction_coverage < 0.99 %}
+                <span class="block text-[10px] text-amber-700 font-semibold">{{ '%.0f%%'|format(r.extraction_coverage * 100) }}</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs text-slate-500">
+              {{ r.windows_completed or 0 }}<span class="text-slate-300">/{{ r.windows_total or 0 }}</span>
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs">
+              {{ r.fields_filled or 0 }}<span class="text-slate-300">/{{ r.fields_total or 0 }}</span>
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs">
+              {% if r.evidence_verified_rate is not none %}
+                <span class="{% if r.evidence_verified_rate < 0.9 %}text-red-700 font-semibold{% endif %}">
+                  {{ '%.0f%%'|format(r.evidence_verified_rate * 100) }}
+                </span>
+              {% else %}<span class="text-slate-300">—</span>{% endif %}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs text-slate-500">
+              {{ r.total_prompt_tokens if r.total_prompt_tokens is not none else '—' }}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs text-slate-500">
+              {{ r.total_completion_tokens if r.total_completion_tokens is not none else '—' }}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs text-slate-500">
+              {{ '%.0f'|format(r.tokens_per_page) if r.tokens_per_page is not none else '—' }}
+            </td>
+            <td class="px-4 py-3 text-[11px] text-slate-400 whitespace-nowrap">
+              {{ (r.completed_at or r.created_at).strftime('%Y-%m-%d %H:%M') }}
+            </td>
+          </tr>
+          {% if r.error_message %}
+            <tr class="{% if r.status == 'FAILED' %}bg-red-50/40{% endif %}">
+              <td></td>
+              <td colspan="11" class="px-4 pb-3 text-xs text-red-800 font-mono">{{ r.error_message }}</td>
+            </tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

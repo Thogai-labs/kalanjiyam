@@ -1433,5 +1433,146 @@ def search_index_status(job_id, limit, app_env):
                     click.echo(f"      error: {job.error_message}")
 
 
+@cli.command()
+@click.option("--project", "slugs", multiple=True, help="project slug; repeatable")
+@click.option("--all", "all_projects", is_flag=True, help="every project with pages")
+@click.option(
+    "--force", is_flag=True, help="re-read every window, ignoring the text-hash cache"
+)
+@click.option(
+    "--local",
+    is_flag=True,
+    help="run in this process instead of enqueueing to the metadata queue",
+)
+@click.option("--limit", type=int, default=0, help="stop after N projects (0 = no limit)")
+def metadata_extract(slugs, all_projects, force, local, limit):
+    """Run archival description extraction over one or more projects.
+
+    Enqueues to the `metadata` Celery queue by default, so a worker must be
+    consuming it (`-Q metadata`). `--local` runs the task inline instead, which
+    is what you want for one document you are watching, and which is the only
+    mode that reports per-document results here.
+
+    Extraction is incremental: windows whose text has not changed since the last
+    completed run are reused, so re-running after a proofreading fix costs a call
+    or two rather than a whole document. `--force` disables that.
+    """
+    if not slugs and not all_projects:
+        raise click.ClickException("Pass --project SLUG (repeatable) or --all.")
+
+    current_app = kalanjiyam.create_app("development")
+    with current_app.app_context():
+        session = q.get_session()
+
+        if all_projects:
+            projects = session.query(db.Project).order_by(db.Project.id).all()
+        else:
+            projects = []
+            for slug in slugs:
+                project = session.query(db.Project).filter_by(slug=slug).first()
+                if project is None:
+                    raise click.ClickException(f"No project with slug {slug!r}.")
+                projects.append(project)
+
+        if limit:
+            projects = projects[:limit]
+
+        if not projects:
+            click.echo("No projects matched.")
+            return
+
+        from kalanjiyam.tasks import archival_extract
+
+        for project in projects:
+            if local:
+                click.echo(f"{project.slug}: extracting...")
+                # `.apply()` rather than calling the private body: it keeps the
+                # Redis lock, so a CLI run and a UI run cannot collide.
+                result = archival_extract.extract_archival_metadata.apply(
+                    args=[project.id], kwargs={"force": force}
+                ).get()
+                run = None
+                if result.get("run_id"):
+                    run = session.query(db.MetadataExtractionRun).get(result["run_id"])
+                if run is not None:
+                    click.echo(
+                        f"{project.slug}: {run.status} "
+                        f"pages {run.pages_read or 0}/{run.pages_total or 0} "
+                        f"windows {run.windows_completed or 0}/{run.windows_total or 0} "
+                        f"tags {run.fields_filled or 0}/{run.fields_total or 0} "
+                        f"tokens {run.total_tokens if run.total_tokens is not None else '?'}"
+                    )
+                else:
+                    click.echo(f"{project.slug}: {result.get('status', '?')}")
+                if result.get("error"):
+                    click.echo(f"      error: {result['error']}")
+            else:
+                archival_extract.extract_archival_metadata.delay(
+                    project.id, force=force
+                )
+                click.echo(f"{project.slug}: queued")
+
+        if not local:
+            click.echo(
+                f"\nQueued {len(projects)} project(s) on the `metadata` queue. "
+                "A worker must be running with -Q metadata, or they will sit there."
+            )
+
+
+@cli.command()
+@click.option("--project", "slug", help="only this project")
+@click.option("--limit", type=int, default=20, help="how many runs to show")
+def metadata_runs(slug, limit):
+    """List recent archival extraction runs.
+
+    The same figures the Extraction Metrics dashboard shows, for when you are
+    driving a batch from a terminal. Blank confidence and token columns mean the
+    service reported none, which is not the same as zero.
+    """
+    current_app = kalanjiyam.create_app("development")
+    with current_app.app_context():
+        session = q.get_session()
+        query = session.query(db.MetadataExtractionRun)
+
+        if slug:
+            project = session.query(db.Project).filter_by(slug=slug).first()
+            if project is None:
+                raise click.ClickException(f"No project with slug {slug!r}.")
+            query = query.filter(db.MetadataExtractionRun.project_id == project.id)
+
+        runs = query.order_by(db.MetadataExtractionRun.id.desc()).limit(limit).all()
+        if not runs:
+            click.echo("No extraction runs recorded yet.")
+            return
+
+        projects = {
+            p.id: p.slug
+            for p in session.query(db.Project).filter(
+                db.Project.id.in_({r.project_id for r in runs})
+            )
+        }
+
+        click.echo(
+            f"{'ID':<5} | {'Project':<28} | {'Status':<10} | {'Pages':<11} | "
+            f"{'Tags':<7} | {'Cited':<6} | Tokens"
+        )
+        click.echo("-" * 96)
+        for run in runs:
+            pages = f"{run.pages_read or 0}/{run.pages_total or 0}"
+            tags = f"{run.fields_filled or 0}/{run.fields_total or 0}"
+            cited = (
+                f"{run.evidence_verified_rate * 100:.0f}%"
+                if run.evidence_verified_rate is not None
+                else "-"
+            )
+            tokens = run.total_tokens if run.total_tokens is not None else "-"
+            click.echo(
+                f"{run.id:<5} | {projects.get(run.project_id, '(deleted)'):<28} | "
+                f"{run.status:<10} | {pages:<11} | {tags:<7} | {cited:<6} | {tokens}"
+            )
+            if run.error_message:
+                click.echo(f"      error: {run.error_message}")
+
+
 if __name__ == "__main__":
     cli()
