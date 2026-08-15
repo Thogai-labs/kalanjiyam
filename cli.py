@@ -1444,9 +1444,19 @@ def search_index_status(job_id, limit, app_env):
     is_flag=True,
     help="run in this process instead of enqueueing to the metadata queue",
 )
+@click.option("--org", "org_slug", help="only projects in this organization")
 @click.option("--limit", type=int, default=0, help="stop after N projects (0 = no limit)")
-def metadata_extract(slugs, all_projects, force, local, limit):
+@click.option(
+    "--dry-run", is_flag=True, help="list what would be queued, without queueing it"
+)
+def metadata_extract(slugs, all_projects, force, local, org_slug, limit, dry_run):
     """Run archival description extraction over one or more projects.
+
+    Scope it with --project (repeatable), --org, or --all; --org combines with
+    the others as a filter, so `--all --org nai-demo` means every project in that
+    organization. `--dry-run` prints the list and queues nothing, which is worth
+    doing before a large batch: each document is minutes of GPU on a worker that
+    runs one at a time.
 
     Enqueues to the `metadata` Celery queue by default, so a worker must be
     consuming it (`-Q metadata`). `--local` runs the task inline instead, which
@@ -1457,8 +1467,10 @@ def metadata_extract(slugs, all_projects, force, local, limit):
     completed run are reused, so re-running after a proofreading fix costs a call
     or two rather than a whole document. `--force` disables that.
     """
-    if not slugs and not all_projects:
-        raise click.ClickException("Pass --project SLUG (repeatable) or --all.")
+    if not slugs and not all_projects and not org_slug:
+        raise click.ClickException(
+            "Pass --project SLUG (repeatable), --org SLUG, or --all."
+        )
 
     # `Session(engine)` rather than `create_app`, like every other command here.
     # `create_app` runs the startup sanity checks, which abort on any drift
@@ -1468,21 +1480,41 @@ def metadata_extract(slugs, all_projects, force, local, limit):
     from kalanjiyam.tasks import archival_extract
 
     with Session(engine) as session:
-        if all_projects:
-            projects = session.query(db.Project).order_by(db.Project.id).all()
-        else:
+        if slugs:
             projects = []
             for slug in slugs:
                 project = session.query(db.Project).filter_by(slug=slug).first()
                 if project is None:
                     raise click.ClickException(f"No project with slug {slug!r}.")
                 projects.append(project)
+        else:
+            projects = session.query(db.Project).order_by(db.Project.id).all()
+
+        if org_slug:
+            org = session.query(db.Group).filter_by(slug=org_slug).first()
+            if org is None:
+                raise click.ClickException(f"No organization with slug {org_slug!r}.")
+            member_ids = {
+                pg.project_id
+                for pg in session.query(db.ProjectGroups.project_id).filter_by(
+                    group_id=org.id
+                )
+            }
+            # An org with no projects yields nothing. Falling through to every
+            # project would be the worst possible reading of "only this org".
+            projects = [p for p in projects if p.id in member_ids]
 
         if limit:
             projects = projects[:limit]
 
         if not projects:
             click.echo("No projects matched.")
+            return
+
+        if dry_run:
+            click.echo(f"Would queue {len(projects)} project(s):")
+            for project in projects:
+                click.echo(f"  {project.slug}")
             return
 
         for project in projects:
