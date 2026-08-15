@@ -269,6 +269,66 @@ def test_evidence_for__separates_spans_by_entity(flask_app):
         assert view.unindexed_evidence == []
 
 
+# Token accounting
+# ----------------
+
+
+def test_token_totals__are_none_when_the_service_reported_no_usage(flask_app):
+    """A run that cost nothing and a run that did not say must not both read 0."""
+    with flask_app.app_context():
+        session = get_session()
+        run = _run(session, _project(session).id)
+
+        assert run.total_tokens is None
+        assert run.tokens_per_page is None
+        assert run.tokens_per_window is None
+
+
+def test_token_totals__add_input_and_output(flask_app):
+    with flask_app.app_context():
+        session = get_session()
+        run = _run(session, _project(session).id)
+        run.total_prompt_tokens = 14320
+        run.total_completion_tokens = 2870
+
+        assert run.total_tokens == 17190
+
+
+def test_tokens_per_page__is_over_pages_actually_read(flask_app):
+    """Not over pages_total: a partial run must not look cheaper than it was."""
+    with flask_app.app_context():
+        session = get_session()
+        run = _run(session, _project(session).id)
+        run.pages_total = 10
+        run.pages_read = 5
+        run.total_prompt_tokens = 900
+        run.total_completion_tokens = 100
+
+        assert run.tokens_per_page == 200
+
+
+def test_tokens_per_window__is_over_windows_completed(flask_app):
+    with flask_app.app_context():
+        session = get_session()
+        run = _run(session, _project(session).id)
+        run.windows_completed = 4
+        run.total_prompt_tokens = 1000
+        run.total_completion_tokens = 0
+
+        assert run.tokens_per_window == 250
+
+
+def test_tokens_per_page__is_none_when_nothing_was_read(flask_app):
+    """Guards the divide, which a failed run would otherwise hit."""
+    with flask_app.app_context():
+        session = get_session()
+        run = _run(session, _project(session).id)
+        run.pages_read = 0
+        run.total_prompt_tokens = 500
+
+        assert run.tokens_per_page is None
+
+
 # Write-down
 # ----------
 

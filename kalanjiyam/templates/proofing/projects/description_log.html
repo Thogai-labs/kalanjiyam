@@ -110,8 +110,42 @@
             <span class="font-mono text-slate-500">{{ _('contract') }} {{ run.contract_version }}</span>
           {% endif %}
         </div>
+        {# Token cost. Reported per window and per document, with the per-page
+           figure marked as an average: tokens are spent per call, and windows
+           overlap by a page while the taxonomy instruction is charged once per
+           window regardless of how many pages it covers. #}
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+          <div class="bg-slate-800 rounded-xl px-3 py-2">
+            <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ _('Tokens in') }}</div>
+            <div class="font-mono text-slate-200">{{ num(run.total_prompt_tokens) }}</div>
+          </div>
+          <div class="bg-slate-800 rounded-xl px-3 py-2">
+            <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ _('Tokens out') }}</div>
+            <div class="font-mono text-slate-200">{{ num(run.total_completion_tokens) }}</div>
+          </div>
+          <div class="bg-slate-800 rounded-xl px-3 py-2">
+            <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ _('Total') }}</div>
+            <div class="font-mono text-slate-200">{{ num(run.total_tokens) }}</div>
+          </div>
+          <div class="bg-slate-800 rounded-xl px-3 py-2">
+            <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ _('Per window') }}</div>
+            <div class="font-mono text-slate-200">
+              {%- if run.tokens_per_window is not none -%}{{ '%.0f'|format(run.tokens_per_window) }}
+              {%- else -%}<span class="text-slate-500">&mdash;</span>{%- endif -%}
+            </div>
+          </div>
+          <div class="bg-slate-800 rounded-xl px-3 py-2"
+               title="{{ _('An average. Tokens are charged per window, not per page: windows overlap by one page and the taxonomy instruction is billed once per call however many pages it covers.') }}">
+            <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ _('Per page (avg)') }}</div>
+            <div class="font-mono text-slate-200">
+              {%- if run.tokens_per_page is not none -%}{{ '%.0f'|format(run.tokens_per_page) }}
+              {%- else -%}<span class="text-slate-500">&mdash;</span>{%- endif -%}
+            </div>
+          </div>
+        </div>
+
         {% if run.error_message %}
-          <p class="text-sm text-red-300 font-mono bg-red-950/40 rounded-lg p-3">{{ run.error_message }}</p>
+          <p class="text-sm text-red-300 font-mono bg-red-950/40 rounded-lg p-3 mt-3">{{ run.error_message }}</p>
         {% endif %}
       </div>
     </section>
@@ -157,7 +191,8 @@
                 <th class="px-4 py-2 font-bold text-right" title="{{ _('Quotes found verbatim, of quotes given') }}">{{ _('Cited') }}</th>
                 <th class="px-4 py-2 font-bold text-right">{{ _('Conf.') }}</th>
                 <th class="px-4 py-2 font-bold text-right" title="{{ _('Mean OCR confidence of this window\'s pages') }}">{{ _('OCR') }}</th>
-                <th class="px-4 py-2 font-bold text-right">{{ _('Tokens') }}</th>
+                <th class="px-4 py-2 font-bold text-right" title="{{ _('Prompt tokens: the page text plus the taxonomy instruction, which is charged once per window however many pages it holds') }}">{{ _('Tok in') }}</th>
+                <th class="px-4 py-2 font-bold text-right" title="{{ _('Completion tokens: the extracted fields and their evidence quotes') }}">{{ _('Tok out') }}</th>
                 <th class="px-4 py-2 font-bold text-right" title="{{ _('Model time; the wall-clock figure beside it includes queue and transport') }}">{{ _('Engine') }}</th>
                 <th class="px-4 py-2 font-bold text-right">{{ _('Wall') }}</th>
               </tr>
@@ -187,16 +222,15 @@
                   </td>
                   <td class="px-4 py-2 text-right font-mono text-xs">{{ conf(w.avg_field_confidence) }}</td>
                   <td class="px-4 py-2 text-right font-mono text-xs">{{ conf(w.source_ocr_confidence) }}</td>
-                  <td class="px-4 py-2 text-right font-mono text-xs text-slate-500">
-                    {{ num((w.prompt_tokens or 0) + (w.completion_tokens or 0) or none) }}
-                  </td>
+                  <td class="px-4 py-2 text-right font-mono text-xs text-slate-500">{{ num(w.prompt_tokens) }}</td>
+                  <td class="px-4 py-2 text-right font-mono text-xs text-slate-500">{{ num(w.completion_tokens) }}</td>
                   <td class="px-4 py-2 text-right font-mono text-xs">{{ ms(w.engine_latency_ms) }}</td>
                   <td class="px-4 py-2 text-right font-mono text-xs text-slate-500">{{ ms(w.extraction_latency_ms) }}</td>
                 </tr>
                 {% if w.error_message or w.raw_response %}
                   <tr class="{% if w.status == 'FAILED' %}bg-red-50/60{% endif %}">
                     <td></td>
-                    <td colspan="11" class="px-4 pb-3 -mt-1">
+                    <td colspan="12" class="px-4 pb-3 -mt-1">
                       {% if w.error_message %}
                         <p class="text-xs text-red-800 font-mono">{{ w.error_message }}</p>
                       {% endif %}

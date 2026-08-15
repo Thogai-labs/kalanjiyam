@@ -1374,8 +1374,11 @@ class PlatformView(AdminBaseView):
             "Evidence Verified (%)",
             "Avg Source OCR Conf (%)",
             "Pages w/o Confidence",
-            "Prompt Tokens",
-            "Completion Tokens",
+            "Prompt Tokens (In)",
+            "Completion Tokens (Out)",
+            "Total Tokens",
+            "Tokens / Window",
+            "Tokens / Page Read",
             "Total Engine Latency (Sec)",
             "Avg Engine Latency (Sec)",
             "Metadata Size (Bytes)",
@@ -1419,8 +1422,19 @@ class PlatformView(AdminBaseView):
                 run.pages_without_confidence
                 if run.pages_without_confidence is not None
                 else "",
-                run.total_prompt_tokens or 0,
-                run.total_completion_tokens or 0,
+                # "" rather than 0 when the service reported no usage at all --
+                # a run that cost nothing and a run that did not say what it cost
+                # must not average together.
+                run.total_prompt_tokens if run.total_prompt_tokens is not None else "",
+                run.total_completion_tokens
+                if run.total_completion_tokens is not None
+                else "",
+                run.total_tokens if run.total_tokens is not None else "",
+                round(run.tokens_per_window, 1)
+                if run.tokens_per_window is not None
+                else "",
+                # An average over an uneven divisor -- see `tokens_per_page`.
+                round(run.tokens_per_page, 1) if run.tokens_per_page is not None else "",
                 round(latency_sec, 2) if latency_sec is not None else "",
                 round(latency_sec / windows, 2)
                 if (latency_sec is not None and windows > 0)

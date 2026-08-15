@@ -266,7 +266,7 @@
           {{ stat(_('Evidence verified'), percent(run.evidence_verified_rate) or None) }}
           {{ stat(_('Mean confidence'), '%.2f'|format(run.avg_field_confidence) if run.avg_field_confidence is not none else None) }}
           {{ stat(_('Source OCR conf.'), '%.2f'|format(run.avg_source_ocr_confidence) if run.avg_source_ocr_confidence is not none else None) }}
-          {{ stat(_('Tokens'), (run.total_prompt_tokens or 0) + (run.total_completion_tokens or 0)) }}
+          {{ stat(_('Tokens in / out'), '%s / %s'|format(run.total_prompt_tokens if run.total_prompt_tokens is not none else '?', run.total_completion_tokens if run.total_completion_tokens is not none else '?')) }}
         </div>
 
         {% if run.extraction_coverage is not none and run.extraction_coverage < 0.99 %}

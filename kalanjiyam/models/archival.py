@@ -137,6 +137,40 @@ class MetadataExtractionRun(Base):
             return None
         return (self.fields_filled or 0) / self.fields_total
 
+    @property
+    def total_tokens(self) -> int | None:
+        """Input plus output over the whole document. None if neither was reported."""
+        if self.total_prompt_tokens is None and self.total_completion_tokens is None:
+            return None
+        return (self.total_prompt_tokens or 0) + (self.total_completion_tokens or 0)
+
+    @property
+    def tokens_per_page(self) -> float | None:
+        """Tokens over pages read -- an *average*, not a measurement.
+
+        Tokens are spent per window, not per page, and the two do not divide
+        cleanly: windows overlap by one page, so a page on a boundary is billed
+        twice, and the taxonomy instruction (~3k tokens) is charged once per
+        window however many pages that window happens to hold. A short window at
+        the end of a document therefore costs far more per page than a full one.
+
+        Useful for forecasting the cost of a comparable document. Not usable as
+        a per-page bill, which is why the per-window figures are kept alongside
+        rather than being replaced by this.
+        """
+        if not self.pages_read:
+            return None
+        total = self.total_tokens
+        return (total / self.pages_read) if total is not None else None
+
+    @property
+    def tokens_per_window(self) -> float | None:
+        """Tokens over windows completed -- what is actually charged per call."""
+        if not self.windows_completed:
+            return None
+        total = self.total_tokens
+        return (total / self.windows_completed) if total is not None else None
+
 
 class MetadataWindow(Base):
     """One model call over one window of pages."""
