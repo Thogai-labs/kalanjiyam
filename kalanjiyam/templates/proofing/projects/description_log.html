@@ -1,0 +1,229 @@
+{# The extraction log: what each model call actually did.
+
+   The description tab answers "what does this file contain". This answers "how
+   did we arrive at that, and what went wrong" -- one row per window, because a
+   window is the unit that succeeds or fails, and a failed window is the reason
+   pages go unread. A failure with no visible error message is the thing that
+   makes a partial run impossible to act on, so the message is shown in full
+   rather than behind a disclosure. #}
+{% extends 'proofing/base-sidebar.html' %}
+{% import "macros/proofing.html" as m %}
+
+
+{% block title %}{{ _('Extraction log: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
+
+
+{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
+
+
+{% macro ms(value) %}
+  {%- if value -%}{{ '%.1f'|format(value / 1000.0) }}s{%- else -%}<span class="text-slate-300">&mdash;</span>{%- endif -%}
+{% endmacro %}
+
+
+{% macro num(value) %}
+  {%- if value is not none -%}{{ value }}{%- else -%}<span class="text-slate-300">&mdash;</span>{%- endif -%}
+{% endmacro %}
+
+
+{% macro conf(value) %}
+  {%- if value is not none -%}{{ '%.2f'|format(value) }}{%- else -%}
+    <span class="text-slate-300" title="{{ _('This engine reports no confidence score') }}">&mdash;</span>
+  {%- endif -%}
+{% endmacro %}
+
+
+{% macro status_pill(status) %}
+  {% if status == 'COMPLETED' %}
+    <span class="px-2 py-0.5 rounded bg-green-100 text-green-800 text-[10px] font-bold uppercase tracking-wide">{{ _('ok') }}</span>
+  {% elif status == 'FAILED' %}
+    <span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-[10px] font-bold uppercase tracking-wide">{{ _('failed') }}</span>
+  {% elif status == 'PARTIAL' %}
+    <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wide">{{ _('partial') }}</span>
+  {% elif status == 'IN_PROGRESS' %}
+    <span class="px-2 py-0.5 rounded bg-royalblue/10 text-royalblue text-[10px] font-bold uppercase tracking-wide">{{ _('running') }}</span>
+  {% else %}
+    <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-wide">{{ status|lower }}</span>
+  {% endif %}
+{% endmacro %}
+
+
+{% block content %}
+{{ m.project_header_nested(_('Extraction log'), project) }}
+{{ m.project_tabs(project=project, active='description', is_mod=current_user.is_moderator) }}
+
+<div class="mb-6">
+  <a href="{{ url_for('proofing.project.description', slug=project.slug) }}"
+     class="text-sm font-semibold text-royalblue hover:text-blue-700">
+    &larr; {{ _('Back to the description') }}
+  </a>
+</div>
+
+{% if not runs %}
+  <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6 text-sm text-slate-600">
+    {{ _('Nothing has been extracted yet, so there is no log.') }}
+  </div>
+{% else %}
+
+  {# --- Run history ------------------------------------------------------- #}
+  <section class="mb-8">
+    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ _('Runs') }}</h2>
+    <div class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden">
+      {% for r in runs %}
+        <a href="{{ url_for('proofing.project.description_log', slug=project.slug, run_id=r.id) }}"
+           class="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 hover:bg-slate-50 transition-colors
+                  {% if run and r.id == run.id %}bg-royalblue/5{% endif %}">
+          <span class="font-mono text-xs text-slate-400">#{{ r.id }}</span>
+          {{ status_pill(r.status) }}
+          <span class="text-sm text-slate-700">
+            {{ _('%(read)s / %(total)s pages', read=r.pages_read or 0, total=r.pages_total or 0) }}
+          </span>
+          <span class="text-sm text-slate-500">
+            {{ _('%(done)s / %(total)s windows', done=r.windows_completed or 0, total=r.windows_total or 0) }}
+          </span>
+          {% if r.windows_failed %}
+            <span class="text-sm text-red-700 font-semibold">{{ _('%(n)s failed', n=r.windows_failed) }}</span>
+          {% endif %}
+          <span class="text-xs text-slate-400 ml-auto">
+            {{ (r.completed_at or r.created_at).strftime('%Y-%m-%d %H:%M') }} UTC
+          </span>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# --- The selected run -------------------------------------------------- #}
+  {% if run %}
+    <section class="mb-6">
+      <div class="bg-slate-900 text-slate-100 rounded-2xl p-5">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs mb-3">
+          <span class="font-bold text-sm">{{ _('Run #%(id)s', id=run.id) }}</span>
+          {{ status_pill(run.status) }}
+          {% if run.engine %}<span class="font-mono text-slate-400">{{ run.engine }}</span>{% endif %}
+          {% if run.model_name %}
+            <span class="font-mono text-slate-400">
+              {{ run.model_name }}{% if run.model_version %} {{ run.model_version }}{% endif %}
+            </span>
+          {% endif %}
+          <span class="font-mono text-slate-500">{{ run.taxonomy_version }}</span>
+          {% if run.contract_version %}
+            <span class="font-mono text-slate-500">{{ _('contract') }} {{ run.contract_version }}</span>
+          {% endif %}
+        </div>
+        {% if run.error_message %}
+          <p class="text-sm text-red-300 font-mono bg-red-950/40 rounded-lg p-3">{{ run.error_message }}</p>
+        {% endif %}
+      </div>
+    </section>
+
+    {% if failed_windows %}
+      <div class="bg-red-50 border border-red-200 rounded-2xl p-5 mb-6">
+        <h3 class="font-bold text-red-900 text-sm mb-2">
+          {{ _('%(n)s windows failed', n=failed_windows|length) }}
+        </h3>
+        <p class="text-sm text-red-800 mb-3">
+          {{ _('Their pages were never read, so any tag that indexes the whole file is missing whatever was on them. Re-running reuses the windows that succeeded and retries only these.') }}
+        </p>
+        <ul class="space-y-1 text-xs">
+          {% for w in failed_windows %}
+            <li class="font-mono text-red-900">
+              {{ _('window %(i)s', i=w.window_index) }}
+              {% if w.page_slugs %}
+                <span class="text-red-700">({{ _('pp.') }} {{ w.page_slugs|join(', ') }})</span>
+              {% endif %}
+              &mdash; {{ w.error_message or _('no reason recorded') }}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {# --- Window by window -------------------------------------------------- #}
+    <section>
+      <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+        {{ _('Windows') }}
+      </h2>
+      <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm text-left">
+            <thead class="bg-slate-50 text-[10px] text-slate-500 uppercase tracking-wider">
+              <tr>
+                <th class="px-4 py-2 font-bold">{{ _('#') }}</th>
+                <th class="px-4 py-2 font-bold">{{ _('Status') }}</th>
+                <th class="px-4 py-2 font-bold">{{ _('Pages') }}</th>
+                <th class="px-4 py-2 font-bold text-right">{{ _('Chars') }}</th>
+                <th class="px-4 py-2 font-bold text-right" title="{{ _('Tags returned of tags asked for') }}">{{ _('Tags') }}</th>
+                <th class="px-4 py-2 font-bold text-right" title="{{ _('Tags the model declined for lack of support -- good behaviour, not failure') }}">{{ _('Declined') }}</th>
+                <th class="px-4 py-2 font-bold text-right" title="{{ _('Quotes found verbatim, of quotes given') }}">{{ _('Cited') }}</th>
+                <th class="px-4 py-2 font-bold text-right">{{ _('Conf.') }}</th>
+                <th class="px-4 py-2 font-bold text-right" title="{{ _('Mean OCR confidence of this window\'s pages') }}">{{ _('OCR') }}</th>
+                <th class="px-4 py-2 font-bold text-right">{{ _('Tokens') }}</th>
+                <th class="px-4 py-2 font-bold text-right" title="{{ _('Model time; the wall-clock figure beside it includes queue and transport') }}">{{ _('Engine') }}</th>
+                <th class="px-4 py-2 font-bold text-right">{{ _('Wall') }}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              {% for w in windows %}
+                <tr class="{% if w.status == 'FAILED' %}bg-red-50/60{% endif %}">
+                  <td class="px-4 py-2 font-mono text-xs text-slate-400">{{ w.window_index }}</td>
+                  <td class="px-4 py-2">{{ status_pill(w.status) }}</td>
+                  <td class="px-4 py-2 font-mono text-xs text-slate-600">
+                    {% if w.page_slugs %}
+                      {{ w.page_slugs[0] }}{% if w.page_slugs|length > 1 %}&ndash;{{ w.page_slugs[-1] }}{% endif %}
+                      <span class="text-slate-400">({{ w.page_slugs|length }})</span>
+                    {% else %}<span class="text-slate-300">&mdash;</span>{% endif %}
+                  </td>
+                  <td class="px-4 py-2 text-right font-mono text-xs">{{ num(w.chars_in) }}</td>
+                  <td class="px-4 py-2 text-right font-mono text-xs">
+                    {{ num(w.fields_returned) }}<span class="text-slate-300">/{{ w.fields_attempted or '?' }}</span>
+                  </td>
+                  <td class="px-4 py-2 text-right font-mono text-xs text-slate-500">{{ num(w.fields_declined) }}</td>
+                  <td class="px-4 py-2 text-right font-mono text-xs">
+                    {% if w.evidence_spans %}
+                      <span class="{% if w.evidence_verified != w.evidence_spans %}text-red-700 font-semibold{% endif %}">
+                        {{ w.evidence_verified or 0 }}/{{ w.evidence_spans }}
+                      </span>
+                    {% else %}<span class="text-slate-300">&mdash;</span>{% endif %}
+                  </td>
+                  <td class="px-4 py-2 text-right font-mono text-xs">{{ conf(w.avg_field_confidence) }}</td>
+                  <td class="px-4 py-2 text-right font-mono text-xs">{{ conf(w.source_ocr_confidence) }}</td>
+                  <td class="px-4 py-2 text-right font-mono text-xs text-slate-500">
+                    {{ num((w.prompt_tokens or 0) + (w.completion_tokens or 0) or none) }}
+                  </td>
+                  <td class="px-4 py-2 text-right font-mono text-xs">{{ ms(w.engine_latency_ms) }}</td>
+                  <td class="px-4 py-2 text-right font-mono text-xs text-slate-500">{{ ms(w.extraction_latency_ms) }}</td>
+                </tr>
+                {% if w.error_message or w.raw_response %}
+                  <tr class="{% if w.status == 'FAILED' %}bg-red-50/60{% endif %}">
+                    <td></td>
+                    <td colspan="11" class="px-4 pb-3 -mt-1">
+                      {% if w.error_message %}
+                        <p class="text-xs text-red-800 font-mono">{{ w.error_message }}</p>
+                      {% endif %}
+                      {% if w.raw_response %}
+                        {# Kept so a bad window can be diagnosed without paying to
+                           re-run the whole document. #}
+                        <details class="mt-1">
+                          <summary class="cursor-pointer text-[11px] text-slate-400 hover:text-slate-600">
+                            {{ _('raw response') }}
+                          </summary>
+                          <pre class="mt-1 text-[10px] bg-slate-900 text-slate-200 rounded-lg p-3 overflow-x-auto max-h-64">{{ w.raw_response|tojson(indent=2) }}</pre>
+                        </details>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endif %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if not windows %}
+          <p class="px-5 py-4 text-sm text-slate-500">
+            {{ _('This run recorded no windows. It failed before it read anything.') }}
+          </p>
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+{% endif %}
+{% endblock %}

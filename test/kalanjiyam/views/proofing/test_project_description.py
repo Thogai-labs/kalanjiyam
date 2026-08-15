@@ -282,6 +282,109 @@ def test_save__is_moderator_only(rama_client, flask_app):
     assert resp.status_code == 200  # redirected to the login page
 
 
+# The extraction log
+# ------------------
+
+
+def _run_with_windows(flask_app):
+    with flask_app.app_context():
+        session = get_session()
+        project = session.query(db.Project).filter_by(slug="test-project").first()
+        run = db.MetadataExtractionRun(
+            project_id=project.id,
+            status="PARTIAL",
+            taxonomy_version=at.TAXONOMY_VERSION,
+            model_name="gemma-3-27b-it",
+            pages_total=10,
+            pages_read=5,
+            windows_total=2,
+            windows_completed=1,
+            windows_failed=1,
+        )
+        session.add(run)
+        session.flush()
+        session.add_all(
+            [
+                db.MetadataWindow(
+                    run_id=run.id,
+                    window_index=1,
+                    status="COMPLETED",
+                    page_slugs=["1", "2", "3", "4", "5"],
+                    chars_in=18234,
+                    fields_attempted=19,
+                    fields_returned=11,
+                    fields_declined=8,
+                    evidence_spans=14,
+                    evidence_verified=13,
+                    prompt_tokens=14320,
+                    completion_tokens=2870,
+                    engine_latency_ms=3120.4,
+                ),
+                db.MetadataWindow(
+                    run_id=run.id,
+                    window_index=2,
+                    status="FAILED",
+                    page_slugs=["6", "7", "8", "9", "10"],
+                    error_message="upstream timed out after 300s",
+                ),
+            ]
+        )
+        session.commit()
+        return run.id
+
+
+def test_log__lists_every_window_and_why_one_failed(moderator_client, flask_app):
+    """The point of the log: a partial run must say which pages went unread."""
+    _run_with_windows(flask_app)
+    body = moderator_client.get(f"{URL}/log").text
+
+    assert "upstream timed out after 300s" in body
+    assert "gemma-3-27b-it" in body
+    # Both windows appear, not only the one that worked.
+    assert "18234" in body
+    assert "13/14" in body
+
+
+def test_log__defaults_to_the_newest_attempt_even_if_it_failed(
+    moderator_client, flask_app
+):
+    """A run that failed outright is exactly the one a log reader wants."""
+    _run_with_windows(flask_app)
+    with flask_app.app_context():
+        session = get_session()
+        project = session.query(db.Project).filter_by(slug="test-project").first()
+        session.add(
+            db.MetadataExtractionRun(
+                project_id=project.id,
+                status="FAILED",
+                error_message="no window produced a usable description",
+            )
+        )
+        session.commit()
+
+    body = moderator_client.get(f"{URL}/log").text
+    assert "no window produced a usable description" in body
+
+
+def test_log__an_unknown_run_is_404(moderator_client):
+    assert moderator_client.get(f"{URL}/log/999999").status_code == 404
+
+
+def test_log__says_so_when_there_is_nothing_to_show(moderator_client):
+    resp = moderator_client.get(f"{URL}/log")
+    assert resp.status_code == 200
+    assert "no log" in resp.text
+
+
+def test_log__is_moderator_only(rama_client):
+    assert rama_client.get(f"{URL}/log").status_code == 302
+
+
+def test_log__is_linked_from_the_description(moderator_client, flask_app):
+    _run_with_windows(flask_app)
+    assert "/description/log" in moderator_client.get(URL).text
+
+
 # Rendering a description that actually has something in it
 # ---------------------------------------------------------
 

@@ -211,6 +211,12 @@
         {{ _('read %(read)s of %(total)s pages', read=run.pages_read or 0, total=run.pages_total or 0) }}
       </span>
     {% endif %}
+    {% if attempt %}
+      <a href="{{ url_for('proofing.project.description_log', slug=project.slug) }}"
+         class="text-xs font-semibold text-royalblue hover:text-blue-700 underline decoration-dotted">
+        {{ _('extraction log') }}
+      </a>
+    {% endif %}
 
     <form method="POST" action="{{ url_for('proofing.project.description_extract', slug=project.slug) }}"
       class="ml-auto flex items-center gap-3">
@@ -285,6 +291,10 @@
   <div class="bg-red-50 border border-red-200 rounded-2xl p-5 mb-6">
     <h3 class="font-bold text-red-900 mb-1">{{ _('The last extraction failed') }}</h3>
     <p class="text-sm text-red-800">{{ attempt.error_message or _('No reason was recorded.') }}</p>
+    <a href="{{ url_for('proofing.project.description_log', slug=project.slug, run_id=attempt.id) }}"
+       class="inline-block mt-2 text-sm font-semibold text-red-900 underline">
+      {{ _('See which windows failed and why') }}
+    </a>
   </div>
 {% endif %}
 

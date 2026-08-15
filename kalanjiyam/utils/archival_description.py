@@ -31,6 +31,7 @@ from kalanjiyam.utils import archival_taxonomy as at
 __all__ = [
     "describe",
     "latest_run",
+    "run_log",
     "set_curated",
     "clear_curated",
     "write_down",
@@ -143,6 +144,47 @@ def last_attempt(session, project_id: int):
         .order_by(db.MetadataExtractionRun.id.desc())
         .first()
     )
+
+
+def run_log(session, project_id: int, run_id: int | None = None) -> dict:
+    """Every run of a project, and the window-by-window record of one of them.
+
+    The description tab shows the newest usable run and nothing else, which is
+    right for reading a catalogue record and useless for answering "why did this
+    stop at eight pages of ten". That answer is per window: which pages it
+    covered, whether the call succeeded, what the service said when it did not.
+
+    Defaults to the newest *attempt* rather than the newest usable run -- a run
+    that failed outright is exactly the one someone opening a log wants.
+    """
+    runs = (
+        session.query(db.MetadataExtractionRun)
+        .filter(db.MetadataExtractionRun.project_id == project_id)
+        .order_by(db.MetadataExtractionRun.id.desc())
+        .all()
+    )
+
+    selected = None
+    if run_id is not None:
+        selected = next((r for r in runs if r.id == run_id), None)
+    elif runs:
+        selected = runs[0]
+
+    windows = []
+    if selected is not None:
+        windows = (
+            session.query(db.MetadataWindow)
+            .filter(db.MetadataWindow.run_id == selected.id)
+            .order_by(db.MetadataWindow.window_index)
+            .all()
+        )
+
+    return {
+        "runs": runs,
+        "run": selected,
+        "windows": windows,
+        "failed_windows": [w for w in windows if w.status == "FAILED"],
+    }
 
 
 def _curated_rows(session, project_id: int) -> dict:

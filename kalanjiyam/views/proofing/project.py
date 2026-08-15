@@ -591,6 +591,32 @@ def description(slug):
     )
 
 
+@bp.route("/<slug>/description/log")
+@bp.route("/<slug>/description/log/<int:run_id>")
+@moderator_required
+def description_log(slug, run_id=None):
+    """The window-by-window record of an extraction run.
+
+    Separate from the description tab because it answers a different question.
+    The tab says what the catalogue record is; this says how it was arrived at --
+    which pages each call covered, what it cost, and what the service said about
+    the windows that failed. Without it a partial run reports a number of missing
+    pages and no way to find out why.
+    """
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    session = q.get_session()
+    log = ad.run_log(session, project_.id, run_id)
+    if run_id is not None and log["run"] is None:
+        abort(404)
+
+    return render_template(
+        "proofing/projects/description_log.html", project=project_, **log
+    )
+
+
 @bp.route("/<slug>/description/extract", methods=["POST"])
 @moderator_required
 def description_extract(slug):
