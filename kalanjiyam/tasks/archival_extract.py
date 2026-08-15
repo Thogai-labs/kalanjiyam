@@ -36,6 +36,7 @@ from config import create_config_only_app
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
 from kalanjiyam.tasks import app
+from kalanjiyam.utils import archival_description as ad
 from kalanjiyam.utils import archival_reduce as ar
 from kalanjiyam.utils import archival_taxonomy as at
 from kalanjiyam.utils import metadata_client as mc
@@ -311,6 +312,8 @@ def _run(project_id: int, *, force: bool) -> dict:
     run.completed_at = datetime.utcnow()
     session.commit()
 
+    _write_down(session, project, fields)
+
     _set_progress(
         project_id,
         status=run.status,
@@ -327,6 +330,36 @@ def _run(project_id: int, *, force: bool) -> dict:
         "fields_filled": metrics["fields_filled"],
         "evidence_verified_rate": metrics["evidence_verified_rate"],
     }
+
+
+def _write_down(session, project, fields: dict) -> None:
+    """Seed the search-facing bibliographic columns from the description.
+
+    This is the whole reason a project needs only one extraction pass. The
+    columns `search/indexer.py` reads used to be filled by a separate sampling
+    run over the front matter; they are now filled from the full-text pass, which
+    read every page and can cite where each value came from.
+
+    Best-effort on purpose: a description that saved correctly must not be marked
+    failed because the search index could not be notified.
+    """
+    try:
+        report = ad.write_down(session, project, fields)
+        session.commit()
+    except Exception:  # noqa: BLE001 - the description itself is already saved
+        LOG.exception("could not write down bibliographic fields for %s", project.id)
+        session.rollback()
+        return
+
+    if not (report.get("applied") or report.get("metadata_applied")):
+        return
+
+    try:
+        from kalanjiyam.tasks.search_index import enqueue_project
+
+        enqueue_project(project.id)
+    except Exception:  # noqa: BLE001
+        LOG.warning("could not reindex project %s after write-down", project.id)
 
 
 def _language_hint(project) -> list[str]:

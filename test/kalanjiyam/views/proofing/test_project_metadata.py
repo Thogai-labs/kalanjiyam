@@ -140,45 +140,14 @@ def test_metadata__save_reindexes_the_project(moderator_client):
 # ----------
 
 
-def test_extract__enqueues_a_background_run(moderator_client):
-    with patch(
-        "kalanjiyam.tasks.metadata.extract_project_metadata.delay"
-    ) as delay:
-        resp = moderator_client.post(f"{URL}/extract", follow_redirects=True)
+def test_extract__the_sampling_extractor_is_gone(moderator_client):
+    """Retired in favour of the full-text pass on the description tab.
 
-    assert resp.status_code == 200
-    assert delay.called
-    assert delay.call_args[1]["deep"] is False
-
-
-def test_extract__passes_the_deep_flag(moderator_client):
-    with patch(
-        "kalanjiyam.tasks.metadata.extract_project_metadata.delay"
-    ) as delay:
-        moderator_client.post(f"{URL}/extract", data={"deep": "1"}, follow_redirects=True)
-
-    assert delay.call_args[1]["deep"] is True
-
-
-def test_extract__is_moderator_only(rama_client):
-    with patch("kalanjiyam.tasks.metadata.extract_project_metadata.delay") as delay:
-        resp = rama_client.post(f"{URL}/extract")
-    assert resp.status_code == 302
-    assert not delay.called
-
-
-def test_status__reports_idle_when_nothing_is_running(moderator_client):
-    with patch("kalanjiyam.tasks.metadata.get_progress", return_value=None):
-        resp = moderator_client.get(f"{URL}/status")
-    assert resp.status_code == 200
-    assert resp.json["status"] == "idle"
-
-
-def test_status__reports_a_running_stage(moderator_client):
-    progress = {"status": "running", "stage": "profiling scripts", "done": 1}
-    with patch("kalanjiyam.tasks.metadata.get_progress", return_value=progress):
-        resp = moderator_client.get(f"{URL}/status")
-    assert resp.json["stage"] == "profiling scripts"
+    Asserted rather than merely deleted: leaving the route reachable would mean a
+    six-page sample could still overwrite what a whole-document run established.
+    """
+    assert moderator_client.post(f"{URL}/extract").status_code == 404
+    assert moderator_client.get(f"{URL}/status").status_code == 404
 
 
 def test_accept__without_a_staged_run_reports_nothing_to_load(moderator_client):

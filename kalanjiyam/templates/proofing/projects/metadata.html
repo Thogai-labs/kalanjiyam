@@ -15,34 +15,16 @@
 
 {{ mf.show_errors_if_any(form.errors) }}
 
-{# --- Extraction controls ------------------------------------------------ #}
+{# --- Where these values now come from ----------------------------------- #}
 <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-8">
-  <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-    <div>
-      <h2 class="text-lg font-bold text-slate-900 mb-1">{{ _('Automatic extraction') }}</h2>
-      <p class="text-sm text-slate-500 max-w-2xl leading-relaxed">
-        {{ _('Reads the front matter and a sample of pages to suggest bibliographic details, languages, and a summary. Everything it produces is editable below, and existing values are never overwritten.') }}
-      </p>
-    </div>
-    <form method="POST" action="{{ url_for('proofing.project.metadata_extract', slug=project.slug) }}" class="shrink-0">
-      {{ extract_form.csrf_token }}
-      <label class="flex items-center gap-2 text-xs text-slate-500 mb-2 cursor-pointer">
-        {{ extract_form.deep(class_="rounded border-slate-300 text-royalblue focus:ring-royalblue") }}
-        {{ _('Deep analysis (slower, better coverage on long books)') }}
-      </label>
-      <button type="submit"
-        class="w-full px-5 py-2.5 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 transition-colors">
-        {{ _('Run extraction') }}
-      </button>
-    </form>
-  </div>
-
-  {% if progress and progress.status == 'running' %}
-    <div id="extraction-progress" class="mt-5 pt-5 border-t border-slate-100 text-sm">
-      <span class="font-semibold text-royalblue">{{ _('Running') }}:</span>
-      <span id="extraction-stage" class="text-slate-600">{{ progress.stage }}</span>
-    </div>
-  {% endif %}
+  <h2 class="text-lg font-bold text-slate-900 mb-1">{{ _('Bibliographic record') }}</h2>
+  <p class="text-sm text-slate-500 max-w-2xl leading-relaxed">
+    {{ _('These are the fields the catalogue and search index read. They are seeded from the archival description, which reads every page and cites its evidence, and only ever fill a box you have left empty.') }}
+  </p>
+  <a href="{{ url_for('proofing.project.description', slug=project.slug) }}"
+    class="inline-block mt-4 px-5 py-2.5 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 transition-colors">
+    {{ _('Go to the description') }}
+  </a>
 </div>
 
 {# --- Staged run --------------------------------------------------------- #}
@@ -231,26 +213,4 @@
   </section>
 {% endif %}
 
-{% if progress and progress.status == 'running' %}
-<script>
-  (function () {
-    const url = "{{ url_for('proofing.project.metadata_status', slug=project.slug) }}";
-    const stage = document.getElementById('extraction-stage');
-    const poll = setInterval(async function () {
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
-        if (data.status === 'running') {
-          if (stage && data.stage) stage.textContent = data.stage;
-          return;
-        }
-        clearInterval(poll);
-        window.location.reload();
-      } catch (e) {
-        clearInterval(poll);
-      }
-    }, 4000);
-  })();
-</script>
-{% endif %}
 {% endblock %}

@@ -1,5 +1,23 @@
 """Background extraction of book metadata.
 
+**The extraction here is retired.** `extract_project_metadata` has no caller: the
+description tab reads every page and cites its evidence, and seeds these same
+columns through `utils.archival_description.write_down`. This module read the
+front matter and a sample of the body, which cannot answer the recall questions
+an archival description is mostly made of, and running both would give two
+answers to "what is this called".
+
+What is still live and imported elsewhere:
+
+* `apply_bibliographic` -- the fill-only-empty-columns rule, reused by the
+  write-down so there is one place that decides whether a generated value may
+  touch a column a human has typed in.
+* `accept_staged` -- so a run staged before the changeover is not stranded.
+* `SCHEMA_VERSION` -- still stamped on `extracted_metadata`.
+
+The sampling code below is kept rather than deleted because the samplers in
+`utils.project_metadata` are shared with the windowing that replaced it.
+
 Orchestrates three persona calls against the chat service, with the
 deterministic work (script profiling, page counts, OCR engine list) done
 locally in `kalanjiyam.utils.project_metadata` so the model is never asked to
@@ -240,9 +258,7 @@ def _deep_content_analysis(session, project_id, tracks, scripts, errors: list[st
         sample = pm._assemble(session, window, budget)
         if not sample.text.strip():
             continue
-        _set_progress(
-            project_id, stage=f"analyzing section {index} of {len(windows)}"
-        )
+        _set_progress(project_id, stage=f"analyzing section {index} of {len(windows)}")
         result = _call(PERSONA_CONTENT_ANALYSIS, sample.text, errors)
         results.append(result)
         if result is not None and result.ok:
@@ -308,9 +324,7 @@ def extract_project_metadata(self, project_id: int, deep: bool = False) -> dict:
             return _run(project_id, deep=deep)
         except Exception as e:  # noqa: BLE001 - surfaced to the UI
             LOG.exception("metadata extraction failed for project %s", project_id)
-            _set_progress(
-                project_id, status=STATUS_ERROR, stage="failed", error=str(e)
-            )
+            _set_progress(project_id, status=STATUS_ERROR, stage="failed", error=str(e))
             return {"status": STATUS_ERROR, "error": str(e)}
         finally:
             if locked:
@@ -328,14 +342,22 @@ def _run(project_id: int, *, deep: bool) -> dict:
 
     total_stages = 5 if not deep else 6
     _set_progress(
-        project_id, status=STATUS_RUNNING, stage="resolving pages", done=0,
-        total=total_stages, error=None,
+        project_id,
+        status=STATUS_RUNNING,
+        stage="resolving pages",
+        done=0,
+        total=total_stages,
+        error=None,
     )
 
     tracks = pm.resolve_extraction_tracks(session, project_id)
     if not tracks:
-        _set_progress(project_id, status=STATUS_ERROR, stage="no text",
-                      error="This project has no OCR'd or edited pages yet.")
+        _set_progress(
+            project_id,
+            status=STATUS_ERROR,
+            stage="no text",
+            error="This project has no OCR'd or edited pages yet.",
+        )
         return {"status": STATUS_ERROR, "error": "no text"}
 
     _set_progress(project_id, stage="profiling scripts", done=1)
@@ -350,11 +372,18 @@ def _run(project_id: int, *, deep: bool) -> dict:
     existing = project.extracted_metadata or {}
     sample_hash = _sample_hash(front.text, body.text, languages.text)
     previous = (existing.get("provenance") or {}).get("sample_hash")
-    if previous == sample_hash and (existing.get("provenance") or {}).get(
-        "status"
-    ) == STATUS_OK and not deep:
-        _set_progress(project_id, status=STATUS_OK, stage="unchanged",
-                      done=total_stages, total=total_stages)
+    if (
+        previous == sample_hash
+        and (existing.get("provenance") or {}).get("status") == STATUS_OK
+        and not deep
+    ):
+        _set_progress(
+            project_id,
+            status=STATUS_OK,
+            stage="unchanged",
+            done=total_stages,
+            total=total_stages,
+        )
         return {"status": STATUS_OK, "unchanged": True}
 
     errors: list[str] = []
@@ -369,7 +398,9 @@ def _run(project_id: int, *, deep: bool) -> dict:
         )
     else:
         content_result = _call(PERSONA_CONTENT_ANALYSIS, body.text, errors)
-        content_data = content_result.data if content_result and content_result.ok else None
+        content_data = (
+            content_result.data if content_result and content_result.ok else None
+        )
         content_results = [content_result]
 
     _set_progress(project_id, stage="identifying languages", done=total_stages - 1)
@@ -381,8 +412,14 @@ def _run(project_id: int, *, deep: bool) -> dict:
         language_result.data if language_result and language_result.ok else None
     )
 
-    status = STATUS_OK if not errors else (
-        STATUS_PARTIAL if (front_data or content_data or language_data) else STATUS_ERROR
+    status = (
+        STATUS_OK
+        if not errors
+        else (
+            STATUS_PARTIAL
+            if (front_data or content_data or language_data)
+            else STATUS_ERROR
+        )
     )
 
     provenance = {
@@ -417,8 +454,12 @@ def _run(project_id: int, *, deep: bool) -> dict:
 
     _save(session, project, payload, existing)
     _set_progress(
-        project_id, status=status, stage="done", done=total_stages,
-        total=total_stages, error="; ".join(errors) if errors else None,
+        project_id,
+        status=status,
+        stage="done",
+        done=total_stages,
+        total=total_stages,
+        error="; ".join(errors) if errors else None,
     )
     return {"status": status, "errors": errors}
 
@@ -437,9 +478,7 @@ def _language_prompt(sample_text: str, derived: dict) -> str:
 
 def _save(session, project, payload: dict, existing: dict) -> None:
     """Persist a run, staging it when curated values already exist."""
-    curated = bool(
-        (existing.get("content") or {}) or (existing.get("languages") or [])
-    )
+    curated = bool((existing.get("content") or {}) or (existing.get("languages") or []))
 
     if curated:
         # Something is already there; park the new run for review rather than

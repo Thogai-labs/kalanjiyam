@@ -199,7 +199,20 @@ class MetadataWindow(Base):
 
 
 class MetadataField(Base):
-    """One tag of the finished description."""
+    """One tag of the finished description.
+
+    Rows come in two kinds, distinguished by `run_id`:
+
+    * **Generated** (`run_id` set) -- what a run produced. Replaced wholesale by
+      the next run, and deleted with it.
+    * **Curated** (`run_id` NULL) -- what an archivist typed, keyed by project and
+      tag. A run never reads or writes these, which is what makes "a regenerate
+      must not destroy curation" true by construction rather than by discipline.
+
+    The curated row also has to exist *before* any run does: the three write-locked
+    tags are never extracted at all, so requiring a run to hang them from would
+    make them unenterable on a project that has not been extracted yet.
+    """
 
     __tablename__ = "metadata_fields"
     __table_args__ = (
@@ -207,10 +220,13 @@ class MetadataField(Base):
     )
 
     id = pk()
+    #: NULL on a curated row -- see the class docstring. Uniqueness for those is
+    #: enforced by a partial index on (project_id, tag_code), because a NULL
+    #: never collides in a UNIQUE constraint.
     run_id = Column(
         Integer,
         ForeignKey("metadata_extraction_runs.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     #: Denormalised so the current description for a project can be read without
@@ -250,6 +266,11 @@ class MetadataField(Base):
     def effective_value(self):
         """What the catalogue should show: curation outranks a generated value."""
         return self.curated_value if self.is_curated else self.value
+
+    @property
+    def is_curated_row(self) -> bool:
+        """True for the project-scoped curation layer, false for run output."""
+        return self.run_id is None
 
 
 class MetadataEvidence(Base):

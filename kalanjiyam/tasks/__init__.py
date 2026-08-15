@@ -42,8 +42,6 @@ app = Celery(
         "kalanjiyam.tasks.search_index",
         "kalanjiyam.tasks.metadata",
         "kalanjiyam.tasks.archival_extract",
-        # SMOKE TEST: delete with the rest of the archival taxonomy experiment.
-        "kalanjiyam.tasks.archival_test",
     ],
 )
 app.conf.update(

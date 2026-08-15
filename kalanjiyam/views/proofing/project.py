@@ -40,17 +40,20 @@ import redis
 
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
-from kalanjiyam.utils.translation_engine import get_available_translation_engines, get_supported_languages_list
+from kalanjiyam.utils.translation_engine import (
+    get_available_translation_engines,
+    get_supported_languages_list,
+)
 from kalanjiyam.models.proofing import OCRComparison
 from kalanjiyam.tasks import app as celery_app
 from kalanjiyam.tasks import ocr as ocr_tasks
 from kalanjiyam.tasks.comparison import run_ocr_comparison_task
 from kalanjiyam.tasks import translation as translation_tasks
 from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
-from kalanjiyam.tasks import archival_test
+from kalanjiyam.tasks import archival_extract as archival_tasks
 from kalanjiyam.tasks import metadata as metadata_tasks
+from kalanjiyam.utils import archival_description as ad
 from kalanjiyam.utils import archival_taxonomy as at
-from kalanjiyam.utils import llm_client
 from kalanjiyam.utils import project_metadata as pm
 from kalanjiyam.utils import project_utils, proofing_utils
 from kalanjiyam.utils.revisions import add_revision
@@ -79,7 +82,9 @@ def _enforce_project_access():
             "proofing.project.confirm_changes",
         }
         if request.endpoint in restricted_endpoints:
-                flask_abort(403, description=_l("Superadmins are not allowed to view project data."))
+            flask_abort(
+                403, description=_l("Superadmins are not allowed to view project data.")
+            )
 
     slug = request.view_args.get("slug") if request.view_args else None
     if not slug:
@@ -210,7 +215,9 @@ class ProjectMetadataForm(FlaskForm):
         widget=TextArea(),
         render_kw={
             "rows": 4,
-            "placeholder": _l("One per line: code, script, role\ne.g. sa, Deva, primary"),
+            "placeholder": _l(
+                "One per line: code, script, role\ne.g. sa, Deva, primary"
+            ),
         },
     )
     summary = StringField(
@@ -233,52 +240,44 @@ class ProjectMetadataForm(FlaskForm):
     )
 
 
-class MetadataExtractForm(FlaskForm):
-    """Trigger for a background extraction run."""
-
-    deep = BooleanField(_l("Deep analysis"))
-
-
 class MetadataAcceptForm(FlaskForm):
-    """Promote a staged extraction over the current values."""
+    """Promote a staged extraction over the current values.
 
-
-class ArchivalTestForm(FlaskForm):
-    """SMOKE TEST: paste an archival-taxonomy document as raw JSON.
-
-    Feeding the tab by hand keeps the experiment independent of the LLM service.
+    Kept after the sampling extractor was retired so that a run staged before
+    the changeover can still be applied instead of being stranded.
     """
 
-    document = StringField(
-        _l("Document (JSON)"),
-        widget=TextArea(),
-        render_kw={"rows": 18, "class": "font-mono text-xs"},
-    )
+
+class DescriptionExtractForm(FlaskForm):
+    """Trigger a full-text archival extraction."""
+
+    force = BooleanField(_l("Re-read every window"))
 
 
-class ArchivalResetForm(FlaskForm):
-    """SMOKE TEST: drop the test document, leaving the rest of the JSON alone."""
+class DescriptionCurateForm(FlaskForm):
+    """Archivist entry for one tag of the description.
 
-
-class ArchivalRunForm(FlaskForm):
-    """SMOKE TEST: run the taxonomy extraction against a chat persona.
-
-    The persona name is an input rather than a constant because the taxonomy
-    has no persona of its own registered server-side. Point it at whatever
-    exists on the service and carry the instructions in the user message.
+    One tag per submit rather than one big form: the write-locked tags are prose
+    an archivist writes deliberately, and a single form over twenty-two fields
+    turns every small correction into a whole-description save.
     """
 
-    persona = StringField(
-        _l("Persona"),
-        default=llm_client.PERSONA_FRONT_MATTER,
-        render_kw={"class": "font-mono text-xs"},
-    )
-    instructions = StringField(
-        _l("Instructions"),
+    tag_code = HiddenField(validators=[DataRequired()])
+    value = StringField(
+        _l("Value"),
         widget=TextArea(),
-        render_kw={"rows": 14, "class": "font-mono text-xs"},
+        render_kw={"rows": 6},
     )
-    max_chars = StringField(_l("Max characters of page text"), default="6000")
+
+    def validate_tag_code(self, field):
+        if field.data not in at.BY_CODE:
+            raise ValidationError(_l("Unknown tag."))
+        tag = at.BY_CODE[field.data]
+        if tag.kind not in (at.KIND_TEXT, at.KIND_PROSE):
+            # Entity and relation tags are lists of structured access points.
+            # A textarea cannot express one, and accepting free text here would
+            # quietly store a string where every reader expects a list.
+            raise ValidationError(_l("This tag cannot be edited as text."))
 
 
 class MatchForm(Form):
@@ -514,48 +513,15 @@ def metadata(slug):
         staged=data.get("staged"),
         entities=(content.get("entities") or {}),
         colophon=(content.get("colophon") or {}),
-        progress=metadata_tasks.get_progress(project_.id),
-        extract_form=MetadataExtractForm(),
         accept_form=MetadataAcceptForm(),
     )
 
 
-@bp.route("/<slug>/metadata/extract", methods=["POST"])
-@moderator_required
-def metadata_extract(slug):
-    """Kick off a background extraction run."""
-    project_ = q.project(slug)
-    if project_ is None:
-        abort(404)
-
-    form = MetadataExtractForm()
-    if not form.validate_on_submit():
-        flash(_l("Could not start extraction. Please try again."), "error")
-        return redirect(url_for("proofing.project.metadata", slug=slug))
-
-    try:
-        metadata_tasks.extract_project_metadata.delay(
-            project_.id, deep=bool(form.deep.data)
-        )
-        flash(
-            _l("Extraction started. This page will update when it finishes."),
-            "success",
-        )
-    except Exception:
-        LOG.exception("could not enqueue metadata extraction for %s", slug)
-        flash(_l("Could not start extraction. Please try again."), "error")
-
-    return redirect(url_for("proofing.project.metadata", slug=slug))
-
-
-@bp.route("/<slug>/metadata/status")
-@moderator_required
-def metadata_status(slug):
-    """Poll the progress of a running extraction."""
-    project_ = q.project(slug)
-    if project_ is None:
-        abort(404)
-    return jsonify(metadata_tasks.get_progress(project_.id) or {"status": "idle"})
+# The sampling extractor that used to fill this tab is retired. It read the front
+# matter and a handful of body pages; the description tab reads every page and
+# cites its evidence, and writes the columns below through
+# `archival_description.write_down`. Running both would mean two passes over one
+# PDF and two competing answers to "what is this called".
 
 
 @bp.route("/<slug>/metadata/accept", methods=["POST"])
@@ -579,169 +545,112 @@ def metadata_accept(slug):
     return redirect(url_for("proofing.project.metadata", slug=slug))
 
 
-# Archival taxonomy smoke test
-# ---------------------------
+# Archival description
+# --------------------
 #
-# Throwaway. Renders the ISAD(G)/ISAAR(CPF)/RiC taxonomy from a JSON document
-# stored under `extracted_metadata["archival"]`, so we can judge the shape
-# against a real project before deciding whether it becomes a data model.
+# The catalogue record itself: twenty-two tags to ISAD(G)/ISAAR(CPF)/RiC, filled
+# by a full-text extraction run and corrected by an archivist.
 #
-# Deliberately does not touch any column, does not reindex, and does not call
-# the LLM service. To remove the experiment, delete these two routes, the two
-# forms above, `utils/archival_taxonomy.py`, the template, and the macro entry.
-
-#: The two keys this experiment owns inside `extracted_metadata`.
-ARCHIVAL_KEY = "archival"
-ARCHIVAL_RUN_KEY = "archival_run"
-
-#: Sampling and timeout limits live on the task module.
+# Three of the tags -- REFERENCE, CUSTODIAL HISTORY, ACCESS -- are never sent to
+# the extractor and can only be typed here. They come from the accession record,
+# not the page text, and a model asked for a custodial history will invent one.
 
 
-@bp.route("/<slug>/metadata-test", methods=["GET", "POST"])
+@bp.route("/<slug>/description")
 @moderator_required
-def metadata_test(slug):
-    """SMOKE TEST: render the archival taxonomy from a pasted JSON document."""
+def description(slug):
+    """The archival description, generated values merged with curated ones."""
     project_ = q.project(slug)
     if project_ is None:
         abort(404)
 
-    data = project_.extracted_metadata or {}
-    document = data.get(ARCHIVAL_KEY)
-    if document is not None:
-        # Documents stored before the codes were renamed are keyed by the old
-        # short tags; rewrite on read so they still render.
-        document = at.migrate_document(document)
-    form = ArchivalTestForm()
-
-    if form.validate_on_submit():
-        # `None` is a valid JSON value ("null"), so it cannot double as the
-        # parse-failure sentinel.
-        failed = object()
-        try:
-            parsed = json.loads(form.document.data or "{}")
-        except json.JSONDecodeError as e:
-            # Re-render with the pasted text intact -- losing it would make the
-            # tab useless for iterating on a long document.
-            flash(_l("Invalid JSON: %(error)s", error=str(e)), "error")
-            parsed = failed
-
-        if parsed is not failed:
-            if not isinstance(parsed, dict):
-                flash(_l("The document must be a JSON object."), "error")
-            else:
-                merged = dict(data)
-                merged[ARCHIVAL_KEY] = parsed
-                project_.extracted_metadata = merged
-                # SQLAlchemy does not track in-place mutation of a JSON column.
-                flag_modified(project_, "extracted_metadata")
-                q.get_session().commit()
-                flash(_l("Loaded the test document."), "success")
-                return redirect(
-                    url_for("proofing.project.metadata_test", slug=slug)
-                )
-
-    if request.method == "GET":
-        # Fall back to the sample so the tab shows something on first load.
-        form.document.data = json.dumps(
-            document if document is not None else at.SAMPLE,
-            indent=2,
-            ensure_ascii=False,
-        )
-
-    rendered = document if document is not None else at.SAMPLE
-    progress = archival_test.get_progress(project_.id)
+    session = q.get_session()
+    view = ad.describe(session, project_.id)
+    progress = archival_tasks.get_progress(project_.id)
     return render_template(
-        "proofing/projects/metadata_test.html",
+        "proofing/projects/description.html",
         project=project_,
-        form=form,
-        reset_form=ArchivalResetForm(),
-        # formdata=None: this render can follow a POST to the *paste* form,
-        # whose fields would otherwise bind here and blank the instructions.
-        run_form=ArchivalRunForm(formdata=None, instructions=at.build_prompt()),
-        run=data.get(ARCHIVAL_RUN_KEY),
+        extract_form=DescriptionExtractForm(),
+        curate_form=DescriptionCurateForm(formdata=None),
         progress=progress,
-        running=bool(progress and progress.get("status") == "running"),
-        groups=at.GROUPS,
-        document=rendered,
-        coverage=at.coverage(rendered),
-        is_sample=document is None,
+        running=bool(
+            progress and progress.get("status") == archival_tasks.STATUS_RUNNING
+        ),
         taxonomy=at,
+        **view,
     )
 
 
-@bp.route("/<slug>/metadata-test/run", methods=["POST"])
+@bp.route("/<slug>/description/extract", methods=["POST"])
 @moderator_required
-def metadata_test_run(slug):
-    """SMOKE TEST: enqueue a taxonomy extraction run.
+def description_extract(slug):
+    """Enqueue a full-text extraction run."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
 
-    Runs on Celery like the real pipeline, so the sample is not capped by a
-    worker timeout and the tab can poll for progress.
+    form = DescriptionExtractForm()
+    if not form.validate_on_submit():
+        flash(_l("Could not start the extraction."), "error")
+        return redirect(url_for("proofing.project.description", slug=slug))
+
+    try:
+        archival_tasks.extract_archival_metadata.delay(
+            project_.id, force=bool(form.force.data)
+        )
+        flash(
+            _l("Extraction started. It reads every page, so it takes a while."),
+            "success",
+        )
+    except Exception:
+        LOG.exception("could not enqueue archival extraction for %s", slug)
+        flash(_l("Could not start the extraction."), "error")
+
+    return redirect(url_for("proofing.project.description", slug=slug))
+
+
+@bp.route("/<slug>/description/status")
+@moderator_required
+def description_status(slug):
+    """Poll a running extraction."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+    return jsonify(archival_tasks.get_progress(project_.id) or {"status": "idle"})
+
+
+@bp.route("/<slug>/description/curate", methods=["POST"])
+@moderator_required
+def description_curate(slug):
+    """Save an archivist's value for one tag.
+
+    Curated values live in their own rows and are never touched by an extraction
+    run, so this cannot be undone by a later regenerate. Submitting an empty box
+    clears the curation and restores whatever the extractor found.
     """
     project_ = q.project(slug)
     if project_ is None:
         abort(404)
 
-    form = ArchivalRunForm()
+    form = DescriptionCurateForm()
     if not form.validate_on_submit():
-        flash(_l("Could not start the run."), "error")
-        return redirect(url_for("proofing.project.metadata_test", slug=slug))
+        flash(_l("Could not save that value."), "error")
+        return redirect(url_for("proofing.project.description", slug=slug))
 
-    persona = (form.persona.data or "").strip() or llm_client.PERSONA_FRONT_MATTER
-    instructions = (form.instructions.data or "").strip() or at.build_prompt()
+    session = q.get_session()
+    value = (form.value.data or "").strip()
+    user_id = current_user.id if current_user.is_authenticated else None
 
-    try:
-        archival_test.run_archival_test.delay(
-            project_.id,
-            persona=persona,
-            instructions=instructions,
-            max_chars=archival_test.clamp_chars(form.max_chars.data),
-        )
-        flash(_l("Run started. This page updates when it finishes."), "success")
-    except Exception:
-        LOG.exception("could not enqueue archival test for %s", slug)
-        flash(_l("Could not start the run."), "error")
-
-    return redirect(url_for("proofing.project.metadata_test", slug=slug))
-
-
-@bp.route("/<slug>/metadata-test/status")
-@moderator_required
-def metadata_test_status(slug):
-    """Poll the progress of a running smoke test."""
-    project_ = q.project(slug)
-    if project_ is None:
-        abort(404)
-    return jsonify(
-        archival_test.get_progress(project_.id) or {"status": "idle"}
-    )
-
-
-@bp.route("/<slug>/metadata-test/reset", methods=["POST"])
-@moderator_required
-def metadata_test_reset(slug):
-    """SMOKE TEST: remove the test document, leaving every other key intact."""
-    project_ = q.project(slug)
-    if project_ is None:
-        abort(404)
-
-    form = ArchivalResetForm()
-    if not form.validate_on_submit():
-        flash(_l("Could not reset the test document."), "error")
-        return redirect(url_for("proofing.project.metadata_test", slug=slug))
-
-    data = project_.extracted_metadata or {}
-    if ARCHIVAL_KEY in data or ARCHIVAL_RUN_KEY in data:
-        merged = dict(data)
-        merged.pop(ARCHIVAL_KEY, None)
-        merged.pop(ARCHIVAL_RUN_KEY, None)
-        project_.extracted_metadata = merged
-        flag_modified(project_, "extracted_metadata")
-        q.get_session().commit()
-        flash(_l("Removed the test document."), "success")
+    if value:
+        ad.set_curated(session, project_.id, form.tag_code.data, value, user_id)
+        flash(_l("Saved %(tag)s.", tag=form.tag_code.data), "success")
+    elif ad.clear_curated(session, project_.id, form.tag_code.data):
+        flash(_l("Cleared %(tag)s.", tag=form.tag_code.data), "success")
     else:
-        flash(_l("There is no test document to remove."), "error")
+        flash(_l("There was nothing to clear."), "error")
 
-    return redirect(url_for("proofing.project.metadata_test", slug=slug))
+    session.commit()
+    return redirect(url_for("proofing.project.description", slug=slug))
 
 
 @bp.route("/<slug>/batch")
@@ -799,7 +708,10 @@ def delete_project(slug):
                     abort(403)
             else:
                 # Organization project: must be an org admin of this project's organization
-                is_org_admin = getattr(current_user, "is_org_admin", False) and any(g.id == getattr(current_user, "organization_id", None) for g in project_.groups)
+                is_org_admin = getattr(current_user, "is_org_admin", False) and any(
+                    g.id == getattr(current_user, "organization_id", None)
+                    for g in project_.groups
+                )
                 if not is_org_admin:
                     abort(403)
     else:
@@ -813,7 +725,10 @@ def delete_project(slug):
         if form.slug.data == slug:
             session = q.get_session()
             from kalanjiyam.models.batch import BatchItem
-            session.query(BatchItem).filter_by(project_id=project_.id).update({"project_id": None})
+
+            session.query(BatchItem).filter_by(project_id=project_.id).update(
+                {"project_id": None}
+            )
             deleted_project_id = project_.id
             session.delete(project_)
             session.commit()
@@ -824,6 +739,7 @@ def delete_project(slug):
             enqueue_project_removal(deleted_project_id)
 
             from kalanjiyam.utils.storage import get_storage, project_prefix
+
             get_storage().delete_prefix(project_prefix(slug))
 
             flash(_l("Deleted project %(slug)s", slug=slug), "success")
@@ -844,9 +760,12 @@ def download(slug):
         abort(404)
 
     from kalanjiyam.utils.storage import project_docx_key, get_storage
+
     is_docx = get_storage().exists(project_docx_key(slug))
 
-    return render_template("proofing/projects/download.html", project=project_, is_docx=is_docx)
+    return render_template(
+        "proofing/projects/download.html", project=project_, is_docx=is_docx
+    )
 
 
 @bp.route("/<slug>/download/text")
@@ -857,6 +776,7 @@ def download_as_text(slug):
         abort(404)
 
     from kalanjiyam.utils.proofing_utils import get_main_revision
+
     content_blobs = []
     for p in project_.pages:
         rev = get_main_revision(p)
@@ -891,8 +811,13 @@ def download_as_xml(slug):
     from kalanjiyam.utils.document_storage import load_revision_document as _load_doc
 
     from kalanjiyam.utils.proofing_utils import get_main_revision
+
     has_blocks = any(
-        (lambda rev: rev and getattr(rev, "content_format", "plain") == "blocks" and _load_doc(rev))(get_main_revision(p))
+        (
+            lambda rev: rev
+            and getattr(rev, "content_format", "plain") == "blocks"
+            and _load_doc(rev)
+        )(get_main_revision(p))
         for p in project_.pages
     )
     if has_blocks:
@@ -950,10 +875,10 @@ def download_as_docx(slug):
 
     blob = proofing_utils.documents_to_docx(project_.pages)
     response = make_response(blob, 200)
-    response.mimetype = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    response.headers["Content-Disposition"] = (
-        f'attachment; filename="{slug}.docx"'
+    response.mimetype = (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
+    response.headers["Content-Disposition"] = f'attachment; filename="{slug}.docx"'
     return response
 
 
@@ -971,7 +896,6 @@ def download_as_pdf(slug):
         f'attachment; filename="{slug}-replica.pdf"'
     )
     return response
-
 
 
 @bp.route("/<slug>/stats")
@@ -1044,6 +968,7 @@ def comparison_details(slug, comparison_id):
 
     # Ensure JSON columns are deserialized if they are returned as string (SQLite fallback)
     import json
+
     if isinstance(comparison.page_results, str):
         try:
             comparison.page_results = json.loads(comparison.page_results)
@@ -1400,14 +1325,14 @@ def batch_ocr(slug):
     # Check if there's an ongoing OCR task using Redis
     task_key = f"ocr_task:{slug}"
     task_info = redis_client.get(task_key)
-    
+
     if task_info:
         try:
             task_data = json.loads(task_info)
-            task_id = task_data.get('task_id')
-            engine = task_data.get('engine', 'google')
-            language = task_data.get('language', 'sa')
-            
+            task_id = task_data.get("task_id")
+            engine = task_data.get("engine", "google")
+            language = task_data.get("language", "sa")
+
             # Try to restore the task to check if it's still active
             r = GroupResult.restore(task_id, app=celery_app)
             if r and r.results:
@@ -1416,13 +1341,18 @@ def batch_ocr(slug):
                 # Check if task is still in progress (not all tasks completed)
                 if current < total:
                     percent = (current / total * 100) if total > 0 else 0
-                    
+
                     # Calculate task status variables
-                    active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
-                    pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
+                    active_tasks = sum(
+                        1 for result in r.results if result.state == "STARTED"
+                    )
+                    pending_tasks = sum(
+                        1 for result in r.results if result.state == "PENDING"
+                    )
                     failed_tasks = sum(1 for result in r.results if result.failed())
-                    
+
                     from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
+
                     numeric_value = REVERSE_ENGINE_MAP.get(engine, "1")
                     engine_label = f"OCR {numeric_value}"
 
@@ -1453,27 +1383,38 @@ def batch_ocr(slug):
             redis_client.delete(task_key)
 
     from kalanjiyam.utils.ocr_client import get_available_engines
-    from kalanjiyam.utils.ocr_types import ENGINE_MAP, build_engine_choices, REVERSE_ENGINE_MAP
+    from kalanjiyam.utils.ocr_types import (
+        ENGINE_MAP,
+        build_engine_choices,
+        REVERSE_ENGINE_MAP,
+    )
 
     system_settings = q.get_system_settings()
     default_ocr_engine = system_settings.default_ocr_engine or "google"
     default_engine_value = REVERSE_ENGINE_MAP.get(default_ocr_engine, "1")
     from kalanjiyam.utils.org_access import is_restricted_ocr_user
+
     is_restricted_ocr = is_restricted_ocr_user(current_user)
 
     if request.method == "POST":
         # Rate limit check for guest users
         if not current_user.is_authenticated:
             from kalanjiyam.utils.rate_limit import is_rate_limited
+
             ip_address = request.remote_addr
             fingerprint_id = request.cookies.get("device_fingerprint")
             limit = system_settings.unregistered_user_ocr_limit
             if is_rate_limited("run_ocr", ip_address, fingerprint_id, limit=limit):
-                flash(_l(f"Rate limit exceeded. Guests can only run OCR {limit} times per 24 hours."), "error")
+                flash(
+                    _l(
+                        f"Rate limit exceeded. Guests can only run OCR {limit} times per 24 hours."
+                    ),
+                    "error",
+                )
                 return redirect(url_for("proofing.project.batch_ocr", slug=slug))
 
-        engine_num = request.form.get('engine', '')
-        language = request.form.get('language', 'sa')
+        engine_num = request.form.get("engine", "")
+        language = request.form.get("language", "sa")
         if is_restricted_ocr:
             engine = default_ocr_engine
         else:
@@ -1494,22 +1435,27 @@ def batch_ocr(slug):
                 # Log usage action for guests
                 if not current_user.is_authenticated:
                     from kalanjiyam.utils.rate_limit import log_usage_action
+
                     log_usage_action(
                         action="run_ocr",
                         ip_address=request.remote_addr,
                         fingerprint_id=request.cookies.get("device_fingerprint"),
-                        project_slug=slug
+                        project_slug=slug,
                     )
                 task_info = {
-                    'task_id': task.id,
-                    'engine': engine,
-                    'language': language,
-                    'started_at': datetime.utcnow().isoformat(),
-                    'project_slug': slug,
+                    "task_id": task.id,
+                    "engine": engine,
+                    "language": language,
+                    "started_at": datetime.utcnow().isoformat(),
+                    "project_slug": slug,
                 }
                 redis_client.setex(task_key, 86400, json.dumps(task_info))
 
-                from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+                from kalanjiyam.utils.user_tasks import (
+                    add_user_task,
+                    get_user_identifier,
+                )
+
                 user_id = get_user_identifier(current_user, request)
                 if user_id:
                     add_user_task(
@@ -1518,9 +1464,10 @@ def batch_ocr(slug):
                         task_type="ocr",
                         project_slug=slug,
                         project_title=project_.display_title,
-                        extra_info={"engine": engine, "language": language}
+                        extra_info={"engine": engine, "language": language},
                     )
                 from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
+
                 numeric_value = REVERSE_ENGINE_MAP.get(engine, "1")
                 engine_label = f"OCR {numeric_value}"
 
@@ -1528,16 +1475,24 @@ def batch_ocr(slug):
                     "proofing/projects/batch-ocr-post.html",
                     project=project_,
                     status="PENDING",
-                    current=0, total=0, percent=0,
+                    current=0,
+                    total=0,
+                    percent=0,
                     task_id=task.id,
-                    active_tasks=0, pending_tasks=0, failed_tasks=0,
-                    engine=engine, language=language,
+                    active_tasks=0,
+                    pending_tasks=0,
+                    failed_tasks=0,
+                    engine=engine,
+                    language=language,
                     engine_label=engine_label,
                     is_restricted_ocr=is_restricted_ocr,
                     default_engine_value=default_engine_value,
                 )
             else:
-                flash(_l("All pages in this project have at least one edit already."), "error")
+                flash(
+                    _l("All pages in this project have at least one edit already."),
+                    "error",
+                )
 
     ocr_status = get_available_engines()
     engine_choices = build_engine_choices(
@@ -1563,7 +1518,7 @@ def _clear_ocr_task_from_redis(task_id):
             task_info = redis_client.get(key)
             if task_info:
                 task_data = json.loads(task_info)
-                if task_data.get('task_id') == task_id:
+                if task_data.get("task_id") == task_id:
                     redis_client.delete(key)
                     LOG.debug(f"Cleared OCR task {task_id} from Redis key {key}")
                     break
@@ -1596,14 +1551,15 @@ def batch_ocr_status(task_id):
             task_info = redis_client.get(key)
             if task_info:
                 task_data = json.loads(task_info)
-                if task_data.get('task_id') == task_id:
-                    engine = task_data.get('engine', 'google')
-                    language = task_data.get('language', 'sa')
+                if task_data.get("task_id") == task_id:
+                    engine = task_data.get("engine", "google")
+                    language = task_data.get("language", "sa")
                     break
     except Exception as e:
         LOG.warning(f"Error getting OCR task info from Redis: {e}")
 
     from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
+
     numeric_value = REVERSE_ENGINE_MAP.get(engine, "1")
     engine_label = f"OCR {numeric_value}"
 
@@ -1613,10 +1569,10 @@ def batch_ocr_status(task_id):
         percent = (current / total * 100) if total > 0 else 0
 
         # Check if any tasks are actively being processed
-        active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
-        pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
+        active_tasks = sum(1 for result in r.results if result.state == "STARTED")
+        pending_tasks = sum(1 for result in r.results if result.state == "PENDING")
         failed_tasks = sum(1 for result in r.results if result.failed())
-        revoked_tasks = sum(1 for result in r.results if result.state == 'REVOKED')
+        revoked_tasks = sum(1 for result in r.results if result.state == "REVOKED")
 
         status = None
         if total:
@@ -1683,12 +1639,12 @@ def batch_translate(slug):
     except Exception as e:
         LOG.warning(f"Error accessing Redis for task {slug}: {e}")
         task_info = None
-    
+
     if task_info:
         try:
             task_data = json.loads(task_info)
-            task_id = task_data.get('task_id')
-            
+            task_id = task_data.get("task_id")
+
             # Try to restore the task to check if it's still active
             r = GroupResult.restore(task_id, app=celery_app)
             if r and r.results:
@@ -1697,12 +1653,16 @@ def batch_translate(slug):
                 # Check if task is still in progress (not all tasks completed)
                 if current < total:
                     percent = (current / total * 100) if total > 0 else 0
-                    
+
                     # Calculate task status variables
-                    active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
-                    pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
+                    active_tasks = sum(
+                        1 for result in r.results if result.state == "STARTED"
+                    )
+                    pending_tasks = sum(
+                        1 for result in r.results if result.state == "PENDING"
+                    )
                     failed_tasks = sum(1 for result in r.results if result.failed())
-                    
+
                     return render_template(
                         "proofing/projects/batch-translate.html",
                         project=project_,
@@ -1730,10 +1690,10 @@ def batch_translate(slug):
 
     if request.method == "POST":
         # Get translation parameters from form
-        source_lang = request.form.get('source_lang', 'sa')
-        target_lang = request.form.get('target_lang', 'en')
-        engine = request.form.get('engine', 'google')
-        glossary = request.form.get('glossary') or None
+        source_lang = request.form.get("source_lang", "sa")
+        target_lang = request.form.get("target_lang", "en")
+        engine = request.form.get("engine", "google")
+        glossary = request.form.get("glossary") or None
 
         if source_lang == target_lang:
             flash(_l("Source and Target languages must be different."), "error")
@@ -1743,9 +1703,10 @@ def batch_translate(slug):
                 engines=engines,
                 languages=languages,
             )
-        
+
         # Validate engine
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
+
         if engine not in TranslationEngineFactory.get_supported_engines():
             flash(_l("Unsupported translation engine selected."), "error")
             return render_template(
@@ -1754,7 +1715,7 @@ def batch_translate(slug):
                 engines=engines,
                 languages=languages,
             )
-        
+
         queue_name = "low_priority" if not current_user.is_authenticated else None
         task = translation_tasks.run_translation_for_project(
             app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
@@ -1768,12 +1729,12 @@ def batch_translate(slug):
         if task:
             # Store task info in Redis with expiration (24 hours)
             task_info = {
-                'task_id': task.id,
-                'engine': engine,
-                'source_lang': source_lang,
-                'target_lang': target_lang,
-                'started_at': datetime.utcnow().isoformat(),
-                'project_slug': slug
+                "task_id": task.id,
+                "engine": engine,
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+                "started_at": datetime.utcnow().isoformat(),
+                "project_slug": slug,
             }
             try:
                 redis_client.setex(task_key, 86400, json.dumps(task_info))
@@ -1781,6 +1742,7 @@ def batch_translate(slug):
                 LOG.warning(f"Error setting Redis key for task {slug}: {redis_err}")
 
             from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+
             user_id = get_user_identifier(current_user, request)
             if user_id:
                 add_user_task(
@@ -1789,9 +1751,14 @@ def batch_translate(slug):
                     task_type="translation",
                     project_slug=slug,
                     project_title=project_.display_title,
-                    extra_info={"engine": engine, "source_lang": source_lang, "target_lang": target_lang, "glossary": glossary}
+                    extra_info={
+                        "engine": engine,
+                        "source_lang": source_lang,
+                        "target_lang": target_lang,
+                        "glossary": glossary,
+                    },
                 )
-            
+
             return render_template(
                 "proofing/projects/batch-translate.html",
                 project=project_,
@@ -1838,26 +1805,35 @@ def batch_translate_status(task_id):
         percent = (current / total * 100) if total > 0 else 0
 
         # Check if any tasks are actively being processed
-        active_tasks = sum(1 for result in r.results if result.state == 'STARTED')
-        pending_tasks = sum(1 for result in r.results if result.state == 'PENDING')
+        active_tasks = sum(1 for result in r.results if result.state == "STARTED")
+        pending_tasks = sum(1 for result in r.results if result.state == "PENDING")
         failed_tasks = sum(1 for result in r.results if result.failed())
-        revoked_tasks = sum(1 for result in r.results if result.state == 'REVOKED')
+        revoked_tasks = sum(1 for result in r.results if result.state == "REVOKED")
 
         status = None
         if total:
             if current == total:
                 status = "SUCCESS"
                 # Clear the task from Redis when complete
-                from kalanjiyam.tasks.translation import _clear_translation_task_from_redis
+                from kalanjiyam.tasks.translation import (
+                    _clear_translation_task_from_redis,
+                )
+
                 _clear_translation_task_from_redis(task_id)
             elif failed_tasks > 0:
                 status = "FAILURE"
                 # Clear the task from Redis when failed
-                from kalanjiyam.tasks.translation import _clear_translation_task_from_redis
+                from kalanjiyam.tasks.translation import (
+                    _clear_translation_task_from_redis,
+                )
+
                 _clear_translation_task_from_redis(task_id)
             elif revoked_tasks > 0:
                 status = "CANCELLED"
-                from kalanjiyam.tasks.translation import _clear_translation_task_from_redis
+                from kalanjiyam.tasks.translation import (
+                    _clear_translation_task_from_redis,
+                )
+
                 _clear_translation_task_from_redis(task_id)
             else:
                 status = "PROGRESS"
@@ -1907,7 +1883,10 @@ def admin(slug):
         if form.slug.data == slug:
             session = q.get_session()
             from kalanjiyam.models.batch import BatchItem
-            session.query(BatchItem).filter_by(project_id=project_.id).update({"project_id": None})
+
+            session.query(BatchItem).filter_by(project_id=project_.id).update(
+                {"project_id": None}
+            )
             deleted_project_id = project_.id
             session.delete(project_)
             session.commit()
