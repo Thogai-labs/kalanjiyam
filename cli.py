@@ -1460,10 +1460,14 @@ def metadata_extract(slugs, all_projects, force, local, limit):
     if not slugs and not all_projects:
         raise click.ClickException("Pass --project SLUG (repeatable) or --all.")
 
-    current_app = kalanjiyam.create_app("development")
-    with current_app.app_context():
-        session = q.get_session()
+    # `Session(engine)` rather than `create_app`, like every other command here.
+    # `create_app` runs the startup sanity checks, which abort on any drift
+    # between the seeded lookup tables and the enums -- fine for serving a site,
+    # wrong for a maintenance command whose job may be to fix that drift. The
+    # task supplies its own config-only app context when it needs one.
+    from kalanjiyam.tasks import archival_extract
 
+    with Session(engine) as session:
         if all_projects:
             projects = session.query(db.Project).order_by(db.Project.id).all()
         else:
@@ -1481,13 +1485,11 @@ def metadata_extract(slugs, all_projects, force, local, limit):
             click.echo("No projects matched.")
             return
 
-        from kalanjiyam.tasks import archival_extract
-
         for project in projects:
             if local:
                 click.echo(f"{project.slug}: extracting...")
-                # `.apply()` rather than calling the private body: it keeps the
-                # Redis lock, so a CLI run and a UI run cannot collide.
+                # `.apply()` rather than the private body: it keeps the Redis
+                # lock, so a CLI run and a UI run cannot collide.
                 result = archival_extract.extract_archival_metadata.apply(
                     args=[project.id], kwargs={"force": force}
                 ).get()
@@ -1507,9 +1509,7 @@ def metadata_extract(slugs, all_projects, force, local, limit):
                 if result.get("error"):
                     click.echo(f"      error: {result['error']}")
             else:
-                archival_extract.extract_archival_metadata.delay(
-                    project.id, force=force
-                )
+                archival_extract.extract_archival_metadata.delay(project.id, force=force)
                 click.echo(f"{project.slug}: queued")
 
         if not local:
@@ -1529,9 +1529,7 @@ def metadata_runs(slug, limit):
     driving a batch from a terminal. Blank confidence and token columns mean the
     service reported none, which is not the same as zero.
     """
-    current_app = kalanjiyam.create_app("development")
-    with current_app.app_context():
-        session = q.get_session()
+    with Session(engine) as session:
         query = session.query(db.MetadataExtractionRun)
 
         if slug:
