@@ -125,6 +125,48 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # Archival metadata extraction. Its own worker, not a queue added to the two
+  # above: a full-text pass is 10-20 minutes of continuous GPU per document, so
+  # on the `ocr` queue it would starve live OCR and on `s3_batch` it would stall
+  # batch OCR behind it. Without a worker consuming `metadata`, an extraction
+  # enqueues successfully and then never runs.
+  kalanjiyam-celery-metadata:
+    image: ${KALANJIYAM_IMAGE}
+    container_name: kalanjiyam-celery-metadata-staging
+    restart: unless-stopped
+    command: >
+      celery -A kalanjiyam.tasks worker
+      -Q metadata
+      --loglevel=INFO
+      --concurrency=1
+      --prefetch-multiplier=1
+    env_file:
+      - ../../.env
+    environment:
+      - FLASK_ENV=${FLASK_ENV:-staging}
+      - REDIS_URL=redis://kalanjiyam-redis:6379/0
+      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam
+      - OCR_BACKEND=remote
+      - OCR_SERVICE_URL=${OCR_SERVICE_URL}
+      - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
+      - TRANSLATION_SERVICE_API_KEY=${TRANSLATION_SERVICE_API_KEY}
+      - FLASK_UPLOAD_FOLDER=/data/uploads
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
+      - S3_ENDPOINT_URL=http://kalanjiyam-versitygw:7070
+      - S3_BUCKET=${S3_BUCKET:-uploads}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-kalanjiyam}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-kalanjiyam}
+      - OPENSEARCH_URL=http://kalanjiyam-search:9200
+    volumes:
+      - ${KALANJIYAM_DATA_DIR:-${HOME}/kalanjiyam-data}/uploads:/data/uploads
+    depends_on:
+      - kalanjiyam-db
+      - kalanjiyam-redis
+      - kalanjiyam-versitygw
+      - kalanjiyam-search
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   # OpenSearch (Lucene) backing the full-text search index.
   # Not published to the host: reachable only from the compose network.
   kalanjiyam-search:
