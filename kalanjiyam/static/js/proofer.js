@@ -582,7 +582,8 @@ export default () => ({
         "paddle_table": "9",
         "glm_ocr": "10",
         "tesseract_manuscript": "11",
-        "dots_ocr": "12"
+        "dots_ocr": "12",
+        "gemma_4": "13"
       };
       const num = engineMap[engine] || engine;
       if (/^\d+$/.test(num)) {
@@ -1289,6 +1290,7 @@ export default () => ({
       '10': 'glm_ocr',
       '11': 'tesseract_manuscript',
       '12': 'dots_ocr',
+      '13': 'gemma_4',
     };
     return engineMap[engineValue] || 'google';
   },

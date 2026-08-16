@@ -130,6 +130,7 @@ TIER_UNKNOWN = 5
 OCR_ENGINE_PREFERENCE = (
     "chandra",
     "dots_ocr",
+    "gemma_4",
     "glm_ocr",
     "qwen3",
     "deepseek",
