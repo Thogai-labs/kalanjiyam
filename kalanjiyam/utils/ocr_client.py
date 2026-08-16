@@ -132,14 +132,15 @@ def _sanitize_block(block: dict) -> dict:
 
 def _get_ocr_service_targets() -> list[tuple[str, str]]:
     """Returns list of (base_url, api_key) pairs for primary and fallback OCR services."""
+    import os
     targets = []
-    url1 = current_app.config.get("OCR_SERVICE_URL", "").rstrip("/")
-    key1 = current_app.config.get("OCR_SERVICE_API_KEY") or ""
+    url1 = (current_app.config.get("OCR_SERVICE_URL") or os.environ.get("OCR_SERVICE_URL") or "").rstrip("/")
+    key1 = current_app.config.get("OCR_SERVICE_API_KEY") or os.environ.get("OCR_SERVICE_API_KEY") or ""
     if url1:
         targets.append((url1, key1))
 
-    url2 = current_app.config.get("OCR_SERVICE_URL_2", "").rstrip("/")
-    key2 = current_app.config.get("OCR_SERVICE_API_KEY_2") or key1
+    url2 = (current_app.config.get("OCR_SERVICE_URL_2") or os.environ.get("OCR_SERVICE_URL_2") or "").rstrip("/")
+    key2 = current_app.config.get("OCR_SERVICE_API_KEY_2") or os.environ.get("OCR_SERVICE_API_KEY_2") or key1
     if url2 and url2 != url1:
         targets.append((url2, key2))
 
@@ -150,7 +151,7 @@ def get_available_engines() -> dict:
     """Ping the OCR service and return which engines are ready.
 
     Tries primary OCR_SERVICE_URL first, falling back to OCR_SERVICE_URL_2
-    if primary is unreachable.
+    if primary is unreachable or returns an error.
 
     Returns a dict with:
       status: "ok" | "unavailable" | "no_engines"
@@ -170,8 +171,11 @@ def get_available_engines() -> dict:
                 engines = [normalize_service_engine(e) for e in raw]
                 status = "ok" if engines else "no_engines"
                 return {"status": status, "engines": engines}
+            else:
+                logger.warning("OCR service at %s returned status %s for engines ping. Falling back...", base_url, response.status_code)
+                continue
         except Exception as ex:
-            logger.warning("Failed to ping OCR service at %s: %s", base_url, ex)
+            logger.warning("Failed to ping OCR service at %s: %s. Falling back...", base_url, ex)
             continue
 
     return {"status": "unavailable", "engines": []}
@@ -208,7 +212,7 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
                 except Exception:
                     pass
                 err_msg = f"OCR service error ({response.status_code}): {detail}"
-                if response.status_code >= 500 and idx < len(targets) - 1:
+                if (response.status_code >= 500 or response.status_code == 404) and idx < len(targets) - 1:
                     logger.warning("OCR service at %s failed with %s. Falling back to next endpoint...", base_url, err_msg)
                     last_exception = RuntimeError(err_msg)
                     continue

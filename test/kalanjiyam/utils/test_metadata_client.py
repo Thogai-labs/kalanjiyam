@@ -208,3 +208,44 @@ def test_parse_response__non_numeric_metrics_become_none():
     result = mc.parse_response(payload, ["TITLE"])
     assert result.engine_latency_ms is None
     assert result.chars_in is None
+
+
+def test_extract_window_fallback_to_secondary_url(flask_app):
+    from unittest.mock import MagicMock, patch
+
+    with flask_app.app_context():
+        flask_app.config.update(
+            OCR_SERVICE_URL="http://primary-ocr.test",
+            OCR_SERVICE_URL_2="http://fallback-ocr.test",
+            OCR_SERVICE_API_KEY="key1",
+            OCR_SERVICE_API_KEY_2="key2",
+            OCR_SERVICE_TIMEOUT=30,
+        )
+
+        mock_primary_response = MagicMock()
+        mock_primary_response.status_code = 503
+        mock_primary_response.text = "Primary service unavailable"
+
+        mock_secondary_response = MagicMock()
+        mock_secondary_response.status_code = 200
+        mock_secondary_response.json.return_value = _payload(
+            {"TITLE": {"value": "Fallback title", "source": "record"}}
+        )
+
+        with patch("kalanjiyam.utils.metadata_client.httpx.post") as mock_post:
+            mock_post.side_effect = [
+                mock_primary_response,
+                mock_primary_response,
+                mock_secondary_response,
+            ]
+            request = mc.build_request(
+                unit_id="u", window_index=1, window_total=1, pages=_pages()
+            )
+            result = mc.extract_window(request)
+
+        assert result.ok
+        assert result.fields["TITLE"]["value"] == "Fallback title"
+        assert mock_post.call_count == 3
+        assert mock_post.call_args_list[0][0][0] == "http://primary-ocr.test/v1/metadata"
+        assert mock_post.call_args_list[2][0][0] == "http://fallback-ocr.test/v1/metadata"
+
