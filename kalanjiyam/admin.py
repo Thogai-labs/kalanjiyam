@@ -1879,6 +1879,12 @@ def _metadata_metrics_payload(
     # zero -- the same rule the CSV and the per-run panel follow.
     tokens_in = [r.total_prompt_tokens for r, _ in rows if r.total_prompt_tokens]
     tokens_out = [r.total_completion_tokens for r, _ in rows if r.total_completion_tokens]
+    durations = [r.duration_sec for r, _ in rows if r.duration_sec is not None]
+    engine_latencies = [
+        r.total_engine_latency_sec
+        for r, _ in rows
+        if r.total_engine_latency_sec is not None
+    ]
 
     return {
         "runs": [
@@ -1905,6 +1911,9 @@ def _metadata_metrics_payload(
                 [r.evidence_verified_rate for r, _ in rows]
             ),
             "avg_field_confidence": _mean([r.avg_field_confidence for r, _ in rows]),
+            "avg_time_taken": _mean(durations),
+            "total_time_taken": sum(durations) if durations else None,
+            "avg_engine_latency": _mean(engine_latencies),
         },
         "current_status": status,
         "search_query": search,
@@ -1963,6 +1972,8 @@ def _metadata_metrics_csv_response(session, project_ids=None):
         "Total Tokens",
         "Tokens / Window",
         "Tokens / Page Read",
+        "Time Taken (Sec)",
+        "Avg Time / Window (Sec)",
         "Total Engine Latency (Sec)",
         "Avg Engine Latency (Sec)",
         "Metadata Size (Bytes)",
@@ -1983,6 +1994,7 @@ def _metadata_metrics_csv_response(session, project_ids=None):
         windows = run.windows_completed or 0
         total_latency = run.total_engine_latency_ms
         latency_sec = (total_latency / 1000.0) if total_latency else None
+        duration_sec = run.duration_sec
         writer.writerow([
             run.id,
             project.slug if project else "",
@@ -2016,6 +2028,10 @@ def _metadata_metrics_csv_response(session, project_ids=None):
             round(run.tokens_per_window, 1) if run.tokens_per_window is not None else "",
             # An average over an uneven divisor -- see `tokens_per_page`.
             round(run.tokens_per_page, 1) if run.tokens_per_page is not None else "",
+            round(duration_sec, 2) if duration_sec is not None else "",
+            round(duration_sec / windows, 2)
+            if (duration_sec is not None and windows > 0)
+            else "",
             round(latency_sec, 2) if latency_sec is not None else "",
             round(latency_sec / windows, 2)
             if (latency_sec is not None and windows > 0)

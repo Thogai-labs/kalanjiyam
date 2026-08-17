@@ -406,6 +406,7 @@ def test_a_filled_description_renders(moderator_client, flask_app):
             pages_total=10,
             pages_read=8,
             pages_without_confidence=3,
+            total_extraction_latency_ms=12400.0,
         )
         session.add(run)
         session.flush()
@@ -458,3 +459,5 @@ def test_a_filled_description_renders(moderator_client, flask_app):
     assert "uncited" in body
     # A partial run must say so rather than reading as a finished description.
     assert "8" in body and "10" in body
+    assert "12.4s" in body
+    assert "took" in body

@@ -1552,9 +1552,9 @@ def metadata_runs(slug, limit):
 
         click.echo(
             f"{'ID':<5} | {'Project':<28} | {'Status':<10} | {'Pages':<11} | "
-            f"{'Tags':<7} | {'Cited':<6} | Tokens"
+            f"{'Tags':<7} | {'Cited':<6} | {'Time':<8} | Tokens"
         )
-        click.echo("-" * 96)
+        click.echo("-" * 105)
         for run in runs:
             pages = f"{run.pages_read or 0}/{run.pages_total or 0}"
             tags = f"{run.fields_filled or 0}/{run.fields_total or 0}"
@@ -1564,9 +1564,10 @@ def metadata_runs(slug, limit):
                 else "-"
             )
             tokens = run.total_tokens if run.total_tokens is not None else "-"
+            time_str = run.time_taken_display if run.duration_sec is not None else "-"
             click.echo(
                 f"{run.id:<5} | {projects.get(run.project_id, '(deleted)'):<28} | "
-                f"{run.status:<10} | {pages:<11} | {tags:<7} | {cited:<6} | {tokens}"
+                f"{run.status:<10} | {pages:<11} | {tags:<7} | {cited:<6} | {time_str:<8} | {tokens}"
             )
             if run.error_message:
                 click.echo(f"      error: {run.error_message}")

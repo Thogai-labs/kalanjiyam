@@ -81,6 +81,11 @@
           <span class="text-sm text-slate-500">
             {{ _('%(done)s / %(total)s windows', done=r.windows_completed or 0, total=r.windows_total or 0) }}
           </span>
+          {% if r.duration_sec is not none %}
+            <span class="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded" title="{{ _('Time taken') }}">
+              {{ r.time_taken_display }}
+            </span>
+          {% endif %}
           {% if r.windows_failed %}
             <span class="text-sm text-red-700 font-semibold">{{ _('%(n)s failed', n=r.windows_failed) }}</span>
           {% endif %}
@@ -114,7 +119,11 @@
            figure marked as an average: tokens are spent per call, and windows
            overlap by a page while the taxonomy instruction is charged once per
            window regardless of how many pages it covers. #}
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
+          <div class="bg-slate-800 rounded-xl px-3 py-2">
+            <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ _('Time taken') }}</div>
+            <div class="font-mono text-slate-200">{{ run.time_taken_display }}</div>
+          </div>
           <div class="bg-slate-800 rounded-xl px-3 py-2">
             <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ _('Tokens in') }}</div>
             <div class="font-mono text-slate-200">{{ num(run.total_prompt_tokens) }}</div>
@@ -124,7 +133,7 @@
             <div class="font-mono text-slate-200">{{ num(run.total_completion_tokens) }}</div>
           </div>
           <div class="bg-slate-800 rounded-xl px-3 py-2">
-            <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ _('Total') }}</div>
+            <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ _('Total Tokens') }}</div>
             <div class="font-mono text-slate-200">{{ num(run.total_tokens) }}</div>
           </div>
           <div class="bg-slate-800 rounded-xl px-3 py-2">

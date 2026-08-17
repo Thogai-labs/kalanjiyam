@@ -140,6 +140,8 @@ def test_the_dashboard_reports_tokens_and_coverage(
     assert "gemma-3-27b-it" in resp.text
     assert "15" in resp.text  # fields filled
     assert "1000" in resp.text  # prompt tokens
+    assert "Time Taken" in resp.text
+    assert "Avg Time Taken" in resp.text
 
 
 def test_filtering_by_status_excludes_the_others(superadmin_client, two_orgs_with_runs):
@@ -163,6 +165,8 @@ def test_the_csv_carries_the_derived_token_rates(superadmin_client, two_orgs_wit
     body = superadmin_client.get(f"{PLATFORM}/export_csv").text
     assert "Tokens / Page Read" in body
     assert "Total Tokens" in body
+    assert "Time Taken (Sec)" in body
+    assert "Avg Time / Window (Sec)" in body
     # 1200 tokens over 10 pages read.
     assert "120.0" in body
 

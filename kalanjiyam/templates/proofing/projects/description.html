@@ -209,6 +209,7 @@
       {% endif %}
       <span class="text-xs text-slate-500">
         {{ _('read %(read)s of %(total)s pages', read=run.pages_read or 0, total=run.pages_total or 0) }}
+        {%- if run.duration_sec is not none %} &bull; {{ _('took %(time)s', time=run.time_taken_display) }}{% endif -%}
       </span>
     {% endif %}
     {% if attempt %}
@@ -258,11 +259,12 @@
           <span class="font-mono text-slate-500">{{ run.taxonomy_version }}</span>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mb-4">
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 text-xs mb-4">
           {{ stat(_('Pages read'), '%s / %s'|format(run.pages_read or 0, run.pages_total or 0)) }}
           {{ stat(_('Page coverage'), percent(run.extraction_coverage) or None) }}
           {{ stat(_('Tags filled'), '%s / %s'|format(run.fields_filled or 0, run.fields_total or 0)) }}
           {{ stat(_('Windows'), '%s / %s'|format(run.windows_completed or 0, run.windows_total or 0)) }}
+          {{ stat(_('Time taken'), run.time_taken_display if run.duration_sec is not none else None) }}
           {{ stat(_('Evidence verified'), percent(run.evidence_verified_rate) or None) }}
           {{ stat(_('Mean confidence'), '%.2f'|format(run.avg_field_confidence) if run.avg_field_confidence is not none else None) }}
           {{ stat(_('Source OCR conf.'), '%.2f'|format(run.avg_source_ocr_confidence) if run.avg_source_ocr_confidence is not none else None) }}

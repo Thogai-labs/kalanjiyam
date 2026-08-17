@@ -632,7 +632,9 @@ def description_extract(slug):
 
     try:
         archival_tasks.extract_archival_metadata.delay(
-            project_.id, force=bool(form.force.data)
+            project_.id,
+            force=bool(form.force.data),
+            enqueued_at=datetime.utcnow().isoformat(),
         )
         flash(
             _l("Extraction started. It reads every page, so it takes a while."),

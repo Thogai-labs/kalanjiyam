@@ -347,6 +347,7 @@ def test_run_metrics__computes_coverage_and_verification_rate():
             "prompt_tokens": 100,
             "completion_tokens": 20,
             "engine_latency_ms": 500.0,
+            "extraction_latency_ms": 800.0,
         },
         {
             "evidence_spans": 2,
@@ -356,6 +357,7 @@ def test_run_metrics__computes_coverage_and_verification_rate():
             "prompt_tokens": 50,
             "completion_tokens": 10,
             "engine_latency_ms": 250.0,
+            "extraction_latency_ms": 400.0,
         },
     ]
     fields = {"TITLE": {"confidence": 0.9}, "DATE": {"confidence": 0.5}}
@@ -370,6 +372,7 @@ def test_run_metrics__computes_coverage_and_verification_rate():
     assert metrics["pages_without_confidence"] == 4
     assert metrics["total_prompt_tokens"] == 150
     assert metrics["total_engine_latency_ms"] == 750.0
+    assert metrics["total_extraction_latency_ms"] == 1200.0
 
 
 def test_run_metrics__no_spans_means_no_rate_rather_than_zero():
