@@ -218,6 +218,18 @@ class MetadataExtractionRun(Base):
         rem_sec = int(sec % 60)
         return f"{mins}m {rem_sec}s"
 
+    @property
+    def engine_latency_display(self) -> str:
+        """Formatted string for engine (model) latency (e.g. '8.2s', '1m 12s')."""
+        sec = self.total_engine_latency_sec
+        if sec is None:
+            return "—"
+        if sec < 60:
+            return f"{sec:.1f}s"
+        mins = int(sec // 60)
+        rem_sec = int(sec % 60)
+        return f"{mins}m {rem_sec}s"
+
 
 class MetadataWindow(Base):
     """One model call over one window of pages."""
