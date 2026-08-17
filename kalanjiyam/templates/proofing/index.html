@@ -9,19 +9,22 @@
 
 
 {% macro status_legend() %}
-<div class="bg-white rounded-2xl p-5 mb-8 shadow-sm border border-slate-50">
-  <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">{{ _('Project Status Legend') }}</h3>
-  <ul class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-medium">
-    <li class="flex items-center p-3 rounded-xl bg-red-50 text-red-700 border border-red-100">
+<div class="bg-white rounded-2xl p-4 mb-6 shadow-sm border border-slate-200/80">
+  <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+    <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+    {{ _('Project Status Legend') }}
+  </h3>
+  <ul class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-medium">
+    <li class="flex items-center p-2.5 rounded-xl bg-red-50/80 text-red-700 border border-red-200/60">
       {{ _badge("bg-red-400", "border-red-500") }} {{ _('Needs more work') }}
     </li>
-    <li class="flex items-center p-3 rounded-xl bg-yellow-50 text-yellow-700 border border-yellow-100">
+    <li class="flex items-center p-2.5 rounded-xl bg-amber-50/80 text-amber-700 border border-amber-200/60">
       {{ _badge("bg-yellow-400", "border-yellow-500") }} {{ _('Proofed once') }}
     </li>
-    <li class="flex items-center p-3 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
+    <li class="flex items-center p-2.5 rounded-xl bg-emerald-50/80 text-emerald-700 border border-emerald-200/60">
       {{ _badge("bg-emerald-400", "border-emerald-500") }} {{ _('Proofed twice') }}
     </li>
-    <li class="flex items-center p-3 rounded-xl bg-slate-50 text-slate-600 border border-slate-200">
+    <li class="flex items-center p-2.5 rounded-xl bg-slate-50 text-slate-600 border border-slate-200">
       {{ _badge("bg-slate-400", "border-slate-500") }} {{ _('Not relevant') }}
     </li>
   </ul>
@@ -44,6 +47,20 @@
       repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
       repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
     background-size: 100% 100%, 24px 24px, 24px 24px;
+  }
+
+  .project-entry-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+  }
+
+  .project-entry-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(65, 105, 225, 0.4);
+    box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.08), 0 10px 10px -5px rgba(65, 105, 225, 0.04);
   }
 </style>
 {% endblock %}
@@ -90,48 +107,47 @@
 
 
 {% block content %}
-<div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-100">
+<div class="w-full">
 
   {% if projects %}
   {{ status_legend() }}
 
   <div class="space-y-6">
 
-    <div class="bg-slate-50 rounded-2xl p-5">
-      <form method="GET" action="{{ url_for('proofing.index') }}" class="flex flex-col md:flex-row items-center gap-4">
+    <!-- Search and Filters Bar -->
+    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-6">
+      <form method="GET" action="{{ url_for('proofing.index') }}" class="flex flex-col md:flex-row items-center gap-3">
         <div class="flex-1 relative w-full">
-          <svg class="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" fill="none"
-            stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          <svg class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
           </svg>
-          <input type="text" name="q" value="{{ search_query }}" placeholder="{{ _('Search projects...') }}"
-            class="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all"
+          <input type="text" name="q" value="{{ search_query }}" placeholder="{{ _('Filter projects by title or slug...') }}"
+            class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all placeholder:text-slate-400"
             @input.debounce.300ms="$el.form.submit()">
         </div>
         {% if current_user.is_super_admin %}
-        <div class="flex items-center gap-3 w-full md:w-auto">
-          <label class="text-sm font-semibold text-slate-500 whitespace-nowrap">{{ _('Mode:') }}</label>
+        <div class="flex items-center gap-2 w-full md:w-auto">
+          <label class="text-xs font-semibold text-slate-500 whitespace-nowrap">{{ _('Mode:') }}</label>
           <select name="mode"
-            class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:border-royalblue outline-none transition-all flex-1"
+            class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all flex-1"
             @change="$el.form.submit()">
-            <option value="all" {% if selected_mode == 'all' %}selected{% endif %}>{{ _('All') }}</option>
+            <option value="all" {% if selected_mode == 'all' %}selected{% endif %}>{{ _('All Modes') }}</option>
             <option value="unregistered" {% if selected_mode == 'unregistered' %}selected{% endif %}>{{ _('Unregistered') }}</option>
             <option value="registered" {% if selected_mode == 'registered' %}selected{% endif %}>{{ _('Registered') }}</option>
             <option value="enterprise" {% if selected_mode == 'enterprise' %}selected{% endif %}>{{ _('Enterprise') }}</option>
           </select>
         </div>
         {% endif %}
-        <div class="flex items-center gap-3 w-full md:w-auto">
-          <label class="text-sm font-semibold text-slate-500 whitespace-nowrap">{{ _('Sort:') }}</label>
+        <div class="flex items-center gap-2 w-full md:w-auto">
+          <label class="text-xs font-semibold text-slate-500 whitespace-nowrap">{{ _('Sort:') }}</label>
           <select name="sort"
-            class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:border-royalblue outline-none transition-all flex-1"
+            class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all"
             @change="$el.form.submit()">
             <option value="created" {% if sort_field == 'created' %}selected{% endif %}>{{ _('Creation date') }}</option>
             <option value="title" {% if sort_field == 'title' %}selected{% endif %}>{{ _('Title') }}</option>
           </select>
           <select name="order"
-            class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:border-royalblue outline-none transition-all"
+            class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all"
             @change="$el.form.submit()">
             <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>{{ _('Desc') }}</option>
             <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>{{ _('Asc') }}</option>
@@ -139,89 +155,107 @@
         </div>
       </form>
     </div>
- 
-    <div class="grid gap-6">
-      {% for p in projects %}
-      <div class="premium-card p-6">
 
-        <div class="flex items-start justify-between mb-4">
-          <div class="flex-1">
-            <a href="{{ url_for('proofing.project.summary', slug=p.slug) }}"
-              class="text-xl font-bold text-slate-900 hover:text-royalblue transition-colors">
-              {{ p.display_title }}
-            </a>
-            {% set count = pages_per_project[p.id] %}
-            <div class="flex items-center gap-3 mt-2">
-              <span
-                class="text-xs font-bold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg uppercase tracking-wider">
-                {{ ngettext('%(num)d page', '%(num)d pages', count) }}
-              </span>
-              {% if current_user.is_super_admin %}
-                {% if p.creator_mode == 'unregistered' %}
-                  <span class="text-xs font-bold px-2.5 py-1 bg-rose-100 text-rose-700 rounded-lg uppercase tracking-wider">
-                    {{ _('Unregistered') }}
-                  </span>
-                {% elif p.creator_mode == 'registered' %}
-                  <span class="text-xs font-bold px-2.5 py-1 bg-amber-100 text-amber-700 rounded-lg uppercase tracking-wider">
-                    {{ _('Registered') }}
-                  </span>
-                {% elif p.creator_mode == 'enterprise' %}
-                  <span class="text-xs font-bold px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-lg uppercase tracking-wider">
-                    {{ _('Enterprise') }}
-                  </span>
+    <!-- Project Entries Cards -->
+    <div class="space-y-4">
+      {% for p in projects %}
+      <div class="project-entry-card flex flex-col justify-between overflow-hidden">
+        <div class="p-5 sm:p-6">
+          <div class="flex items-start gap-3.5 mb-3">
+            <div class="w-10 h-10 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0 mt-0.5">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+              </svg>
+            </div>
+            <div class="min-w-0 flex-1">
+              <h2 class="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                <a href="{{ url_for('proofing.project.summary', slug=p.slug) }}" class="hover:text-royalblue transition-colors">
+                  {{ p.display_title }}
+                </a>
+              </h2>
+              {% set count = pages_per_project[p.id] %}
+              <div class="flex flex-wrap items-center gap-2 mt-2">
+                <span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-lg">
+                  <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                  </svg>
+                  {{ ngettext('%(num)d page', '%(num)d pages', count) }}
+                </span>
+                {% if current_user.is_super_admin %}
+                  {% if p.creator_mode == 'unregistered' %}
+                    <span class="text-xs font-bold px-2 py-0.5 bg-rose-100 text-rose-700 rounded-lg uppercase tracking-wide text-[10px]">
+                      {{ _('Unregistered') }}
+                    </span>
+                  {% elif p.creator_mode == 'registered' %}
+                    <span class="text-xs font-bold px-2 py-0.5 bg-amber-100 text-amber-700 rounded-lg uppercase tracking-wide text-[10px]">
+                      {{ _('Registered') }}
+                    </span>
+                  {% elif p.creator_mode == 'enterprise' %}
+                    <span class="text-xs font-bold px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-lg uppercase tracking-wide text-[10px]">
+                      {{ _('Enterprise') }}
+                    </span>
+                  {% endif %}
                 {% endif %}
-              {% endif %}
-              <span class="text-xs text-slate-400 font-medium">
-                {{ p.created_at.strftime('%b %d, %Y') }}
-              </span>
+                <span class="text-xs text-slate-400 font-medium">
+                  {{ p.created_at.strftime('%b %d, %Y') }}
+                </span>
+              </div>
             </div>
           </div>
-          <div class="p-2 bg-slate-50 rounded-xl text-slate-400">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
-              </path>
+
+          {% if p.description %}
+          <div class="mt-3 text-xs text-slate-600 leading-relaxed bg-slate-50/80 rounded-xl p-3 border border-slate-100 line-clamp-2">
+            {{ p.description|markdown|safe }}
+          </div>
+          {% endif %}
+
+          <div class="mt-4 p-3.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+            <div class="flex items-center justify-between font-bold mb-1.5">
+              <span class="text-slate-600">{{ _('Proofing Completion') }}</span>
+              <span class="text-royalblue font-bold">{{ "%.1f"|format(progress_per_project[p.id] * 100) }}%</span>
+            </div>
+            <div class="w-full bg-slate-200/80 rounded-full h-2.5 flex overflow-hidden">
+              {% for cls, fraction in statuses_per_project[p.id].items() %}
+              <div class="h-full {{ cls }} transition-all duration-500" style="width: {{ fraction * 100 }}%"></div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="px-5 sm:px-6 py-3 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between">
+          <a href="{{ url_for('proofing.project.summary', slug=p.slug) }}" class="text-xs font-semibold text-slate-500 hover:text-royalblue transition-colors flex items-center gap-1">
+            <span>{{ _('Summary & Metrics') }}</span>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
             </svg>
-          </div>
+          </a>
+          <a href="{{ url_for('proofing.project.edit', slug=p.slug) }}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-royalblue hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shadow-royalblue/20">
+            <span>{{ _('Open Workspace') }}</span>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+            </svg>
+          </a>
         </div>
-
-        <div class="mt-6">
-          <div class="flex items-center justify-between text-sm font-bold mb-2">
-            <span class="text-slate-500">{{ _('Completion') }}</span>
-            <span class="text-royalblue">{{ "%.1f"|format(progress_per_project[p.id] * 100) }}%</span>
-          </div>
-          <div class="w-full bg-slate-100 rounded-full h-3 flex overflow-hidden">
-            {% for cls, fraction in statuses_per_project[p.id].items() %}
-            <div class="h-full {{ cls }} transition-all duration-500" style="width: {{ fraction * 100 }}%"></div>
-            {% endfor %}
-          </div>
-        </div>
-
-        {% if p.description %}
-        <div class="mt-5 text-sm text-slate-600 leading-relaxed bg-slate-50/50 rounded-xl p-4 border border-slate-50">
-          {{ p.description|markdown|safe }}
-        </div>
-        {% endif %}
       </div>
       {% endfor %}
     </div>
 
     {% if total_pages and total_pages > 1 %}
-    <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-100 text-sm">
-      <div class="text-slate-500 font-medium">
+    <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-200/80 text-sm">
+      <div class="text-slate-500 font-medium text-xs">
         {{ _('Showing %(start)d - %(end)d of %(total)d projects', start=((page - 1) * per_page) + 1, end=[page * per_page, total_projects]|min, total=total_projects) }}
       </div>
       <div class="flex items-center gap-2">
         {% if page > 1 %}
-        <a href="{{ url_for('proofing.index', page=page - 1, per_page=per_page, q=search_query, mode=selected_mode, sort=sort_field, order=sort_order) }}" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 transition-colors">
+        <a href="{{ url_for('proofing.index', page=page - 1, per_page=per_page, q=search_query, mode=selected_mode, sort=sort_field, order=sort_order) }}" class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors">
           {{ _('Previous') }}
         </a>
         {% endif %}
-        <span class="px-3 py-2 font-bold text-slate-700">
+        <span class="px-3 py-1.5 text-xs font-bold text-slate-700">
           {{ page }} / {{ total_pages }}
         </span>
         {% if page < total_pages %}
-        <a href="{{ url_for('proofing.index', page=page + 1, per_page=per_page, q=search_query, mode=selected_mode, sort=sort_field, order=sort_order) }}" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 transition-colors">
+        <a href="{{ url_for('proofing.index', page=page + 1, per_page=per_page, q=search_query, mode=selected_mode, sort=sort_field, order=sort_order) }}" class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors">
           {{ _('Next') }}
         </a>
         {% endif %}
@@ -230,19 +264,18 @@
     {% endif %}
   </div>
   {% else %}
-  <div class="text-center py-20">
-    <div class="w-24 h-24 mx-auto mb-8 bg-royalblue/5 rounded-full flex items-center justify-center">
-      <svg class="w-12 h-12 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <div class="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm max-w-lg mx-auto">
+    <div class="w-16 h-16 bg-royalblue/10 rounded-2xl flex items-center justify-center mx-auto text-royalblue mb-4">
+      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
           d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
         </path>
       </svg>
     </div>
-    <h3 class="text-2xl font-bold text-slate-900 mb-2">{{ _('No projects yet') }}</h3>
-    <p class="text-slate-500 mb-8 max-w-sm mx-auto">{{ _('Ready to digitize some Sanskrit? Create your first project to
-      get started.') }}</p>
+    <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('No projects found') }}</h3>
+    <p class="text-xs text-slate-500 mb-6 max-w-sm mx-auto leading-relaxed">{{ _('Ready to digitize some manuscripts? Create your first project to get started.') }}</p>
     <a href="{{ url_for('proofing.create_project') }}" class="btn-premium">
-      {{ _('Create your first project') }}
+      {{ _('Create project') }}
     </a>
   </div>
   {% endif %}
