@@ -79,9 +79,9 @@
 <form method="POST">
   {{ form.csrf_token }}
 
-  <fieldset>
-    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Bibliographic') }}</legend>
-    <div class="bg-slate-100 p-4">
+  <fieldset class="mb-6">
+    <legend class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ _('Bibliographic') }}</legend>
+    <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-2">
       {{ mf.field(form.print_title) }}
       {{ mf.field(form.subtitle) }}
       {{ mf.field(form.author) }}
@@ -97,23 +97,28 @@
     </div>
   </fieldset>
 
-  <fieldset>
-    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Languages') }}</legend>
-    <div class="bg-slate-100 p-4">
+  <fieldset class="mb-6">
+    <legend class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ _('Languages') }}</legend>
+    <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-2">
       {{ mf.field(form.languages) }}
     </div>
   </fieldset>
 
-  <fieldset>
-    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Content') }}</legend>
-    <div class="bg-slate-100 p-4">
+  <fieldset class="mb-6">
+    <legend class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ _('Content') }}</legend>
+    <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-2">
       {{ mf.field(form.summary) }}
       {{ mf.field(form.keywords) }}
       {{ mf.field(form.toc) }}
     </div>
   </fieldset>
 
-  {{ mf.submit(_('Save metadata')) }}
+  <div class="flex items-center justify-end mt-6 mb-12">
+    <button type="submit"
+      class="px-5 py-2.5 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm text-sm">
+      {{ _('Save metadata') }}
+    </button>
+  </div>
 </form>
 
 {# --- Read-only extras --------------------------------------------------- #}

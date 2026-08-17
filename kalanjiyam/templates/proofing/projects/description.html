@@ -63,13 +63,13 @@
 
 {% macro entity_chip(item, spans, taxonomy) %}
   {% set enriched = item.source == taxonomy.SOURCE_ENRICHMENT %}
-  <span class="inline-flex items-baseline gap-1 px-2 py-1 rounded-lg text-xs
-    {% if enriched %}bg-amber-50 border border-dashed border-amber-300{% else %}bg-slate-100 border border-slate-200{% endif %}"
+  <span class="inline-flex items-baseline gap-1.5 px-2.5 py-1 rounded-xl text-xs
+    {% if enriched %}bg-amber-50/80 border border-dashed border-amber-300 text-amber-900{% else %}bg-royalblue/5 border border-royalblue/20 text-slate-800{% endif %}"
     title="{% if item.variants %}{{ _('also') }}: {{ item.variants|join('; ') }}{% endif %}{% if item.note %} &mdash; {{ item.note }}{% endif %}">
-    <span class="font-medium text-slate-800">{{ item.label }}</span>
+    <span class="font-semibold text-slate-900">{{ item.label }}</span>
     {% if item.dates %}<span class="text-slate-500">({{ item.dates }})</span>{% endif %}
-    {% if item.auth_id %}<span class="font-mono text-[10px] text-royalblue">{{ item.auth_id }}</span>{% endif %}
-    {% if item.kind %}<span class="text-[10px] uppercase tracking-wide text-slate-400">{{ item.kind }}</span>{% endif %}
+    {% if item.auth_id %}<span class="font-mono text-[10px] text-royalblue font-bold">{{ item.auth_id }}</span>{% endif %}
+    {% if item.kind %}<span class="text-[10px] uppercase tracking-wide text-royalblue/80 font-bold">{{ item.kind }}</span>{% endif %}
     {% if enriched %}
       <span class="text-[10px] uppercase tracking-wide text-amber-700 font-semibold"
         title="{{ _('From an authority file, not stated in the record') }}">{{ _('ext') }}</span>
@@ -92,13 +92,13 @@
         {{ tag.label }}
       </label>
       <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
-        <span class="font-mono text-[10px] text-slate-400">{{ tag.code }}</span>
+        <span class="font-mono text-[10px] font-bold text-royalblue bg-royalblue/10 px-1.5 py-0.5 rounded-md">{{ tag.code }}</span>
         <span class="text-[10px] text-slate-400">{{ tag.standard }}</span>
-        <button type="button" class="text-[10px] text-royalblue underline decoration-dotted"
+        <button type="button" class="text-[10px] text-royalblue hover:text-blue-700 font-semibold underline decoration-dotted"
           title="{{ tag.definition }}">{{ _('what is this?') }}</button>
       </div>
       {% if view.is_locked %}
-        <span class="inline-block mt-2 px-2 py-0.5 bg-slate-800 text-white rounded text-[10px] font-bold uppercase tracking-wide"
+        <span class="inline-block mt-2 px-2 py-0.5 bg-slate-800 text-white rounded-md text-[10px] font-bold uppercase tracking-wide"
           title="{{ _('Never sent to the extractor -- it comes from the accession record') }}">
           {{ _('archivist only') }}
         </span>
@@ -110,11 +110,11 @@
       {% if tag.kind in ('text', 'prose') %}
         {% if tag.kind == 'prose' %}
           <textarea id="{{ prefix }}{{ tag.code }}" name="{{ prefix }}{{ tag.code }}" rows="5"
-            class="w-full rounded-xl border-slate-300 text-sm"
+            class="w-full rounded-xl border-slate-300 text-sm focus:border-royalblue focus:ring-2 focus:ring-royalblue/20"
             placeholder="{{ _('Nothing recorded') }}">{{ view.value or '' }}</textarea>
         {% else %}
           <input type="text" id="{{ prefix }}{{ tag.code }}" name="{{ prefix }}{{ tag.code }}"
-            value="{{ view.value or '' }}" class="w-full rounded-xl border-slate-300 text-sm"
+            value="{{ view.value or '' }}" class="w-full rounded-xl border-slate-300 text-sm focus:border-royalblue focus:ring-2 focus:ring-royalblue/20"
             placeholder="{{ _('Nothing recorded') }}">
         {% endif %}
       {% elif view.is_empty %}
@@ -131,8 +131,8 @@
             <tbody class="divide-y divide-slate-100">
               {% for rel in taxonomy.normalize_relations(view.value) %}
                 <tr>
-                  <td class="py-1.5 pr-4 text-slate-800">{{ rel.subject }}</td>
-                  <td class="py-1.5 pr-4"><span class="font-mono text-xs text-royalblue">{{ rel.type }}</span></td>
+                  <td class="py-1.5 pr-4 text-slate-800 font-medium">{{ rel.subject }}</td>
+                  <td class="py-1.5 pr-4"><span class="font-mono text-xs font-bold text-royalblue bg-royalblue/10 px-2 py-0.5 rounded-md">{{ rel.type }}</span></td>
                   <td class="py-1.5 text-slate-800">
                     {{ rel.object }}
                     {% if rel.note %}<span class="block text-xs text-slate-400 italic">{{ rel.note }}</span>{% endif %}
@@ -308,7 +308,7 @@
 {% endif %}
 
 {# --- The description, as a form ------------------------------------------ #}
-<form method="POST" action="{{ url_for('proofing.project.description_save', slug=project.slug) }}">
+<form method="POST" action="{{ url_for('proofing.project.description_save', slug=project.slug) }}" class="pb-16">
   {{ save_form.csrf_token }}
 
   {% for group_name, views in groups %}
@@ -346,14 +346,17 @@
     </details>
   {% endif %}
 
-  <div class="sticky bottom-0 bg-white/95 backdrop-blur border-t border-slate-200 py-3 flex items-center gap-4">
-    <button type="submit"
-      class="px-6 py-2.5 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 transition-colors">
-      {{ _('Save description') }}
-    </button>
-    <span class="text-xs text-slate-500">
-      {{ _('Only boxes you changed are saved, and a re-run never overwrites them. Emptying a box you filled restores what the extraction found.') }}
-    </span>
+  {# Full bottom width sticky bar with centered content and right-aligned save button #}
+  <div class="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-[0_-4px_25px_rgba(0,0,0,0.08)] py-3">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <span class="text-xs text-slate-500 max-w-xl text-center sm:text-left leading-relaxed">
+        {{ _('Only boxes you changed are saved, and a re-run never overwrites them. Emptying a box you filled restores what the extraction found.') }}
+      </span>
+      <button type="submit"
+        class="shrink-0 px-5 py-2 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm text-sm">
+        {{ _('Save description') }}
+      </button>
+    </div>
   </div>
 </form>
 
