@@ -308,7 +308,7 @@
 {% endif %}
 
 {# --- The description, as a form ------------------------------------------ #}
-<form method="POST" action="{{ url_for('proofing.project.description_save', slug=project.slug) }}" class="pb-16">
+<form method="POST" action="{{ url_for('proofing.project.description_save', slug=project.slug) }}" class="mt-8">
   {{ save_form.csrf_token }}
 
   {% for group_name, views in groups %}
@@ -318,7 +318,7 @@
     {% if visible %}
       <section class="mb-6">
         <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ group_name }}</h2>
-        <div class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden">
+        <div class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden shadow-sm">
           {% for view in visible %}{{ field_row(view, taxonomy, field_prefix) }}{% endfor %}
         </div>
       </section>
@@ -336,24 +336,24 @@
 
   {% if empties %}
     <details class="mb-6">
-      <summary class="cursor-pointer bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-semibold text-slate-500 hover:text-slate-700">
+      <summary class="cursor-pointer bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-semibold text-slate-500 hover:text-slate-700 transition-colors">
         {{ _('%(n)s tags with nothing in them', n=empties|length) }}
         <span class="font-normal text-slate-400">&mdash; {{ _('open to fill one in by hand') }}</span>
       </summary>
-      <div class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden mt-2">
+      <div class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden shadow-sm mt-2">
         {% for view in empties %}{{ field_row(view, taxonomy, field_prefix) }}{% endfor %}
       </div>
     </details>
   {% endif %}
 
-  {# Full bottom width sticky bar with centered content and right-aligned save button #}
-  <div class="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-[0_-4px_25px_rgba(0,0,0,0.08)] py-3">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+  {# Sticky bottom card that snaps into place at page bottom with smooth animation #}
+  <div class="sticky bottom-4 z-30 mt-8 p-4 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl shadow-lg shadow-slate-900/5 transition-all duration-300 ease-out hover:shadow-xl">
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
       <span class="text-xs text-slate-500 max-w-xl text-center sm:text-left leading-relaxed">
         {{ _('Only boxes you changed are saved, and a re-run never overwrites them. Emptying a box you filled restores what the extraction found.') }}
       </span>
       <button type="submit"
-        class="shrink-0 px-5 py-2 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm text-sm">
+        class="shrink-0 px-5 py-2.5 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 active:scale-95 transition-all duration-200 shadow-md shadow-royalblue/20 hover:shadow-lg hover:shadow-royalblue/30 text-sm">
         {{ _('Save description') }}
       </button>
     </div>
