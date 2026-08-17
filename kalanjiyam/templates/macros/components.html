@@ -120,19 +120,19 @@
 
 {# A list of tabs. #}
 {% macro tabs(urls, active) %}
-<nav class="border-b border-slate-100 mb-10 overflow-x-auto">
-  <ul class="flex gap-2">
+<nav class="mb-6 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+  <ul class="inline-flex items-center gap-1 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/60 shadow-inner">
     {% for name, label, url in urls %}
-    {% if name == active %}
-    <li class="relative">
-      <div class="px-6 py-4 font-black text-royalblue border-b-4 border-royalblue transition-all">{{ label }}</div>
-    </li>
-    {% else %}
     <li>
-      <a class="block px-6 py-4 font-bold text-slate-400 hover:text-slate-900 transition-all border-b-4 border-transparent hover:border-slate-200"
+      {% if name == active %}
+      <span class="inline-flex items-center px-3.5 py-1.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-royalblue shadow-md shadow-royalblue/20 whitespace-nowrap">
+        {{ label }}
+      </span>
+      {% else %}
+      <a class="inline-flex items-center px-3.5 py-1.5 rounded-xl font-semibold text-xs sm:text-sm text-slate-600 hover:text-royalblue hover:bg-royalblue/5 transition-all whitespace-nowrap"
         href="{{ url }}">{{ label }}</a>
+      {% endif %}
     </li>
-    {% endif %}
     {% endfor %}
   </ul>
 </nav>
