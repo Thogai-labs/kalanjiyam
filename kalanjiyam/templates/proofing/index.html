@@ -29,29 +29,68 @@
 {% endmacro %}
 
 
-{% block title %}{{ mc.title(_('Proofing Dashboard')) }}{% endblock %}
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
 
+  .font-serif-title {
+    font-family: 'Cinzel', Georgia, serif;
+  }
+
+  .catalog-hero {
+    background: #0b1120;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
+      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
+      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
+    background-size: 100% 100%, 24px 24px, 24px 24px;
+  }
+</style>
+{% endblock %}
+
+{% block title %}{{ mc.title(_('Proofing Dashboard')) }}{% endblock %}
 
 {% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
+{% block hero %}
+<header class="catalog-hero text-slate-100 py-14 px-4 mb-8 border-b border-slate-800">
+  <div class="max-w-6xl mx-auto text-center">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-4 shadow-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+      </svg>
+      <span>{{ _('Collaborative Proofing') }}</span>
+    </div>
+
+    <h1 class="text-4xl sm:text-5xl font-bold font-serif-title tracking-tight mb-4 text-white">
+      {{ _('Proofing & Transcription Workspace') }}
+    </h1>
+    <p class="text-base sm:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
+      {{ _('Collaborative platform for proofreading, OCR correction, and metadata curation of historical manuscripts and texts.') }}
+    </p>
+
+    <!-- Stat Badges and Action -->
+    <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+      {% if projects %}
+        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800/80 border border-slate-700/80 text-slate-300 text-sm font-medium backdrop-blur-sm shadow-inner">
+          <span>{{ _('Active Projects:') }}</span>
+          <span class="font-bold text-white bg-royalblue px-2.5 py-0.5 rounded-full text-xs shadow-sm">{{ total_projects if total_projects is defined else projects|length }}</span>
+        </div>
+      {% endif %}
+      <a href="{{ url_for('proofing.create_project') }}" class="btn-premium">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+        <span>{{ _('New Project') }}</span>
+      </a>
+    </div>
+  </div>
+</header>
+{% endblock %}
+
 
 {% block content %}
-<div class="bg-white rounded-2xl p-8 shadow-sm border border-slate-50">
-  <div class="flex items-center justify-between mb-8">
-    <div>
-      <h1 class="text-3xl font-extrabold text-slate-900 flex items-center">
-        <span class="pulse-indicator"></span>
-        {{ _('Proofing Dashboard') }}
-      </h1>
-      <p class="text-slate-500 mt-2 font-medium">{{ _('Manage and edit Sanskrit texts with precision') }}</p>
-    </div>
-    <a href="{{ url_for('proofing.create_project') }}" class="btn-premium">
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-      </svg>
-      {{ _('New Project') }}
-    </a>
-  </div>
+<div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-100">
 
   {% if projects %}
   {{ status_legend() }}
