@@ -164,3 +164,80 @@ def test_preparation_redelivery_safety(flask_app):
             
             mock_dl.assert_not_called()
             assert mock_dispatch.called
+
+
+def test_force_rerun_does_not_skip_completed_chunks_or_pages(flask_app):
+    with flask_app.app_context():
+        session = get_session()
+        board = db.Board(title="test board force")
+        session.add(board)
+        session.flush()
+
+        proj = db.Project(slug="test-force-proj", display_title="test force", board_id=board.id)
+        session.add(proj)
+        session.flush()
+
+        unreviewed = session.query(db.PageStatus).filter_by(name="reviewed-0").first()
+        session.add(db.Page(project_id=proj.id, slug="1", order=1, status_id=unreviewed.id if unreviewed else 1))
+        session.flush()
+
+        job = BatchJob(target_uri="s3://test/bucket/force.pdf", status="IN_PROGRESS")
+        session.add(job)
+        session.flush()
+
+        item = BatchItem(job_id=job.id, file_path="s3://test/bucket/force.pdf", status="COMPLETED", project_id=proj.id)
+        session.add(item)
+        session.flush()
+
+        chunk = BatchOcrChunk(
+            batch_item_id=item.id,
+            start_page=1,
+            end_page=1,
+            status="COMPLETED",
+            completed_at=datetime.utcnow()
+        )
+        session.add(chunk)
+        session.flush()
+
+        ocr_page = BatchOcrPage(
+            chunk_id=chunk.id,
+            batch_item_id=item.id,
+            page_number=1,
+            status="COMPLETED"
+        )
+        session.add(ocr_page)
+        session.commit()
+
+        # When force=True is passed, process_s3_batch_chunk MUST NOT skip even though chunk & page were COMPLETED
+        with patch("kalanjiyam.tasks.s3_batch.httpx.Client") as mock_http, \
+             patch("kalanjiyam.tasks.s3_batch.get_storage") as mock_storage:
+            mock_client_instance = MagicMock()
+            mock_response = MagicMock()
+            mock_response.json.return_value = {
+                "text": "Extracted text on rerun",
+                "page_confidence": 0.95,
+                "engine": "google"
+            }
+            mock_response.raise_for_status.return_value = None
+            mock_client_instance.post.return_value = mock_response
+            mock_http.return_value.__enter__.return_value = mock_client_instance
+
+            import io
+            from PIL import Image as TestImg
+            img_buf = io.BytesIO()
+            TestImg.new('RGB', (100, 100), color='white').save(img_buf, format='JPEG')
+            valid_jpeg_bytes = img_buf.getvalue()
+
+            mock_storage_inst = MagicMock()
+            mock_storage_inst.read_bytes.return_value = valid_jpeg_bytes
+            mock_storage_inst.exists.return_value = False
+            mock_storage.return_value = mock_storage_inst
+
+            process_s3_batch_chunk(chunk.id, force=True)
+            mock_client_instance.post.assert_called()
+
+        reloaded_chunk = session.query(BatchOcrChunk).get(chunk.id)
+        assert reloaded_chunk.status == "COMPLETED"
+        reloaded_page = session.query(BatchOcrPage).get(ocr_page.id)
+        assert reloaded_page.status == "COMPLETED"
+
