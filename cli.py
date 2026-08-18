@@ -901,6 +901,7 @@ def batch_status(job_id):
 
             # Metadata extraction metrics (if enabled or present)
             project_ids = [i.project_id for i in items if i.project_id]
+            item_by_project = {i.project_id: i for i in items if i.project_id}
             meta_runs = []
             if project_ids:
                 meta_runs = (
@@ -912,7 +913,10 @@ def batch_status(job_id):
             latest_meta_by_proj = {}
             for r in meta_runs:
                 if r.project_id not in latest_meta_by_proj:
-                    latest_meta_by_proj[r.project_id] = r
+                    item_for_proj = item_by_project.get(r.project_id)
+                    # Only count metadata runs if the batch item has completed OCR or if the run occurred after item was created
+                    if item_for_proj and item_for_proj.status == 'COMPLETED':
+                        latest_meta_by_proj[r.project_id] = r
 
             if getattr(j, 'extract_metadata', False) or latest_meta_by_proj:
                 meta_completed = sum(1 for r in latest_meta_by_proj.values() if r.status in ('COMPLETED', 'ok'))
