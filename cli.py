@@ -308,7 +308,8 @@ def cleanup_uploads(days, force, app_env):
 @click.option("--image", is_flag=True, help="Process image directories only")
 @click.option("--lang", "--language", "lang", default="en", help="OCR Language code (default: 'en', e.g. 'en', 'ta', 'hi')")
 @click.option("--engine", "ocr_engine", default="surya", help="OCR Engine (e.g. 'surya', 'google', 'deepseek', '1', '3')")
-def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, ocr_engine):
+@click.option("--extract-metadata", is_flag=True, default=False, help="Automatically run archival metadata extraction once OCR completes for each book")
+def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, ocr_engine, extract_metadata):
     """Start a Batch OCR process for PDFs and Image folders from S3 or Local."""
     import boto3
     import os
@@ -437,7 +438,7 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, ocr_engine):
         return
         
     with Session(engine) as session:
-        job = BatchJob(target_uri=target_uri, status='PENDING')
+        job = BatchJob(target_uri=target_uri, status='PENDING', extract_metadata=extract_metadata)
         session.add(job)
         session.flush()
         
@@ -723,7 +724,8 @@ def batch_cancel(job_id):
 @click.option("--lang", "--language", "lang", default="en", help="OCR Language code (default: 'en')")
 @click.option("--engine", "ocr_engine", default=None, help="OCR engine name or masked ID (e.g. 'surya', 'dots_ocr', '12')")
 @click.option("--force", is_flag=True, help="Force rerun OCR on ALL pages including already COMPLETED ones")
-def batch_retry(job_id, org, lang, ocr_engine, force):
+@click.option("--extract-metadata/--no-extract-metadata", default=None, help="Enable or disable archival metadata extraction on completion")
+def batch_retry(job_id, org, lang, ocr_engine, force, extract_metadata):
     """Retry failed or stuck items/chunks in a Batch OCR job without re-scanning.
 
     Use --force to re-run OCR on all pages (including completed ones)
@@ -764,6 +766,8 @@ def batch_retry(job_id, org, lang, ocr_engine, force):
         job.status = 'IN_PROGRESS'
         job.error_message = None
         job.completed_at = None
+        if extract_metadata is not None:
+            job.extract_metadata = extract_metadata
 
         chunks_dispatched = 0
         items_dispatched = 0
@@ -894,6 +898,39 @@ def batch_status(job_id):
                 click.echo(f"Avg Extraction Latency   : {sum(avg_extraction)/len(avg_extraction):.2f} ms")
             if avg_ocr:
                 click.echo(f"Avg OCR Latency          : {sum(avg_ocr)/len(avg_ocr):.2f} ms")
+
+            # Metadata extraction metrics (if enabled or present)
+            project_ids = [i.project_id for i in items if i.project_id]
+            meta_runs = []
+            if project_ids:
+                meta_runs = (
+                    session.query(db.MetadataExtractionRun)
+                    .filter(db.MetadataExtractionRun.project_id.in_(project_ids))
+                    .order_by(db.MetadataExtractionRun.id.desc())
+                    .all()
+                )
+            latest_meta_by_proj = {}
+            for r in meta_runs:
+                if r.project_id not in latest_meta_by_proj:
+                    latest_meta_by_proj[r.project_id] = r
+
+            if getattr(j, 'extract_metadata', False) or latest_meta_by_proj:
+                meta_completed = sum(1 for r in latest_meta_by_proj.values() if r.status in ('COMPLETED', 'ok'))
+                meta_in_prog = sum(1 for r in latest_meta_by_proj.values() if r.status in ('IN_PROGRESS', 'running'))
+                meta_failed = sum(1 for r in latest_meta_by_proj.values() if r.status in ('FAILED', 'error'))
+                meta_total = len(project_ids)
+                click.echo(f"Metadata   : {meta_completed}/{meta_total} Described ({meta_in_prog} In Progress, {meta_failed} Failed) [enabled={getattr(j, 'extract_metadata', False)}]")
+                
+                total_fields = sum(r.fields_filled or 0 for r in latest_meta_by_proj.values())
+                total_tokens = sum((r.total_prompt_tokens or 0) + (r.total_completion_tokens or 0) for r in latest_meta_by_proj.values())
+                avg_cited = [r.evidence_verified_rate for r in latest_meta_by_proj.values() if r.evidence_verified_rate is not None]
+                
+                if latest_meta_by_proj:
+                    click.echo(f"Meta Fields: {total_fields} total tags extracted across {len(latest_meta_by_proj)} project(s)")
+                    if avg_cited:
+                        click.echo(f"Meta Evidence: {sum(avg_cited)/len(avg_cited):.1%} average verified citations")
+                    if total_tokens > 0:
+                        click.echo(f"Meta Tokens: {total_tokens} tokens consumed")
 
             if failed > 0:
                 click.echo("Failed Items:")

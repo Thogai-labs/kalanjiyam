@@ -194,6 +194,19 @@ def _finalize_batch_item_status(session, batch_item_id: int):
     session.commit()
     LOG.info(f"Finalized BatchItem #{batch_item_id} status: {item.status}")
 
+    # Trigger metadata extraction if requested on the batch job and book OCR completed
+    if item.status == 'COMPLETED' and item.project_id and item.job and getattr(item.job, 'extract_metadata', False):
+        try:
+            from kalanjiyam.tasks.archival_extract import extract_archival_metadata
+            extract_archival_metadata.apply_async(
+                args=[item.project_id],
+                kwargs={"force": False},
+                queue='metadata'
+            )
+            LOG.info(f"Dispatched archival metadata extraction for project #{item.project_id} (BatchItem #{batch_item_id})")
+        except Exception as e:
+            LOG.warning(f"Could not dispatch metadata extraction for project #{item.project_id}: {e}")
+
     if item.job_id:
         _finalize_batch_job_status(session, item.job_id)
 

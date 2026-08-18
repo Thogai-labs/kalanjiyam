@@ -19,6 +19,7 @@ class BatchJob(Base):
     jsonl_uri = Column(String(1024), nullable=True)
     pdf_uri = Column(String(1024), nullable=True)
     job_type = Column(String(64), nullable=False, default='BATCH_OCR')
+    extract_metadata = Column(Boolean, nullable=False, default=False)
 
     items = relationship('BatchItem', back_populates='job', cascade='all, delete-orphan')
 

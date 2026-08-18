@@ -241,3 +241,63 @@ def test_force_rerun_does_not_skip_completed_chunks_or_pages(flask_app):
         reloaded_page = session.query(BatchOcrPage).get(ocr_page.id)
         assert reloaded_page.status == "COMPLETED"
 
+
+def test_metadata_extraction_triggered_on_item_completion(flask_app):
+    with flask_app.app_context():
+        session = get_session()
+        board = db.Board(title="test meta board")
+        session.add(board)
+        session.flush()
+
+        proj = db.Project(slug="test-meta-proj", display_title="test meta", board_id=board.id)
+        session.add(proj)
+        session.flush()
+
+        job = BatchJob(target_uri="s3://test/bucket/meta.pdf", status="IN_PROGRESS", extract_metadata=True)
+        session.add(job)
+        session.flush()
+
+        item = BatchItem(job_id=job.id, file_path="s3://test/bucket/meta.pdf", status="IN_PROGRESS", project_id=proj.id)
+        session.add(item)
+        session.flush()
+
+        chunk = BatchOcrChunk(batch_item_id=item.id, start_page=1, end_page=10, status="COMPLETED", total_ocr_latency_ms=500)
+        session.add(chunk)
+        session.commit()
+
+        with patch("kalanjiyam.tasks.archival_extract.extract_archival_metadata.apply_async") as mock_extract:
+            _finalize_batch_item_status(session, item.id)
+            assert mock_extract.called
+            call_kwargs = mock_extract.call_args[1]
+            assert call_kwargs.get("queue") == "metadata"
+            assert mock_extract.call_args[1]["args"] == [proj.id] or mock_extract.call_args[0] == ([proj.id],) or mock_extract.call_args[1].get("args") == [proj.id]
+
+
+def test_metadata_extraction_skipped_when_disabled(flask_app):
+    with flask_app.app_context():
+        session = get_session()
+        board = db.Board(title="test no meta board")
+        session.add(board)
+        session.flush()
+
+        proj = db.Project(slug="test-no-meta-proj", display_title="test no meta", board_id=board.id)
+        session.add(proj)
+        session.flush()
+
+        job = BatchJob(target_uri="s3://test/bucket/nometa.pdf", status="IN_PROGRESS", extract_metadata=False)
+        session.add(job)
+        session.flush()
+
+        item = BatchItem(job_id=job.id, file_path="s3://test/bucket/nometa.pdf", status="IN_PROGRESS", project_id=proj.id)
+        session.add(item)
+        session.flush()
+
+        chunk = BatchOcrChunk(batch_item_id=item.id, start_page=1, end_page=10, status="COMPLETED", total_ocr_latency_ms=500)
+        session.add(chunk)
+        session.commit()
+
+        with patch("kalanjiyam.tasks.archival_extract.extract_archival_metadata.apply_async") as mock_extract:
+            _finalize_batch_item_status(session, item.id)
+            mock_extract.assert_not_called()
+
+
