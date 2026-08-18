@@ -94,6 +94,7 @@
           <th class="px-4 py-3 font-bold text-right" title="{{ _('An average: tokens are charged per window, not per page') }}">{{ _('Tok/pg') }}</th>
           <th class="px-4 py-3 font-bold text-right" title="{{ _('Pure model/engine processing time across all windows') }}">{{ _('Engine Time') }}</th>
           <th class="px-4 py-3 font-bold text-right" title="{{ _('Total time taken to complete the extraction request (wall-clock duration)') }}">{{ _('Time Taken') }}</th>
+          <th class="px-4 py-3 font-bold text-right" title="{{ _('Average time taken per completed window') }}">{{ _('Time / Win') }}</th>
           <th class="px-4 py-3 font-bold">{{ _('When') }}</th>
         </tr>
       </thead>
@@ -174,6 +175,15 @@
                 <span class="text-slate-300">—</span>
               {% endif %}
             </td>
+            <td class="px-4 py-3 text-right font-mono text-xs font-semibold text-slate-700">
+              {% if r.avg_time_per_window_sec is not none %}
+                <span title="{% if r.avg_engine_latency_sec is not none %}{{ _('Avg engine latency: %(sec).2fs/w', sec=r.avg_engine_latency_sec) }}{% endif %}">
+                  {{ r.avg_time_per_window_display }}
+                </span>
+              {% else %}
+                <span class="text-slate-300">—</span>
+              {% endif %}
+            </td>
             <td class="px-4 py-3 text-[11px] text-slate-400 whitespace-nowrap">
               {{ (r.completed_at or r.created_at).strftime('%Y-%m-%d %H:%M') }}
             </td>
@@ -181,7 +191,7 @@
           {% if r.error_message %}
             <tr class="{% if r.status == 'FAILED' %}bg-red-50/40{% endif %}">
               <td></td>
-              <td colspan="13" class="px-4 pb-3 text-xs text-red-800 font-mono">{{ r.error_message }}</td>
+              <td colspan="14" class="px-4 pb-3 text-xs text-red-800 font-mono">{{ r.error_message }}</td>
             </tr>
           {% endif %}
         {% endfor %}

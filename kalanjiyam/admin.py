@@ -1885,6 +1885,16 @@ def _metadata_metrics_payload(
         for r, _ in rows
         if r.total_engine_latency_sec is not None
     ]
+    window_times = [
+        r.avg_time_per_window_sec
+        for r, _ in rows
+        if r.avg_time_per_window_sec is not None
+    ]
+    engine_latencies_per_window = [
+        r.avg_engine_latency_sec
+        for r, _ in rows
+        if r.avg_engine_latency_sec is not None
+    ]
 
     return {
         "runs": [
@@ -1914,6 +1924,8 @@ def _metadata_metrics_payload(
             "avg_time_taken": _mean(durations),
             "total_time_taken": sum(durations) if durations else None,
             "avg_engine_latency": _mean(engine_latencies),
+            "avg_time_per_window": _mean(window_times),
+            "avg_engine_latency_per_window": _mean(engine_latencies_per_window),
         },
         "current_status": status,
         "search_query": search,
@@ -1993,7 +2005,7 @@ def _metadata_metrics_csv_response(session, project_ids=None):
     for run, project in rows:
         windows = run.windows_completed or 0
         total_latency = run.total_engine_latency_ms
-        latency_sec = (total_latency / 1000.0) if total_latency else None
+        latency_sec = (total_latency / 1000.0) if total_latency is not None else None
         duration_sec = run.duration_sec
         writer.writerow([
             run.id,

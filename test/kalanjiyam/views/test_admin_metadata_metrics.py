@@ -142,6 +142,7 @@ def test_the_dashboard_reports_tokens_and_coverage(
     assert "1000" in resp.text  # prompt tokens
     assert "Engine Time" in resp.text
     assert "Time Taken" in resp.text
+    assert "Time / Win" in resp.text
     assert "Avg Engine Time" in resp.text
     assert "Avg Time Taken" in resp.text
 
