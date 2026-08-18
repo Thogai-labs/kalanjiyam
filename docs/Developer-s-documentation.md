@@ -697,6 +697,123 @@ projects/
 
 ---
 
+## Archival Metadata Extraction Pipeline (`/v1/metadata`)
+
+Kalanjiyam includes an automated archival metadata extraction pipeline that reads every page of a project in token-budgeted windows, asks the extraction microservice (`POST /v1/metadata`) to describe each window, verifies citation evidence, and reduces window outputs into unified archival metadata records (ISAD(G), ISAAR(CPF), and RiC-CM elements).
+
+```
+Kalanjiyam Server                                  Metadata Microservice
+       │                                                    │
+       │ ─── POST /v1/metadata (Window 3 of 24) ──────────> │ (Server-side schema-guided
+       │     Payload: Typed blocks, tag list,               │  decoding & prompt execution)
+       │              taxonomy version                      │
+       │ <─── 200 OK (Single JSON Payload) ──────────────── │
+       │      Includes: Fields, per-value evidence citations,│
+       │      token usage, engine latency                   │
+       ▼                                                    │
+Kalanjiyam verifies quotes, stores window metrics,
+and reduces all windows into one description per project.
+```
+
+### 1. How Pages are Divided into Windows
+
+The windowing algorithm (`kalanjiyam.utils.project_metadata.iter_windows` and `plan_windows`) divides documents into windows using token budgets and script awareness:
+
+* **Script Token Profiling**: Token density is estimated based on the dominant writing script:
+  * **Latin script (`Latn`)**: ~3.0 chars/token.
+  * **Indic / Non-Latin scripts (`_default`)**: ~1.2 chars/token (pessimistic ratio accounting for conjuncts/matras).
+  * A safety multiplier of `TOKEN_SAFETY_FACTOR = 0.85` is applied.
+* **Token Budget (`WINDOW_TOKEN_BUDGET = 20_000`)**: Each window targets 20,000 tokens of input text, reserving space in the 32k context window for system taxonomy instructions (~3k tokens) and generation completion (~4.5k tokens).
+  $$\text{budget\_chars} = \lfloor \text{WINDOW\_TOKEN\_BUDGET} \times (\text{chars\_per\_token} \times 0.85) \rfloor$$
+* **Whole Pages Preserved**: Pages are never split mid-page across windows. If a single page exceeds the budget, it gets a window to itself.
+* **1-Page Overlap (`WINDOW_OVERLAP_PAGES = 1`)**: The last page of each window is carried forward into the beginning of the next window. This guarantees that facts, multi-page sentences, signatures, and dates spanning page seams appear in both windows and are captured.
+* **Lazy Streaming & Content Hashing**: Pages stream in DB batches of 250 (`_STREAM_BATCH = 250`) to keep worker RAM usage constant (<50 MB). A SHA-256 hash (`window_hash`) over block text enables skipping unchanged windows during incremental re-runs (`STATUS_SKIPPED`).
+
+---
+
+### 2. What is Sent to the Backend Endpoint (`POST /v1/metadata`)
+
+Kalanjiyam dispatches window extraction requests to the metadata service with automatic failover between primary (`OCR_SERVICE_URL`) and fallback (`OCR_SERVICE_URL_2`) endpoints.
+
+* **Endpoint**: `POST {OCR_SERVICE_URL}/v1/metadata`
+* **Headers**: `Content-Type: application/json`, `X-API-Key: <OCR_SERVICE_API_KEY>`
+
+#### Request Payload Structure:
+
+```json
+{
+  "contract_version": "1.0",
+  "unit_id": "kalanjiyam:project/kalat-1932-17",
+  "window": {
+    "index": 3,
+    "total": 24,
+    "page_slugs": ["61", "62", "63"]
+  },
+  "taxonomy_version": "client-2026-08",
+  "tags": [
+    "TITLE",
+    "DATE",
+    "CREATOR",
+    "SCOPE CONTENT",
+    "PERSON NAME",
+    "PLACE",
+    "ORGANISATION",
+    "SUBJECT"
+  ],
+  "language_hint": ["fa", "ur", "en"],
+  "pages": [
+    {
+      "page_slug": "61",
+      "ocr_confidence": 0.94,
+      "blocks": [
+        {
+          "id": "b1",
+          "type": "heading",
+          "reading_order": 1,
+          "text": "Grant of an honorary commission"
+        },
+        {
+          "id": "b2",
+          "type": "paragraph",
+          "reading_order": 2,
+          "text": "First line of body text..."
+        }
+      ]
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `contract_version` | String | Must be `"1.0"`. |
+| `unit_id` | String | Unique document identifier (e.g. `kalanjiyam:project/x`). |
+| `window` | Object | Current window `index`, `total` planned windows, and `page_slugs`. |
+| `taxonomy_version` | String | Taxonomy schema version (e.g. `"client-2026-08"`). |
+| `tags` | Array[String] | Authoritative whitelist of requested tags. Write-locked tags are automatically filtered out. |
+| `language_hint` | Array[String] | Known language codes (e.g. `["fa", "ur", "en"]`). |
+| `pages` | Array[Object] | Ordered list of pages in the window, each containing `page_slug`, nullable `ocr_confidence`, and structured `blocks`. |
+| ↳ `blocks` | Array[Object] | Typed layout blocks containing `id`, `type`, `reading_order`, and `text`. |
+
+---
+
+### 3. Prompt Architecture & Schema Handling
+
+* **No Natural Language Prompt in the Wire Payload**: The HTTP request contains only structured page blocks and taxonomy tags. The system prompt, extraction instructions, few-shot examples, and grammar constraints live on the microservice.
+* **Write-Locked Tags Excluded**: Custodial history and access restriction tags are write-locked (human archivist curated). They are excluded from `tags` before sending and stripped if returned by the model.
+* **Internal Reference Prompt**: The function `build_prompt()` in `kalanjiyam.utils.archival_taxonomy` defines the canonical prompt instruction for local evaluation, test suites, and offline auditing.
+
+---
+
+### 4. Evidence Verification & Reduction
+
+* **Quote Verification**: Every `record` field is checked verbatim against the original block text sent in the request. If the quote is missing or hallucinated, its confidence score is set to `0.0`.
+* **Coordinate Linking**: The `block_id` links verified quotes directly to spatial bounding boxes in `Revision.document`, allowing readers to click any fact in the catalogue and highlight its bounding box on the original page image.
+* **Reduction (`reduce_windows`)**: Once all windows complete, window fields are merged into a canonical project description. Single-value fields pick the highest confidence verified value; entity lists are deduplicated and merged.
+* **Bibliographic Write-Down**: Search-facing columns in `Project` (title, author, publication year, etc.) are seeded from the verified archival fields without overwriting user-curated data.
+
+---
+
 ## Production Deployment (with Docker)
 
 For production deployments (e.g., staging or live production servers like `siddhasagaram.in`), you should use the dedicated deployment script **`./deploy/prod/deploy.sh`** rather than `make docker-start`. 

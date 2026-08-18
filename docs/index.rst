@@ -24,6 +24,7 @@ Kalanjiyam locally or contribute to Kalanjiyam's technical work.
    search
    ocr-api
    ocr-editing
+   metadata-extraction
    production-deploy
    i18n-and-l10n
    tei-xml
