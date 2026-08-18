@@ -392,6 +392,7 @@ def activity(slug):
         revisions_by_page.setdefault(r.page_id, []).append(r)
 
     from kalanjiyam.utils.diff import revision_diff
+    from kalanjiyam.utils import proofing_utils
 
     for r in recent_revisions:
         page_revs = revisions_by_page.get(r.page_id, [])
@@ -400,9 +401,11 @@ def activity(slug):
         except ValueError:
             idx = -1
 
+        cur_text = proofing_utils.revision_plain_content(r)
         if idx != -1 and idx + 1 < len(page_revs):
             prev_r = page_revs[idx + 1]
-            r.diff = revision_diff(prev_r.content, r.content)
+            prev_text = proofing_utils.revision_plain_content(prev_r)
+            r.diff = revision_diff(prev_text, cur_text)
         else:
             r.diff = None
 
@@ -884,7 +887,7 @@ def download_as_text(slug):
     content_blobs = []
     for p in project_.pages:
         rev = get_main_revision(p)
-        content_blobs.append(rev.content if rev else "")
+        content_blobs.append(proofing_utils.revision_plain_content(rev) if rev else "")
 
     raw_text = proofing_utils.to_plain_text(content_blobs)
 

@@ -608,6 +608,8 @@ def recent_changes():
 
         from kalanjiyam.utils.diff import revision_diff
 
+        from kalanjiyam.utils import proofing_utils
+
         for r in recent_revisions:
             page_revs = revs_by_page.get(r.page_id, [])
             try:
@@ -615,14 +617,16 @@ def recent_changes():
             except ValueError:
                 idx = -1
 
+            cur_text = proofing_utils.revision_plain_content(r)
             if idx != -1 and idx + 1 < len(page_revs):
                 prev_r = page_revs[idx + 1]
                 r.prev_revision_id = prev_r.id
-                r.diff = revision_diff(prev_r.content or "", r.content or "")
+                prev_text = proofing_utils.revision_plain_content(prev_r)
+                r.diff = revision_diff(prev_text, cur_text)
             else:
                 r.prev_revision_id = None
-                if r.content:
-                    r.diff = revision_diff("", r.content)
+                if cur_text:
+                    r.diff = revision_diff("", cur_text)
                 else:
                     r.diff = None
 

@@ -633,7 +633,8 @@ def download_as_text(project_slug, page_slug):
         abort(404)
 
     from kalanjiyam.utils import proofing_utils
-    content_blobs = [page_.revisions[-1].content if page_.revisions else ""]
+    rev = page_.revisions[-1] if page_.revisions else None
+    content_blobs = [proofing_utils.revision_plain_content(rev) if rev else ""]
     raw_text = proofing_utils.to_plain_text(content_blobs)
 
     response = make_response(raw_text, 200)
@@ -1001,13 +1002,11 @@ def revision(project_slug, page_slug, revision_id):
         else:
             prev_revision = r
 
-    if not cur_revision:
-        abort(404)
+    from kalanjiyam.utils import proofing_utils
 
-    if prev_revision:
-        diff = revision_diff(prev_revision.content, cur_revision.content)
-    else:
-        diff = revision_diff("", cur_revision.content)
+    prev_text = proofing_utils.revision_plain_content(prev_revision) if prev_revision else ""
+    cur_text = proofing_utils.revision_plain_content(cur_revision)
+    diff = revision_diff(prev_text, cur_text)
 
     return render_template(
         "proofing/pages/revision.html",

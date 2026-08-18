@@ -11,6 +11,7 @@ from typing import Any
 import kalanjiyam.database as db
 from kalanjiyam.search import schema
 from kalanjiyam.search.client import get_client, get_settings
+from kalanjiyam.utils.document_storage import load_revision_document
 from kalanjiyam.utils.page_document import PageDocument
 from kalanjiyam.utils.text_utils import normalize_unicode_text
 
@@ -68,7 +69,8 @@ def build_page_doc(
     fallback_lang: str | None = None,
 ) -> dict[str, Any]:
     """Build the indexed document for one page."""
-    doc = PageDocument.from_dict(revision.document)
+    doc_dict = load_revision_document(revision) or revision.document
+    doc = PageDocument.from_dict(doc_dict)
     text = doc.to_plain_text() if doc.blocks else ""
     if not text:
         text = revision.content or ""

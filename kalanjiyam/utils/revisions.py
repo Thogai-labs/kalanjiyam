@@ -95,30 +95,33 @@ def add_revision(
     )
     session.commit()
 
-    # 3. Create the Revision linked to the PageVersion
+    # 3. Create the Revision linked to the PageVersion (keep DB lightweight)
     revision_ = db.Revision(
         project_id=page.project_id,
         page_id=page.id,
         page_version_id=page_version.id,
         summary=summary,
-        content=resolved_content,
+        content=resolved_content or "",
         author_id=author_id,
         status_id=status_ids[status],
-        document=resolved_document,
+        document=None,
         content_format=resolved_format,
     )
     session.add(revision_)
     session.commit()
 
-    # Persist document snapshot to S3/VersityGW (dual-write during migration).
+    # Persist document snapshot to S3/VersityGW as compressed .json.gz
     if resolved_document:
         from kalanjiyam.utils.document_storage import save_revision_document
 
         try:
-            save_revision_document(revision_, resolved_document)
+            saved_to_s3 = save_revision_document(revision_, resolved_document)
+            if not saved_to_s3:
+                revision_.document = resolved_document
+                session.commit()
         except Exception:
-            # S3/VersityGW write failure must not break the page-save flow;
-            # the data is safely in the DB column as a fallback.
+            revision_.document = resolved_document
+            session.commit()
             import logging
 
             logging.getLogger(__name__).warning(
