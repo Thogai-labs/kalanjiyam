@@ -182,21 +182,22 @@ def test_engine_aliases_map_service_ids():
 
     assert normalize_service_engine("surya-table") == "surya_table"
     assert normalize_service_engine("glm-ocr") == "glm_ocr"
-    assert normalize_service_engine("gemma-4") == "gemma_4"
+    assert normalize_service_engine("gemma-ocr") == "gemma_ocr"
+    assert normalize_service_engine("gemma-4") == "gemma_ocr"
     assert engine_for_service("surya_table") == "surya-table"
     assert engine_for_service("glm_ocr") == "glm-ocr"
-    assert engine_for_service("gemma_4") == "gemma-4"
-    assert normalize_engine("13") == "gemma_4"
-    assert ENGINE_MAP["13"] == "gemma_4"
+    assert engine_for_service("gemma_ocr") == "gemma-ocr"
+    assert normalize_engine("13") == "gemma_ocr"
+    assert ENGINE_MAP["13"] == "gemma_ocr"
 
     choices = build_engine_choices(
-        ["tesseract", "surya-table", "chandra", "glm-ocr", "gemma-4"],
+        ["tesseract", "surya-table", "chandra", "glm-ocr", "gemma-ocr"],
         is_super_admin=True,
     )
     labels = {c["label"] for c in choices}
     assert "Surya Table" in labels
     assert "GLM OCR" in labels
-    assert "Gemma 4 OCR" in labels
+    assert "Gemma OCR" in labels
 
 
 def test_run_ocr_remote_parses_v2_contract_fields(flask_app, tmp_path):

@@ -583,6 +583,7 @@ export default () => ({
         "glm_ocr": "10",
         "tesseract_manuscript": "11",
         "dots_ocr": "12",
+        "gemma_ocr": "13",
         "gemma_4": "13"
       };
       const num = engineMap[engine] || engine;
@@ -1290,7 +1291,7 @@ export default () => ({
       '10': 'glm_ocr',
       '11': 'tesseract_manuscript',
       '12': 'dots_ocr',
-      '13': 'gemma_4',
+      '13': 'gemma_ocr',
     };
     return engineMap[engineValue] || 'google';
   },
