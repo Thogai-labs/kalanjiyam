@@ -586,13 +586,46 @@ def recent_changes():
     session = q.get_session()
     recent_revisions = (
         session.query(db.Revision)
-        .options(orm.defer(db.Revision.content))
         .filter(db.Revision.author_id != bot_user.id)
         .order_by(db.Revision.created.desc())
         .limit(num_per_page * 2)  # Fetch more to allow filtering
         .all()
     )
     recent_revisions = [r for r in recent_revisions if q.user_can_view_proofing_project(current_user, r.project)][:num_per_page]
+
+    # Pre-calculate diffs against previous page revision
+    if recent_revisions:
+        page_ids = list({r.page_id for r in recent_revisions})
+        all_page_revs = (
+            session.query(db.Revision)
+            .filter(db.Revision.page_id.in_(page_ids))
+            .order_by(db.Revision.created.desc())
+            .all()
+        )
+        revs_by_page = {}
+        for rev in all_page_revs:
+            revs_by_page.setdefault(rev.page_id, []).append(rev)
+
+        from kalanjiyam.utils.diff import revision_diff
+
+        for r in recent_revisions:
+            page_revs = revs_by_page.get(r.page_id, [])
+            try:
+                idx = page_revs.index(r)
+            except ValueError:
+                idx = -1
+
+            if idx != -1 and idx + 1 < len(page_revs):
+                prev_r = page_revs[idx + 1]
+                r.prev_revision_id = prev_r.id
+                r.diff = revision_diff(prev_r.content or "", r.content or "")
+            else:
+                r.prev_revision_id = None
+                if r.content:
+                    r.diff = revision_diff("", r.content)
+                else:
+                    r.diff = None
+
     recent_activity = [("revision", r.created, r) for r in recent_revisions]
 
     recent_projects = (
