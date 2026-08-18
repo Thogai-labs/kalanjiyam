@@ -20,20 +20,21 @@
     _('Per-document runs of the archival description extractor: coverage, citation quality, and token cost.')) }}
 
 {# --- Summary ------------------------------------------------------------- #}
-<div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4 mb-6">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
   {{ admin.stat_card(_('Runs'), summary.runs) }}
-  {{ admin.stat_card(_('Documents'), summary.documents) }}
   {{ admin.stat_card(_('Pages read'), '%s / %s'|format(summary.pages_read, summary.pages_total)) }}
-  {{ admin.stat_card(_('Failed / partial'), '%s / %s'|format(summary.failed, summary.partial)) }}
   {# Token totals skip runs whose service reported no usage, rather than
      counting them as zero -- see `_metadata_metrics_payload`. #}
   {{ admin.stat_card(_('Tokens in / out'),
       '%s / %s'|format(summary.tokens_in if summary.tokens_in is not none else '—',
                        summary.tokens_out if summary.tokens_out is not none else '—')) }}
-  {{ admin.stat_card(_('Evidence verified'),
-      ('%.0f%%'|format(summary.avg_evidence_verified * 100)) if summary.avg_evidence_verified is not none else '—') }}
   {{ admin.stat_card(_('Avg Engine Time'),
       ('%.1fs'|format(summary.avg_engine_latency)) if summary.avg_engine_latency is not none else '—') }}
+
+  {{ admin.stat_card(_('Documents'), summary.documents) }}
+  {{ admin.stat_card(_('Failed / partial'), '%s / %s'|format(summary.failed, summary.partial)) }}
+  {{ admin.stat_card(_('Evidence verified'),
+      ('%.0f%%'|format(summary.avg_evidence_verified * 100)) if summary.avg_evidence_verified is not none else '—') }}
   {{ admin.stat_card(_('Avg Time Taken'),
       ('%.1fs'|format(summary.avg_time_taken)) if summary.avg_time_taken is not none else '—') }}
 </div>
