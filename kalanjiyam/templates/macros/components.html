@@ -120,8 +120,8 @@
 
 {# A list of tabs. #}
 {% macro tabs(urls, active) %}
-<nav class="mb-6 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-  <ul class="inline-flex items-center gap-1 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/60 shadow-inner">
+<nav class="mb-6 flex justify-center overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+  <ul class="inline-flex items-center gap-1 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/60 shadow-inner mx-auto">
     {% for name, label, url in urls %}
     <li>
       {% if name == active %}
