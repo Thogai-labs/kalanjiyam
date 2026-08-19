@@ -88,10 +88,10 @@
 
     <!-- Stat Badges and Action -->
     <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-      {% if projects %}
-        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800/80 border border-slate-700/80 text-slate-300 text-sm font-medium backdrop-blur-sm shadow-inner">
+      {% if has_any_projects %}
+        <div id="active-projects-badge" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800/80 border border-slate-700/80 text-slate-300 text-sm font-medium backdrop-blur-sm shadow-inner">
           <span>{{ _('Active Projects:') }}</span>
-          <span class="font-bold text-white bg-royalblue px-2.5 py-0.5 rounded-full text-xs shadow-sm">{{ total_projects if total_projects is defined else projects|length }}</span>
+          <span id="active-projects-badge-count" class="font-bold text-white bg-royalblue px-2.5 py-0.5 rounded-full text-xs shadow-sm">{{ total_projects }}</span>
         </div>
       {% endif %}
       <a href="{{ url_for('proofing.create_project') }}" class="btn-premium">
@@ -107,30 +107,44 @@
 
 
 {% block content %}
-<div class="w-full">
+<div class="w-full" x-data="proofingDashboard()">
 
-  {% if projects %}
+  {% if has_any_projects %}
   {{ status_legend() }}
 
   <div class="space-y-6">
 
     <!-- Search and Filters Bar -->
     <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-6">
-      <form method="GET" action="{{ url_for('proofing.index') }}" class="flex flex-col md:flex-row items-center gap-3">
+      <form method="GET" action="{{ url_for('proofing.index') }}" @submit.prevent="fetchResults(1)" class="flex flex-col md:flex-row items-center gap-3">
         <div class="flex-1 relative w-full">
           <svg class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
           </svg>
-          <input type="text" name="q" value="{{ search_query }}" placeholder="{{ _('Filter projects by title or slug...') }}"
-            class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all placeholder:text-slate-400"
-            @input.debounce.300ms="$el.form.submit()">
+          <input type="text" name="q" x-model="query" value="{{ search_query }}" placeholder="{{ _('Filter projects by title or slug...') }}"
+            class="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all placeholder:text-slate-400"
+            @input.debounce.300ms="fetchResults(1)">
+          <!-- Loading spinner & Clear button -->
+          <div class="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+            <template x-if="isLoading">
+              <svg class="animate-spin w-4 h-4 text-royalblue" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </template>
+            <button type="button" x-show="query && !isLoading" @click="query = ''; fetchResults(1)" class="text-slate-400 hover:text-slate-600 transition-colors p-0.5" title="{{ _('Clear search') }}">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
         </div>
         {% if current_user.is_super_admin %}
         <div class="flex items-center gap-2 w-full md:w-auto">
           <label class="text-xs font-semibold text-slate-500 whitespace-nowrap">{{ _('Mode:') }}</label>
-          <select name="mode"
+          <select name="mode" x-model="mode"
             class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all flex-1"
-            @change="$el.form.submit()">
+            @change="fetchResults(1)">
             <option value="all" {% if selected_mode == 'all' %}selected{% endif %}>{{ _('All Modes') }}</option>
             <option value="unregistered" {% if selected_mode == 'unregistered' %}selected{% endif %}>{{ _('Unregistered') }}</option>
             <option value="registered" {% if selected_mode == 'registered' %}selected{% endif %}>{{ _('Registered') }}</option>
@@ -140,15 +154,15 @@
         {% endif %}
         <div class="flex items-center gap-2 w-full md:w-auto">
           <label class="text-xs font-semibold text-slate-500 whitespace-nowrap">{{ _('Sort:') }}</label>
-          <select name="sort"
+          <select name="sort" x-model="sort"
             class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all"
-            @change="$el.form.submit()">
+            @change="fetchResults(1)">
             <option value="created" {% if sort_field == 'created' %}selected{% endif %}>{{ _('Creation date') }}</option>
             <option value="title" {% if sort_field == 'title' %}selected{% endif %}>{{ _('Title') }}</option>
           </select>
-          <select name="order"
+          <select name="order" x-model="order"
             class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all"
-            @change="$el.form.submit()">
+            @change="fetchResults(1)">
             <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>{{ _('Desc') }}</option>
             <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>{{ _('Asc') }}</option>
           </select>
@@ -156,114 +170,11 @@
       </form>
     </div>
 
-    <!-- Project Entries Cards -->
-    <div class="space-y-4">
-      {% for p in projects %}
-      <div class="project-entry-card flex flex-col justify-between overflow-hidden">
-        <div class="p-5 sm:p-6">
-          <div class="flex items-start gap-3.5 mb-3">
-            <div class="w-10 h-10 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0 mt-0.5">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-              </svg>
-            </div>
-            <div class="min-w-0 flex-1">
-              <h2 class="text-base sm:text-lg font-bold text-slate-900 leading-snug">
-                <a href="{{ url_for('proofing.project.summary', slug=p.slug) }}" class="hover:text-royalblue transition-colors">
-                  {{ p.display_title }}
-                </a>
-              </h2>
-              {% set count = pages_per_project[p.id] %}
-              <div class="flex flex-wrap items-center gap-2 mt-2">
-                <span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-lg">
-                  <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-                  </svg>
-                  {{ ngettext('%(num)d page', '%(num)d pages', count) }}
-                </span>
-                {% if current_user.is_super_admin %}
-                  {% if p.creator_mode == 'unregistered' %}
-                    <span class="text-xs font-bold px-2 py-0.5 bg-rose-100 text-rose-700 rounded-lg uppercase tracking-wide text-[10px]">
-                      {{ _('Unregistered') }}
-                    </span>
-                  {% elif p.creator_mode == 'registered' %}
-                    <span class="text-xs font-bold px-2 py-0.5 bg-amber-100 text-amber-700 rounded-lg uppercase tracking-wide text-[10px]">
-                      {{ _('Registered') }}
-                    </span>
-                  {% elif p.creator_mode == 'enterprise' %}
-                    <span class="text-xs font-bold px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-lg uppercase tracking-wide text-[10px]">
-                      {{ _('Enterprise') }}
-                    </span>
-                  {% endif %}
-                {% endif %}
-                <span class="text-xs text-slate-400 font-medium">
-                  {{ p.created_at.strftime('%b %d, %Y') }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {% if p.description %}
-          <div class="mt-3 text-xs text-slate-600 leading-relaxed bg-slate-50/80 rounded-xl p-3 border border-slate-100 line-clamp-2">
-            {{ p.description|markdown|safe }}
-          </div>
-          {% endif %}
-
-          <div class="mt-4 p-3.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-            <div class="flex items-center justify-between font-bold mb-1.5">
-              <span class="text-slate-600">{{ _('Proofing Completion') }}</span>
-              <span class="text-royalblue font-bold">{{ "%.1f"|format(progress_per_project[p.id] * 100) }}%</span>
-            </div>
-            <div class="w-full bg-slate-200/80 rounded-full h-2.5 flex overflow-hidden">
-              {% for cls, fraction in statuses_per_project[p.id].items() %}
-              <div class="h-full {{ cls }} transition-all duration-500" style="width: {{ fraction * 100 }}%"></div>
-              {% endfor %}
-            </div>
-          </div>
-        </div>
-
-        <div class="px-5 sm:px-6 py-3.5 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between gap-3">
-          <a href="{{ url_for('proofing.project.download', slug=p.slug) }}"
-             class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors shadow-sm">
-            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-            </svg>
-            <span>{{ _('Download') }}</span>
-          </a>
-          <a href="{{ url_for('proofing.project.summary', slug=p.slug) }}"
-             class="inline-flex items-center gap-1.5 px-4 py-2 bg-royalblue hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shadow-royalblue/20 hover:shadow-md hover:shadow-royalblue/30">
-            <span>{{ _('View') }}</span>
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
-            </svg>
-          </a>
-        </div>
-      </div>
-      {% endfor %}
+    <!-- Project Results Container (dynamically updated) -->
+    <div id="projects-results-container" :class="{ 'opacity-60 transition-opacity duration-200 pointer-events-none': isLoading }">
+      {% include 'proofing/_projects_list.html' %}
     </div>
 
-    {% if total_pages and total_pages > 1 %}
-    <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-200/80 text-sm">
-      <div class="text-slate-500 font-medium text-xs">
-        {{ _('Showing %(start)d - %(end)d of %(total)d projects', start=((page - 1) * per_page) + 1, end=[page * per_page, total_projects]|min, total=total_projects) }}
-      </div>
-      <div class="flex items-center gap-2">
-        {% if page > 1 %}
-        <a href="{{ url_for('proofing.index', page=page - 1, per_page=per_page, q=search_query, mode=selected_mode, sort=sort_field, order=sort_order) }}" class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors">
-          {{ _('Previous') }}
-        </a>
-        {% endif %}
-        <span class="px-3 py-1.5 text-xs font-bold text-slate-700">
-          {{ page }} / {{ total_pages }}
-        </span>
-        {% if page < total_pages %}
-        <a href="{{ url_for('proofing.index', page=page + 1, per_page=per_page, q=search_query, mode=selected_mode, sort=sort_field, order=sort_order) }}" class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors">
-          {{ _('Next') }}
-        </a>
-        {% endif %}
-      </div>
-    </div>
-    {% endif %}
   </div>
   {% else %}
   <div class="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm max-w-lg mx-auto">
@@ -282,4 +193,102 @@
   </div>
   {% endif %}
 </div>
+
+<script>
+function proofingDashboard() {
+  return {
+    query: {{ search_query|tojson }},
+    mode: {{ selected_mode|tojson }},
+    sort: {{ sort_field|tojson }},
+    order: {{ sort_order|tojson }},
+    page: {{ page }},
+    perPage: {{ per_page }},
+    isLoading: false,
+    abortController: null,
+
+    init() {
+      window.addEventListener('popstate', () => {
+        const params = new URLSearchParams(window.location.search);
+        this.query = params.get('q') || params.get('query') || '';
+        this.mode = params.get('mode') || 'all';
+        this.sort = params.get('sort') || 'created';
+        this.order = params.get('order') || 'desc';
+        this.page = parseInt(params.get('page') || '1', 10);
+        this.fetchResults(this.page, false);
+      });
+    },
+
+    async fetchResults(targetPage = 1, updateUrl = true) {
+      if (this.abortController) {
+        this.abortController.abort();
+      }
+      this.abortController = new AbortController();
+      this.page = targetPage;
+      this.isLoading = true;
+
+      const params = new URLSearchParams();
+      if (this.query && this.query.trim()) params.set('q', this.query.trim());
+      if (this.mode && this.mode !== 'all') params.set('mode', this.mode);
+      if (this.sort && this.sort !== 'created') params.set('sort', this.sort);
+      if (this.order && this.order !== 'desc') params.set('order', this.order);
+      if (this.page && this.page > 1) params.set('page', this.page);
+      if (this.perPage && this.perPage !== 20) params.set('per_page', this.perPage);
+
+      const qs = params.toString();
+      const baseUrl = '{{ url_for("proofing.index") }}';
+      const targetUrl = baseUrl + (qs ? '?' + qs : '');
+
+      if (updateUrl) {
+        window.history.pushState({}, '', targetUrl);
+      }
+
+      try {
+        const response = await fetch(targetUrl, {
+          signal: this.abortController.signal,
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+
+        const html = await response.text();
+        const resultsEl = document.getElementById('projects-results-container');
+        if (resultsEl) {
+          resultsEl.innerHTML = html;
+          if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+            window.Alpine.initTree(resultsEl);
+          }
+        }
+
+        const totalHeader = response.headers.get('X-Total-Projects');
+        const badgeEl = document.getElementById('active-projects-badge-count');
+        if (badgeEl && totalHeader !== null) {
+          badgeEl.textContent = totalHeader;
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('Failed to fetch proofing projects:', err);
+        }
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    clearFilters() {
+      this.query = '';
+      this.mode = 'all';
+      this.sort = 'created';
+      this.order = 'desc';
+      this.fetchResults(1);
+    },
+
+    goToPage(pageNum) {
+      this.fetchResults(pageNum);
+    }
+  };
+}
+</script>
 {% endblock %}

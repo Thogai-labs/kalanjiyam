@@ -8,7 +8,7 @@ import math
 import os
 import redis
 
-from flask import Blueprint, current_app, flash, render_template, request, redirect, url_for
+from flask import Blueprint, current_app, flash, make_response, render_template, request, redirect, url_for
 from flask_babel import lazy_gettext as _l
 from flask_login import current_user
 from flask_wtf import FlaskForm
@@ -126,7 +126,10 @@ def index():
     )
 
     # 3. Filter projects based on user access permissions (tenant scope)
-    projects = [p for p in all_projects if q.user_can_view_proofing_project(current_user, p)]
+    accessible_projects = [p for p in all_projects if q.user_can_view_proofing_project(current_user, p)]
+    has_any_projects = bool(accessible_projects)
+
+    projects = accessible_projects
 
     # 4. Filter by creator mode if specified
     if selected_mode and selected_mode != "all":
@@ -238,21 +241,30 @@ def index():
             except Exception:
                 pass
 
-    return render_template(
-        "proofing/index.html",
-        projects=paginated_projects,
-        statuses_per_project=statuses_per_project,
-        progress_per_project=progress_per_project,
-        pages_per_project=pages_per_project,
-        page=page,
-        per_page=per_page,
-        total_pages=total_pages,
-        total_projects=total_projects,
-        search_query=search_query,
-        selected_mode=selected_mode,
-        sort_field=sort_field,
-        sort_order=sort_order,
-    )
+    template_kwargs = {
+        "projects": paginated_projects,
+        "statuses_per_project": statuses_per_project,
+        "progress_per_project": progress_per_project,
+        "pages_per_project": pages_per_project,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "total_projects": total_projects,
+        "search_query": search_query,
+        "selected_mode": selected_mode,
+        "sort_field": sort_field,
+        "sort_order": sort_order,
+        "has_any_projects": has_any_projects,
+    }
+
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.args.get("ajax") == "1"
+    if is_ajax:
+        rendered = render_template("proofing/_projects_list.html", **template_kwargs)
+        resp = make_response(rendered)
+        resp.headers["X-Total-Projects"] = str(total_projects)
+        return resp
+
+    return render_template("proofing/index.html", **template_kwargs)
 
 
 @bp.route("/help")

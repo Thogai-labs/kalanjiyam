@@ -33,6 +33,27 @@ def test_index_search(client):
     assert ">Proofing<" in resp.text
 
 
+def test_index_ajax_xhr(client):
+    resp = client.get("/proofing/", headers={"X-Requested-With": "XMLHttpRequest"})
+    assert resp.status_code == 200
+    assert "X-Total-Projects" in resp.headers
+
+
+def test_index_ajax_search(client):
+    resp = client.get(
+        "/proofing/?q=test&sort=title&order=asc",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    assert "X-Total-Projects" in resp.headers
+
+
+def test_index_ajax_param(client):
+    resp = client.get("/proofing/?ajax=1&page=1&per_page=5")
+    assert resp.status_code == 200
+    assert "X-Total-Projects" in resp.headers
+
+
 def test_beginners_guide(client):
     resp = client.get("/proofing/help/beginners-guide")
     assert "Beginner's Guide" in resp.text
