@@ -12,28 +12,53 @@ const sampleHTML = `
 delete window.location;
 window.IMAGE_URL = 'IMAGE_URL';
 window.OpenSeadragon = (_) => ({
-  addHandler: jest.fn((_, callback) => callback()),
+  addHandler: jest.fn((_, callback) => callback && callback()),
+  isOpen: jest.fn(() => true),
   viewport: {
     getHomeZoom: jest.fn(() => 0.5),
+    getZoom: jest.fn(() => 0.5),
     zoomTo: jest.fn((_) => {}),
+    goHome: jest.fn(() => {}),
+    applyConstraints: jest.fn(() => {}),
+    getContainerSize: jest.fn(() => ({ x: 800, y: 600 })),
+    deltaPointsFromPixels: jest.fn((pt) => pt),
+    pointFromPixel: jest.fn((pt) => pt),
+    panBy: jest.fn((pt) => {}),
+    setRotation: jest.fn((_) => {}),
+    getRotation: jest.fn(() => 0),
   }
 });
+window.OpenSeadragon.Point = function(x, y) {
+  this.x = x;
+  this.y = y;
+};
 window.Sanscript = {
   // Preface `s` with a marker so that we can verify that we're using the right
   // selection range.
   t: jest.fn((s, from, to) => `:${s}:${to}`),
 }
 window.fetch = jest.fn(async (url) => {
-  // Special URL so we can test server errors.
-  if (url === '/api/ocr/error') {
-    return { ok: false }
+  const cleanUrl = url.split('?')[0];
+  if (cleanUrl === '/api/ocr/error') {
+    return {
+      ok: false,
+      text: async () => '(server error)',
+      json: async () => ({ error: 'server error' }),
+    };
+  } else if (cleanUrl.endsWith('/api/glossaries')) {
+    return {
+      ok: true,
+      json: async () => [],
+      text: async () => '[]',
+    };
   } else {
-    const segments = url.split('/');
+    const segments = cleanUrl.split('/');
     const page = segments.pop();
     return {
       ok: true,
       text: async () => `text for ${page}`,
-    }
+      json: async () => ({ text: `text for ${page}` }),
+    };
   }
 });
 navigator.clipboard = {
@@ -254,4 +279,22 @@ test('replaceColonVisarga works', () => {
 test('copyCharacter works', () => {
   const { p } = markupFixtures();
   p.copyCharacter({ target: { textContent: 'foo' }});
+});
+
+test('panImage calls viewport.panBy with calculated delta', () => {
+  const p = Proofer();
+  p.init();
+  const panBySpy = jest.spyOn(p.imageViewer.viewport, 'panBy');
+  p.panImage(0, -0.15);
+  expect(panBySpy).toHaveBeenCalled();
+});
+
+test('rotateLeft and rotateRight work', () => {
+  const p = Proofer();
+  p.init();
+  const setRotationSpy = jest.spyOn(p.imageViewer.viewport, 'setRotation');
+  p.rotateLeft();
+  expect(setRotationSpy).toHaveBeenCalledWith(-90);
+  p.rotateRight();
+  expect(setRotationSpy).toHaveBeenCalledWith(90);
 });

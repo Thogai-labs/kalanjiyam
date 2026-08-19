@@ -1213,14 +1213,74 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
 }">
   <div x-show="!showTranslation" class="book-editor-image-viewport relative h-full">
     <div id="osd-image" class="w-full h-full"></div>
-    <div class="book-editor-image-controls">
-      <button type="button" id="osd-zoom-in" title="{{ _('Zoom in') }}">+</button>
-      <button type="button" id="osd-zoom-out" title="{{ _('Zoom out') }}">−</button>
-      <button type="button" id="osd-home" title="{{ _('Reset') }}">⌂</button>
-      <button type="button" id="osd-rotate-left" title="{{ _('Rotate left') }}">↺</button>
-      <button type="button" id="osd-rotate-right" title="{{ _('Rotate right') }}">↻</button>
+    <!-- D-Pad Navigation Controls -->
+    <div class="book-editor-dpad" role="region" aria-label="{{ _('D-Pad navigation') }}" title="{{ _('D-Pad: Click or hold to pan image') }}">
+      <div class="dpad-grid">
+        <div></div>
+        <button type="button" id="osd-pan-up" class="dpad-btn dpad-up" title="{{ _('Pan up (Up Arrow)') }}" aria-label="{{ _('Pan up') }}">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"/>
+          </svg>
+        </button>
+        <div></div>
+
+        <button type="button" id="osd-pan-left" class="dpad-btn dpad-left" title="{{ _('Pan left (Left Arrow)') }}" aria-label="{{ _('Pan left') }}">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <button type="button" id="osd-pan-center" class="dpad-btn dpad-center" title="{{ _('Center / Reset view (Home)') }}" aria-label="{{ _('Center view') }}">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="3" fill="currentColor"/>
+          </svg>
+        </button>
+        <button type="button" id="osd-pan-right" class="dpad-btn dpad-right" title="{{ _('Pan right (Right Arrow)') }}" aria-label="{{ _('Pan right') }}">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+
+        <div></div>
+        <button type="button" id="osd-pan-down" class="dpad-btn dpad-down" title="{{ _('Pan down (Down Arrow)') }}" aria-label="{{ _('Pan down') }}">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <div></div>
+      </div>
+    </div>
+
+    <!-- Zoom and View Controls -->
+    <div class="book-editor-image-controls" role="toolbar" aria-label="{{ _('Image controls') }}">
+      <button type="button" id="osd-zoom-in" title="{{ _('Zoom in (+)') }}" aria-label="{{ _('Zoom in') }}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+        </svg>
+      </button>
+      <button type="button" id="osd-zoom-out" title="{{ _('Zoom out (-)') }}" aria-label="{{ _('Zoom out') }}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4"/>
+        </svg>
+      </button>
+      <button type="button" id="osd-home" title="{{ _('Reset view') }}" aria-label="{{ _('Reset view') }}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        </svg>
+      </button>
+      <button type="button" id="osd-rotate-left" title="{{ _('Rotate left') }}" aria-label="{{ _('Rotate left') }}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a5 5 0 0 1 5 5v2m-15-7l4-4m-4 4l4 4"/>
+        </svg>
+      </button>
+      <button type="button" id="osd-rotate-right" title="{{ _('Rotate right') }}" aria-label="{{ _('Rotate right') }}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 10H11a5 5 0 0 0-5 5v2m15-7l-4-4m4 4l-4 4"/>
+        </svg>
+      </button>
       {% if translation_content or (available_translations and available_translations|length > 0) %}
-      <button type="button" @click="showTranslation = true" title="{{ _('Translation') }}">T</button>
+      <button type="button" @click="showTranslation = true" title="{{ _('Translation view') }}" aria-label="{{ _('Translation') }}">
+        <span class="font-bold font-mono text-xs">T</span>
+      </button>
       {% endif %}
     </div>
   </div>

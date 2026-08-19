@@ -13,16 +13,12 @@ module.exports = {
     'kalanjiyam/static/js/*.{js,ts}',
     '!kalanjiyam/static/js/*.d.ts',
   ],
-  moduleNameMapping: {
+  moduleNameMapper: {
+    '\\.css$': '<rootDir>/test/js/styleMock.js',
     '^@/(.*)': '<rootDir>/kalanjiyam/static/js/$1',
   },
-  setupFilesAfterEnv: ['<rootDir>/test/js/setup.js'],
+  setupFilesAfterEnv: [],
   transform: {
-    '^.+\\.ts$': 'ts-jest',
-  },
-  globals: {
-    'ts-jest': {
-      tsconfig: 'tsconfig.json',
-    },
+    '^.+\\.[jt]sx?$': 'babel-jest',
   },
 };

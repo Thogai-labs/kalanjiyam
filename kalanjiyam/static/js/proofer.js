@@ -51,19 +51,46 @@ function initializeImageViewer(imageURL) {
     showHomeControl: false,
     showRotationControl: false,
     showFullPageControl: false,
-    // Zoom buttons are defined in the `Editor` component below.
-    // Custom rotation buttons are defined in the template
+    showNavigator: false,
 
-    // Animations
+    // Navigation constraints to prevent losing image
+    visibilityRatio: 0.8,
+    constrainDuringPan: true,
+    minZoomImageRatio: 0.5,
+    maxZoomPixelRatio: 5.0,
+    defaultZoomLevel: 0,
+
+    // Fast, smooth and responsive animations
+    animationTime: 0.2,
+    springStiffness: 7.0,
+
+    // Mouse, trackpad, and touch gesture settings
     gestureSettingsMouse: {
-      flickEnabled: true,
+      clickToZoom: false,
+      dblClickToZoom: true,
+      pinchToZoom: true,
+      scrollToZoom: false, // Handled custom for trackpad pan and pinch zoom
+      flickEnabled: false,
+      dragToPan: true,
     },
-    animationTime: 0.5,
+    gestureSettingsTouch: {
+      pinchToZoom: true,
+      flickEnabled: false,
+      dragToPan: true,
+    },
+    gestureSettingsPen: {
+      pinchToZoom: true,
+      flickEnabled: false,
+      dragToPan: true,
+    },
+    gestureSettingsUnknown: {
+      pinchToZoom: true,
+      flickEnabled: false,
+      dragToPan: true,
+    },
 
-    // The zoom multiplier to use when using the zoom in/out buttons.
-    zoomPerClick: 1.1,
-    // Max zoom level
-    maxZoomPixelRatio: 2.5,
+    // Zoom multiplier
+    zoomPerClick: 1.2,
   });
 }
 
@@ -540,11 +567,6 @@ export default () => ({
     // Initialize language options
     this.updateLanguageOptions();
     
-    // Add event listeners for rotation buttons
-    if (!this.isDocx) {
-      this.setupRotationButtons();
-    }
-    
     // Initialize translation selector
     this.initTranslationSelector();
     
@@ -555,7 +577,11 @@ export default () => ({
       setTimeout(() => this.ensureFlowEditor(), 0);
     }
     if (!this.isDocx) {
+      this.setupRotationButtons();
       this.setupZoomButtons();
+      this.setupDpadButtons();
+      this.setupTrackpadAndMouseNavigation();
+      this.setupKeyboardNavigation();
     }
   },
 
@@ -1317,13 +1343,13 @@ export default () => ({
     const engineKey = window._ocrSelectedEngine || this.selectedEngine;
     const decodedEngine = this.decodeEngine(engineKey);
     const combinedLanguage = this.getCombinedLanguage();
-    const { pathname } = window.location;
+    const pathname = (window.location && window.location.pathname) || '';
     const url = pathname.replace('/proofing/', '/api/ocr/') + `?engine=${decodedEngine}&language=${combinedLanguage}`;
 
     try {
       const response = await fetch(url);
-      if (response.ok) {
-        const contentType = response.headers.get('content-type') || '';
+      if (response && response.ok) {
+        const contentType = (response.headers && response.headers.get && response.headers.get('content-type')) || '';
         if (contentType.includes('application/json')) {
           const payload = await response.json();
           this.applyOcrPayload(payload);
@@ -1335,6 +1361,10 @@ export default () => ({
       } else {
         const errorText = await this.getErrorMessage(response);
         this.showNotification(`OCR failed: ${errorText}`, 'error');
+        const contentTextarea = document.getElementById('content');
+        if (contentTextarea) {
+          contentTextarea.value = errorText;
+        }
       }
     } catch (error) {
       console.error('OCR error:', error);
@@ -1437,13 +1467,13 @@ export default () => ({
 
   async fetchGlossaries() {
     try {
-      const { pathname } = window.location;
+      const pathname = (window.location && window.location.pathname) || '';
       const prefixMatch = pathname.match(/^(.*)\/proofing\//);
       const prefix = prefixMatch ? prefixMatch[1] : '';
       const response = await fetch(`${prefix}/api/glossaries`);
-      if (response.ok) {
+      if (response && response.ok && typeof response.json === 'function') {
         this.allGlossaries = await response.json();
-      } else {
+      } else if (response && !response.ok) {
         console.warn('Failed to fetch glossaries:', response.status);
       }
     } catch (error) {
@@ -1616,28 +1646,32 @@ export default () => ({
   },
 
   async getErrorMessage(response) {
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
+    if (!response) return 'Server error';
+    const contentType = (response.headers && response.headers.get && response.headers.get('content-type')) || '';
+    if (contentType.includes('application/json') && typeof response.json === 'function') {
       try {
         const data = await response.json();
-        return data.message || data.error || `Error ${response.status}`;
+        return data.message || data.error || `Error ${response.status || 500}`;
       } catch (e) {
-        return `Error ${response.status}`;
+        return `Error ${response.status || 500}`;
       }
     }
-    const text = await response.text();
-    if (contentType.includes('text/html') || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-      const match = text.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || text.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-      if (match && match[1]) {
-        const cleanMsg = match[1].replace(/<[^>]*>/g, '').trim();
-        if (cleanMsg.includes(response.status.toString())) {
-          return cleanMsg;
+    if (typeof response.text === 'function') {
+      const text = await response.text();
+      if (contentType.includes('text/html') || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+        const match = text.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || text.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+        if (match && match[1]) {
+          const cleanMsg = match[1].replace(/<[^>]*>/g, '').trim();
+          if (cleanMsg.includes((response.status || '').toString())) {
+            return cleanMsg;
+          }
+          return `${cleanMsg} (${response.status || 500})`;
         }
-        return `${cleanMsg} (${response.status})`;
+        return `Server error (${response.status || 500})`;
       }
-      return `Server error (${response.status})`;
+      return text || `Server error (${response.status || 500})`;
     }
-    return text || `Error ${response.status}`;
+    return `Server error (${response.status || 500})`;
   },
 
   // Simple notification system
@@ -1675,19 +1709,248 @@ export default () => ({
   // Image zoom controls
 
   increaseImageZoom() {
-    this.imageZoom *= 1.2;
+    if (!this.imageViewer || !this.imageViewer.viewport) return;
+    this.imageZoom = (this.imageZoom || (this.imageViewer.viewport.getZoom && this.imageViewer.viewport.getZoom()) || 1.0) * 1.2;
     this.imageViewer.viewport.zoomTo(this.imageZoom);
+    if (this.imageViewer.viewport.applyConstraints) {
+      this.imageViewer.viewport.applyConstraints();
+    }
     this.saveSettings();
   },
   decreaseImageZoom() {
-    this.imageZoom *= 0.8;
+    if (!this.imageViewer || !this.imageViewer.viewport) return;
+    this.imageZoom = (this.imageZoom || (this.imageViewer.viewport.getZoom && this.imageViewer.viewport.getZoom()) || 1.0) * 0.8;
     this.imageViewer.viewport.zoomTo(this.imageZoom);
+    if (this.imageViewer.viewport.applyConstraints) {
+      this.imageViewer.viewport.applyConstraints();
+    }
     this.saveSettings();
   },
   resetImageZoom() {
+    if (!this.imageViewer || !this.imageViewer.viewport) return;
     this.imageZoom = this.imageViewer.viewport.getHomeZoom();
-    this.imageViewer.viewport.zoomTo(this.imageZoom);
+    if (this.imageViewer.viewport.goHome) {
+      this.imageViewer.viewport.goHome();
+    } else {
+      this.imageViewer.viewport.zoomTo(this.imageZoom);
+    }
+    if (this.imageViewer.viewport.applyConstraints) {
+      this.imageViewer.viewport.applyConstraints();
+    }
     this.saveSettings();
+  },
+
+  // Image pan & D-pad navigation controls
+
+  panImage(dxRatio, dyRatio) {
+    if (!this.imageViewer || !this.imageViewer.viewport) return;
+    try {
+      const containerSize = this.imageViewer.viewport.getContainerSize
+        ? this.imageViewer.viewport.getContainerSize()
+        : { x: 800, y: 600 };
+      const px = containerSize.x * dxRatio;
+      const py = containerSize.y * dyRatio;
+      if (this.imageViewer.viewport.deltaPointsFromPixels) {
+        const delta = this.imageViewer.viewport.deltaPointsFromPixels(
+          new OpenSeadragon.Point(px, py),
+        );
+        this.imageViewer.viewport.panBy(delta, false);
+        if (this.imageViewer.viewport.applyConstraints) {
+          this.imageViewer.viewport.applyConstraints();
+        }
+      }
+    } catch (e) {
+      console.warn('panImage failed:', e);
+    }
+  },
+
+  setupDpadButtons() {
+    const dpadBindings = [
+      { id: 'osd-pan-up', dx: 0, dy: -0.15 },
+      { id: 'osd-pan-down', dx: 0, dy: 0.15 },
+      { id: 'osd-pan-left', dx: -0.15, dy: 0 },
+      { id: 'osd-pan-right', dx: 0.15, dy: 0 },
+    ];
+
+    dpadBindings.forEach(({ id, dx, dy }) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+
+      let holdTimer = null;
+      let holdInterval = null;
+
+      const startPan = (e) => {
+        e.preventDefault();
+        this.panImage(dx, dy);
+        // Continuous pan on long press
+        holdTimer = setTimeout(() => {
+          holdInterval = setInterval(() => {
+            this.panImage(dx * 0.4, dy * 0.4);
+          }, 45);
+        }, 220);
+      };
+
+      const stopPan = () => {
+        if (holdTimer) {
+          clearTimeout(holdTimer);
+          holdTimer = null;
+        }
+        if (holdInterval) {
+          clearInterval(holdInterval);
+          holdInterval = null;
+        }
+      };
+
+      btn.addEventListener('mousedown', startPan);
+      btn.addEventListener('touchstart', startPan, { passive: false });
+      btn.addEventListener('mouseup', stopPan);
+      btn.addEventListener('mouseleave', stopPan);
+      btn.addEventListener('touchend', stopPan);
+      btn.addEventListener('touchcancel', stopPan);
+    });
+
+    const centerBtn = document.getElementById('osd-pan-center');
+    if (centerBtn) {
+      centerBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.resetImageZoom();
+      });
+    }
+  },
+
+  setupTrackpadAndMouseNavigation() {
+    if (!this.imageViewer) return;
+    const container = document.getElementById('osd-image');
+    if (!container) return;
+
+    // Trackpad 2-finger panning & pinch-to-zoom / mouse wheel
+    container.addEventListener(
+      'wheel',
+      (e) => {
+        if (!this.imageViewer || !this.imageViewer.viewport) return;
+        if (this.imageViewer.isOpen && !this.imageViewer.isOpen()) return;
+
+        // Prevent browser page scrolling while pointer is in the image viewer
+        e.preventDefault();
+        e.stopPropagation();
+
+        const rect = container.getBoundingClientRect();
+        const mousePixel = new OpenSeadragon.Point(
+          e.clientX - rect.left,
+          e.clientY - rect.top,
+        );
+
+        // 1. Trackpad Pinch-to-zoom OR Ctrl + Mouse Wheel Zoom
+        if (e.ctrlKey || e.metaKey) {
+          const factor = Math.pow(0.993, e.deltaY);
+          const refPoint = this.imageViewer.viewport.pointFromPixel(mousePixel, true);
+          this.imageViewer.viewport.zoomBy(factor, refPoint);
+          if (this.imageViewer.viewport.applyConstraints) {
+            this.imageViewer.viewport.applyConstraints();
+          }
+          if (this.imageViewer.viewport.getZoom) {
+            this.imageZoom = this.imageViewer.viewport.getZoom();
+          }
+          return;
+        }
+
+        // 2. Trackpad 2-finger pan OR Mouse wheel scroll
+        let dx = e.deltaX;
+        let dy = e.deltaY;
+
+        // Normalize deltaMode (DOM_DELTA_LINE or DOM_DELTA_PAGE)
+        if (e.deltaMode === 1) {
+          dx *= 20;
+          dy *= 20;
+        } else if (e.deltaMode === 2) {
+          dx *= 200;
+          dy *= 200;
+        }
+
+        // Support Shift + wheel for horizontal scroll
+        if (e.shiftKey && dx === 0 && dy !== 0) {
+          dx = dy;
+          dy = 0;
+        }
+
+        // Pan viewport by delta pixels
+        if (this.imageViewer.viewport.deltaPointsFromPixels) {
+          const delta = this.imageViewer.viewport.deltaPointsFromPixels(
+            new OpenSeadragon.Point(dx, dy),
+            true,
+          );
+          this.imageViewer.viewport.panBy(delta, false);
+          if (this.imageViewer.viewport.applyConstraints) {
+            this.imageViewer.viewport.applyConstraints();
+          }
+        }
+      },
+      { passive: false },
+    );
+
+    // Visual grabbing cursor feedback during canvas drag
+    if (this.imageViewer.addHandler) {
+      this.imageViewer.addHandler('canvas-drag', () => {
+        container.classList.add('is-grabbing');
+      });
+      this.imageViewer.addHandler('canvas-drag-end', () => {
+        container.classList.remove('is-grabbing');
+      });
+      this.imageViewer.addHandler('canvas-release', () => {
+        container.classList.remove('is-grabbing');
+      });
+    }
+  },
+
+  setupKeyboardNavigation() {
+    window.addEventListener('keydown', (e) => {
+      const active = document.activeElement;
+      if (active) {
+        const tag = active.tagName.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || active.isContentEditable) {
+          return;
+        }
+        if (active.closest('#rich-editor') || active.closest('#ocr-replica-root') || active.closest('.ProseMirror') || active.closest('.replica-block-input')) {
+          return;
+        }
+      }
+
+      if (!this.imageViewer || !this.imageViewer.viewport || this.isDocx) return;
+
+      switch (e.key) {
+        case 'ArrowUp':
+          e.preventDefault();
+          this.panImage(0, -0.15);
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          this.panImage(0, 0.15);
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          this.panImage(-0.15, 0);
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          this.panImage(0.15, 0);
+          break;
+        case '+':
+        case '=':
+          e.preventDefault();
+          this.increaseImageZoom();
+          break;
+        case '-':
+        case '_':
+          e.preventDefault();
+          this.decreaseImageZoom();
+          break;
+        case '0':
+        case 'Home':
+          e.preventDefault();
+          this.resetImageZoom();
+          break;
+      }
+    });
   },
 
   // Image rotation controls
@@ -1784,6 +2047,9 @@ export default () => ({
   transliterateSelection() {
     this.changeSelectedText((s) => Sanscript.t(s, this.fromScript, this.toScript));
     this.saveSettings();
+  },
+  transliterate() {
+    this.transliterateSelection();
   },
 
   // Character controls
@@ -1893,6 +2159,7 @@ export default () => ({
   },
 
   _getStorageKey() {
+    if (!window.location || !window.location.pathname) return null;
     const pathMatch = window.location.pathname.match(/\/proofing\/([^\/]+)\/([^\/]+)/);
     if (pathMatch) {
       const targetKey = (typeof window.TARGET_VERSION_KEY !== 'undefined' && window.TARGET_VERSION_KEY) ? window.TARGET_VERSION_KEY : 'default';

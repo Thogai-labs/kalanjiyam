@@ -152,9 +152,18 @@ export class OsdBboxOverlay {
       el.setAttribute('stroke', stroke);
       el.setAttribute('stroke-width', '2');
       el.setAttribute('vector-effect', 'non-scaling-stroke');
-      el.style.pointerEvents = 'all';
-      el.style.cursor = 'pointer';
+      let pointerDownPos = null;
+      el.addEventListener('pointerdown', (e) => {
+        pointerDownPos = { x: e.clientX, y: e.clientY };
+      });
       el.addEventListener('click', (e) => {
+        if (pointerDownPos) {
+          const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+          if (dist > 6) {
+            e.stopPropagation();
+            return;
+          }
+        }
         e.stopPropagation();
         const bbox = [box.x1, box.y1, box.x2, box.y2];
         this.onBoxClick({

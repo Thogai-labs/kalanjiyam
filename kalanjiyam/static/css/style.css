@@ -632,19 +632,92 @@
     @apply h-full min-h-[40vh] lg:min-h-0;
   }
 
+  #osd-image {
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+
+  #osd-image:active,
+  #osd-image.is-grabbing {
+    cursor: grabbing;
+  }
+
+  .ocr-osd-overlay {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .ocr-osd-overlay rect {
+    transition: fill 0.15s ease, stroke 0.15s ease;
+  }
+
+  .book-editor-dpad {
+    @apply absolute bottom-3 left-3 z-20 select-none p-1.5 rounded-2xl;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .dpad-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1.75rem);
+    grid-template-rows: repeat(3, 1.75rem);
+    gap: 3px;
+  }
+
+  .dpad-btn {
+    @apply flex items-center justify-center rounded-lg transition-all text-slate-200;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .dpad-btn:hover {
+    background: rgba(255, 255, 255, 0.28);
+    color: #ffffff;
+    transform: scale(1.06);
+  }
+
+  .dpad-btn:active {
+    background: #4169e1;
+    color: #ffffff;
+    transform: scale(0.92);
+  }
+
+  .dpad-center {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  .dpad-center:hover {
+    background: rgba(65, 105, 225, 0.7);
+  }
+
   .book-editor-image-controls {
-    @apply absolute bottom-3 right-3 flex gap-1 rounded-lg p-1 z-20;
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(4px);
+    @apply absolute bottom-3 right-3 flex items-center gap-1.5 rounded-2xl p-1.5 z-20 select-none;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
   }
 
   .book-editor-image-controls button {
-    @apply w-8 h-8 rounded text-sm font-bold transition-colors;
-    color: rgba(255, 255, 255, 0.9);
+    @apply w-8 h-8 rounded-lg text-xs font-bold transition-all flex items-center justify-center text-slate-200;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   .book-editor-image-controls button:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.28);
+    color: #ffffff;
+    transform: scale(1.06);
+  }
+
+  .book-editor-image-controls button:active {
+    background: #4169e1;
+    color: #ffffff;
+    transform: scale(0.92);
   }
 
   .book-editor-content-pane {
