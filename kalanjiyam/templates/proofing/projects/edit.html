@@ -3,82 +3,150 @@
 {% import "macros/forms.html" as mf %}
 {% import "macros/proofing.html" as m %}
 
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  .font-serif-title {
+    font-family: 'Cinzel', Georgia, serif;
+  }
+
+  .project-hero {
+    background: #0b1120;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
+      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
+      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
+    background-size: 100% 100%, 24px 24px, 24px 24px;
+  }
+</style>
+{% endblock %}
 
 {% block title %}{{ _('Edit: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
 
-
 {% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
+{% block hero %}
+<header class="project-hero text-slate-100 py-10 px-4 mb-8 border-b border-slate-800">
+  <div class="max-w-6xl mx-auto">
+    <!-- Category Badge -->
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+      </svg>
+      <span>{{ _('Project Settings & Metadata') }}</span>
+    </div>
+
+    <!-- Title -->
+    <h1 class="text-3xl sm:text-4xl font-bold font-serif-title tracking-tight mb-2 text-white">
+      {{ project.display_title }}
+    </h1>
+
+    <!-- Meta Info -->
+    <div class="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-slate-400 font-medium">
+      {% if project.author %}
+      <span class="text-slate-300 font-semibold">{{ project.author }}</span>
+      {% endif %}
+      {% if project.publication_year %}
+      <span class="text-slate-600">•</span>
+      <span>{{ project.publication_year }}</span>
+      {% endif %}
+      {% if project.publisher %}
+      <span class="text-slate-600">•</span>
+      <span>{{ project.publisher }}</span>
+      {% endif %}
+      <span class="text-slate-600">•</span>
+      <span class="text-blue-400 font-semibold">{{ project.pages|length }} {{ _('pages') }}</span>
+    </div>
+  </div>
+</header>
+{% endblock %}
 
 {% block content %}
-{{ m.project_header_nested(_('Edit'), project) }}
-{{ m.project_tabs(project=project, active='edit', is_mod=current_user.is_moderator) }}
+<div class="w-full max-w-4xl">
+  <div class="mb-6">
+    {{ m.project_tabs(project=project, active='edit', is_mod=current_user.is_moderator) }}
+  </div>
 
-{{ mf.show_errors_if_any(form.errors) }}
+  {{ mf.show_errors_if_any(form.errors) }}
 
-<form method="POST">
-  {{ form.csrf_token }}
+  <form method="POST" class="space-y-8">
+    {{ form.csrf_token }}
 
-  <fieldset>
-    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Basic information') }}</legend>
-    <div class="bg-slate-100 p-4">
-      {{ mf.field(form.display_title) }}
-      {{ mf.field(form.genre) }}
-      {{ mf.markdown_field(form.description) }}
-      
-      <div class="my-4 flex items-start gap-3">
-        {{ form.is_publicly_viewable(class_="h-5 w-5 mt-1 rounded border-slate-300 text-royalblue focus:ring-royalblue cursor-pointer") }}
-        <div>
-          {{ form.is_publicly_viewable.label(class_="font-semibold text-slate-700 block cursor-pointer") }}
-          <span class="text-sm text-slate-500">{{ _('When checked, anyone (including guests) can read this book at /books/.') }}</span>
+    <fieldset class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
+      <legend class="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-royalblue"></span>
+        {{ _('Basic information') }}
+      </legend>
+      <div class="space-y-4">
+        {{ mf.field(form.display_title) }}
+        {{ mf.field(form.genre) }}
+        {{ mf.markdown_field(form.description) }}
+        
+        <div class="my-4 flex items-start gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+          {{ form.is_publicly_viewable(class_="h-5 w-5 mt-0.5 rounded border-slate-300 text-royalblue focus:ring-royalblue cursor-pointer") }}
+          <div>
+            {{ form.is_publicly_viewable.label(class_="font-semibold text-slate-800 text-sm block cursor-pointer") }}
+            <span class="text-xs text-slate-500">{{ _('When checked, anyone (including guests) can read this book at /books/.') }}</span>
+          </div>
         </div>
+
+        {{ mf.field(form.page_numbers) }}
       </div>
+    </fieldset>
 
-      {{ mf.field(form.page_numbers) }}
+    <fieldset class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
+      <legend class="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-royalblue"></span>
+        {{ _('Book metadata') }}
+      </legend>
+      <div class="space-y-4">
+        {{ mf.field(form.print_title) }}
+        {{ mf.field(form.author) }}
+        {{ mf.field(form.editor) }}
+        {{ mf.field(form.publisher) }}
+        {{ mf.field(form.publication_year) }}
+        {{ mf.field(form.worldcat_link) }}
+      </div>
+    </fieldset>
+
+    <fieldset class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
+      <legend class="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-royalblue"></span>
+        {{ _('Internal notes') }}
+      </legend>
+      <div class="space-y-4">
+        {{ mf.field(form.notes) }}
+      </div>
+    </fieldset>
+
+    <div class="pt-2">
+      <input class="inline-flex items-center justify-center px-6 py-3 bg-royalblue hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md shadow-royalblue/20 transition-all cursor-pointer" type="submit" value="{{ _('Save changes') }}">
     </div>
-  </fieldset>
-
-  <fieldset>
-    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Book metadata') }}</legend>
-    <div class="bg-slate-100 p-4">
-      {{ mf.field(form.print_title) }}
-      {{ mf.field(form.author) }}
-      {{ mf.field(form.editor) }}
-      {{ mf.field(form.publisher) }}
-      {{ mf.field(form.publication_year) }}
-      {{ mf.field(form.worldcat_link) }}
-    </div>
-  </fieldset>
-
-  <fieldset>
-    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Internal notes') }}</legend>
-    <div class="bg-slate-100 p-4">
-      {{ mf.field(form.notes) }}
-    </div>
-  </fieldset>
-
-  <input class="btn btn-submit mt-4" type="submit" value="{{ _('Save changes') }}">
-</form>
-
-<hr class="my-8 border-slate-200">
-
-<div class="border border-red-500 rounded p-6 my-8 bg-red-50/10">
-  <h3 class="text-red-700 font-bold text-lg mb-2">{{ _('Danger zone') }}</h3>
-  
-  <form method="POST" action="{{ url_for('proofing.project.delete_project', slug=project.slug) }}">
-    {{ delete_form.csrf_token }}
-    <p class="font-bold text-slate-800">{{ _('Delete this project') }}</p>
-    <p class="text-sm text-slate-600 my-2">
-      {{ _('Once you delete a project, there is no going back. This will permanently delete all of its pages, revisions, and discussion threads.') }}
-    </p>
-    <p class="text-sm text-slate-700 font-medium my-2">
-      {{ _('Please type') }} <kbd class="px-2 py-1 bg-slate-200 rounded font-mono text-sm text-slate-800">{{ project.slug }}</kbd> {{ _('to confirm:') }}
-    </p>
-    
-    {{ delete_form.slug(class_="modern-input block w-full my-4", placeholder=project.slug) }}
-    
-    <input class="btn bg-red-700 hover:bg-red-900 transition text-white font-semibold py-2 px-4 rounded cursor-pointer" type="submit" value="{{ _('Permanently delete this project and its data') }}">
   </form>
-</div>
 
+  <div class="mt-12 bg-white border border-red-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+    <h3 class="text-red-700 font-bold text-base mb-2 flex items-center gap-2">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+      {{ _('Danger zone') }}
+    </h3>
+    
+    <form method="POST" action="{{ url_for('proofing.project.delete_project', slug=project.slug) }}" class="mt-4">
+      {{ delete_form.csrf_token }}
+      <p class="font-bold text-slate-800 text-sm">{{ _('Delete this project') }}</p>
+      <p class="text-xs text-slate-500 my-2 leading-relaxed">
+        {{ _('Once you delete a project, there is no going back. This will permanently delete all of its pages, revisions, and discussion threads.') }}
+      </p>
+      <p class="text-xs text-slate-700 font-medium my-2">
+        {{ _('Please type') }} <kbd class="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded font-mono text-xs text-slate-800 font-bold">{{ project.slug }}</kbd> {{ _('to confirm:') }}
+      </p>
+      
+      <div class="my-4 max-w-md">
+        {{ delete_form.slug(class_="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition-all", placeholder=project.slug) }}
+      </div>
+      
+      <input class="inline-flex items-center justify-center px-5 py-2.5 bg-red-600 hover:bg-red-700 transition-colors text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer" type="submit" value="{{ _('Permanently delete this project and its data') }}">
+    </form>
+  </div>
+</div>
 {% endblock %}

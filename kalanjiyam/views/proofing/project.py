@@ -405,9 +405,14 @@ def activity(slug):
         if idx != -1 and idx + 1 < len(page_revs):
             prev_r = page_revs[idx + 1]
             prev_text = proofing_utils.revision_plain_content(prev_r)
+            r.prev_revision_id = prev_r.id
             r.diff = revision_diff(prev_text, cur_text)
         else:
-            r.diff = None
+            r.prev_revision_id = None
+            if cur_text:
+                r.diff = revision_diff("", cur_text)
+            else:
+                r.diff = None
 
     recent_activity = [("revision", r.created, r) for r in recent_revisions]
     recent_activity.append(("project", project_.created_at, project_))
