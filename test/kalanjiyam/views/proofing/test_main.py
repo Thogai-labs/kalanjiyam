@@ -74,6 +74,12 @@ def test_recent_changes(client):
     assert "Recent changes" in resp.text
 
 
+def test_recent_changes_pagination(client):
+    resp = client.get("/proofing/recent-changes?page=1&per_page=10")
+    assert resp.status_code == 200
+    assert "Recent changes" in resp.text
+
+
 def test_create_project__unauth(client):
     resp = client.get("/proofing/create-project")
     assert resp.status_code in (200, 302)

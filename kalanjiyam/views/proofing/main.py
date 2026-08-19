@@ -588,50 +588,110 @@ def create_project_status(task_id):
 
 @bp.route("/recent-changes")
 def recent_changes():
-    """Show recent changes across all projects."""
-    num_per_page = 100
-
-    # Exclude bot edits, which overwhelm all other edits on the site.
-    bot_user = q.user(consts.BOT_USERNAME)
-    assert bot_user, "Bot user not defined"
+    """Show recent changes across all projects with pagination and eager-loaded queries."""
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except (ValueError, TypeError):
+        page = 1
+    try:
+        per_page = max(1, min(100, int(request.args.get("per_page", 25))))
+    except (ValueError, TypeError):
+        per_page = 25
 
     session = q.get_session()
-    recent_revisions = (
-        session.query(db.Revision)
-        .filter(db.Revision.author_id != bot_user.id)
-        .order_by(db.Revision.created.desc())
-        .limit(num_per_page * 2)  # Fetch more to allow filtering
+
+    # 1. Fetch accessible projects for current user in one query with eager loaded groups
+    all_projects = (
+        session.query(db.Project)
+        .options(orm.selectinload(db.Project.groups))
         .all()
     )
-    recent_revisions = [r for r in recent_revisions if q.user_can_view_proofing_project(current_user, r.project)][:num_per_page]
+    accessible_projects = [p for p in all_projects if q.user_can_view_proofing_project(current_user, p)]
+    accessible_project_ids = [p.id for p in accessible_projects]
 
-    # Pre-calculate diffs against previous page revision
-    if recent_revisions:
-        page_ids = list({r.page_id for r in recent_revisions})
-        all_page_revs = (
-            session.query(db.Revision)
-            .filter(db.Revision.page_id.in_(page_ids))
-            .order_by(db.Revision.created.desc())
-            .all()
+    if not accessible_project_ids:
+        return render_template(
+            "proofing/recent-changes.html",
+            recent_activity=[],
+            page=1,
+            per_page=per_page,
+            total_pages=1,
+            total_items=0,
         )
-        revs_by_page = {}
-        for rev in all_page_revs:
-            revs_by_page.setdefault(rev.page_id, []).append(rev)
 
+    # 2. Exclude bot edits
+    bot_user = q.user(consts.BOT_USERNAME)
+    bot_id = bot_user.id if bot_user else None
+
+    # Base filter for revisions scoped to accessible projects
+    rev_filters = [db.Revision.project_id.in_(accessible_project_ids)]
+    if bot_id:
+        rev_filters.append(db.Revision.author_id != bot_id)
+
+    # Counts
+    total_revisions = session.query(db.Revision.id).filter(*rev_filters).count()
+    total_projects = len(accessible_project_ids)
+    total_items = total_revisions + total_projects
+    total_pages = max(1, math.ceil(total_items / per_page)) if total_items else 1
+    if page > total_pages:
+        page = total_pages
+
+    # 3. Efficiently fetch items needed up to the current page with full eager loading
+    fetch_limit = page * per_page
+    revisions = (
+        session.query(db.Revision)
+        .options(
+            orm.joinedload(db.Revision.author),
+            orm.joinedload(db.Revision.project),
+            orm.joinedload(db.Revision.page),
+            orm.joinedload(db.Revision.status),
+        )
+        .filter(*rev_filters)
+        .order_by(db.Revision.created.desc())
+        .limit(fetch_limit)
+        .all()
+    )
+
+    projects = (
+        session.query(db.Project)
+        .options(
+            orm.joinedload(db.Project.creator),
+        )
+        .filter(db.Project.id.in_(accessible_project_ids))
+        .order_by(db.Project.created_at.desc())
+        .limit(fetch_limit)
+        .all()
+    )
+
+    # Combine into activity list and sort chronologically
+    all_activity = [("revision", r.created, r) for r in revisions] + [
+        ("project", p.created_at, p) for p in projects
+    ]
+    all_activity.sort(key=lambda x: x[1], reverse=True)
+
+    # Slice current page
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    page_activity = all_activity[start_idx:end_idx]
+
+    # 4. Compute diffs ONLY for the revisions on the current page
+    page_revisions = [item[2] for item in page_activity if item[0] == "revision"]
+    if page_revisions:
         from kalanjiyam.utils.diff import revision_diff
-
         from kalanjiyam.utils import proofing_utils
 
-        for r in recent_revisions:
-            page_revs = revs_by_page.get(r.page_id, [])
-            try:
-                idx = page_revs.index(r)
-            except ValueError:
-                idx = -1
-
+        for r in page_revisions:
             cur_text = proofing_utils.revision_plain_content(r)
-            if idx != -1 and idx + 1 < len(page_revs):
-                prev_r = page_revs[idx + 1]
+            prev_r = (
+                session.query(db.Revision)
+                .filter(
+                    db.Revision.page_id == r.page_id,
+                    db.Revision.created < r.created
+                )
+                .order_by(db.Revision.created.desc())
+                .first()
+            )
+            if prev_r:
                 r.prev_revision_id = prev_r.id
                 prev_text = proofing_utils.revision_plain_content(prev_r)
                 r.diff = revision_diff(prev_text, cur_text)
@@ -642,21 +702,13 @@ def recent_changes():
                 else:
                     r.diff = None
 
-    recent_activity = [("revision", r.created, r) for r in recent_revisions]
-
-    recent_projects = (
-        session.query(db.Project)
-        .order_by(db.Project.created_at.desc())
-        .limit(num_per_page * 2)
-        .all()
-    )
-    recent_projects = [p for p in recent_projects if q.user_can_view_proofing_project(current_user, p)][:num_per_page]
-    recent_activity += [("project", p.created_at, p) for p in recent_projects]
-
-    recent_activity.sort(key=lambda x: x[1], reverse=True)
-    recent_activity = recent_activity[:num_per_page]
     return render_template(
-        "proofing/recent-changes.html", recent_activity=recent_activity
+        "proofing/recent-changes.html",
+        recent_activity=page_activity,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+        total_items=total_items,
     )
 
 
