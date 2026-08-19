@@ -2,43 +2,141 @@
 {% from "macros/forms.html" import field %}
 {% import "macros/proofing.html" as m %}
 
-{% block title %}{{ _('Search and Replace') }} | {{ project.display_title }}{% endblock %}
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  .font-serif-title {
+    font-family: 'Cinzel', Georgia, serif;
+  }
+
+  .project-hero {
+    background: #0b1120;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
+      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
+      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
+    background-size: 100% 100%, 24px 24px, 24px 24px;
+  }
+</style>
+{% endblock %}
+
+{% block title %}{{ _('Changes: Confirm and Review') }} | {{ project.display_title }}{% endblock %}
+
+{% block hero %}
+<header class="project-hero text-slate-100 py-10 px-4 mb-8 border-b border-slate-800">
+  <div class="max-w-6xl mx-auto">
+    <!-- Category Badge -->
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+      <span>{{ _('Changes: Confirmation') }}</span>
+    </div>
+
+    <!-- Title -->
+    <h1 class="text-3xl sm:text-4xl font-bold font-serif-title tracking-tight mb-2 text-white">
+      {{ project.display_title }}
+    </h1>
+
+    <!-- Meta Info -->
+    <div class="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-slate-400 font-medium">
+      {% if project.author %}
+      <span class="text-slate-300 font-semibold">{{ project.author }}</span>
+      {% endif %}
+      {% if project.publication_year %}
+      <span class="text-slate-600">•</span>
+      <span>{{ project.publication_year }}</span>
+      {% endif %}
+      {% if project.publisher %}
+      <span class="text-slate-600">•</span>
+      <span>{{ project.publisher }}</span>
+      {% endif %}
+      <span class="text-slate-600">•</span>
+      <span class="text-blue-400 font-semibold">{{ project.pages|length }} {{ _('pages') }}</span>
+    </div>
+  </div>
+</header>
+{% endblock %}
 
 {% block content %}
+<div class="w-full">
+  <div class="mb-6">
+    {{ m.project_tabs(project=project, active='search_operations', is_mod=current_user.is_moderator) }}
+  </div>
 
-{{ m.project_header_nested(_('Review and Confirm Changes'), project) }}
-{{ m.project_tabs(project=project, active='edit') }}
+  {% set match_counts = results|map(attribute='matches')|map('length')|list %}
+  {% set nr = match_counts|sum %}
 
-<div class="prose">
-  <h1>{{ _('Confirm Changes') }}</h1>
-  {% macro sp(s, p, n) %}{% if n == 1 %}{{ s }}{% else %}{{ p }}{% endif %}{% endmacro %}
-  <p>{{ _('Please carefully review and confirm the changes you selected:') }}</p>
-  <form method="POST" action="{{ url_for('proofing.project.confirm_changes', slug=project.slug) }}" class="bg-slate-100 p-4 my-4">
+  <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 mb-8">
+    <h2 class="text-base font-bold text-slate-900 flex items-center gap-2 mb-2">
+      <span class="w-2 h-2 rounded-full bg-royalblue"></span>
+      {{ _('Review & Confirm Changes') }}
+    </h2>
+    <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+      {{ ngettext('Confirm changes on %(count)s match containing', 'Confirm changes on %(count)s matches containing', nr, count=nr) }}
+      <span class="px-2 py-0.5 bg-red-100 text-red-800 rounded font-mono text-xs font-bold">{{ query }}</span>
+      {{ _('to be replaced by') }}
+      <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-mono text-xs font-bold">{{ replace }}</span>.
+    </p>
+  </div>
+
+  <form method="POST" action="{{ url_for('proofing.project.confirm_changes', slug=project.slug) }}">
     {{ form.csrf_token }}
     <input type="hidden" name="query" value="{{ query }}">
     <input type="hidden" name="replace" value="{{ replace }}">
 
-    {% set match_counts = results|map(attribute='matches')|map('length')|list %}
-    {% set nr = match_counts|sum %}
-    <p>{{ ngettext('Confirm changes on %(count)s match containing', 'Confirm changes on %(count)s matches containing', nr, count=nr) }} <span style="color: red;"><kbd>{{ query }}</kbd></span> {{ _('to be replaced by') }} <span style="color: green;"><kbd>{{ replace }}</kbd></span>.</p>
-    
-    {% for result in results %}
-      {% set page = result.page %}
-      {% set page_url = url_for("proofing.page.edit", project_slug=project.slug, page_slug=page.slug) %}
-      {% set matches = result.matches %}
-      {% for match in matches %}
-        <div class="match" style="background-color: rgb(243, 239, 239);">
-          <p>{{ _('Page') }} <a href="{{ page_url }}">{{ project.display_title }}/{{ page.slug }}:</a> {{ _('Line') }} {{ match.line_num }}</p>
-          <label for="match{{ page.slug }}-{{ match.line_num }}">{{ match.query }}</label>
-          <input type="hidden" name="match{{ page.slug }}-{{ match.line_num }}-query" value="{{ match.query }}">
-          <br>
-          <label for="match{{ page.slug }}-{{ match.line_num }}-replace" style="color: rgb(97, 86, 66); background-color: rgb(219, 215, 215);"> {{ match.replace }} </label>
-          <input type="hidden" name="match{{ page.slug }}-{{ match.line_num }}-replace" value="{{ match.replace }}">
+    <div class="space-y-4 mb-8">
+      {% for result in results %}
+        {% set page = result.page %}
+        {% set page_url = url_for("proofing.page.edit", project_slug=project.slug, page_slug=page.slug) %}
+        {% set matches = result.matches %}
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+            <a href="{{ page_url }}" class="inline-flex items-center gap-2 font-bold text-sm text-royalblue hover:underline">
+              <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              <span>{{ project.display_title }} / {{ page.slug }}</span>
+            </a>
+            <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-xs">
+              {{ matches|length }} {{ _('matches') }}
+            </span>
+          </div>
+
+          <div class="space-y-3 font-mono text-xs">
+            {% for match in matches %}
+              <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
+                <div class="font-sans text-slate-500 font-semibold text-xs">
+                  {{ _('Line %(line)s', line=match.line_num) }}
+                </div>
+                <div class="p-2 bg-red-50 text-red-800 rounded-lg border border-red-100 flex items-baseline gap-2">
+                  <span class="font-sans font-bold text-[10px] text-red-500 uppercase shrink-0">- OLD</span>
+                  <span class="leading-relaxed">{{ match.query }}</span>
+                  <input type="hidden" name="match{{ page.slug }}-{{ match.line_num }}-query" value="{{ match.query }}">
+                </div>
+                <div class="p-2 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-100 flex items-baseline gap-2">
+                  <span class="font-sans font-bold text-[10px] text-emerald-600 uppercase shrink-0">+ NEW</span>
+                  <span class="leading-relaxed">{{ match.replace }}</span>
+                  <input type="hidden" name="match{{ page.slug }}-{{ match.line_num }}-replace" value="{{ match.replace }}">
+                </div>
+              </div>
+            {% endfor %}
+          </div>
         </div>
       {% endfor %}
-    {% endfor %}
-    <button class="btn btn-submit" type="submit" name="cancel" value="cancel">{{ _('Cancel') }}</button>
-    <button class="btn btn-submit" type="submit" name="confirm" value="confirm">{{ _('Confirm') }}</button>
+    </div>
+
+    <!-- Sticky Confirmation Toolbar -->
+    <div class="sticky bottom-4 z-30 p-4 bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl shadow-lg flex items-center justify-between gap-4">
+      <button class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer" 
+              type="submit" name="cancel" value="cancel">{{ _('Cancel') }}</button>
+      <button class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-royalblue hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-royalblue/20 transition-all cursor-pointer" 
+              type="submit" name="confirm" value="confirm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        {{ _('Confirm and Apply Changes') }}
+      </button>
+    </div>
   </form>
-  </div>
+</div>
 {% endblock %}

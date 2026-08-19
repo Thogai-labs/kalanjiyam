@@ -2,25 +2,81 @@
 {% import "macros/components.html" as components %}
 {% import "macros/proofing.html" as m %}
 
-{% block title %}{{ _('Batch Translate: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  .font-serif-title {
+    font-family: 'Cinzel', Georgia, serif;
+  }
+
+  .project-hero {
+    background: #0b1120;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
+      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
+      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
+    background-size: 100% 100%, 24px 24px, 24px 24px;
+  }
+</style>
+{% endblock %}
+
+{% block title %}{{ _('Batch Translate:') }} {{ project.display_title }} | Kalanjiyam{% endblock %}
+
+{% block hero %}
+<header class="project-hero text-slate-100 py-10 px-4 mb-8 border-b border-slate-800">
+  <div class="max-w-6xl mx-auto">
+    <!-- Category Badge -->
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
+      </svg>
+      <span>{{ _('Automated Batch Translation') }}</span>
+    </div>
+
+    <!-- Title -->
+    <h1 class="text-3xl sm:text-4xl font-bold font-serif-title tracking-tight mb-2 text-white">
+      {{ project.display_title }}
+    </h1>
+
+    <!-- Meta Info -->
+    <div class="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-slate-400 font-medium">
+      {% if project.author %}
+      <span class="text-slate-300 font-semibold">{{ project.author }}</span>
+      {% endif %}
+      {% if project.publication_year %}
+      <span class="text-slate-600">•</span>
+      <span>{{ project.publication_year }}</span>
+      {% endif %}
+      {% if project.publisher %}
+      <span class="text-slate-600">•</span>
+      <span>{{ project.publisher }}</span>
+      {% endif %}
+      <span class="text-slate-600">•</span>
+      <span class="text-blue-400 font-semibold">{{ project.pages|length }} {{ _('pages') }}</span>
+    </div>
+  </div>
+</header>
+{% endblock %}
 
 {% block content %}
-
-{{ m.project_header_nested(_('Batch Translate'), project) }}
-{{ m.project_tabs(project=project, active='batch_processes', is_mod=current_user.is_moderator) }}
+<div class="w-full">
+  <div class="mb-6">
+    {{ m.project_tabs(project=project, active='batch_processes', is_mod=current_user.is_moderator) }}
+  </div>
 
 {% if status %}
   {# Show progress when task is running #}
-  <div class="bg-white shadow rounded-lg p-6">
-    <div class="flex items-center mb-4">
-      <div class="flex-shrink-0">
-        <svg class="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
+  <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 mb-8">
+    <div class="flex items-center mb-6">
+      <div class="w-12 h-12 rounded-xl bg-blue-50 text-royalblue border border-blue-100 flex items-center justify-center shrink-0">
+        <svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
         </svg>
       </div>
-      <div class="ml-3">
-        <h3 class="text-lg font-medium text-gray-900">{{ _('Batch Translation Progress') }}</h3>
-        <p class="text-sm text-gray-500">{{ _('Translating project pages...') }}</p>
+      <div class="ml-4">
+        <h3 class="text-base font-bold text-slate-900">{{ _('Batch Translation Progress') }}</h3>
+        <p class="text-xs text-slate-500 mt-0.5">{{ _('Translating project pages asynchronously in the background...') }}</p>
       </div>
     </div>
 
@@ -28,89 +84,72 @@
       {% include 'include/translation-progress.html' %}
     </div>
 
-    <div class="border-t pt-4">
-      <div class="flex justify-between items-center">
-        <div class="text-sm text-gray-600">
-          <span id="status-text">
-            {% if status == "PENDING" %}
-              {{ _('Preparing translation tasks...') }}
-            {% elif status == "PROGRESS" %}
-              {{ _('Translation in progress...') }}
-            {% elif status == "SUCCESS" %}
-              {{ _('Translation completed successfully!') }}
-            {% elif status == "FAILURE" %}
-              {{ _('Translation failed. Please try again.') }}
-            {% endif %}
-          </span>
-        </div>
-        <div class="space-x-2">
-          <a href="{{ url_for('proofing.project.edit', slug=project.slug) }}" 
-             class="bg-gray-300 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-400 transition-colors">
-            {{ _('Back to Project') }}
-          </a>
-          {% if status == "SUCCESS" %}
-            <a href="{{ url_for('proofing.project.activity', slug=project.slug) }}" 
-               class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors">
-              {{ _('View Results') }}
-            </a>
+    <div class="border-t border-slate-100 pt-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+      <div class="text-xs font-semibold text-slate-600">
+        <span id="status-text">
+          {% if status == "PENDING" %}
+            {{ _('Preparing translation tasks...') }}
+          {% elif status == "PROGRESS" %}
+            {{ _('Translation in progress...') }}
+          {% elif status == "SUCCESS" %}
+            {{ _('Translation completed successfully!') }}
+          {% elif status == "FAILURE" %}
+            {{ _('Translation failed. Please try again.') }}
           {% endif %}
-        </div>
+        </span>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="{{ url_for('proofing.project.batch_processes', slug=project.slug) }}" 
+           class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors">
+          {{ _('Back to Pipelines') }}
+        </a>
+        {% if status == "SUCCESS" %}
+          <a href="{{ url_for('proofing.project.activity', slug=project.slug) }}" 
+             class="px-4 py-2 rounded-xl bg-royalblue hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-royalblue/20 transition-colors">
+            {{ _('View Results') }}
+          </a>
+        {% endif %}
       </div>
     </div>
   </div>
 
   <script>
-  // Auto-refresh progress every 2 seconds
   function updateProgress() {
     fetch('{{ url_for("proofing.project.batch_translate_status", task_id=task_id) }}')
       .then(response => response.text())
       .then(html => {
         document.getElementById('translation-progress').innerHTML = html;
-        
-        // Check if we need to stop refreshing
         const statusElement = document.querySelector('[data-status]');
         if (statusElement) {
           const status = statusElement.getAttribute('data-status');
           if (status === 'SUCCESS' || status === 'FAILURE') {
-            // Update status text
             const statusText = document.getElementById('status-text');
             if (status === 'SUCCESS') {
               statusText.textContent = {{ _('Translation completed successfully!')|tojson }};
             } else if (status === 'FAILURE') {
               statusText.textContent = {{ _('Translation failed. Please try again.')|tojson }};
             }
-            return; // Stop refreshing
+            return;
           }
         }
-        
-        // Continue refreshing
         setTimeout(updateProgress, 2000);
       })
       .catch(error => {
         console.error('Error updating progress:', error);
-        setTimeout(updateProgress, 5000); // Retry after 5 seconds
+        setTimeout(updateProgress, 5000);
       });
   }
-
-  // Start progress updates
   setTimeout(updateProgress, 2000);
   </script>
 
 {% else %}
-  {# Show form when no task is running #}
-  <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-    <div class="flex">
-      <div class="flex-shrink-0">
-        <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-        </svg>
-      </div>
-      <div class="ml-3">
-        <p class="text-sm text-yellow-700">
-          <strong>{{ _('Note:') }}</strong> {{ _('This will translate all pages in the project that have revisions.') }} 
-          {{ _('The translation will be based on the latest revision of each page.') }}
-        </p>
-      </div>
+  <!-- Notice Alert Banner -->
+  <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 text-xs text-amber-800 flex items-center gap-3">
+    <svg class="w-5 h-5 text-amber-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+      <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+    </svg>
+    <div>
+      <strong class="font-bold text-amber-900">{{ _('Note:') }}</strong> {{ _('This will translate all pages in the project that have revisions, using the latest revision of each page.') }}
     </div>
   </div>
 
@@ -165,15 +204,31 @@
       return name.charAt(0).toUpperCase() + name.slice(1);
     }
   }" @submit.prevent="if (sourceLang === targetLang) { alert({{ _('Source and Target languages must be different.')|tojson|forceescape }}); } else { $el.submit(); }">
-    <div class="bg-white shadow rounded-lg p-6">
-      <h3 class="text-lg font-medium text-gray-900 mb-4">{{ _('Translation Settings') }}</h3>
-      
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 mb-8">
+      <div class="flex items-center justify-between gap-4 mb-4">
         <div>
-          <label for="source_lang" class="block text-sm font-medium text-gray-700 mb-2">
+          <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-royalblue"></span>
+            {{ _('Translation Settings') }}
+          </h2>
+          <p class="text-xs text-slate-500 mt-1">
+            {{ _('Configure languages, target engines, and domain glossaries for automated translation.') }}
+          </p>
+        </div>
+        <a href="{{ url_for('proofing.project.batch_processes', slug=project.slug) }}" 
+           class="text-xs font-semibold text-slate-500 hover:text-royalblue flex items-center gap-1 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+          {{ _('All Batch Pipelines') }}
+        </a>
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        <div>
+          <label for="source_lang" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
             {{ _('Source Language') }}
           </label>
-          <select id="source_lang" name="source_lang" x-model="sourceLang" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select id="source_lang" name="source_lang" x-model="sourceLang" 
+                  class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all">
             {% for lang in languages %}
               <option value="{{ lang.code }}" {% if lang.code == 'sa' %}selected{% endif %}>{{ lang.name }}</option>
             {% endfor %}
@@ -181,10 +236,11 @@
         </div>
         
         <div>
-          <label for="target_lang" class="block text-sm font-medium text-gray-700 mb-2">
+          <label for="target_lang" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
             {{ _('Target Language') }}
           </label>
-          <select id="target_lang" name="target_lang" x-model="targetLang" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select id="target_lang" name="target_lang" x-model="targetLang" 
+                  class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all">
             {% for lang in languages %}
               <option value="{{ lang.code }}" {% if lang.code == 'en' %}selected{% endif %}>{{ lang.name }}</option>
             {% endfor %}
@@ -193,34 +249,32 @@
       </div>
       
       <div class="mt-6">
-        <label for="engine" class="block text-sm font-medium text-gray-700 mb-2">
+        <label for="engine" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
           {{ _('Translation Engine') }}
         </label>
-        <select id="engine" name="engine" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" {% if not engines %}disabled{% endif %}>
+        <select id="engine" name="engine" 
+                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all" {% if not engines %}disabled{% endif %}>
           {% for eng in engines %}
             <option value="{{ eng.value }}" {% if loop.first %}selected{% endif %}>{{ eng.label }}</option>
           {% else %}
             <option value="" disabled selected>{{ _('No translation models available') }}</option>
           {% endfor %}
         </select>
-        <p class="mt-1 text-sm text-gray-500">
-          {{ _('Select the translation engine to use for batch translating this project.') }}
-        </p>
       </div>
 
       <!-- Glossary Selection List -->
       <div class="mt-6 text-left" x-show="filteredGlossaries.length > 0" x-cloak>
-          <label class="block text-sm font-medium text-gray-700 mb-2">
+        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
           {{ _('Select Glossaries (Optional)') }}
         </label>
         <input type="hidden" name="glossary" :value="selectedGlossaries.includes('all') ? 'all' : selectedGlossaries.join(', ')">
         
         <div class="relative" x-data="{ open: false }" @click.outside="open = false">
-          <!-- Selector trigger -->
-          <div @click.stop="open = !open" class="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-sm focus-within:border-royalblue focus-within:ring-2 focus-within:ring-royalblue/20 outline-none transition-all font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[38px] select-none">
+          <div @click.stop="open = !open" 
+               class="w-full bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus-within:border-royalblue focus-within:ring-2 focus-within:ring-royalblue/20 outline-none transition-all font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[42px] select-none">
             <div class="flex flex-wrap gap-1.5 items-center">
               <template x-if="selectedGlossaries.length === 0">
-                <span class="text-slate-400 font-medium">{{ _("Select glossaries...") }}</span>
+                <span class="text-slate-400 font-normal text-xs">{{ _("Select glossaries...") }}</span>
               </template>
               <template x-if="selectedGlossaries.includes('all')">
                 <div class="flex items-center bg-royalblue/10 text-royalblue rounded-lg px-2.5 py-1 text-xs font-bold">
@@ -237,20 +291,19 @@
                 </template>
               </template>
             </div>
-            <svg class="w-4 h-4 text-slate-400 ml-2 flex-shrink-0 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 text-slate-400 ml-2 shrink-0 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
             </svg>
           </div>
 
-          <!-- Dropdown menu -->
-          <div x-show="open" class="absolute z-[100] w-full mt-1.5 bg-white border border-gray-350 rounded-md shadow-lg max-h-48 overflow-y-auto p-2 space-y-1 text-left" x-cloak x-transition>
-            <label class="flex items-center px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer text-sm font-semibold text-slate-700 select-none">
+          <div x-show="open" class="absolute z-[100] w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto p-2 space-y-1 text-left" x-cloak x-transition>
+            <label class="flex items-center px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer text-xs font-semibold text-slate-700 select-none">
               <input type="checkbox" value="all" x-model="selectedGlossaries" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-3 w-4 h-4">
               <span>{{ _("All Glossaries") }}</span>
             </label>
             <div class="h-px bg-slate-100 my-1"></div>
             <template x-for="g in filteredGlossaries" :key="g.name">
-              <label class="flex items-center px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer text-sm font-medium text-slate-600 select-none">
+              <label class="flex items-center px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer text-xs font-medium text-slate-600 select-none">
                 <input type="checkbox" :value="g.name" x-model="selectedGlossaries" :disabled="selectedGlossaries.includes('all')" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-3 w-4 h-4">
                 <span x-text="getGlossaryDisplayName(g.name)"></span>
               </label>
@@ -258,41 +311,46 @@
           </div>
         </div>
         
-        <!-- Warning Message -->
-        <div x-show="showGlossaryWarning" x-transition class="mt-2 text-xs text-yellow-600 bg-yellow-50 border border-yellow-100 rounded-md p-3 font-medium animate-pulse" x-cloak>
-          {{ _("Adding all / more than 3 glossaries may increase translation time.") }}
+        <div x-show="showGlossaryWarning" x-transition class="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3 font-medium" x-cloak>
+          {{ _("Adding all or more than 3 glossaries may increase translation processing time.") }}
         </div>
       </div>
 
-      <div class="mt-6">
-        <p class="text-sm text-red-500 font-semibold mt-3" x-show="sourceLang === targetLang" x-cloak>
+      <div class="mt-4">
+        <p class="text-xs text-red-500 font-semibold" x-show="sourceLang === targetLang" x-cloak>
           {{ _("Source and Target languages must be different.") }}
         </p>
       </div>
       
-      <div class="mt-6 flex justify-end space-x-3">
-        <a href="{{ url_for('proofing.project.edit', slug=project.slug) }}" 
-           class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors">
+      <div class="mt-6 flex justify-end items-center gap-3 pt-4 border-t border-slate-100">
+        <a href="{{ url_for('proofing.project.batch_processes', slug=project.slug) }}" 
+           class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors">
           {{ _('Cancel') }}
         </a>
         <button type="submit" 
-                class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-royalblue hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-royalblue/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="sourceLang === targetLang || {% if not engines %}true{% else %}false{% endif %}">
-          {{ _('Start Translation') }}
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          {{ _('Start Batch Translation') }}
         </button>
       </div>
     </div>
   </form>
 
-  <div class="mt-6 bg-gray-50 rounded-lg p-4">
-    <h4 class="text-sm font-medium text-gray-900 mb-2">{{ _('What happens next?') }}</h4>
-    <ul class="text-sm text-gray-600 space-y-1">
-      <li>• {{ _('The system will process each page that has revisions') }}</li>
-      <li>• {{ _('Text will be segmented into manageable chunks for translation') }}</li>
-      <li>• {{ _('Each chunk will be translated using the selected engine') }}</li>
-      <li>• {{ _('Translations will be stored and can be viewed/edited later') }}</li>
-      <li>• {{ _('You can monitor progress and navigate away from this page') }}</li>
+  <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+    <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+      <svg class="w-4 h-4 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      {{ _('What happens next?') }}
+    </h4>
+    <ul class="text-xs text-slate-600 space-y-2 leading-relaxed">
+      <li>• {{ _('The system will process each page that has revisions.') }}</li>
+      <li>• {{ _('Text will be segmented into manageable chunks for translation.') }}</li>
+      <li>• {{ _('Each chunk will be translated using the selected engine.') }}</li>
+      <li>• {{ _('Translations will be stored and can be viewed/edited later.') }}</li>
+      <li>• {{ _('You can monitor progress and safely navigate away from this page.') }}</li>
     </ul>
   </div>
 {% endif %}
-{% endblock %} 
+</div>
+{% endblock %}
+ 

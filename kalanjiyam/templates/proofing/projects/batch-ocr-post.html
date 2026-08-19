@@ -2,18 +2,74 @@
 {% from "macros/forms.html" import field %}
 {% import "macros/proofing.html" as m %}
 
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
 
-{% block title %}{{ _('OCR: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
+  .font-serif-title {
+    font-family: 'Cinzel', Georgia, serif;
+  }
 
+  .project-hero {
+    background: #0b1120;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
+      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
+      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
+    background-size: 100% 100%, 24px 24px, 24px 24px;
+  }
+</style>
+{% endblock %}
+
+{% block title %}{{ _('Batch OCR Progress:') }} {{ project.display_title }} | Kalanjiyam{% endblock %}
+
+{% block hero %}
+<header class="project-hero text-slate-100 py-10 px-4 mb-8 border-b border-slate-800">
+  <div class="max-w-6xl mx-auto">
+    <!-- Category Badge -->
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+      </svg>
+      <span>{{ _('Automated Batch OCR') }}</span>
+    </div>
+
+    <!-- Title -->
+    <h1 class="text-3xl sm:text-4xl font-bold font-serif-title tracking-tight mb-2 text-white">
+      {{ project.display_title }}
+    </h1>
+
+    <!-- Meta Info -->
+    <div class="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-slate-400 font-medium">
+      {% if project.author %}
+      <span class="text-slate-300 font-semibold">{{ project.author }}</span>
+      {% endif %}
+      {% if project.publication_year %}
+      <span class="text-slate-600">•</span>
+      <span>{{ project.publication_year }}</span>
+      {% endif %}
+      {% if project.publisher %}
+      <span class="text-slate-600">•</span>
+      <span>{{ project.publisher }}</span>
+      {% endif %}
+      <span class="text-slate-600">•</span>
+      <span class="text-blue-400 font-semibold">{{ project.pages|length }} {{ _('pages') }}</span>
+    </div>
+  </div>
+</header>
+{% endblock %}
 
 {% block content %}
-{{ m.project_header_nested(_('OCR'), project) }}
-{{ m.project_tabs(project=project, active='batch_processes', is_mod=current_user.is_moderator) }}
+<div class="w-full">
+  <div class="mb-6">
+    {{ m.project_tabs(project=project, active='batch_processes', is_mod=current_user.is_moderator) }}
+  </div>
 
-{% set url = url_for('proofing.project.batch_ocr_status', task_id=task_id) %}
-<div id="progress" x-data="htmlPoller('{{ url }}')">
-  {% with current=current, total=total, percent=percent, slug=slug, status=status, active_tasks=active_tasks, pending_tasks=pending_tasks, failed_tasks=failed_tasks, engine=engine, language=language %}
-    {% include 'include/ocr-progress.html' %}
-  {% endwith %}
+  {% set url = url_for('proofing.project.batch_ocr_status', task_id=task_id) %}
+  <div id="progress" x-data="htmlPoller('{{ url }}')">
+    {% with current=current, total=total, percent=percent, slug=slug, status=status, active_tasks=active_tasks, pending_tasks=pending_tasks, failed_tasks=failed_tasks, engine=engine, language=language %}
+      {% include 'include/ocr-progress.html' %}
+    {% endwith %}
+  </div>
 </div>
 {% endblock %}
