@@ -1,13 +1,10 @@
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% import "macros/components.html" as components %}
 {% from "macros/forms.html" import field %}
 {% import "macros/proofing.html" as m %}
 
-
 {% block title %}{{ _('OCR %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
 
-
-{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 {% block content %}
 {{ m.project_header_nested(_('OCR'), project) }}
 {{ m.project_tabs(project=project, active='batch_processes', is_mod=current_user.is_moderator) }}

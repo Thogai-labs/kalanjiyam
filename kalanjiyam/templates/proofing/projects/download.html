@@ -1,4 +1,4 @@
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% import "macros/proofing.html" as m %}
 
 {% block extra_css %}
@@ -21,8 +21,6 @@
 {% endblock %}
 
 {% block title %}{{ _('Download') }}: {{ project.display_title }} | Kalanjiyam{% endblock %}
-
-{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
 {% block hero %}
 <header class="project-hero text-slate-100 py-10 px-4 mb-8 border-b border-slate-800">
@@ -61,7 +59,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="w-full max-w-5xl">
+<div class="w-full">
   <div class="mb-6">
     {{ m.project_tabs(project=project, active='download', is_mod=current_user.is_moderator) }}
   </div>

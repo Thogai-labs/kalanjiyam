@@ -6,14 +6,10 @@
    pages go unread. A failure with no visible error message is the thing that
    makes a partial run impossible to act on, so the message is shown in full
    rather than behind a disclosure. #}
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% import "macros/proofing.html" as m %}
 
-
 {% block title %}{{ _('Extraction log: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
-
-
-{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
 
 {% macro ms(value) %}

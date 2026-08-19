@@ -1,55 +1,110 @@
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% import "macros/components.html" as components %}
 {% import "macros/forms.html" as mf %}
 {% import "macros/proofing.html" as m %}
 
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  .font-serif-title {
+    font-family: 'Cinzel', Georgia, serif;
+  }
+
+  .project-hero {
+    background: #0b1120;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
+      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
+      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
+    background-size: 100% 100%, 24px 24px, 24px 24px;
+  }
+</style>
+{% endblock %}
 
 {% block title %}{{ _('Admin: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
 
+{% block hero %}
+<header class="project-hero text-slate-100 py-10 px-4 mb-8 border-b border-slate-800">
+  <div class="max-w-6xl mx-auto">
+    <!-- Category Badge -->
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+      </svg>
+      <span>{{ _('Project Administration') }}</span>
+    </div>
 
-{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
+    <!-- Title -->
+    <h1 class="text-3xl sm:text-4xl font-bold font-serif-title tracking-tight mb-2 text-white">
+      {{ project.display_title }}
+    </h1>
 
+    <!-- Meta Info -->
+    <div class="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-slate-400 font-medium">
+      {% if project.author %}
+      <span class="text-slate-300 font-semibold">{{ project.author }}</span>
+      {% endif %}
+      {% if project.publication_year %}
+      <span class="text-slate-600">•</span>
+      <span>{{ project.publication_year }}</span>
+      {% endif %}
+      {% if project.publisher %}
+      <span class="text-slate-600">•</span>
+      <span>{{ project.publisher }}</span>
+      {% endif %}
+      <span class="text-slate-600">•</span>
+      <span class="text-blue-400 font-semibold">{{ project.pages|length }} {{ _('pages') }}</span>
+    </div>
+  </div>
+</header>
+{% endblock %}
 
 {% block content %}
-{{ m.project_header_nested(_('Admin'), project) }}
-{{ m.project_tabs(project=project, active='admin', is_mod=current_user.is_moderator) }}
+<div class="w-full max-w-4xl">
+  <div class="mb-6">
+    {{ m.project_tabs(project=project, active='admin', is_mod=current_user.is_moderator) }}
+  </div>
 
-<div class="prose">
+  <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 mb-8">
+    <h2 class="text-base font-bold text-slate-900 mb-3 flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-royalblue"></span>
+      {{ _('Project Information') }}
+    </h2>
+    <div class="text-xs sm:text-sm text-slate-600 space-y-2">
+      {% if project.creator %}
+      {% set user_link = url_for('proofing.user.summary', username=project.creator.username) %}
+      <p>{{ _('Created by') }} <a href="{{ user_link }}" class="font-bold text-royalblue hover:underline">{{ project.creator.username }}</a> {{ project.created_at|time_ago }}.</p>
+      {% else %}
+      <p>{{ _('Created by %(user)s', user=_('(unknown user)')) }} {{ project.created_at|time_ago }}.</p>
+      {% endif %}
+    </div>
+  </div>
 
-<h2>{{ _('Summary') }}</h2>
+  {{ mf.show_errors_if_any(form.errors) }}
 
-{% if project.creator %}
-{% set user_link = url_for('proofing.user.summary', username=project.creator.username) %}
-<p>{{ _('Created by') }} <a href="{{ user_link }}">{{ project.creator.username }}</a>
-{{ project.created_at|time_ago }}.</p>
-{% else %}
-<p>{{ _('Created by %(user)s', user=_('(unknown user)')) }} {{ project.created_at|time_ago }}.</p>
-{% endif %}
+  <div class="bg-white border border-red-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+    <h3 class="text-red-700 font-bold text-base mb-2 flex items-center gap-2">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+      {{ _('Danger zone') }}
+    </h3>
+    
+    <form method="POST" class="mt-4">
+      {{ form.csrf_token }}
+      <p class="font-bold text-slate-800 text-sm">{{ _('Delete project') }}</p>
 
+      <p class="text-xs text-slate-500 my-2 leading-relaxed">{{ _('Deleting this project will permanently delete all of its pages, revisions, and discussion threads.') }}</p>
 
-<h2>{{ _('Danger zone') }}</h2>
+      <p class="text-xs text-slate-700 font-medium my-2">
+        {{ _('To confirm this decision, enter') }} <kbd class="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded font-mono text-xs text-slate-800 font-bold">{{ project.slug }}</kbd> {{ _('in the field below.') }}
+      </p>
 
-{{ mf.show_errors_if_any(form.errors) }}
-<form method="POST" class="border border-red-500 rounded p-4 my-4">
-  {{ form.csrf_token }}
-  <p><strong>{{ _('Delete project') }}</strong></p>
+      <div class="my-4 max-w-md">
+        {{ form.slug(class_="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition-all") }}
+      </div>
 
-  <p>{{ _('Deleting this project will delete all of its:') }}</p>
-
-  <ul>
-    <li>{{ _('pages') }}</li>
-    <li>{{ _('revisions') }}</li>
-    <li>{{ _('discussion threads') }}</li>
-  </ul>
-
-  <p>{{ _('This action') }} <strong>{{ _('cannot') }}</strong> {{ _('be undone.') }}</p>
-
-  <p>{{ _('To confirm this decision, enter') }} <kbd>{{ project.slug }}</kbd> {{ _('in the field below.') }}</p>
-
-  {{ form.slug(class_="p-2 block w-full my-4 border") }}
-
-  <input class="btn bg-red-700 hover:bg-red-900 transition text-white" type="submit" value="{{ _('Permanently delete this project and its data') }}">
-</form>
-
+      <input class="inline-flex items-center justify-center px-5 py-2.5 bg-red-600 hover:bg-red-700 transition-colors text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer" type="submit" value="{{ _('Permanently delete this project and its data') }}">
+    </form>
+  </div>
 </div>
 {% endblock %}

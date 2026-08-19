@@ -1,4 +1,4 @@
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% import "macros/components.html" as components %}
 {% import "macros/proofing.html" as m %}
 
@@ -22,8 +22,6 @@
 {% endblock %}
 
 {% block title %}{{ _('Batch Processes') }}: {{ project.display_title }} | Kalanjiyam{% endblock %}
-
-{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
 {% block hero %}
 <header class="project-hero text-slate-100 py-10 px-4 mb-8 border-b border-slate-800">

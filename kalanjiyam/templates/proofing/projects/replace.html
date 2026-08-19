@@ -1,4 +1,4 @@
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% from "macros/forms.html" import field %}
 {% import "macros/proofing.html" as m %}
 
@@ -30,9 +30,6 @@
 
 
 {% block title %}{{ _('Search and Replace %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
-
-
-{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
 
 {% block content %}

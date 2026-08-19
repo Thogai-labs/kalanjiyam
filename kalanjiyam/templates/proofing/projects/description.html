@@ -10,7 +10,7 @@
    * Generated and curated values merge before they reach here, but never merge
      *visually*. Whether a machine wrote a value, and whether its citation checked
      out, stays visible without being in the way. #}
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% import "macros/forms.html" as mf %}
 {% import "macros/proofing.html" as m %}
 
@@ -34,8 +34,6 @@
 {% endblock %}
 
 {% block title %}{{ _('Description: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
-
-{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
 {% block hero %}
 <header class="project-hero text-slate-100 py-10 px-4 mb-8 border-b border-slate-800">
@@ -237,7 +235,7 @@
 
 
 {% block content %}
-<div class="w-full max-w-5xl">
+<div class="w-full">
   <div class="mb-6">
     {{ m.project_tabs(project=project, active='description', is_mod=current_user.is_moderator) }}
   </div>
