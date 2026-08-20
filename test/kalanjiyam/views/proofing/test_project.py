@@ -328,5 +328,27 @@ def test_batch_ocr_status_progress_math(mock_group_result, mock_redis_from_url, 
     assert resp.status_code == 200
     assert "50%" in resp.text
     assert "width: 50.0%" in resp.text
+    assert "AUTO" in resp.text
+
+
+@patch("redis.Redis.from_url")
+@patch("kalanjiyam.views.proofing.project.GroupResult")
+def test_batch_ocr_status_default_language_auto(mock_group_result, mock_redis_from_url, rama_client):
+    mock_redis = MagicMock()
+    mock_redis.scan_iter.return_value = []
+    mock_redis_from_url.return_value = mock_redis
+
+    mock_group = MagicMock()
+    mock_results = [MagicMock()]
+    mock_results[0].state = "STARTED"
+    mock_results[0].failed.return_value = False
+    mock_group.results = mock_results
+    mock_group.completed_count.return_value = 0
+    mock_group_result.restore.return_value = mock_group
+
+    resp = rama_client.get("/proofing/batch-ocr-status/task-123")
+    assert resp.status_code == 200
+    assert "AUTO" in resp.text
+
 
 

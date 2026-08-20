@@ -24,8 +24,8 @@ def _run_ocr_for_page_inner(
     project_slug: str,
     page_slug: str,
     engine: str = 'google',
-    language: str = 'sa',
-) -> int:
+    language: str = 'auto',
+):
     """Must run in the application context."""
     import time
     import json
@@ -202,7 +202,7 @@ def run_ocr_for_page(
     project_slug: str,
     page_slug: str,
     engine: str = '1',  # Default to Google OCR (1)
-    language: str = 'sa',
+    language: str = 'auto',
 ):
     _run_ocr_for_page_inner(
         app_env,
@@ -217,7 +217,7 @@ def run_ocr_for_project(
     app_env: str,
     project: db.Project,
     engine: str = '1',  # Default to Google OCR (1)
-    language: str = 'sa',
+    language: str = 'auto',
     queue: str | None = None,
 ) -> GroupResult | None:
     """Create a `group` task to run OCR on a project."""

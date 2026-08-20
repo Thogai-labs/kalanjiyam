@@ -76,8 +76,7 @@ def _schedule_zip_cleanup(zip_path: Path) -> None:
     """Delete export ZIP after the response is sent."""
 
 def _export_revision_payloads(project: db.Project, files_dir: Path) -> None:
-    """Save model-named .json.gz revision payloads into files/revisions/{page_slug}/."""
-    import gzip
+    """Save model-named .json revision payloads into files/revisions/{page_slug}/."""
     from kalanjiyam.utils.document_storage import derive_revision_tag, get_page_revision_index, load_revision_document
 
     revisions_dir = files_dir / "revisions"
@@ -88,7 +87,7 @@ def _export_revision_payloads(project: db.Project, files_dir: Path) -> None:
             if doc is not None:
                 page_rev_dir.mkdir(parents=True, exist_ok=True)
                 tag = derive_revision_tag(revision)
-                filename = f"{tag}.json.gz" if tag else f"v{get_page_revision_index(revision)}.json.gz"
+                filename = f"{tag}.json" if tag else f"v{get_page_revision_index(revision)}.json"
                 payload_path = page_rev_dir / filename
                 if isinstance(doc, dict) and "timestamp" not in doc:
                     created_dt = getattr(revision, "created", None)
@@ -96,9 +95,9 @@ def _export_revision_payloads(project: db.Project, files_dir: Path) -> None:
                 raw = (
                     doc.encode("utf-8")
                     if isinstance(doc, str)
-                    else json.dumps(doc, ensure_ascii=False).encode("utf-8")
+                    else json.dumps(doc, indent=2, ensure_ascii=False).encode("utf-8")
                 )
-                payload_path.write_bytes(gzip.compress(raw))
+                payload_path.write_bytes(raw)
 
 
 class KalanjiyamIndexView(AdminIndexView):
@@ -176,7 +175,7 @@ class KalanjiyamIndexView(AdminIndexView):
                     image_dest = pages_dir / f"{page.slug}.jpg"
                     image_dest.write_bytes(image_path.read_bytes())
 
-            # Export revision payloads as model-named .json.gz files
+            # Export revision payloads as model-named .json files
             _export_revision_payloads(project, project_files_dir)
             
             # Create ZIP file
@@ -258,7 +257,7 @@ class KalanjiyamIndexView(AdminIndexView):
                     if image_path.exists():
                         (pages_dir / f"{page.slug}.jpg").write_bytes(image_path.read_bytes())
 
-                # Export revision payloads as model-named .json.gz files
+                # Export revision payloads as model-named .json files
                 _export_revision_payloads(project, files_dir)
 
             json_file = export_dir / "all_projects_data.json"
@@ -547,7 +546,7 @@ class KalanjiyamIndexView(AdminIndexView):
                 elif tag.startswith("translation-"):
                     trans_model = tag.split("translation-", 1)[1]
 
-                payload_filename = f"{tag}_v{v_num}.json.gz"
+                payload_filename = f"{tag}_v{v_num}.json"
 
                 revision_data = {
                     'revision_key': revision.id,

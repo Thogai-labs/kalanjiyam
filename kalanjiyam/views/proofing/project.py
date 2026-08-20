@@ -1443,7 +1443,7 @@ def batch_ocr(slug):
             task_data = json.loads(task_info)
             task_id = task_data.get("task_id")
             engine = task_data.get("engine", "google")
-            language = task_data.get("language", "sa")
+            language = task_data.get("language") or "auto"
 
             # Try to restore the task to check if it's still active
             r = GroupResult.restore(task_id, app=celery_app)
@@ -1526,7 +1526,7 @@ def batch_ocr(slug):
                 return redirect(url_for("proofing.project.batch_ocr", slug=slug))
 
         engine_num = request.form.get("engine", "")
-        language = request.form.get("language", "sa")
+        language = request.form.get("language") or "auto"
         if is_restricted_ocr:
             engine = default_ocr_engine
         else:
@@ -1652,12 +1652,12 @@ def batch_ocr_status(task_id):
             pending_tasks=0,
             failed_tasks=0,
             engine="google",
-            language="sa",
+            language="auto",
         )
 
     # Get task info from Redis to include engine and language
     engine = "google"
-    language = "sa"
+    language = "auto"
     try:
         for key in redis_client.scan_iter(match="ocr_task:*"):
             task_info = redis_client.get(key)
@@ -1665,7 +1665,7 @@ def batch_ocr_status(task_id):
                 task_data = json.loads(task_info)
                 if task_data.get("task_id") == task_id:
                     engine = task_data.get("engine", "google")
-                    language = task_data.get("language", "sa")
+                    language = task_data.get("language") or "auto"
                     break
     except Exception as e:
         LOG.warning(f"Error getting OCR task info from Redis: {e}")
