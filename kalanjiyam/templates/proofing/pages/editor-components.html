@@ -378,8 +378,14 @@ these components in our help text and documentation.
           </button>
           {% else %}
           <button @click.prevent.stop="selectedTranslationEngine = 'indictrans2'; saveSettings()" 
-                  class="ocr-engine-btn active">
+                  class="ocr-engine-btn"
+                  :class="selectedTranslationEngine === 'indictrans2' ? 'active' : ''">
             IndicTrans v2
+          </button>
+          <button @click.prevent.stop="selectedTranslationEngine = 'gemma'; saveSettings()" 
+                  class="ocr-engine-btn"
+                  :class="selectedTranslationEngine === 'gemma' ? 'active' : ''">
+            Gemma 4 12B
           </button>
           {% endfor %}
         </div>

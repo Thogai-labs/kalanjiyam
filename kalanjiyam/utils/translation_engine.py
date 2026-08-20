@@ -202,12 +202,12 @@ class OpenAITranslateEngine(TranslationEngine):
         return ['en', 'hi', 'sa', 'te', 'mr', 'fr', 'de', 'es', 'ja', 'ko', 'zh']
 
 
-class IndicTransEngine(TranslationEngine):
-    """Client for the external standalone IndicTrans translation service."""
+class GenericTranslationEngine(TranslationEngine):
+    """Generic translation engine client that forwards translation requests to the backend service."""
 
-    def __init__(self, version: str):
-        # version is 'indictrans2' or 'indictrans3'
-        self.version = version
+    def __init__(self, engine_name: str):
+        self.engine_name = engine_name
+        self.version = engine_name
 
     def translate(self, text: str, source_lang: str, target_lang: str, **kwargs) -> TranslationResponse:
         import httpx
@@ -223,7 +223,7 @@ class IndicTransEngine(TranslationEngine):
 
         headers = {"X-API-Key": api_key} if api_key else {}
 
-        # Map language codes to English names
+        # Map language codes to English names if available
         language_map = {
             'en': 'English',
             'hi': 'Hindi',
@@ -253,15 +253,19 @@ class IndicTransEngine(TranslationEngine):
         source_name = language_map.get(source_lang, source_lang.capitalize())
         target_name = language_map.get(target_lang, target_lang.capitalize())
 
-        # Determine the model name based on translation direction
-        if source_lang == 'en':
-            direction = 'en-indic'
-        elif target_lang == 'en':
-            direction = 'indic-en'
+        # Determine the model name based on translation direction or engine
+        if self.engine_name.startswith("indictrans"):
+            if source_lang == 'en':
+                direction = 'en-indic'
+            elif target_lang == 'en':
+                direction = 'indic-en'
+            else:
+                direction = 'indic-indic'
+            model_name = f"ai4bharat/{self.engine_name}-{direction}-1B"
+        elif "gemma" in self.engine_name.lower():
+            model_name = "google/gemma-4-12b-it"
         else:
-            direction = 'indic-indic'
-
-        model_name = f"ai4bharat/{self.version}-{direction}-1B"
+            model_name = self.engine_name
 
         payload = {
             "text": text,
@@ -293,50 +297,59 @@ class IndicTransEngine(TranslationEngine):
                 translated_text=translated_text,
                 source_language=source_lang,
                 target_language=target_lang,
-                engine=self.version,
+                engine=self.engine_name,
                 metadata={'model': model_name}
             )
         except Exception as e:
-            logging.error(f"IndicTrans translation failed: {e}")
+            logging.error(f"Translation service failed for engine {self.engine_name}: {e}")
             raise
 
     def get_supported_languages(self) -> List[str]:
         return ['en', 'hi', 'bn', 'ta', 'te', 'mr', 'gu', 'kn', 'ml', 'pa', 'ur', 'or', 'as', 'sa', 'ks', 'sd', 'mni', 'sat', 'npi', 'gom', 'doi', 'brx', 'mai']
 
 
+# Backward-compatible alias
+IndicTransEngine = GenericTranslationEngine
+
+
 class TranslationEngineFactory:
-    """Factory for creating translation engines."""
+    """Dynamic factory for creating translation engines."""
     
     _engines = {
-        'indictrans2': lambda: IndicTransEngine('indictrans2'),
+        'indictrans2': lambda: GenericTranslationEngine('indictrans2'),
+        'gemma': lambda: GenericTranslationEngine('gemma'),
     }
     
     @classmethod
     def create(cls, engine_name: str, **kwargs) -> TranslationEngine:
-        """Create a translation engine instance.
+        """Create a translation engine instance dynamically.
         
-        :param engine_name: Name of the engine ('indictrans2' or other indictrans variants)
+        :param engine_name: Name of the engine ('indictrans2', 'gemma', or any backend model)
         :param kwargs: Additional arguments for the engine
         :return: Translation engine instance
         :raises: ValueError if engine name is not supported
         """
-        if engine_name not in cls._engines:
-            if engine_name.startswith('indictrans'):
-                return IndicTransEngine(engine_name)
-            raise ValueError(f"Unsupported translation engine: {engine_name}. Supported engines: {list(cls._engines.keys())}")
+        if not engine_name or engine_name in ["unsupported"]:
+            raise ValueError(f"Unsupported translation engine: {engine_name}")
         
-        engine_class_or_factory = cls._engines[engine_name]
-        return engine_class_or_factory()
+        if engine_name in cls._engines:
+            return cls._engines[engine_name]()
+        return GenericTranslationEngine(engine_name)
     
     @classmethod
     def get_supported_engines(cls) -> List[str]:
-        """Get list of supported translation engines."""
+        """Get list of supported translation engines dynamically."""
+        dynamic = get_available_translation_engines()
+        if dynamic:
+            return [e["value"] for e in dynamic]
         return list(cls._engines.keys())
 
     @classmethod
     def is_supported(cls, engine_name: str) -> bool:
         """Check if the translation engine is supported."""
-        return engine_name in cls._engines or engine_name.startswith('indictrans')
+        if not engine_name or engine_name in ["unsupported"]:
+            return False
+        return True
 
 
 def protect_dnt_and_math(text: str) -> tuple[str, dict[str, str]]:
@@ -564,7 +577,9 @@ def segment_text_for_translation(text: str, max_length: int = 1000) -> List[str]
 def get_available_translation_engines() -> List[Dict[str, str]]:
     """Fetch available translation engines dynamically from the translation service endpoint."""
     import httpx
-    from flask import current_app
+    from flask import current_app, has_app_context
+    if not has_app_context():
+        return []
     base_url = current_app.config.get("TRANSLATION_SERVICE_URL", "").rstrip("/")
     if not base_url:
         return []
@@ -578,28 +593,47 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
             response = client.get(url, headers=headers)
         if response.status_code == 200:
             models = response.json()
-            versions = set()
+            seen_engines = {}
             for m in models:
-                name = m.get("model_name", "")
-                parts = name.split('/')
-                if len(parts) > 1:
-                    family_part = parts[1]
-                    family = family_part.split('-')[0]
-                    versions.add(family)
-                else:
-                    versions.add(name)
-            
-            choices = []
-            label_map = {
-                'indictrans2': 'IndicTrans v2',
-                'indictrans3': 'IndicTrans v3',
-            }
-            for v in sorted(list(versions)):
-                choices.append({
-                    'value': v,
-                    'label': label_map.get(v, v.replace('_', ' ').title())
-                })
-            return choices
+                # Use backend provided engine/label or derive intelligently
+                engine_val = m.get("engine")
+                if not engine_val:
+                    name = m.get("model_name", "")
+                    parts = name.split('/')
+                    if len(parts) > 1:
+                        family_part = parts[1]
+                        if family_part.startswith("indictrans"):
+                            engine_val = family_part.split('-')[0]
+                        elif "gemma" in family_part.lower():
+                            engine_val = "gemma"
+                        else:
+                            engine_val = family_part.split('-')[0]
+                    else:
+                        engine_val = "gemma" if "gemma" in name.lower() else name
+                
+                label_val = m.get("label")
+                if not label_val:
+                    label_map = {
+                        'indictrans2': 'IndicTrans v2',
+                        'indictrans3': 'IndicTrans v3',
+                        'gemma': 'Gemma 4 12B',
+                        'gemma4': 'Gemma 4 12B',
+                    }
+                    label_val = label_map.get(engine_val, engine_val.replace('_', ' ').replace('-', ' ').title())
+
+                if engine_val not in seen_engines:
+                    seen_engines[engine_val] = {
+                        'value': engine_val,
+                        'label': label_val,
+                        'model_name': m.get("model_name", ""),
+                    }
+
+            sort_order = {'indictrans2': 0, 'gemma': 1, 'indictrans3': 2}
+            sorted_choices = sorted(
+                list(seen_engines.values()),
+                key=lambda x: sort_order.get(x['value'], 99)
+            )
+            return sorted_choices
     except Exception as e:
         logging.error(f"Failed to fetch translation models: {e}")
     return []

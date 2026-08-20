@@ -64,6 +64,7 @@ class TestTranslationEngineFactory:
         """Test getting supported engines."""
         engines = TranslationEngineFactory.get_supported_engines()
         assert "indictrans2" in engines
+        assert "gemma" in engines
         assert "google" not in engines
         assert "openai" not in engines
     
@@ -72,6 +73,12 @@ class TestTranslationEngineFactory:
         engine = TranslationEngineFactory.create("indictrans2")
         assert isinstance(engine, IndicTransEngine)
         assert engine.version == "indictrans2"
+
+    def test_create_gemma_engine(self):
+        """Test creating Gemma engine."""
+        engine = TranslationEngineFactory.create("gemma")
+        assert isinstance(engine, IndicTransEngine)
+        assert engine.version == "gemma"
     
     def test_create_unsupported_engine(self):
         """Test creating unsupported engine raises error."""
@@ -116,6 +123,32 @@ class TestIndicTransEngine:
             assert call_kwargs["json"]["model_name"] == "ai4bharat/indictrans2-indic-en-1B"
             assert call_kwargs["json"]["source_language"] == "Sanskrit"
             assert call_kwargs["json"]["target_language"] == "English"
+
+    @patch('httpx.Client')
+    def test_translate_gemma_text(self, mock_client_class):
+        """Test Gemma text translation uses google/gemma-4-12b-it."""
+        mock_client = Mock()
+        mock_client_class.return_value.__enter__.return_value = mock_client
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"text": "வணக்கம் உலகம்"}
+        mock_client.post.return_value = mock_response
+
+        from flask import Flask
+        app = Flask("test_app")
+        app.config["TRANSLATION_SERVICE_URL"] = "http://localhost:8888"
+
+        with app.app_context():
+            engine = IndicTransEngine("gemma")
+            response = engine.translate("Hello world", "en", "ta")
+
+            assert response.translated_text == "வணக்கம் உலகம்"
+            assert response.engine == "gemma"
+
+            call_kwargs = mock_client.post.call_args[1]
+            assert call_kwargs["json"]["model_name"] == "google/gemma-4-12b-it"
+            assert call_kwargs["json"]["source_language"] == "English"
+            assert call_kwargs["json"]["target_language"] == "Tamil"
 
     @patch('httpx.Client')
     def test_translate_with_api_key(self, mock_client_class):
@@ -177,14 +210,15 @@ class TestAvailableTranslationEngines:
 
     @patch('httpx.Client')
     def test_get_available_translation_engines(self, mock_client_class):
-        """Test fetching available engines includes X-API-Key header."""
+        """Test fetching available engines includes X-API-Key header and parses Gemma and IndicTrans."""
         from kalanjiyam.utils.translation_engine import get_available_translation_engines
         mock_client = Mock()
         mock_client_class.return_value.__enter__.return_value = mock_client
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = [
-            {"model_name": "ai4bharat/indictrans2-en-indic-1B"}
+            {"model_name": "ai4bharat/indictrans2-en-indic-1B"},
+            {"model_name": "google/gemma-4-12b-it"}
         ]
         mock_client.get.return_value = mock_response
 
@@ -195,8 +229,11 @@ class TestAvailableTranslationEngines:
 
         with app.app_context():
             engines = get_available_translation_engines()
-            assert len(engines) == 1
+            assert len(engines) == 2
             assert engines[0]["value"] == "indictrans2"
+            assert engines[0]["label"] == "IndicTrans v2"
+            assert engines[1]["value"] == "gemma"
+            assert engines[1]["label"] == "Gemma 4 12B"
 
             mock_client.get.assert_called_once()
             call_kwargs = mock_client.get.call_args[1]

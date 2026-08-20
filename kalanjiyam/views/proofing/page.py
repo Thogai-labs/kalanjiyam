@@ -281,6 +281,7 @@ def get_version_display_name(version_key: str) -> str:
         label_map = {
             'indictrans2': 'IndicTrans v2',
             'indictrans3': 'IndicTrans v3',
+            'gemma': 'Gemma 4 12B',
             'google': 'Google',
             'openai': 'OpenAI',
         }
