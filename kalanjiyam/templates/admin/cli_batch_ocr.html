@@ -16,6 +16,16 @@
 <!-- PAGE 1: STANDALONE BATCH JOBS LIST -->
 {{ admin.page_header(_('OCR & Translation Metrics'), _('Filter, search, and inspect batch OCR, translation, and proofer jobs.')) }}
 
+<!-- KPI Summary Cards -->
+{% if summary %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  {{ admin.stat_card(_('Total OCR Time'), summary.total_ocr_time_formatted) }}
+  {{ admin.stat_card(_('Total Extraction + OCR Time'), summary.total_extract_ocr_time_formatted) }}
+  {{ admin.stat_card(_('Total Pages'), summary.total_pages_formatted) }}
+  {{ admin.stat_card(_('Total Source Size'), summary.total_source_size_formatted) }}
+</div>
+{% endif %}
+
 {# Archival extraction is not a batch job, so it has no row in the table below:
    a run belongs to a project, a BatchItem belongs to a job, and there is no
    honest single row for both. Its metrics are their own export, linked here
@@ -186,6 +196,16 @@
 </div>
 
 {{ admin.page_header(_('Job #') ~ selected_job.id ~ _(' Metrics Details'), _('Comprehensive file metrics, page breakdowns, latencies, and CSV downloads.')) }}
+
+<!-- KPI Summary Cards -->
+{% if summary %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  {{ admin.stat_card(_('Total OCR Time'), summary.total_ocr_time_formatted) }}
+  {{ admin.stat_card(_('Total Extraction + OCR Time'), summary.total_extract_ocr_time_formatted) }}
+  {{ admin.stat_card(_('Total Pages'), summary.total_pages_formatted) }}
+  {{ admin.stat_card(_('Total Source Size'), summary.total_source_size_formatted) }}
+</div>
+{% endif %}
 
 <div class="space-y-6 mb-8">
   <!-- Job Header Summary Card -->
