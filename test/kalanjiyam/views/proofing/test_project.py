@@ -81,6 +81,12 @@ def test_edit__condition_tags(rama_client):
     assert "Shmushing" in summary_resp.text
     assert "Torn" in summary_resp.text
 
+    # Check edit page contains the saved tags in initial-condition-tags JSON script
+    edit_resp = rama_client.get("/proofing/test-project/edit")
+    assert edit_resp.status_code == 200
+    assert "Shmushing" in edit_resp.text
+    assert "initial-condition-tags" in edit_resp.text
+
 
 
 def test_edit__auth__post_fails(rama_client):

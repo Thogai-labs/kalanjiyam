@@ -99,7 +99,11 @@
       </div>
     </fieldset>
 
-    <fieldset class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200" x-data="conditionTagsManager({{ (project.condition_tag_list or []) | tojson }})">
+    <script type="application/json" id="initial-condition-tags">
+      {{ (project.condition_tag_list or []) | tojson | safe }}
+    </script>
+
+    <fieldset class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200" x-data="conditionTagsManager()">
       <legend class="text-base font-bold text-slate-900 mb-2 flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-amber-500"></span>
         {{ _('Document Condition & Issues') }}
@@ -253,16 +257,16 @@
 </div>
 
 <script>
-function conditionTagsManager(initialTags) {
+function conditionTagsManager() {
   let parsed = [];
-  if (typeof initialTags === 'string') {
+  const el = document.getElementById('initial-condition-tags');
+  if (el && el.textContent) {
     try {
-      parsed = JSON.parse(initialTags);
+      parsed = JSON.parse(el.textContent.trim());
     } catch(e) {
+      console.error('Failed to parse initial condition tags:', e);
       parsed = [];
     }
-  } else if (Array.isArray(initialTags)) {
-    parsed = initialTags;
   }
 
   const normalizedTags = (parsed || []).map(function(item) {
