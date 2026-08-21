@@ -36,9 +36,24 @@
     </div>
 
     <!-- Title -->
-    <h1 class="text-3xl sm:text-4xl font-bold font-serif-title tracking-tight mb-2 text-white">
-      {{ project.display_title }}
-    </h1>
+    <div class="flex flex-wrap items-center gap-3 mb-2">
+      <h1 class="text-3xl sm:text-4xl font-bold font-serif-title tracking-tight text-white">
+        {{ project.display_title }}
+      </h1>
+      {% if project.condition_tag_list %}
+        <div class="flex flex-wrap items-center gap-2">
+          {% for tag in project.condition_tag_list %}
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-400/20 text-amber-300 border border-amber-400/40 shadow-sm backdrop-blur-sm" title="{{ _('Condition issue: %(tag)s', tag=tag.name) }}{% if tag.pages %} ({{ _('Pages:') }} {{ tag.pages }}){% endif %}">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+              <span>{{ tag.name }}</span>
+              {% if tag.pages %}
+                <span class="text-[11px] text-amber-200/80 font-normal">({{ tag.pages }})</span>
+              {% endif %}
+            </span>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
 
     <!-- Meta Info -->
     <div class="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-slate-400 font-medium">
@@ -80,20 +95,30 @@
             <section class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                     <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider">{{ _('Pages Grid') }} ({{ project.pages|length }})</h2>
-                    <div class="flex items-center gap-3 text-[11px] font-semibold">
+                    <div class="flex flex-wrap items-center gap-3 text-[11px] font-semibold">
                         <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-red-400"></span> {{ _('Raw') }}</span>
                         <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-yellow-400"></span> {{ _('P1') }}</span>
                         <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-emerald-400"></span> {{ _('P2') }}</span>
                         <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-slate-400"></span> {{ _('Skip') }}</span>
+                        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 border border-amber-500 shadow-sm"></span> {{ _('Has Issues') }}</span>
                     </div>
                 </div>
                 <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2.5">
                     {% for page_title, p in pages %}
                       {% set colors = m.revision_colors(p.status.name) %}
                       {% set url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=p.slug) %}
+                      {% set issues = page_issues_map.get(loop.index, []) if page_issues_map else [] %}
+                      {% set has_issues = issues|length > 0 %}
                       <a href="{{ url }}" 
-                         class="flex items-center justify-center h-10 rounded-xl font-bold text-xs transition-all hover:scale-105 shadow-sm border border-black/5 hover:shadow-md {{ colors }}" title="{{ page_title }} ({{ p.status.name }})">
-                         {{ page_title }}
+                         class="relative flex items-center justify-center h-10 rounded-xl font-bold text-xs transition-all hover:scale-105 shadow-sm border border-black/5 hover:shadow-md {{ colors }}" 
+                         title="{{ page_title }} ({{ p.status.name }}){% if has_issues %} - {{ _('Issues:') }} {{ issues|join(', ') }}{% endif %}">
+                         <span>{{ page_title }}</span>
+                         {% if has_issues %}
+                           <span class="absolute -top-1 -right-1 flex h-3 w-3" title="{{ _('Issues:') }} {{ issues|join(', ') }}">
+                             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                             <span class="relative inline-flex rounded-full h-3 w-3 bg-amber-400 border-2 border-white shadow-sm"></span>
+                           </span>
+                         {% endif %}
                       </a>
                     {% endfor %}
                 </div>
@@ -147,6 +172,22 @@
                         <span class="text-slate-500 font-medium uppercase tracking-wider text-[11px]">{{ _('Year') }}</span>
                         <span class="font-bold text-slate-800 text-right">{{ project.publication_year or _("(none)") }}</span>
                     </div>
+                    {% if project.condition_tag_list %}
+                    <div class="py-2 border-b border-slate-100">
+                        <span class="text-slate-500 font-medium uppercase tracking-wider text-[11px] block mb-1.5">{{ _('Condition & Issues') }}</span>
+                        <div class="flex flex-wrap gap-1.5">
+                          {% for tag in project.condition_tag_list %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-200">
+                              <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                              <span>{{ tag.name }}</span>
+                              {% if tag.pages %}
+                                <span class="text-amber-700/80 font-normal">({{ tag.pages }})</span>
+                              {% endif %}
+                            </span>
+                          {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
                     <div class="flex justify-between items-center py-1.5">
                         <span class="text-slate-500 font-medium uppercase tracking-wider text-[11px]">{{ _('Pages') }}</span>
                         <span class="font-bold text-royalblue text-right">{{ project.pages|length }}</span>

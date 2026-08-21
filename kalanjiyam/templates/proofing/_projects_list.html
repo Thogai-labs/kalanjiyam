@@ -11,11 +11,26 @@
           </svg>
         </div>
         <div class="min-w-0 flex-1">
-          <h2 class="text-base sm:text-lg font-bold text-slate-900 leading-snug">
-            <a href="{{ url_for('proofing.project.summary', slug=p.slug) }}" class="hover:text-royalblue transition-colors">
-              {{ p.display_title }}
-            </a>
-          </h2>
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+              <a href="{{ url_for('proofing.project.summary', slug=p.slug) }}" class="hover:text-royalblue transition-colors">
+                {{ p.display_title }}
+              </a>
+            </h2>
+            {% if p.condition_tag_list %}
+              <div class="flex flex-wrap items-center gap-1.5">
+                {% for tag in p.condition_tag_list %}
+                  <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-sm" title="{{ _('Condition issue: %(tag)s', tag=tag.name) }}{% if tag.pages %} ({{ _('Pages:') }} {{ tag.pages }}){% endif %}">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                    <span>{{ tag.name }}</span>
+                    {% if tag.pages %}
+                      <span class="text-[10px] text-amber-700/80 font-normal">({{ tag.pages }})</span>
+                    {% endif %}
+                  </span>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
           {% set count = pages_per_project.get(p.id, 0) %}
           <div class="flex flex-wrap items-center gap-2 mt-2">
             <span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-lg">

@@ -93,6 +93,85 @@
       </div>
     </fieldset>
 
+    <fieldset class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200" x-data="conditionTagsManager({{ (project.condition_tag_list or []) | tojson }})">
+      <legend class="text-base font-bold text-slate-900 mb-2 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+        {{ _('Document Condition & Issues') }}
+      </legend>
+      <p class="text-xs text-slate-500 mb-6 leading-relaxed">
+        {{ _('Tag physical or scan condition issues (such as shmushing / smudging, blurry text, torn pages, etc.) with optional affected page numbers (e.g. "1-3, 5, 8"). These issue tags will be visible on project cards, proofing pages, and will highlight pages with a yellow dot.') }}
+      </p>
+
+      {{ form.condition_tags(id="condition_tags_input", **{":value": "JSON.stringify(tags)"}) }}
+
+      <!-- Quick Add Preset Chips -->
+      <div class="mb-5">
+        <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">{{ _('Quick Add Common Issues:') }}</label>
+        <div class="flex flex-wrap gap-2">
+          <template x-for="preset in presets" :key="preset">
+            <button type="button" 
+                    @click="addTag(preset)"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition-all hover:scale-105 active:scale-95 shadow-sm cursor-pointer">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+              <span x-text="'+ ' + preset"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      <!-- Add Custom Tag Input -->
+      <div class="flex items-center gap-2 mb-6">
+        <input type="text" 
+               x-model="newTagName" 
+               @keydown.enter.prevent="addCustomTag()"
+               placeholder="{{ _('Or enter custom condition tag (e.g. Shmushing, Water damage, Skewed)...') }}" 
+               class="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none transition-all">
+        <button type="button" 
+                @click="addCustomTag()"
+                class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          <span>{{ _('Add Tag') }}</span>
+        </button>
+      </div>
+
+      <!-- Active Tags List -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <span>{{ _('Assigned Condition Tags') }} (<span x-text="tags.length"></span>)</span>
+        </div>
+
+        <template x-if="tags.length === 0">
+          <div class="p-6 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center text-slate-400 text-xs font-medium">
+            {{ _('No condition tags added yet. Click a preset above or enter a custom tag.') }}
+          </div>
+        </template>
+
+        <template x-for="(tag, index) in tags" :key="index">
+          <div class="p-4 rounded-xl bg-amber-50/70 border border-amber-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all shadow-sm">
+            <div class="flex items-center gap-2.5 min-w-[180px]">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0"></span>
+              <span class="font-bold text-sm text-amber-950" x-text="tag.name"></span>
+            </div>
+            
+            <div class="flex-1 flex items-center gap-2">
+              <span class="text-xs font-bold text-amber-800 shrink-0">{{ _('Pages:') }}</span>
+              <input type="text" 
+                     x-model="tag.pages"
+                     placeholder="{{ _('All pages (or e.g. 1-3, 5, 8)') }}" 
+                     class="w-full px-3 py-2 rounded-lg border border-amber-300 bg-white text-xs text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:ring-1 focus:ring-amber-400 outline-none">
+            </div>
+
+            <button type="button" 
+                    @click="removeTag(index)" 
+                    class="p-2 text-amber-700 hover:text-red-600 hover:bg-amber-100/80 rounded-lg transition-colors shrink-0 cursor-pointer" 
+                    title="{{ _('Remove tag') }}">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
+          </div>
+        </template>
+      </div>
+    </fieldset>
+
     <fieldset class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
       <legend class="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-royalblue"></span>
@@ -147,4 +226,44 @@
     </form>
   </div>
 </div>
+
+<script>
+function conditionTagsManager(initialTags) {
+  return {
+    tags: Array.isArray(initialTags) ? initialTags : [],
+    newTagName: '',
+    presets: [
+      'Shmushing',
+      'Smudging',
+      'Blurry',
+      'Torn',
+      'Faded',
+      'Bleed-through',
+      'Binding Cutoff',
+      'Missing Pages',
+      'Stained',
+      'Skewed'
+    ],
+    addTag(name) {
+      if (!name) return;
+      const trimmed = name.trim();
+      const existing = this.tags.find(t => t.name.toLowerCase() === trimmed.toLowerCase());
+      if (!existing) {
+        this.tags.push({ name: trimmed, pages: '' });
+      }
+    },
+    addCustomTag() {
+      const trimmed = this.newTagName.trim();
+      if (trimmed) {
+        this.addTag(trimmed);
+        this.newTagName = '';
+      }
+    },
+    removeTag(index) {
+      this.tags.splice(index, 1);
+    }
+  };
+}
+</script>
 {% endblock %}
+

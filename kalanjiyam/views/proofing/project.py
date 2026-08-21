@@ -132,6 +132,7 @@ class EditMetadataForm(FlaskForm):
             "placeholder": _l("Coming soon."),
         },
     )
+    condition_tags = HiddenField(_l("Condition tags"))
     genre = QuerySelectField(
         query_factory=q.genres, allow_blank=True, blank_text=_l("(none)")
     )
@@ -352,10 +353,14 @@ def summary(slug):
 
     page_rules = project_utils.parse_page_number_spec(project_.page_numbers)
     page_titles = project_utils.apply_rules(len(project_.pages), page_rules)
+    page_issues_map = project_utils.get_page_issues_map(
+        project_.condition_tags, len(project_.pages)
+    )
     return render_template(
         "proofing/projects/summary.html",
         project=project_,
         pages=zip(page_titles, project_.pages),
+        page_issues_map=page_issues_map,
         recent_revisions=recent_revisions,
     )
 
@@ -438,9 +443,18 @@ def edit(slug):
             abort(403)
 
     form = EditMetadataForm(obj=project_)
+    if request.method == "GET":
+        form.condition_tags.data = json.dumps(project_.condition_tag_list)
+
     if form.validate_on_submit():
         session = q.get_session()
         form.populate_obj(project_)
+
+        raw_tags = request.form.get("condition_tags") or form.condition_tags.data
+        project_.condition_tags = project_utils.normalize_condition_tags(
+            raw_tags, total_pages=len(project_.pages)
+        )
+        flag_modified(project_, "condition_tags")
         session.commit()
 
         # Title, author, and visibility are all indexed on every page

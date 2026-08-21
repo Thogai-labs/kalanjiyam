@@ -63,7 +63,7 @@ these components in our help text and documentation.
 
 
 {# Compact toolbar for book editing: navigation + OCR/tools + publish. #}
-{% macro book_toolbar(ctx, page_number, image_number, num_images, ocr_status="unavailable", engine_choices=[], can_save=false, translation_engines=[]) %}
+{% macro book_toolbar(ctx, page_number, image_number, num_images, ocr_status="unavailable", engine_choices=[], can_save=false, translation_engines=[], cur_page_issues=[]) %}
 {% set project = ctx.project %}
 {% set button_css = "p-2 rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors" %}
 <header class="book-editor-toolbar">
@@ -85,6 +85,12 @@ these components in our help text and documentation.
     <span class="text-xs text-slate-400 hidden sm:inline">({{ _('Page') }} {{ page_number }})</span>
     {% endif %}
     {{ status_badge(ctx.cur.status.name) }}
+    {% if cur_page_issues %}
+    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-sm" title="{{ _('Condition: %(issues)s', issues=cur_page_issues|join(', ')) }}">
+      <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+      <span class="truncate max-w-[130px]">{{ cur_page_issues|join(', ') }}</span>
+    </span>
+    {% endif %}
   </div>
 
   <div class="book-editor-toolbar-center">

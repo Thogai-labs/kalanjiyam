@@ -40,6 +40,31 @@ def test_edit__auth(rama_client):
     assert "Publish changes" in r.text
 
 
+def test_edit__with_condition_issues(flask_app, rama_client):
+    from kalanjiyam import queries as q
+    try:
+        with flask_app.app_context():
+            project = q.project("test-project")
+            project.condition_tags = [
+                {"name": "Shmushing", "pages": "1", "page_numbers": [1]}
+            ]
+            session = q.get_session()
+            session.add(project)
+            session.commit()
+
+        r = rama_client.get("/proofing/test-project/1/")
+        assert r.status_code == 200
+        assert "Shmushing" in r.text
+        assert "bg-amber-400" in r.text  # Yellow dot
+    finally:
+        with flask_app.app_context():
+            project = q.project("test-project")
+            project.condition_tags = []
+            session = q.get_session()
+            session.add(project)
+            session.commit()
+
+
 def test_edit__bad_project(client):
     r = client.get("/proofing/unknown/1/")
     assert r.status_code == 404

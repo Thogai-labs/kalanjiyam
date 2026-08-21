@@ -117,6 +117,9 @@ class Project(Base):
     #: `kalanjiyam.utils.project_metadata` for the document shape.
     extracted_metadata = Column(JSON, nullable=True)
 
+    #: Condition tags / document issues (e.g. shmushing, blurry, torn) with affected pages
+    condition_tags = Column(JSON, nullable=True, default=list)
+
     #: Timestamp at which this project was created.
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     #: Timestamp at which this project was last updated.
@@ -142,6 +145,22 @@ class Project(Base):
     pages = relationship(
         "Page", order_by=lambda: Page.order, backref="project", cascade="delete"
     )
+
+    @property
+    def condition_tag_list(self) -> list:
+        """Return condition tags as a list of dictionaries."""
+        if not self.condition_tags:
+            return []
+        if isinstance(self.condition_tags, list):
+            return self.condition_tags
+        import json
+        if isinstance(self.condition_tags, str):
+            try:
+                parsed = json.loads(self.condition_tags)
+                return parsed if isinstance(parsed, list) else []
+            except Exception:
+                return []
+        return []
 
     @property
     def creator_mode(self) -> str:

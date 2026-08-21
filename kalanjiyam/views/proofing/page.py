@@ -495,6 +495,15 @@ def _editor_template_kwargs(
         version_key=target_version_key
     ).first()
     page_version = target_version_record.version if target_version_record else 0
+    page_issues_map = project_utils.get_page_issues_map(
+        ctx.project.condition_tags, len(ctx.project.pages)
+    )
+    cur_page_index = 1
+    for idx, p in enumerate(ctx.project.pages, start=1):
+        if p.id == cur.id:
+            cur_page_index = idx
+            break
+    cur_page_issues = page_issues_map.get(cur_page_index, [])
 
     return {
         "page_version": page_version,
@@ -514,6 +523,8 @@ def _editor_template_kwargs(
         "page_number": page_number,
         "project": ctx.project,
         "pages": pages,
+        "page_issues_map": page_issues_map,
+        "cur_page_issues": cur_page_issues,
         "translation_content": translation_content,
         "translation_metadata": translation_metadata,
         "available_translations": available_translations,
