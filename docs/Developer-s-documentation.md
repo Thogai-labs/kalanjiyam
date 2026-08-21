@@ -293,7 +293,7 @@ This directory contains the main Flask application code:
 
 ## Database Schema Overview
 
-Kalanjiyam's data models are managed dynamically using SQLAlchemy. Below is the complete entity-relationship diagram of all 28 tables defined across `/models/`:
+Kalanjiyam's data models are managed dynamically using SQLAlchemy. Below is the complete entity-relationship diagram of all 41 tables defined across `/models/`:
 
 ```mermaid
 erDiagram
@@ -309,6 +309,8 @@ erDiagram
         boolean is_banned
         boolean is_verified
         int organization_id FK "groups.id"
+        int ocr_credits_used
+        int translation_credits_used
     }
     roles {
         int id PK
@@ -339,6 +341,11 @@ erDiagram
         bigint storage_used_bytes
         int ocr_credit_limit
         int ocr_credits_used
+        int translation_credit_limit
+        int translation_credits_used
+        bigint default_user_storage_limit
+        int default_user_ocr_limit
+        int default_user_translation_limit
         int admin_user_id FK "users.id"
         datetime created_at
         datetime updated_at
@@ -379,6 +386,7 @@ erDiagram
     proof_projects {
         int id PK
         string slug
+        string source_book_id
         string display_title
         string print_title
         string author
@@ -386,15 +394,22 @@ erDiagram
         string publisher
         string publication_year
         string worldcat_link
+        string subtitle
+        string place_of_publication
+        string edition
+        string series
+        string subject
         text description
         text notes
         text page_numbers
+        json extracted_metadata
         datetime created_at
         datetime updated_at
         int board_id FK "discussion_boards.id"
         int creator_id FK "users.id"
         int genre_id FK "genres.id"
         boolean is_publicly_viewable
+        string fingerprint_id
     }
     project_groups {
         int group_id PK "FK groups.id"
@@ -459,6 +474,117 @@ erDiagram
         text error_message
     }
 
+    %% Batch Ingestion System
+    batch_jobs {
+        int id PK
+        string target_uri
+        string status
+        boolean extract_metadata
+        text error_message
+        datetime created_at
+        datetime completed_at
+    }
+    batch_items {
+        int id PK
+        int job_id FK "batch_jobs.id"
+        int project_id FK "proof_projects.id"
+        string file_path
+        string mime_type
+        string engine
+        string status
+        float avg_confidence
+        int total_chars
+        datetime created_at
+        datetime completed_at
+    }
+    batch_ocr_chunks {
+        int id PK
+        int batch_item_id FK "batch_items.id"
+        int chunk_index
+        string status
+        datetime created_at
+        datetime completed_at
+    }
+    batch_ocr_pages {
+        int id PK
+        int chunk_id FK "batch_ocr_chunks.id"
+        int batch_item_id FK "batch_items.id"
+        int page_id FK "proof_pages.id"
+        int page_number
+        string status
+        float confidence
+        datetime created_at
+        datetime completed_at
+    }
+
+    %% Archival Metadata Extraction
+    metadata_extraction_runs {
+        int id PK
+        int project_id FK "proof_projects.id"
+        string status
+        string engine
+        string model_name
+        string taxonomy_version
+        int windows_total
+        int windows_completed
+        int pages_read
+        int fields_filled
+        float avg_field_confidence
+        float evidence_verified_rate
+        int total_prompt_tokens
+        int total_completion_tokens
+        datetime created_at
+        datetime completed_at
+    }
+    metadata_windows {
+        int id PK
+        int run_id FK "metadata_extraction_runs.id"
+        int window_index
+        string status
+        json page_slugs
+        string text_hash
+        int fields_returned
+        float engine_latency_ms
+        datetime created_at
+        datetime completed_at
+    }
+    metadata_fields {
+        int id PK
+        int run_id FK "metadata_extraction_runs.id"
+        int project_id FK "proof_projects.id"
+        string tag_code
+        json value
+        json curated_value
+        boolean is_curated
+        float confidence
+        string source
+        datetime created_at
+    }
+    metadata_evidence {
+        int id PK
+        int field_id FK "metadata_fields.id"
+        int value_index
+        string page_slug
+        string block_id
+        text quote
+        boolean verified
+        datetime created_at
+    }
+
+    %% Search Indexing
+    search_index_jobs {
+        int id PK
+        string job_type
+        string scope_kind
+        int scope_org_id FK "groups.id"
+        int scope_project_id FK "proof_projects.id"
+        string status
+        int total_docs
+        int processed_docs
+        datetime started_at
+        datetime completed_at
+    }
+
     %% Library Texts System
     texts {
         int id PK
@@ -504,7 +630,7 @@ erDiagram
         string value
     }
 
-    %% Blog
+    %% Blog & Site Telemetry
     blog_posts {
         int id PK
         int author_id FK "users.id"
@@ -514,8 +640,6 @@ erDiagram
         string slug
         text content
     }
-
-    %% Site/Sponsorship
     site_project_sponsorship {
         int id PK
         string sa_title
@@ -529,14 +653,42 @@ erDiagram
         string title
         text description
     }
+    system_settings {
+        int id PK
+        string key
+        string value
+        string description
+        datetime updated_at
+    }
+    system_metric_logs {
+        int id PK
+        string metric_name
+        float metric_value
+        string context_data
+        datetime recorded_at
+    }
+    usage_logs {
+        int id PK
+        int user_id FK "users.id"
+        string action
+        string resource_type
+        int resource_id
+        datetime created_at
+    }
+    reported_issues {
+        int id PK
+        int user_id FK "users.id"
+        int project_id FK "proof_projects.id"
+        int page_id FK "proof_pages.id"
+        text issue_description
+        string status
+        datetime created_at
+    }
 
     %% Relationships
-    %% Auth
     users ||--o{ user_roles : "has roles"
     roles ||--o{ user_roles : "assigned to"
     users ||--o{ auth_password_reset_tokens : "requests"
-
-    %% Groups
     groups ||--o{ users : "has primary members"
     users ||--o{ user_groups : "member of"
     groups ||--o{ user_groups : "contains"
@@ -545,14 +697,12 @@ erDiagram
     groups ||--o{ project_groups : "owns proof projects"
     proof_projects ||--o{ project_groups : "owned by groups"
 
-    %% Discussion (Talk)
     discussion_boards ||--o{ discussion_threads : "contains"
     users ||--o{ discussion_threads : "creates"
     discussion_boards ||--o{ discussion_posts : "contains"
     discussion_threads ||--o{ discussion_posts : "contains"
     users ||--o{ discussion_posts : "writes"
 
-    %% Proofing
     users ||--o{ proof_projects : "creates"
     discussion_boards ||--o{ proof_projects : "associated with"
     genres ||--o{ proof_projects : "categorizes"
@@ -569,29 +719,42 @@ erDiagram
     users ||--o{ proof_translations : "translates"
     proof_projects ||--o{ proof_ocr_comparisons : "compared in"
 
-    %% Library Texts
+    batch_jobs ||--o{ batch_items : "contains items"
+    proof_projects ||--o{ batch_items : "created by"
+    batch_items ||--o{ batch_ocr_chunks : "divided into"
+    batch_ocr_chunks ||--o{ batch_ocr_pages : "tracks pages in"
+    proof_pages ||--o{ batch_ocr_pages : "mapped to"
+
+    proof_projects ||--o{ metadata_extraction_runs : "described by"
+    metadata_extraction_runs ||--o{ metadata_windows : "executed in windows"
+    metadata_extraction_runs ||--o{ metadata_fields : "generates tags"
+    proof_projects ||--o{ metadata_fields : "curated tags for"
+    metadata_fields ||--o{ metadata_evidence : "substantiated by"
+
+    groups ||--o{ search_index_jobs : "scopes search rebuild"
+    proof_projects ||--o{ search_index_jobs : "scopes project reindex"
+
     texts ||--o{ text_sections : "has divisions"
     texts ||--o{ text_blocks : "contains blocks"
     text_sections ||--o{ text_blocks : "contains blocks in section"
     texts ||--o{ block_parses : "has parse data for"
     text_blocks ||--o{ block_parses : "parsed in"
 
-    %% Dictionaries
     dictionaries ||--o{ dictionary_entries : "contains entries"
-
-    %% Blog
     users ||--o{ blog_posts : "authors"
+    users ||--o{ usage_logs : "triggers actions"
+    users ||--o{ reported_issues : "submits reports"
 ```
 
 *(Note: These correspond directly to the database tables mapped by SQLAlchemy models in the [kalanjiyam/models/](file:///home/mrportable/Documents/kalanjiyam/kalanjiyam/models/) directory).*
 
 ### Table Summary:
 
-1. **`users`**: Platform user accounts storing credentials, status flags (verified, deleted, banned), and default organization association.
+1. **`users`**: Platform user accounts storing credentials, status flags (verified, deleted, banned), organization associations, and quota credit usages.
 2. **`roles`**: Permissions scopes (e.g. `p1`, `p2`, `moderator`, `org_admin`, `super_admin`).
 3. **`user_roles`**: Many-to-many lookup connecting users with their system roles.
 4. **`auth_password_reset_tokens`**: Stores hashed tokens for security recovery operations.
-5. **`groups`**: Tenants/organizations managing resource quotas, limits, and administrative mappings.
+5. **`groups`**: Tenants/organizations managing resource quotas (storage, OCR, translation), per-user limits, and administrative mappings.
 6. **`user_groups`**: Many-to-many membership linking users to their secondary groups.
 7. **`texts`**: Digital library base documents featuring meta-header definitions (TEI).
 8. **`text_sections`**: Hierarchical subdivisions of library texts (e.g. chapters, cantos).
@@ -599,23 +762,36 @@ erDiagram
 10. **`text_groups`**: Association table mapping text access permissions to tenant groups.
 11. **`block_parses`**: Lexical/grammatical analysis strings associated with library text blocks.
 12. **`genres`**: Categories (e.g. Kavya, Shastra) to classify proofreading projects.
-13. **`proof_projects`**: Tracking elements representing books in the proofreading queue.
+13. **`proof_projects`**: Tracking elements representing books in the proofreading queue, including bibliographic metadata and public visibility flags.
 14. **`project_groups`**: Association table mapping projects to their owning organizations.
-15. **`proof_pages`**: Individual page records containing OCR bounding boxes and images.
+15. **`proof_pages`**: Individual page records containing OCR bounding boxes, native dimensions, and status.
 16. **`proof_page_statuses`**: Enumerated validation status types (`reviewed-0`, `reviewed-1`, etc.).
 17. **`proof_page_versions`**: Parallel branch/version tracks for page edits (such as user-specific and OCR engine tracks) performing optimistic locking.
 18. **`proof_revisions`**: Transcription edit history recording plain-text and structured documents, linked to a specific version track.
-19. **`proof_translations`**: Keeps translations of revisions across languages and engines (e.g., GPT, Google).
+19. **`proof_translations`**: Keeps translations of revisions across languages and engines (e.g., GPT, Google, IndicTrans2).
 20. **`proof_ocr_comparisons`**: Analytics for comparing OCR engine results against manual proofing ground truth.
-21. **`discussion_boards`**: Associated forum board instances.
-22. **`discussion_threads`**: Forum topic structures created by users.
-23. **`discussion_posts`**: Thread comments/posts compiled under a forum thread.
-24. **`blog_posts`**: Announcements and updates authored by system operators.
-25. **`site_project_sponsorship`**: Public donation goals to support book digitizations.
-26. **`contributor_info`**: Public recognition list for contributors and moderators.
-27. **`dictionaries`**: Lexicon definitions mapping to various languages.
-28. **`dictionary_entries`**: Lexical index mappings containing value definitions in XML.
-29. **`alembic_version`**: Schema migration states tracked internally by Alembic.
+21. **`batch_jobs`**: High-level execution records for bulk folder/S3 ingestions.
+22. **`batch_items`**: Document-level progress and metrics within a batch job.
+23. **`batch_ocr_chunks`**: Celery worker chunk subdivisions for parallelized batch OCR.
+24. **`batch_ocr_pages`**: Per-page OCR tracking, latency, and confidence scores for batch items.
+25. **`metadata_extraction_runs`**: Archival description extraction passes holding whole-document rollups and token accounting.
+26. **`metadata_windows`**: Single model extraction calls across budgeted token windows.
+27. **`metadata_fields`**: Individual archival description tag entries (both machine-generated and human-curated).
+28. **`metadata_evidence`**: Verbatim citation spans linking metadata facts to page image bounding boxes.
+29. **`search_index_jobs`**: Asynchronous tracking records for OpenSearch rebuilds, reconciliations, and syncing.
+30. **`discussion_boards`**: Associated forum board instances.
+31. **`discussion_threads`**: Forum topic structures created by users.
+32. **`discussion_posts`**: Thread comments/posts compiled under a forum thread.
+33. **`blog_posts`**: Announcements and updates authored by system operators.
+34. **`site_project_sponsorship`**: Public donation goals to support book digitizations.
+35. **`contributor_info`**: Public recognition list for contributors and moderators.
+36. **`system_settings`**: Key-value runtime platform configuration store.
+37. **`system_metric_logs`**: System latency and resource telemetry logs.
+38. **`usage_logs`**: User activity and audit trail logs.
+39. **`reported_issues`**: User-submitted problem reports on projects or pages.
+40. **`dictionaries`**: Lexicon definitions mapping to various languages.
+41. **`dictionary_entries`**: Lexical index mappings containing value definitions in XML.
+42. **`alembic_version`**: Schema migration states tracked internally by Alembic.
 
 ---
 
@@ -814,6 +990,33 @@ Kalanjiyam dispatches window extraction requests to the metadata service with au
 
 ---
 
+### 5. Extraction Metrics & Window Calculations
+
+Both per-window and whole-run performance metrics are tracked in the database models (`MetadataExtractionRun`, `MetadataWindow`) and rendered on the **Extraction Metrics** dashboard (`/admin/platform/metadata_metrics`) and via the CLI (`python cli.py metadata-runs`):
+
+#### A. Window Calculation Algorithm
+1. **Track Resolution (`resolve_extraction_tracks`)**: Identifies the highest-tier transcription track for each page (`moderator` > `role:p2` > `role:p1` > `ocr:<engine>`). Pages `< 50` characters are treated as blank and skipped.
+2. **Script Token Profiling**: Converts token budget into character limits based on detected scripts:
+   $$\text{chars\_per\_token} = \begin{cases} 3.0 & \text{Latin (Latn)} \\ 1.2 & \text{Indic / Non-Latin (Devanagari, Tamil, etc.)} \end{cases}$$
+   $$\text{budget\_chars} = \lfloor 20000 \times (\text{chars\_per\_token} \times 0.85) \rfloor$$
+3. **Greedy Partitioning (`plan_windows`)**: Pages are packed in reading order until `used_chars + page.char_len > budget_chars`. Pages are never split mid-page.
+4. **Boundary Overlap (`WINDOW_OVERLAP_PAGES = 1`)**: Carries the last page of Window $N$ into Window $N+1$ so cross-page dates, entity names, and signatures are not missed.
+5. **Incremental SHA-256 Hashing (`window_hash`)**: Hashes page slugs, block IDs, and texts. Re-runs skip unchanged windows (`STATUS_SKIPPED`), consuming zero model tokens.
+
+#### B. Telemetry & Performance Formulae
+* **Tokens Per Window:**
+  $$\text{tokens\_per\_window} = \frac{\text{total\_prompt\_tokens} + \text{total\_completion\_tokens}}{\text{windows\_completed}}$$
+* **Average Wall-Clock Duration Per Window:**
+  $$\text{avg\_time\_per\_window\_sec} = \frac{\text{completed\_at} - \text{created\_at} \text{ (in seconds)}}{\text{windows\_completed}}$$
+* **Average Engine Latency Per Window:**
+  $$\text{avg\_engine\_latency\_per\_window} = \frac{\text{total\_engine\_latency\_ms}}{1000 \times \text{windows\_completed}}$$
+* **Evidence Verification Rate:**
+  $$\text{evidence\_verified\_rate} = \frac{\text{verified\_evidence\_citations}}{\text{total\_evidence\_citations}}$$
+* **Field Fill Rate:**
+  $$\text{fields\_fill\_rate} = \frac{\text{fields\_filled}}{\text{fields\_total}} \quad (\text{out of 22 standard tags})$$
+
+---
+
 ## Production Deployment (with Docker)
 
 For production deployments (e.g., staging or live production servers like `siddhasagaram.in`), you should use the dedicated deployment script **`./deploy/prod/deploy.sh`** rather than `make docker-start`. 
@@ -959,7 +1162,7 @@ When proofreaders open a page, the editing interface supports two primary views 
 
 ---
 
-### 2. OCR Service Response Contract (v2.1)
+### 2. OCR Service Response Contract (v2.2)
 
 To ensure loose coupling, Kalanjiyam communicates with the external OCR service via a strict engine-agnostic API contract. The external OCR service MUST return a JSON payload with a `Content-Type: application/json` header. 
 
@@ -970,7 +1173,7 @@ The JSON payload must include the following top-level and block-level properties
 
 ```json
 {
-  "contract_version": "2.1",
+  "contract_version": "2.2",
   "engine": "surya",
   "model": {
     "name": "surya-rec",
@@ -981,7 +1184,9 @@ The JSON payload must include the following top-level and block-level properties
   "page_width": 1240,
   "page_height": 1754,
   "page_confidence": 0.942,
+  "page_p05": 0.810,
   "engine_latency_ms": 342.5,
+  "stable_block_ids": true,
   "blocks": [
     {
       "id": "b1a2c3d4",
@@ -1005,15 +1210,19 @@ The JSON payload must include the following top-level and block-level properties
 
 #### B. Key Fields Reference
 
+* **`contract_version` (String, Required):** Must be `"2.2"` (or legacy `"2.1"` / `"2.0"`).
 * **`page_width` / `page_height` (Integer, Required):** Dimensions (in pixels) of the source scan. Required so the spatial Replica view can scale and align bounding boxes precisely.
+* **`page_confidence` (Float 0.0 - 1.0 or null):** Aggregate page quality score. May be `null` for confidence-blind VLM engines.
+* **`page_p05` (Float 0.0 - 1.0 or null):** 5th-percentile token confidence floor. Serves as a robust indicator of low-confidence text runs. `null` for VLM engines.
+* **`stable_block_ids` (Boolean, Optional):** Default `true`. Signals whether block IDs remain stable across re-runs.
 * **`coordinate_space` (String, Optional):** Can be `"pixel"` (coordinates map directly to image pixels) or `"normalized"` (coordinates scaled between `0.0` and `1.0`). Defaults to `"pixel"`.
 * **`blocks` (Array, Required):** List of recognized layout elements. Each block must have:
   * **`id` (String, Required):** A stable, page-unique identifier (e.g. 8 hex characters). Ensures manual edits by proofreaders survive a re-OCR run.
-  * **`type` (String, Required):** Layout type. Valid values: `paragraph`, `heading`, `subheading`, `table`, `figure`, `caption`, `footnote`, `running-header`, `page-number`, `equation`.
+  * **`type` (String, Required):** Layout type. Valid values: `paragraph`, `heading`, `subheading`, `verse`, `table`, `figure`, `caption`, `footnote`, `running-header`, `page-number`, `column-header`, `equation`.
   * **`bbox` (Array, Required):** Array of four coordinates `[x1, y1, x2, y2]` denoting the bounding box of the block.
   * **`reading_order` (Integer, Required):** 1-based order in which the block should be read.
   * **`content` (String, Required):** Plain text inside the block. For the `table` type, this field contains a complete HTML `<table>` string instead of plain text.
-  * **`confidence` (Float 0.0 - 1.0, Required if available):** Block recognition score. Scores `< 0.5` are highlighted in red (errors) and `0.5 - 0.74` in amber (review recommended).
+  * **`confidence` (Float 0.0 - 1.0 or null):** Block recognition score. Scores `< 0.5` are highlighted in red (errors) and `0.5 - 0.74` in amber (review recommended).
   * **`words` (Array, Optional):** Word-level or line-level breakdown containing local text coordinates and confidence scores for in-block word-level highlights.
 
 *If v2 blocks are missing from the response, Kalanjiyam falls back to legacy behaviors by parsing raw text and TSV bounding boxes if possible.*
@@ -1024,7 +1233,7 @@ The JSON payload must include the following top-level and block-level properties
 
 If you encounter issues during local development or production deployment, monitoring container logs and understanding the state of individual services is critical.
 
-All five main containers have explicit `container_name` attributes, meaning you can access their logs directly using standard Docker commands or through the environment's orchestrator (Makefile/deploy script).
+All eight main containers in the Docker Compose stack have explicit environment-suffixed `container_name` attributes (e.g. `kalanjiyam-web-dev` / `kalanjiyam-web-prod`), meaning you can access their logs directly using standard Docker commands or through the environment's orchestrator (Makefile/deploy script).
 
 ### General Logging Commands
 
@@ -1045,17 +1254,17 @@ All five main containers have explicit `container_name` attributes, meaning you 
   ```bash
   docker logs -f <container-name>
   ```
-  *(Example: `docker logs -f kalanjiyam-web`)*
+  *(Example: `docker logs -f kalanjiyam-web-dev` or `docker logs -f kalanjiyam-web-prod`)*
 
 ---
 
 ### Container Reference & Troubleshooting
 
-#### 1. `kalanjiyam-web`
+#### 1. `kalanjiyam-web` (`kalanjiyam-web-dev` / `kalanjiyam-web-prod`)
 * **Role:** Serves the main Flask web application (using Gunicorn in production, and standard Flask development server in local).
 * **Logs Command:**
   ```bash
-  docker logs -f kalanjiyam-web
+  docker logs -f kalanjiyam-web-dev
   ```
 * **Common Issues:**
   * **502 Bad Gateway / Connection Refused:**
@@ -1065,54 +1274,75 @@ All five main containers have explicit `container_name` attributes, meaning you 
     * *Cause:* A critical configuration variable like `FLASK_UPLOAD_FOLDER` is missing or is configured as a relative path instead of an absolute path.
     * *Troubleshooting:* Modify the `.env` file to use absolute paths and restart the service.
 
-#### 2. `kalanjiyam-celery`
-* **Role:** Celery worker that processes asynchronous background tasks (such as PDF book import, page parsing, and OCR transcription).
+#### 2. `kalanjiyam-celery` (`kalanjiyam-celery-dev` / `kalanjiyam-celery-prod`)
+* **Role:** Core Celery worker processing `default`, `ocr`, `low_priority`, and `search_index` task queues.
 * **Logs Command:**
   ```bash
-  docker logs -f kalanjiyam-celery
+  docker logs -f kalanjiyam-celery-dev
   ```
 * **Common Issues:**
-  * **OCR / PDF processing tasks remain in "Pending" or fail instantly:**
+  * **OCR / indexing tasks remain in "Pending" or fail instantly:**
     * *Cause:* The Celery container is either not running, cannot reach Redis, or cannot communicate with the external OCR service.
-    * *Troubleshooting:* Verify the container is running by typing `docker ps`. Check the logs for connection timeout or host lookup failures (e.g. if the `OCR_SERVICE_URL` is misconfigured).
-  * **Out of Memory (OOM) / Worker Crash on Large PDFs:**
-    * *Cause:* Processing very large PDF documents can exhaust container resource limits.
-    * *Troubleshooting:* Check `docker stats kalanjiyam-celery` to monitor resource usage. You may need to allocate more memory/CPU to your Docker daemon or split massive PDFs into smaller parts before uploading.
+    * *Troubleshooting:* Verify the container is running with `docker ps`. Check the logs for connection timeout or host lookup failures (e.g. if `OCR_SERVICE_URL` is misconfigured).
 
-#### 3. `kalanjiyam-versitygw`
-* **Role:** Versity Gateway S3 adapter. It exposes the application's local filesystem upload storage through an S3-compatible API, allowing S3 file upload routines without needing a cloud S3 instance.
+#### 3. `kalanjiyam-celery-batch` (`kalanjiyam-celery-batch-dev` / `kalanjiyam-celery-batch-prod`)
+* **Role:** Dedicated Celery worker for the `s3_batch` queue, managing large PDF splitting, S3 folder discovery, and parallel batch ingestion.
 * **Logs Command:**
   ```bash
-  docker logs -f kalanjiyam-versitygw
+  docker logs -f kalanjiyam-celery-batch-dev
+  ```
+* **Common Issues:**
+  * **Batch OCR tasks stuck:**
+    * *Cause:* Worker disconnected from Redis or S3 gateway unreachable. Check `python cli.py batch-status --job-id <ID>` for failed item traces.
+
+#### 4. `kalanjiyam-celery-metadata` (`kalanjiyam-celery-metadata-dev` / `kalanjiyam-celery-metadata-prod`)
+* **Role:** Dedicated Celery worker for the `metadata` queue, performing token-budgeted whole-document archival metadata extraction.
+* **Logs Command:**
+  ```bash
+  docker logs -f kalanjiyam-celery-metadata-dev
+  ```
+* **Common Issues:**
+  * **Metadata extractions unqueued:**
+    * *Cause:* Ensure worker is listening on `-Q metadata`. Check with `python cli.py metadata-runs`.
+
+#### 5. `kalanjiyam-search` (`kalanjiyam-search-dev` / `kalanjiyam-search-prod`)
+* **Role:** OpenSearch cluster with the ICU analysis plugin for multilingual tokenization and full-text search across library books and proofing projects.
+* **Logs Command:**
+  ```bash
+  docker logs -f kalanjiyam-search-dev
+  ```
+* **Common Issues:**
+  * **Search queries failing with 503 or yellow/red cluster health:**
+    * *Cause:* OpenSearch heap exhaustion or uninitialized indices. Re-run `python cli.py search-index init` or `python cli.py search-index status`.
+
+#### 6. `kalanjiyam-versitygw` (`kalanjiyam-versitygw-dev` / `kalanjiyam-versitygw-prod`)
+* **Role:** Versity Gateway S3 adapter. It exposes the application's local filesystem upload storage through an S3-compatible API.
+* **Logs Command:**
+  ```bash
+  docker logs -f kalanjiyam-versitygw-dev
   ```
 * **Common Issues:**
   * **Upload or file storage errors (S3 API Connection Errors):**
-    * *Cause:* The gateway failed to initialize POSIX storage or there is an access key/secret mismatch between `.env` configuration and container variables.
-    * *Troubleshooting:* Inspect the logs of `kalanjiyam-versitygw` to ensure it successfully started on port `7070` and set up the posix backend. Make sure the S3 keys configured in your `.env` match the credentials in `deploy/local/docker-compose.yml` or `deploy/prod/docker-compose.yml`. Ensure the data directories on the host mapped to the volumes are writeable by the container.
+    * *Cause:* The gateway failed to initialize POSIX storage or credentials mismatch between `.env` and Compose environment.
+    * *Troubleshooting:* Inspect logs to verify VersityGW is listening on port `7070` and storage path permissions are correct.
 
-#### 4. `kalanjiyam-redis`
-* **Role:** Redis container serving as the broker and backend for the Celery task queue.
+#### 7. `kalanjiyam-redis` (`kalanjiyam-redis-dev` / `kalanjiyam-redis-prod`)
+* **Role:** Redis container serving as the message broker and backend for Celery task queues and distributed locks.
 * **Logs Command:**
   ```bash
-  docker logs -f kalanjiyam-redis
+  docker logs -f kalanjiyam-redis-dev
   ```
-* **Common Issues:**
-  * **Celery or Web containers report connection pool issues or failed to connect to Redis broker:**
-    * *Cause:* Redis container is stopped, crashing, or out of resources.
-    * *Troubleshooting:* Check the Redis logs. Redis may fail to write to its database file or exhaust memory if loaded with too many tasks. If necessary, stop and purge the containers using `make docker-stop` (local) or `./deploy/prod/deploy.sh stop` (prod), and restart them.
 
-#### 5. `kalanjiyam-db`
-* **Role:** PostgreSQL database container storing platform metadata, users, organizations, proofing logs, and books.
+#### 8. `kalanjiyam-db` (`kalanjiyam-db-dev` / `kalanjiyam-db-prod`)
+* **Role:** PostgreSQL 15 database container storing platform metadata, users, organizations, proofing logs, and books.
 * **Logs Command:**
   ```bash
-  docker logs -f kalanjiyam-db
+  docker logs -f kalanjiyam-db-dev
   ```
 * **Common Issues:**
   * **Fatal Authentication Errors / Database Connection Refused:**
-    * *Cause:* The credentials configured in `SQLALCHEMY_DATABASE_URI` do not match the database username, database name, or `POSTGRES_PASSWORD` defined in the environment.
-    * *Troubleshooting:* Verify that the passwords and usernames match in your `.env` file. Check db container logs for messages like `password authentication failed for user "kalanjiyam"`.
-    * *Cause:* The database schema is out of sync with the application code or migrations were interrupted.
-    * *Troubleshooting:* Check the migration status by running `docker exec -it kalanjiyam-web alembic current` and apply pending updates with `docker exec -it kalanjiyam-web alembic upgrade head` (or running `./deploy/prod/deploy.sh migrate` in production).
+    * *Cause:* Credentials configured in `SQLALCHEMY_DATABASE_URI` do not match `POSTGRES_PASSWORD`.
+    * *Troubleshooting:* Verify that passwords and usernames match in `.env`. Check migration status with `docker exec -it kalanjiyam-web-dev alembic current` and upgrade with `docker exec -it kalanjiyam-web-dev alembic upgrade head` (or `./deploy/prod/deploy.sh migrate`).
 
 ---
 

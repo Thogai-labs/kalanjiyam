@@ -10,9 +10,11 @@ Kalanjiyam is a web application built with Flask that provides access to Siddha 
 literature. The application consists of several key components:
 
 - **Web server**: Flask application that serves HTML pages and API endpoints
-- **Database**: SQLite database (development) or PostgreSQL (production) for storing data
-- **Background tasks**: Celery for handling long-running tasks like OCR processing
-- **Static assets**: CSS, JavaScript, and images served directly by the web server
+- **Database**: SQLite database (development) or PostgreSQL (production) for storing structured metadata
+- **Object Storage**: S3-compatible dual-tier storage (via Versity Gateway or cloud S3) for page scans and compressed spatial JSON documents
+- **Full-Text Search**: OpenSearch cluster with ICU analysis for multilingual manuscript search
+- **Background tasks**: Celery across multiple queues for OCR, batch imports, search indexing, and metadata extraction
+- **Static assets**: CSS and JavaScript bundled via Tailwind and esbuild
 
 Data Sources
 ------------
@@ -28,18 +30,21 @@ Kalanjiyam's data comes from several sources:
 Database
 --------
 
-We use SQLAlchemy as our ORM and SQLite for development. SQLite is fast and great for prototyping. Kalanjiyam is a read-heavy website, so
-SQLite's performance characteristics work well for our use case.
+We use SQLAlchemy as our ORM and SQLite for lightweight local prototyping.
 
-For production, we use PostgreSQL for better concurrency and data integrity.
+For production, we use PostgreSQL for concurrency, multi-tenancy, and data integrity.
 
-Key database tables:
+Key database table groups (41 tables total across models):
 
-- `users`: User accounts and authentication
-- `texts`: Siddha texts and their metadata
-- `projects`: Proofreading projects
-- `dictionaries`: Dictionary entries and definitions
-- `parses`: Grammatical analysis data
+- **Authentication & RBAC**: `users`, `roles`, `user_roles`, `auth_password_reset_tokens`
+- **Multi-Tenancy & Quotas**: `groups`, `user_groups`, `text_groups`, `project_groups`
+- **Proofing System**: `proof_projects`, `proof_pages`, `proof_page_statuses`, `proof_page_versions`, `proof_revisions`, `proof_translations`, `proof_ocr_comparisons`, `genres`
+- **Batch Processing**: `batch_jobs`, `batch_items`, `batch_ocr_chunks`, `batch_ocr_pages`
+- **Archival Metadata Extraction**: `metadata_extraction_runs`, `metadata_windows`, `metadata_fields`, `metadata_evidence`
+- **Search Indexing**: `search_index_jobs`
+- **Digital Library Texts**: `texts`, `text_sections`, `text_blocks`, `block_parses`
+- **Dictionaries**: `dictionaries`, `dictionary_entries`
+- **Forums & Site**: `discussion_boards`, `discussion_threads`, `discussion_posts`, `blog_posts`, `site_project_sponsorship`, `contributor_info`, `system_settings`, `system_metric_logs`, `usage_logs`, `reported_issues`
 
 Frontend
 --------
@@ -56,38 +61,26 @@ We avoid complex frontend frameworks to keep the codebase simple and maintainabl
 Background Tasks
 ---------------
 
-We use Celery for background tasks like:
+We use Celery for background processing across 6 dedicated queues:
 
-- OCR processing of manuscript images
-- Text parsing and analysis
-- Data import and processing
-- Email notifications
-
-These tasks run asynchronously to avoid blocking the web interface.
-
-Static Assets
--------------
-
-We use a simple build process for our static assets:
-
-- **Tailwind CSS** compiles our CSS from utility classes
-- **esbuild** bundles our JavaScript
-- **Asset hashing** for cache busting
-
-The build process might seem overkill at first. But it keeps Kalanjiyam's CSS consistent, predictable, and fairly
-maintainable.
+- `default`: General asynchronous tasks and emails
+- `ocr`: Interactive single-page OCR and comparison jobs
+- `s3_batch`: Bulk PDF/image folder batch OCR ingestion
+- `metadata`: Token-budgeted full-document archival metadata extraction
+- `search_index`: Incremental OpenSearch indexing and sync jobs
+- `low_priority`: Heavy background exports and non-urgent maintenance
 
 Deployment
 ----------
 
-Kalanjiyam is deployed using Docker containers:
+Kalanjiyam is deployed using Docker containers (orchestrated via Docker Compose):
 
-- **Web container**: Flask application
-- **Database container**: PostgreSQL
-- **Redis container**: For Celery task queue
-- **Nginx container**: For static file serving and load balancing
-
-We use Docker Compose for local development and Kubernetes for production deployment.
+- **Web container** (`kalanjiyam-web`): Flask web app behind Gunicorn
+- **Database container** (`kalanjiyam-db`): PostgreSQL 15
+- **Redis container** (`kalanjiyam-redis`): Celery task broker and result backend
+- **Celery worker containers** (`kalanjiyam-celery`, `kalanjiyam-celery-batch`, `kalanjiyam-celery-metadata`): Background workers
+- **Search container** (`kalanjiyam-search`): OpenSearch with ICU analysis plugin
+- **Storage gateway** (`kalanjiyam-versitygw`): S3 POSIX storage adapter
 
 Security
 --------

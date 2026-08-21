@@ -1,8 +1,8 @@
-OCR Service API (v2.1)
+OCR Service API (v2.2)
 ======================
 
-Kalanjiyam delegates OCR to external microservices. The editor expects **v2.1** responses
-with structured blocks, quality confidence metrics, and processing latency.
+Kalanjiyam delegates OCR to external microservices. The editor expects **v2.2** responses
+with structured blocks, quality confidence metrics, processing latency, and optional word-level confidence spans.
 
 Base URLs & Fallback
 --------------------
@@ -26,24 +26,32 @@ Endpoints & Formats
 
   Headers: ``X-API-Key`` when ``OCR_SERVICE_API_KEY`` (or ``OCR_SERVICE_API_KEY_2``) is set.
 
-Response (v2.1)
+Response (v2.2)
 ---------------
 
-+--------------------+----------+--------------------------------------------------------------+
-| Field              | Type     | Description                                                  |
-+====================+==========+==============================================================+
-| ``contract_version``| string  | Must be ``"2.1"`` or ``"2.0"``                               |
-+--------------------+----------+--------------------------------------------------------------+
-| ``engine``         | string   | Engine identifier (e.g. ``"surya"``, ``"google"``)           |
-+--------------------+----------+--------------------------------------------------------------+
-| ``model``          | object   | Model provenance metadata (e.g. ``{"name": "...", "version": "..."}``) |
-+--------------------+----------+--------------------------------------------------------------+
-| ``page_confidence``| float    | Aggregate page recognition accuracy in ``[0.0, 1.0]``        |
-+--------------------+----------+--------------------------------------------------------------+
-| ``engine_latency_ms``| float  | OCR engine microservice processing time in milliseconds       |
-+--------------------+----------+--------------------------------------------------------------+
-| ``blocks``         | array    | Structured layout blocks (see below)                         |
-+--------------------+----------+--------------------------------------------------------------+
++--------------------+------------------+--------------------------------------------------------------+
+| Field              | Type             | Description                                                  |
++====================+==================+==============================================================+
+| ``contract_version``| string          | Must be ``"2.2"`` (or legacy ``"2.1"`` / ``"2.0"``)          |
++--------------------+------------------+--------------------------------------------------------------+
+| ``engine``         | string           | Engine identifier (e.g. ``"surya"``, ``"google"``)           |
++--------------------+------------------+--------------------------------------------------------------+
+| ``model``          | object           | Model provenance metadata (e.g. ``{"name": "...", "version": "..."}``) |
++--------------------+------------------+--------------------------------------------------------------+
+| ``page_confidence``| float or null    | Aggregate page recognition accuracy in ``[0.0, 1.0]``        |
++--------------------+------------------+--------------------------------------------------------------+
+| ``page_p05``       | float or null    | 5th-percentile confidence floor; ``null`` on VLM engines     |
++--------------------+------------------+--------------------------------------------------------------+
+| ``engine_latency_ms``| float          | OCR engine microservice processing time in milliseconds       |
++--------------------+------------------+--------------------------------------------------------------+
+| ``page_width``     | integer          | Source image width in pixels                                 |
++--------------------+------------------+--------------------------------------------------------------+
+| ``page_height``    | integer          | Source image height in pixels                                |
++--------------------+------------------+--------------------------------------------------------------+
+| ``stable_block_ids``| boolean         | Optional (default true). Stable IDs across re-OCR runs       |
++--------------------+------------------+--------------------------------------------------------------+
+| ``blocks``         | array            | Structured layout blocks (see below)                         |
++--------------------+------------------+--------------------------------------------------------------+
 
 Block object
 ~~~~~~~~~~~~
@@ -54,12 +62,15 @@ Block object
      "id": "b1",
      "type": "paragraph",
      "bbox": [80, 120, 520, 200],
-     "content": "…",
+     "content": "Sanskrit text string here.",
+     "confidence": 0.92,
      "reading_order": 1,
-     "children": []
+     "words": [
+       {"text": "Sanskrit", "bbox": [80, 120, 150, 150], "confidence": 0.98}
+     ]
    }
 
-Block types: ``paragraph``, ``heading``, ``verse``, ``table``, ``figure``, ``list_item``.
+Block types: ``paragraph``, ``heading``, ``subheading``, ``verse``, ``table``, ``figure``, ``caption``, ``footnote``, ``running-header``, ``page-number``, ``column-header``, ``equation``.
 
 Pipelines
 ---------

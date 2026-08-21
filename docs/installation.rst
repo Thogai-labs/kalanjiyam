@@ -163,21 +163,17 @@ can run the OCR service on ``http://localhost:8000`` and set::
 reCAPTCHA
 ^^^^^^^^^
 
-We use reCAPTCHA as an anti-spam measure when users create an account.
+We use reCAPTCHA v2 ("I'm not a robot" checkbox) as an anti-spam measure when users create an account or reset passwords.
 
-You should set up reCAPTCHA credentials if you want to test the authentication
-flow locally. To do so, refer to the documentation here:
+To set up reCAPTCHA credentials for local authentication testing:
 
-- `How to set up reCAPTCHA`_
+1. Create a **reCAPTCHA v2 Checkbox** key pair on the `Google reCAPTCHA Console`_.
+2. Set your keys in the ``.env`` file::
 
-Then, download your JSON credentials and set the `GOOGLE_APPLICATION_CREDENTIALS`
-environment variable in your `.env` file to point to these credentials.
+    RECAPTCHA_PUBLIC_KEY=your_site_key
+    RECAPTCHA_PRIVATE_KEY=your_secret_key
 
-.. note::
-    Kalanjiyam uses reCAPTCHA v2. It is slightly less sophisticated than v3 but has
-    better privacy guarantees.
-
-.. _`How to set up reCAPTCHA`: https://developers.google.com/recaptcha/intro
+.. _`Google reCAPTCHA Console`: https://www.google.com/recaptcha/admin
 
 
 Sentry

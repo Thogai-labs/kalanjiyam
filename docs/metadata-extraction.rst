@@ -175,3 +175,75 @@ Once a window response is received:
 2. **Coordinate Linking**: The ``block_id`` links verified quotes directly to spatial bounding boxes in ``Revision.document``, enabling users to click a fact in the catalog and highlight its exact bounding box on the page image.
 3. **Map-Reduce (``reduce_windows``)**: Once all windows complete, window fields are merged into a canonical project description. Single-value fields choose the highest confidence verified entry, and entity lists (persons, places, subjects) are deduplicated and merged.
 4. **Bibliographic Write-Down**: Search-facing columns in ``Project`` (title, author, publication year, etc.) are seeded from the verified archival fields without overwriting user-curated data.
+
+Extraction Metrics & Window Calculations
+----------------------------------------
+
+Kalanjiyam calculates and exposes both per-window and whole-run performance metrics in the **Admin Metrics Dashboard** (``/admin/platform/metadata_metrics``) and via the CLI (``python cli.py metadata-runs``).
+
+Window Calculation Breakdown
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+1. **Track Resolution**:
+   ``resolve_extraction_tracks()`` selects the highest-quality text revision for every page in reading order (Moderator > Proofread P2 > Proofread P1 > OCR). Blank pages (< 50 characters) are excluded.
+
+2. **Script-Aware Character Budgeting**:
+   The input token budget per window is fixed at **20,000 tokens** (``WINDOW_TOKEN_BUDGET = 20_000``). Character capacity is computed from the document's script distribution:
+
+   .. math::
+
+      \text{chars\_per\_token} = \begin{cases} 
+         3.0 & \text{for Latin script (} \text{Latn} \text{)} \\
+         1.2 & \text{for Indic / Non-Latin scripts (} \text{\_default} \text{)} 
+      \end{cases}
+
+   .. math::
+
+      \text{budget\_chars} = \lfloor 20000 \times (\text{chars\_per\_token} \times 0.85) \rfloor
+
+   *For an Indic manuscript, `budget_chars` is approximately $20,000 \times 1.2 \times 0.85 \approx 20,400$ characters per window.*
+
+3. **Greedy Page Partitioning**:
+   ``plan_windows()`` accumulates pages into `current_window` until ``used_chars + page.char_len > budget_chars``.
+   * **Page Integrity Rule**: Pages are never split across windows. If a single page exceeds `budget_chars`, it is assigned its own window.
+
+4. **1-Page Boundary Overlap**:
+   ``WINDOW_OVERLAP_PAGES = 1`` carries the last page of Window $N$ into the start of Window $N+1$. This ensures multi-page sentences, signatures, and dates bridging page breaks appear in both windows and are not lost during map-reduce.
+
+5. **Incremental Window Hashing**:
+   A SHA-256 digest (``window_hash``) is computed over ``page_slug``, ``block.id``, and ``block.text``. When re-running extraction on an edited document, windows with identical hashes are marked ``STATUS_SKIPPED`` and loaded from the database cache, incurring zero LLM cost.
+
+Window Performance Metrics Formulae
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following metrics are tracked on ``MetadataExtractionRun`` and ``MetadataWindow``:
+
+* **Tokens Per Window**:
+  
+  .. math::
+
+     \text{tokens\_per\_window} = \frac{\text{total\_prompt\_tokens} + \text{total\_completion\_tokens}}{\text{windows\_completed}}
+
+* **Average Wall-Clock Time Per Window**:
+
+  .. math::
+
+     \text{avg\_time\_per\_window\_sec} = \frac{\text{completed\_at} - \text{created\_at} \text{ (seconds)}}{\text{windows\_completed}}
+
+* **Average Engine Processing Latency Per Window**:
+
+  .. math::
+
+     \text{avg\_engine\_latency\_per\_window} = \frac{\text{total\_engine\_latency\_ms}}{1000 \times \text{windows\_completed}}
+
+* **Evidence Verification Rate**:
+
+  .. math::
+
+     \text{evidence\_verified\_rate} = \frac{\text{count}(\text{verified evidence citations})}{\text{count}(\text{total evidence citations})}
+
+* **Field Fill Rate**:
+
+  .. math::
+
+     \text{fields\_fill\_rate} = \frac{\text{fields\_filled}}{\text{fields\_total}} \quad (\text{out of 22 standard taxonomy tags})

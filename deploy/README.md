@@ -34,8 +34,7 @@ cp .env.example .env   # fill in all required values
 ./deploy/local/deploy.sh stop     # tear down
 ```
 
-Celery listens on `default` and `ocr` queues in all environments. OCR runs as a separate
-service; set `OCR_SERVICE_URL` to a host reachable from inside containers.
+Celery processes tasks across 6 queues (`default`, `ocr`, `low_priority`, `s3_batch`, `search_index`, `metadata`) partitioned across 3 worker containers (`kalanjiyam-celery`, `kalanjiyam-celery-batch`, `kalanjiyam-celery-metadata`). OpenSearch (`kalanjiyam-search`) handles full-text search indexing. OCR runs as a separate microservice; set `OCR_SERVICE_URL` to a host reachable from inside containers.
 
 Full guide: `docs/production-deploy.rst`.
 

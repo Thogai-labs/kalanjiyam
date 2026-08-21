@@ -523,57 +523,6 @@ def import_jsonl(jsonl_uri, pdf_uri, org, dry_run, allow_duplicate):
         click.echo("Dry run: no database or storage writes performed.")
 
 
-@cli.command("metadata-extract")
-@click.option("--project", "slug", required=True, help="Project slug to describe")
-@click.option(
-    "--force",
-    is_flag=True,
-    help="Re-ask every window, even ones whose text has not changed since the last run",
-)
-@click.option(
-    "--sync",
-    is_flag=True,
-    help="Run in this process instead of queueing to Celery (useful for a first look)",
-)
-def metadata_extract(slug, force, sync):
-    """Extract the archival description for a project, reading every page.
-
-    Unlike `metadata` sampling, this is a full pass: fifteen of the twenty-two
-    tags in the schema ask who and what is named *anywhere* in the file, which a
-    sample cannot answer.
-    """
-    from kalanjiyam.tasks import archival_extract
-
-    session = Session(engine)
-    project = session.query(db.Project).filter_by(slug=slug).first()
-    if project is None:
-        raise click.ClickException(f"project {slug!r} not found")
-
-    if not sync:
-        task = archival_extract.extract_archival_metadata.delay(project.id, force=force)
-        click.echo(f"Queued extraction for {slug} (task {task.id}) on the metadata queue.")
-        click.echo("Follow it with: python cli.py metadata-status --project " + slug)
-        return
-
-    click.echo(f"Extracting {slug} in this process; this reads every page.")
-    result = archival_extract.extract_archival_metadata(project.id, force=force)
-    status = result.get("status")
-    click.echo(f"Status: {status}")
-    if result.get("error"):
-        raise click.ClickException(result["error"])
-
-    click.echo(
-        f"Windows: {result.get('windows_completed')} completed, "
-        f"{result.get('windows_failed')} failed"
-    )
-    click.echo(f"Fields filled: {result.get('fields_filled')} of 22")
-    rate = result.get("evidence_verified_rate")
-    click.echo(
-        "Evidence verified: "
-        + ("no verifiable spans" if rate is None else f"{rate:.1%}")
-    )
-
-
 @cli.command("metadata-status")
 @click.option("--project", "slug", required=True, help="Project slug")
 def metadata_status(slug):
