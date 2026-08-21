@@ -62,13 +62,19 @@
 
 {% block content %}
 <div class="w-full max-w-4xl">
-  <div class="mb-6">
-    {{ m.project_tabs(project=project, active='edit', is_mod=current_user.is_moderator) }}
+  <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+    <div class="flex-1 min-w-0">
+      {{ m.project_tabs(project=project, active='edit', is_mod=current_user.is_moderator) }}
+    </div>
+    <button type="submit" form="project-edit-form" class="inline-flex items-center gap-2 px-6 py-2.5 bg-royalblue hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-royalblue/20 transition-all cursor-pointer shrink-0">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+      <span>{{ _('Save changes') }}</span>
+    </button>
   </div>
 
   {{ mf.show_errors_if_any(form.errors) }}
 
-  <form method="POST" class="space-y-8">
+  <form method="POST" id="project-edit-form" class="space-y-8">
     {{ form.csrf_token }}
 
     <fieldset class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
@@ -150,7 +156,7 @@
           <div class="p-4 rounded-xl bg-amber-50/70 border border-amber-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all shadow-sm">
             <div class="flex items-center gap-2.5 min-w-[180px]">
               <span class="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0"></span>
-              <span class="font-bold text-sm text-amber-950" x-text="tag.name"></span>
+              <span class="font-bold text-sm text-amber-950" x-text="typeof tag === 'object' && tag ? (tag.name || '') : tag"></span>
             </div>
             
             <div class="flex-1 flex items-center gap-2">
@@ -169,6 +175,19 @@
             </button>
           </div>
         </template>
+      </div>
+
+      <!-- Save Button inside Condition Tags Box -->
+      <div class="pt-4 mt-4 border-t border-amber-200/80 flex flex-wrap items-center justify-between gap-3">
+        <span class="text-xs text-amber-900/80 font-medium">
+          {{ _('Save condition tags and page assignments to this project.') }}
+        </span>
+        <button type="submit" 
+                form="project-edit-form"
+                class="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+          <span>{{ _('Save Condition Tags') }}</span>
+        </button>
       </div>
     </fieldset>
 
@@ -197,8 +216,14 @@
       </div>
     </fieldset>
 
-    <div class="pt-2">
-      <input class="inline-flex items-center justify-center px-6 py-3 bg-royalblue hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md shadow-royalblue/20 transition-all cursor-pointer" type="submit" value="{{ _('Save changes') }}">
+    <div class="pt-4 pb-2 flex flex-wrap items-center justify-between gap-4 border-t border-slate-200">
+      <button class="inline-flex items-center gap-2.5 px-8 py-3.5 bg-royalblue hover:bg-blue-700 active:scale-95 text-white font-bold text-sm rounded-xl shadow-lg shadow-royalblue/25 hover:shadow-royalblue/35 transition-all cursor-pointer" type="submit">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+        <span>{{ _('Save all changes') }}</span>
+      </button>
+      <a href="{{ url_for('proofing.project.summary', slug=project.slug) }}" class="text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">
+        {{ _('Cancel & Back to Summary') }}
+      </a>
     </div>
   </form>
 
@@ -229,8 +254,32 @@
 
 <script>
 function conditionTagsManager(initialTags) {
+  let parsed = [];
+  if (typeof initialTags === 'string') {
+    try {
+      parsed = JSON.parse(initialTags);
+    } catch(e) {
+      parsed = [];
+    }
+  } else if (Array.isArray(initialTags)) {
+    parsed = initialTags;
+  }
+
+  const normalizedTags = (parsed || []).map(function(item) {
+    if (typeof item === 'string') {
+      return { name: item, pages: '' };
+    }
+    if (item && typeof item === 'object') {
+      return {
+        name: item.name || item.tag || item.title || item.label || '',
+        pages: item.pages || ''
+      };
+    }
+    return null;
+  }).filter(function(item) { return item && item.name; });
+
   return {
-    tags: Array.isArray(initialTags) ? initialTags : [],
+    tags: normalizedTags,
     newTagName: '',
     presets: [
       'Shmushing',
@@ -246,14 +295,18 @@ function conditionTagsManager(initialTags) {
     ],
     addTag(name) {
       if (!name) return;
-      const trimmed = name.trim();
-      const existing = this.tags.find(t => t.name.toLowerCase() === trimmed.toLowerCase());
+      var trimmed = (typeof name === 'string' ? name : '').trim();
+      if (!trimmed) return;
+      var existing = this.tags.find(function(t) {
+        var tName = (t && t.name) ? t.name : (typeof t === 'string' ? t : '');
+        return tName.toLowerCase() === trimmed.toLowerCase();
+      });
       if (!existing) {
         this.tags.push({ name: trimmed, pages: '' });
       }
     },
     addCustomTag() {
-      const trimmed = this.newTagName.trim();
+      var trimmed = this.newTagName.trim();
       if (trimmed) {
         this.addTag(trimmed);
         this.newTagName = '';

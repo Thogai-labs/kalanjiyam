@@ -148,19 +148,10 @@ class Project(Base):
 
     @property
     def condition_tag_list(self) -> list:
-        """Return condition tags as a list of dictionaries."""
-        if not self.condition_tags:
-            return []
-        if isinstance(self.condition_tags, list):
-            return self.condition_tags
-        import json
-        if isinstance(self.condition_tags, str):
-            try:
-                parsed = json.loads(self.condition_tags)
-                return parsed if isinstance(parsed, list) else []
-            except Exception:
-                return []
-        return []
+        """Return condition tags as a list of normalized dictionaries."""
+        from kalanjiyam.utils.project_utils import normalize_condition_tags
+        total = len(self.pages) if self.pages else 0
+        return normalize_condition_tags(self.condition_tags, total_pages=total)
 
     @property
     def creator_mode(self) -> str:
