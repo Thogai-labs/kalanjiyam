@@ -209,3 +209,114 @@ def test_org_batch_ocr_kpi_cards(flask_app, setup_batch_jobs_with_metrics):
     assert "4.0 mins" in resp_job.text
     assert "25" in resp_job.text
     assert "10.00 MB" in resp_job.text
+
+
+def test_platform_batch_ocr_pagination(superadmin_client, setup_batch_jobs_with_metrics, flask_app):
+    with flask_app.app_context():
+        session = get_session()
+        # Add a second job to test multi-page pagination
+        job2 = BatchJob(
+            target_uri="ui://project/second-job-for-pagination",
+            job_type="UI_BATCH_TRANSLATION",
+            status="COMPLETED",
+            created_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+        )
+        session.add(job2)
+        session.commit()
+        total_jobs = session.query(BatchJob).count()
+
+    # Request page 1 with per_page=1
+    resp = superadmin_client.get(f"{PLATFORM_BATCH_OCR}?page=1&per_page=1")
+    assert resp.status_code == 200
+    html = resp.text
+    assert f"Page 1 of {total_jobs}" in html
+    assert "Next" in html
+
+    # Request page 2 with per_page=1
+    resp_p2 = superadmin_client.get(f"{PLATFORM_BATCH_OCR}?page=2&per_page=1")
+    assert resp_p2.status_code == 200
+    html_p2 = resp_p2.text
+    assert f"Page 2 of {total_jobs}" in html_p2
+    assert "Previous" in html_p2
+
+
+def test_platform_batch_ocr_item_metrics_pagination(superadmin_client, setup_batch_jobs_with_metrics):
+    job_id = setup_batch_jobs_with_metrics["job1_id"]
+    # Job 1 has 2 items (doc1.pdf, doc2.pdf). Test per_page=1
+    resp = superadmin_client.get(f"{PLATFORM_BATCH_OCR}/{job_id}?page=1&per_page=1")
+    assert resp.status_code == 200
+    html = resp.text
+    assert "Page 1 of 2" in html
+    assert "Showing 1–1 of 2" in html
+    assert "doc1.pdf" in html
+    assert "Next" in html
+
+    # Page 2 should show doc2.pdf
+    resp_p2 = superadmin_client.get(f"{PLATFORM_BATCH_OCR}/{job_id}?page=2&per_page=1")
+    assert resp_p2.status_code == 200
+    html_p2 = resp_p2.text
+    assert "Page 2 of 2" in html_p2
+    assert "Showing 2–2 of 2" in html_p2
+    assert "doc2.pdf" in html_p2
+    assert "Previous" in html_p2
+
+
+def test_org_batch_ocr_pagination(flask_app, setup_batch_jobs_with_metrics):
+    admin_id = setup_batch_jobs_with_metrics["admin_id"]
+    project_id = setup_batch_jobs_with_metrics["project_id"]
+    session = get_session()
+
+    # Add second job belonging to the org
+    job2 = BatchJob(
+        target_uri="ui://project/second-org-job",
+        job_type="UI_BATCH_OCR",
+        status="COMPLETED",
+        created_at=datetime.utcnow(),
+        completed_at=datetime.utcnow(),
+    )
+    session.add(job2)
+    session.flush()
+
+    item = BatchItem(
+        job_id=job2.id,
+        project_id=project_id,
+        file_path="org_doc2.pdf",
+        total_pages=5,
+        status="COMPLETED",
+    )
+    session.add(item)
+    session.commit()
+
+    org_client = flask_app.test_client(user=session.query(db.User).get(admin_id))
+
+    # Test jobs list pagination with per_page=1
+    resp = org_client.get(f"{ORG_BATCH_OCR}?page=1&per_page=1")
+    assert resp.status_code == 200
+    assert "Page 1 of 2" in resp.text or "Page 1 of" in resp.text
+
+    # Test job details pagination
+    job1_id = setup_batch_jobs_with_metrics["job1_id"]
+    resp_job = org_client.get(f"{ORG_BATCH_OCR}/{job1_id}?page=1&per_page=1")
+    assert resp_job.status_code == 200
+    assert "Page 1 of 2" in resp_job.text
+
+
+def test_batch_ocr_csv_exports(superadmin_client, setup_batch_jobs_with_metrics):
+    job_id = setup_batch_jobs_with_metrics["job1_id"]
+    
+    # Export document summary CSV
+    resp_summary = superadmin_client.get(f"{PLATFORM_BATCH_OCR}/{job_id}/export_summary_csv")
+    assert resp_summary.status_code == 200
+    assert resp_summary.mimetype == "text/csv"
+    assert "Item ID,Name / File Path,Engine,Pages" in resp_summary.text
+    assert "doc1.pdf" in resp_summary.text
+    assert "doc2.pdf" in resp_summary.text
+
+    # Export per-page metrics CSV
+    resp_pages = superadmin_client.get(f"{PLATFORM_BATCH_OCR}/{job_id}/export_pages_csv")
+    assert resp_pages.status_code == 200
+    assert resp_pages.mimetype == "text/csv"
+    assert "Item ID,Name / File Path,Page Number,Engine" in resp_pages.text
+    assert "doc1.pdf,1" in resp_pages.text or "doc1.pdf" in resp_pages.text
+

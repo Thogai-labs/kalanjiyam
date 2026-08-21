@@ -106,7 +106,12 @@
   </div>
 
   <div class="flex items-center justify-between">
-    <h2 class="text-base font-bold text-slate-900">{{ _('Jobs List') }} ({{ jobs_list | length }})</h2>
+    <h2 class="text-base font-bold text-slate-900">{{ _('Jobs List') }} ({{ total if total is not none else jobs_list | length }})</h2>
+    {% if total and total > 0 and num_pages and num_pages > 1 %}
+    <span class="text-xs text-slate-500 font-medium">
+      Showing {{ ((page - 1) * per_page) + 1 }}–{{ [page * per_page, total]|min }} of {{ total }}
+    </span>
+    {% endif %}
   </div>
 
   {% if jobs_list %}
@@ -170,6 +175,34 @@
       </tbody>
     </table>
   </div>
+
+  {% if num_pages and num_pages > 1 %}
+  <div class="flex items-center justify-between text-xs text-slate-500 pt-4 border-t border-slate-100">
+    <span class="font-medium">
+      Page {{ page }} of {{ num_pages }} ({{ total }} {{ _('jobs') }})
+    </span>
+    <div class="flex items-center gap-2">
+      {% if page > 1 %}
+      <a href="{{ url_for(view_endpoint, page=page - 1, category=current_category, task_type=current_task_type, q=search_query) }}"
+         class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+        </svg>
+        <span>{{ _('Previous') }}</span>
+      </a>
+      {% endif %}
+      {% if page < num_pages %}
+      <a href="{{ url_for(view_endpoint, page=page + 1, category=current_category, task_type=current_task_type, q=search_query) }}"
+         class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 transition-colors">
+        <span>{{ _('Next') }}</span>
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        </svg>
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
   {% else %}
   <div class="py-12 text-center text-slate-400">
     <svg class="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -243,7 +276,12 @@
   <!-- Metrics Table Card -->
   <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
     <div class="flex items-center justify-between mb-4">
-      <h3 class="text-base font-bold text-slate-900">{{ _('Document & File Metrics') }} ({{ item_metrics | length }})</h3>
+      <h3 class="text-base font-bold text-slate-900">{{ _('Document & File Metrics') }} ({{ total if total is not none else item_metrics | length }})</h3>
+      {% if total and total > 0 and num_pages and num_pages > 1 %}
+      <span class="text-xs text-slate-500 font-medium">
+        Showing {{ ((page - 1) * per_page) + 1 }}–{{ [page * per_page, total]|min }} of {{ total }}
+      </span>
+      {% endif %}
     </div>
 
     <div class="overflow-x-auto rounded-xl border border-slate-100">
@@ -540,7 +578,7 @@
           {% endif %}
           {% else %}
           <tr>
-            <td colspan="12" class="px-4 py-8 text-center text-slate-400">
+            <td colspan="19" class="px-4 py-8 text-center text-slate-400">
               {{ _('No items in this batch job.') }}
             </td>
           </tr>
@@ -548,6 +586,34 @@
         </tbody>
       </table>
     </div>
+
+    {% if num_pages and num_pages > 1 %}
+    <div class="flex items-center justify-between text-xs text-slate-500 pt-4 border-t border-slate-100 mt-4">
+      <span class="font-medium">
+        Page {{ page }} of {{ num_pages }} ({{ total }} {{ _('files') }})
+      </span>
+      <div class="flex items-center gap-2">
+        {% if page > 1 %}
+        <a href="{{ url_for(view_endpoint, job_id=selected_job.id, page=page - 1) }}"
+           class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+          </svg>
+          <span>{{ _('Previous') }}</span>
+        </a>
+        {% endif %}
+        {% if page < num_pages %}
+        <a href="{{ url_for(view_endpoint, job_id=selected_job.id, page=page + 1) }}"
+           class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 transition-colors">
+          <span>{{ _('Next') }}</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+          </svg>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endif %}

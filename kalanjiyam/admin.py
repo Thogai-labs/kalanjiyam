@@ -870,17 +870,25 @@ class KalanjiyamIndexView(AdminIndexView):
 def _sync_job_and_item_metrics(session, job):
     """Auto-heal metrics: sync item/page statuses and re-aggregate totals
     for jobs whose pages have finished processing but weren't marked COMPLETED."""
-    if not job:
+    if not job or job.status == 'COMPLETED':
         return
     from kalanjiyam.models.batch import BatchItem, BatchOcrPage
     items = session.query(BatchItem).filter_by(job_id=job.id).all()
-    all_completed = True if items else False
+    if not items:
+        return
+    all_completed = True
+    item_ids = [item.id for item in items]
+    all_pages = (
+        session.query(BatchOcrPage)
+        .filter(BatchOcrPage.batch_item_id.in_(item_ids))
+        .all()
+    ) if item_ids else []
+    pages_by_item = {item.id: [] for item in items}
+    for p in all_pages:
+        pages_by_item[p.batch_item_id].append(p)
+
     for item in items:
-        page_records = (
-            session.query(BatchOcrPage)
-            .filter_by(batch_item_id=item.id)
-            .all()
-        )
+        page_records = pages_by_item.get(item.id, [])
         
         # Retroactively backfill source_size_bytes from Project metadata or Storage
         if item.source_size_bytes is None or item.source_size_bytes == 0:
@@ -1119,6 +1127,12 @@ class PlatformView(AdminBaseView):
             category = request.args.get('category', 'all')  # all, proofer, ui_batch, cli_batch
             task_type = request.args.get('task_type', 'all')  # all, ocr, translation
             search_query = request.args.get('q', '').strip()
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 20, type=int)
+            if page < 1:
+                page = 1
+            if per_page < 1 or per_page > 100:
+                per_page = 20
 
             query = session.query(BatchJob)
 
@@ -1146,27 +1160,84 @@ class PlatformView(AdminBaseView):
                     BatchJob.job_type.ilike(f"%{search_query}%")
                 ))
 
-            jobs_query = query.order_by(BatchJob.id.desc()).all()
+            # Database-level summary aggregation
+            summary_query = (
+                session.query(
+                    func.coalesce(func.sum(BatchItem.total_ocr_latency_ms), 0.0),
+                    func.coalesce(func.sum(BatchItem.extraction_latency_ms), 0.0),
+                    func.coalesce(func.sum(BatchItem.total_pages), 0),
+                    func.coalesce(func.sum(BatchItem.source_size_bytes), 0),
+                )
+                .join(BatchJob, BatchItem.job_id == BatchJob.id)
+            )
+
+            if category == 'proofer':
+                summary_query = summary_query.filter(BatchJob.job_type.in_(['SINGLE_PAGE_PROOFING_OCR', 'SINGLE_PAGE_PROOFING_TRANSLATION']))
+            elif category == 'ui_batch':
+                summary_query = summary_query.filter(BatchJob.job_type.in_(['UI_BATCH_OCR', 'UI_BATCH_TRANSLATION']))
+            elif category == 'cli_batch':
+                summary_query = summary_query.filter(BatchJob.job_type.in_(['BATCH_OCR', 'BATCH_OCR_JSONL', 'JSONL_IMPORT']))
+
+            if task_type == 'ocr':
+                summary_query = summary_query.filter(or_(
+                    BatchJob.job_type.like('%OCR%'),
+                    BatchJob.job_type == 'JSONL_IMPORT'
+                ))
+            elif task_type == 'translation':
+                summary_query = summary_query.filter(BatchJob.job_type.like('%TRANSLATION%'))
+
+            if search_query:
+                summary_query = summary_query.filter(or_(
+                    BatchJob.target_uri.ilike(f"%{search_query}%"),
+                    BatchJob.job_type.ilike(f"%{search_query}%")
+                ))
+
+            tot_ocr_ms, tot_extract_ms, tot_pages, tot_source_bytes = (
+                summary_query.first() or (0.0, 0.0, 0, 0)
+            )
+
+            summary = _batch_ocr_summary_dict(
+                total_ocr_ms=float(tot_ocr_ms),
+                total_pages=int(tot_pages),
+                total_source_size_bytes=int(tot_source_bytes),
+                total_extraction_ms=float(tot_extract_ms),
+            )
+
+            # Paginated Jobs list
+            total_jobs = query.count()
+            num_pages = max(1, (total_jobs + per_page - 1) // per_page)
+            if page > num_pages:
+                page = num_pages
+
+            jobs_on_page = (
+                query.order_by(BatchJob.id.desc())
+                .offset((page - 1) * per_page)
+                .limit(per_page)
+                .all()
+            )
+
+            for j in jobs_on_page:
+                if j.status != 'COMPLETED':
+                    _sync_job_and_item_metrics(session, j)
+
+            job_ids = [j.id for j in jobs_on_page]
+            stats_map = {}
+            if job_ids:
+                job_item_stats = (
+                    session.query(
+                        BatchItem.job_id,
+                        func.count(BatchItem.id).label("item_count"),
+                        func.coalesce(func.sum(BatchItem.total_pages), 0).label("total_pages"),
+                    )
+                    .filter(BatchItem.job_id.in_(job_ids))
+                    .group_by(BatchItem.job_id)
+                    .all()
+                )
+                stats_map = {row.job_id: (row.item_count, row.total_pages) for row in job_item_stats}
+
             jobs_list = []
-            total_ocr_ms_sum = 0.0
-            total_extraction_ms_sum = 0.0
-            total_pages_sum_all = 0
-            total_source_size_sum = 0
-
-            for j in jobs_query:
-                _sync_job_and_item_metrics(session, j)
-                items = session.query(BatchItem).filter_by(job_id=j.id).all()
-                item_count = len(items)
-                job_pages = sum(item.total_pages or 0 for item in items)
-                job_ocr_ms = sum(item.total_ocr_latency_ms or 0.0 for item in items)
-                job_extraction_ms = sum(item.extraction_latency_ms or 0.0 for item in items)
-                job_source_size = sum(item.source_size_bytes or 0 for item in items)
-
-                total_ocr_ms_sum += job_ocr_ms
-                total_extraction_ms_sum += job_extraction_ms
-                total_pages_sum_all += job_pages
-                total_source_size_sum += job_source_size
-
+            for j in jobs_on_page:
+                item_count, job_pages = stats_map.get(j.id, (0, 0))
                 jobs_list.append({
                     "id": j.id,
                     "target_uri": j.target_uri,
@@ -1178,13 +1249,6 @@ class PlatformView(AdminBaseView):
                     "total_pages": job_pages,
                 })
 
-            summary = _batch_ocr_summary_dict(
-                total_ocr_ms=total_ocr_ms_sum,
-                total_pages=total_pages_sum_all,
-                total_source_size_bytes=total_source_size_sum,
-                total_extraction_ms=total_extraction_ms_sum,
-            )
-
             return render_template(
                 "admin/cli_batch_ocr.html",
                 is_job_list=True,
@@ -1193,6 +1257,10 @@ class PlatformView(AdminBaseView):
                 current_category=category,
                 current_task_type=task_type,
                 search_query=search_query,
+                page=page,
+                per_page=per_page,
+                total=total_jobs,
+                num_pages=num_pages,
             )
 
         # Page 2: Dedicated Job Details & Metrics View
@@ -1200,37 +1268,73 @@ class PlatformView(AdminBaseView):
         if not selected_job:
             abort(404)
 
-        _sync_job_and_item_metrics(session, selected_job)
+        if selected_job.status != 'COMPLETED':
+            _sync_job_and_item_metrics(session, selected_job)
+
+        job_summary_row = (
+            session.query(
+                func.coalesce(func.sum(BatchItem.total_ocr_latency_ms), 0.0),
+                func.coalesce(func.sum(BatchItem.extraction_latency_ms), 0.0),
+                func.coalesce(func.sum(BatchItem.total_pages), 0),
+                func.coalesce(func.sum(BatchItem.source_size_bytes), 0),
+            )
+            .filter(BatchItem.job_id == selected_job.id)
+            .first()
+        )
+        job_total_ocr_ms, job_total_extraction_ms, job_total_pages, job_total_source_size = (
+            job_summary_row or (0.0, 0.0, 0, 0)
+        )
+
+        summary = _batch_ocr_summary_dict(
+            total_ocr_ms=float(job_total_ocr_ms),
+            total_pages=int(job_total_pages),
+            total_source_size_bytes=int(job_total_source_size),
+            total_extraction_ms=float(job_total_extraction_ms),
+        )
+
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 25, type=int)
+        if page < 1:
+            page = 1
+        if per_page < 1 or per_page > 100:
+            per_page = 25
+
+        items_query = session.query(BatchItem).filter(BatchItem.job_id == selected_job.id)
+        total_items = items_query.count()
+        num_pages = max(1, (total_items + per_page - 1) // per_page)
+        if page > num_pages:
+            page = num_pages
+
+        items = (
+            items_query.order_by(BatchItem.id.asc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .all()
+        )
+
+        item_ids = [item.id for item in items]
+        pages_by_item = {item.id: [] for item in items}
+        if item_ids:
+            page_records = (
+                session.query(BatchOcrPage)
+                .filter(BatchOcrPage.batch_item_id.in_(item_ids))
+                .order_by(BatchOcrPage.batch_item_id.asc(), BatchOcrPage.page_number.asc())
+                .all()
+            )
+            for p_rec in page_records:
+                pages_by_item[p_rec.batch_item_id].append(p_rec)
 
         item_metrics = []
-        items = session.query(BatchItem).filter_by(job_id=selected_job.id).all()
-        job_total_ocr_ms = sum(item.total_ocr_latency_ms or 0.0 for item in items)
-        job_total_extraction_ms = sum(item.extraction_latency_ms or 0.0 for item in items)
-        job_total_source_size = sum(item.source_size_bytes or 0 for item in items)
-        job_total_pages = 0
-
         for item in items:
-            page_count_db = (
-                session.query(func.count(BatchOcrPage.id))
-                .filter_by(batch_item_id=item.id)
-                .scalar()
-            ) or 0
-            pages = item.total_pages or page_count_db
-            job_total_pages += pages
+            p_recs = pages_by_item.get(item.id, [])
+            pages = item.total_pages or len(p_recs)
             time_sec = (item.total_ocr_latency_ms / 1000.0) if item.total_ocr_latency_ms else None
             trans_time_sec = (item.total_translation_latency_ms / 1000.0) if item.total_translation_latency_ms else None
             avg_per_page_sec = (time_sec / pages) if (time_sec is not None and pages > 0) else None
             avg_trans_per_page_sec = (trans_time_sec / pages) if (trans_time_sec is not None and pages > 0) else None
 
-            # Fetch per-page metrics
-            page_records = (
-                session.query(BatchOcrPage)
-                .filter_by(batch_item_id=item.id)
-                .order_by(BatchOcrPage.page_number.asc())
-                .all()
-            )
             page_metrics_list = []
-            for p_rec in page_records:
+            for p_rec in p_recs:
                 p_time_sec = (p_rec.ocr_latency_ms / 1000.0) if p_rec.ocr_latency_ms else None
                 p_trans_time_sec = (p_rec.translation_latency_ms / 1000.0) if p_rec.translation_latency_ms else None
                 p_eng_lat_sec = (p_rec.engine_latency_ms / 1000.0) if p_rec.engine_latency_ms else None
@@ -1288,19 +1392,16 @@ class PlatformView(AdminBaseView):
                 "page_metrics": page_metrics_list,
             })
 
-        summary = _batch_ocr_summary_dict(
-            total_ocr_ms=job_total_ocr_ms,
-            total_pages=job_total_pages,
-            total_source_size_bytes=job_total_source_size,
-            total_extraction_ms=job_total_extraction_ms,
-        )
-
         return render_template(
             "admin/cli_batch_ocr.html",
             is_job_list=False,
             selected_job=selected_job,
             item_metrics=item_metrics,
             summary=summary,
+            page=page,
+            per_page=per_page,
+            total=total_items,
+            num_pages=num_pages,
         )
 
     @expose("/cli_batch_ocr/<int:job_id>/export_summary_csv")
@@ -1318,6 +1419,16 @@ class PlatformView(AdminBaseView):
             abort(404)
 
         items = session.query(BatchItem).filter_by(job_id=job.id).all()
+        item_ids = [i.id for i in items]
+        page_counts_map = {}
+        if item_ids:
+            page_counts = (
+                session.query(BatchOcrPage.batch_item_id, func.count(BatchOcrPage.id))
+                .filter(BatchOcrPage.batch_item_id.in_(item_ids))
+                .group_by(BatchOcrPage.batch_item_id)
+                .all()
+            )
+            page_counts_map = {b_id: count for b_id, count in page_counts}
 
         output = io.StringIO()
         writer = csv.writer(output)
@@ -1352,12 +1463,7 @@ class PlatformView(AdminBaseView):
         ])
 
         for item in items:
-            page_count_db = (
-                session.query(func.count(BatchOcrPage.id))
-                .filter_by(batch_item_id=item.id)
-                .scalar()
-            ) or 0
-            pages = item.total_pages or page_count_db
+            pages = item.total_pages or page_counts_map.get(item.id, 0)
             time_sec = (item.total_ocr_latency_ms / 1000.0) if item.total_ocr_latency_ms else None
             eng_lat_sec = (item.total_engine_latency_ms / 1000.0) if item.total_engine_latency_ms else None
             avg_eng_lat_sec = (eng_lat_sec / pages) if (eng_lat_sec is not None and pages > 0) else None
@@ -2631,7 +2737,7 @@ class OrgAdminView(AdminBaseView):
         session = q.get_session()
         from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrPage
         from kalanjiyam.models.group import ProjectGroups
-        from sqlalchemy import func
+        from sqlalchemy import func, or_
 
         # Get all project IDs belonging to this organization
         org_project_ids = [
@@ -2651,6 +2757,10 @@ class OrgAdminView(AdminBaseView):
                 item_metrics=[],
                 is_org_admin=True,
                 org=org,
+                page=1,
+                per_page=20,
+                total=0,
+                num_pages=1,
             )
 
         # Get all batch jobs that contain items associated with this org's projects
@@ -2667,6 +2777,12 @@ class OrgAdminView(AdminBaseView):
             category = request.args.get('category', 'all')  # all, proofer, ui_batch, cli_batch
             task_type = request.args.get('task_type', 'all')  # all, ocr, translation
             search_query = request.args.get('q', '').strip()
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 20, type=int)
+            if page < 1:
+                page = 1
+            if per_page < 1 or per_page > 100:
+                per_page = 20
 
             query = session.query(BatchJob).filter(BatchJob.id.in_(valid_job_ids)) if valid_job_ids else session.query(BatchJob).filter(False)
 
@@ -2694,33 +2810,94 @@ class OrgAdminView(AdminBaseView):
                     BatchJob.job_type.ilike(f"%{search_query}%")
                 ))
 
-            jobs_query = query.order_by(BatchJob.id.desc()).all() if valid_job_ids else []
+            # Database-level summary aggregation for this Org
+            if valid_job_ids:
+                summary_query = (
+                    session.query(
+                        func.coalesce(func.sum(BatchItem.total_ocr_latency_ms), 0.0),
+                        func.coalesce(func.sum(BatchItem.extraction_latency_ms), 0.0),
+                        func.coalesce(func.sum(BatchItem.total_pages), 0),
+                        func.coalesce(func.sum(BatchItem.source_size_bytes), 0),
+                    )
+                    .join(BatchJob, BatchItem.job_id == BatchJob.id)
+                    .filter(
+                        BatchJob.id.in_(valid_job_ids),
+                        BatchItem.project_id.in_(org_project_ids),
+                    )
+                )
 
-            jobs_list = []
-            total_ocr_ms_sum = 0.0
-            total_extraction_ms_sum = 0.0
-            total_pages_sum_all = 0
-            total_source_size_sum = 0
+                if category == 'proofer':
+                    summary_query = summary_query.filter(BatchJob.job_type.in_(['SINGLE_PAGE_PROOFING_OCR', 'SINGLE_PAGE_PROOFING_TRANSLATION']))
+                elif category == 'ui_batch':
+                    summary_query = summary_query.filter(BatchJob.job_type.in_(['UI_BATCH_OCR', 'UI_BATCH_TRANSLATION']))
+                elif category == 'cli_batch':
+                    summary_query = summary_query.filter(BatchJob.job_type.in_(['BATCH_OCR', 'BATCH_OCR_JSONL', 'JSONL_IMPORT']))
 
-            for j in jobs_query:
-                _sync_job_and_item_metrics(session, j)
-                items = (
-                    session.query(BatchItem)
-                    .filter_by(job_id=j.id)
-                    .filter(BatchItem.project_id.in_(org_project_ids))
+                if task_type == 'ocr':
+                    summary_query = summary_query.filter(or_(
+                        BatchJob.job_type.like('%OCR%'),
+                        BatchJob.job_type == 'JSONL_IMPORT'
+                    ))
+                elif task_type == 'translation':
+                    summary_query = summary_query.filter(BatchJob.job_type.like('%TRANSLATION%'))
+
+                if search_query:
+                    summary_query = summary_query.filter(or_(
+                        BatchJob.target_uri.ilike(f"%{search_query}%"),
+                        BatchJob.job_type.ilike(f"%{search_query}%")
+                    ))
+
+                tot_ocr_ms, tot_extract_ms, tot_pages, tot_source_bytes = (
+                    summary_query.first() or (0.0, 0.0, 0, 0)
+                )
+            else:
+                tot_ocr_ms, tot_extract_ms, tot_pages, tot_source_bytes = (0.0, 0.0, 0, 0)
+
+            summary = _batch_ocr_summary_dict(
+                total_ocr_ms=float(tot_ocr_ms),
+                total_pages=int(tot_pages),
+                total_source_size_bytes=int(tot_source_bytes),
+                total_extraction_ms=float(tot_extract_ms),
+            )
+
+            # Paginated Jobs list
+            total_jobs = query.count() if valid_job_ids else 0
+            num_pages = max(1, (total_jobs + per_page - 1) // per_page)
+            if page > num_pages:
+                page = num_pages
+
+            jobs_on_page = (
+                query.order_by(BatchJob.id.desc())
+                .offset((page - 1) * per_page)
+                .limit(per_page)
+                .all()
+            ) if valid_job_ids else []
+
+            for j in jobs_on_page:
+                if j.status != 'COMPLETED':
+                    _sync_job_and_item_metrics(session, j)
+
+            job_ids = [j.id for j in jobs_on_page]
+            stats_map = {}
+            if job_ids:
+                job_item_stats = (
+                    session.query(
+                        BatchItem.job_id,
+                        func.count(BatchItem.id).label("item_count"),
+                        func.coalesce(func.sum(BatchItem.total_pages), 0).label("total_pages"),
+                    )
+                    .filter(
+                        BatchItem.job_id.in_(job_ids),
+                        BatchItem.project_id.in_(org_project_ids),
+                    )
+                    .group_by(BatchItem.job_id)
                     .all()
                 )
-                item_count = len(items)
-                job_pages = sum(item.total_pages or 0 for item in items)
-                job_ocr_ms = sum(item.total_ocr_latency_ms or 0.0 for item in items)
-                job_extraction_ms = sum(item.extraction_latency_ms or 0.0 for item in items)
-                job_source_size = sum(item.source_size_bytes or 0 for item in items)
+                stats_map = {row.job_id: (row.item_count, row.total_pages) for row in job_item_stats}
 
-                total_ocr_ms_sum += job_ocr_ms
-                total_extraction_ms_sum += job_extraction_ms
-                total_pages_sum_all += job_pages
-                total_source_size_sum += job_source_size
-
+            jobs_list = []
+            for j in jobs_on_page:
+                item_count, job_pages = stats_map.get(j.id, (0, 0))
                 jobs_list.append({
                     "id": j.id,
                     "target_uri": j.target_uri,
@@ -2732,13 +2909,6 @@ class OrgAdminView(AdminBaseView):
                     "total_pages": job_pages,
                 })
 
-            summary = _batch_ocr_summary_dict(
-                total_ocr_ms=total_ocr_ms_sum,
-                total_pages=total_pages_sum_all,
-                total_source_size_bytes=total_source_size_sum,
-                total_extraction_ms=total_extraction_ms_sum,
-            )
-
             return render_template(
                 "admin/cli_batch_ocr.html",
                 is_job_list=True,
@@ -2749,6 +2919,10 @@ class OrgAdminView(AdminBaseView):
                 search_query=search_query,
                 is_org_admin=True,
                 org=org,
+                page=page,
+                per_page=per_page,
+                total=total_jobs,
+                num_pages=num_pages,
             )
 
         # Page 2: Standalone Org Job Metrics Details View
@@ -2759,44 +2933,79 @@ class OrgAdminView(AdminBaseView):
         if not selected_job:
             abort(404)
 
-        _sync_job_and_item_metrics(session, selected_job)
+        if selected_job.status != 'COMPLETED':
+            _sync_job_and_item_metrics(session, selected_job)
 
-        items = (
-            session.query(BatchItem)
+        job_summary_row = (
+            session.query(
+                func.coalesce(func.sum(BatchItem.total_ocr_latency_ms), 0.0),
+                func.coalesce(func.sum(BatchItem.extraction_latency_ms), 0.0),
+                func.coalesce(func.sum(BatchItem.total_pages), 0),
+                func.coalesce(func.sum(BatchItem.source_size_bytes), 0),
+            )
             .filter(
                 BatchItem.job_id == selected_job.id,
                 BatchItem.project_id.in_(org_project_ids),
             )
+            .first()
+        )
+        job_total_ocr_ms, job_total_extraction_ms, job_total_pages, job_total_source_size = (
+            job_summary_row or (0.0, 0.0, 0, 0)
+        )
+
+        summary = _batch_ocr_summary_dict(
+            total_ocr_ms=float(job_total_ocr_ms),
+            total_pages=int(job_total_pages),
+            total_source_size_bytes=int(job_total_source_size),
+            total_extraction_ms=float(job_total_extraction_ms),
+        )
+
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 25, type=int)
+        if page < 1:
+            page = 1
+        if per_page < 1 or per_page > 100:
+            per_page = 25
+
+        items_query = session.query(BatchItem).filter(
+            BatchItem.job_id == selected_job.id,
+            BatchItem.project_id.in_(org_project_ids),
+        )
+        total_items = items_query.count()
+        num_pages = max(1, (total_items + per_page - 1) // per_page)
+        if page > num_pages:
+            page = num_pages
+
+        items = (
+            items_query.order_by(BatchItem.id.asc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
             .all()
         )
-        job_total_ocr_ms = sum(item.total_ocr_latency_ms or 0.0 for item in items)
-        job_total_extraction_ms = sum(item.extraction_latency_ms or 0.0 for item in items)
-        job_total_source_size = sum(item.source_size_bytes or 0 for item in items)
-        job_total_pages = 0
+
+        item_ids = [item.id for item in items]
+        pages_by_item = {item.id: [] for item in items}
+        if item_ids:
+            page_records = (
+                session.query(BatchOcrPage)
+                .filter(BatchOcrPage.batch_item_id.in_(item_ids))
+                .order_by(BatchOcrPage.batch_item_id.asc(), BatchOcrPage.page_number.asc())
+                .all()
+            )
+            for p_rec in page_records:
+                pages_by_item[p_rec.batch_item_id].append(p_rec)
 
         item_metrics = []
         for item in items:
-            page_count_db = (
-                session.query(func.count(BatchOcrPage.id))
-                .filter_by(batch_item_id=item.id)
-                .scalar()
-            ) or 0
-            pages = item.total_pages or page_count_db
-            job_total_pages += pages
+            p_recs = pages_by_item.get(item.id, [])
+            pages = item.total_pages or len(p_recs)
             time_sec = (item.total_ocr_latency_ms / 1000.0) if item.total_ocr_latency_ms else None
             trans_time_sec = (item.total_translation_latency_ms / 1000.0) if item.total_translation_latency_ms else None
             avg_per_page_sec = (time_sec / pages) if (time_sec is not None and pages > 0) else None
             avg_trans_per_page_sec = (trans_time_sec / pages) if (trans_time_sec is not None and pages > 0) else None
 
-            # Fetch per-page metrics
-            page_records = (
-                session.query(BatchOcrPage)
-                .filter_by(batch_item_id=item.id)
-                .order_by(BatchOcrPage.page_number.asc())
-                .all()
-            )
             page_metrics_list = []
-            for p_rec in page_records:
+            for p_rec in p_recs:
                 p_time_sec = (p_rec.ocr_latency_ms / 1000.0) if p_rec.ocr_latency_ms else None
                 p_trans_time_sec = (p_rec.translation_latency_ms / 1000.0) if p_rec.translation_latency_ms else None
                 p_eng_lat_sec = (p_rec.engine_latency_ms / 1000.0) if p_rec.engine_latency_ms else None
@@ -2854,13 +3063,6 @@ class OrgAdminView(AdminBaseView):
                 "page_metrics": page_metrics_list,
             })
 
-        summary = _batch_ocr_summary_dict(
-            total_ocr_ms=job_total_ocr_ms,
-            total_pages=job_total_pages,
-            total_source_size_bytes=job_total_source_size,
-            total_extraction_ms=job_total_extraction_ms,
-        )
-
         return render_template(
             "admin/cli_batch_ocr.html",
             is_job_list=False,
@@ -2869,6 +3071,10 @@ class OrgAdminView(AdminBaseView):
             summary=summary,
             is_org_admin=True,
             org=org,
+            page=page,
+            per_page=per_page,
+            total=total_items,
+            num_pages=num_pages,
         )
 
     @expose("/cli_batch_ocr/<int:job_id>/export_summary_csv")
@@ -2907,6 +3113,17 @@ class OrgAdminView(AdminBaseView):
         if not items:
             abort(403, description="No accessible items in this batch job.")
 
+        item_ids = [i.id for i in items]
+        page_counts_map = {}
+        if item_ids:
+            page_counts = (
+                session.query(BatchOcrPage.batch_item_id, func.count(BatchOcrPage.id))
+                .filter(BatchOcrPage.batch_item_id.in_(item_ids))
+                .group_by(BatchOcrPage.batch_item_id)
+                .all()
+            )
+            page_counts_map = {b_id: count for b_id, count in page_counts}
+
         output = io.StringIO()
         writer = csv.writer(output)
 
@@ -2940,12 +3157,7 @@ class OrgAdminView(AdminBaseView):
         ])
 
         for item in items:
-            page_count_db = (
-                session.query(func.count(BatchOcrPage.id))
-                .filter_by(batch_item_id=item.id)
-                .scalar()
-            ) or 0
-            pages = item.total_pages or page_count_db
+            pages = item.total_pages or page_counts_map.get(item.id, 0)
             time_sec = (item.total_ocr_latency_ms / 1000.0) if item.total_ocr_latency_ms else None
             eng_lat_sec = (item.total_engine_latency_ms / 1000.0) if item.total_engine_latency_ms else None
             avg_eng_lat_sec = (eng_lat_sec / pages) if (eng_lat_sec is not None and pages > 0) else None

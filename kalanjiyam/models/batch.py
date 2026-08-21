@@ -11,14 +11,14 @@ class BatchJob(Base):
 
     id = Column(Integer, primary_key=True)
     target_uri = Column(String(1024), nullable=False)
-    status = Column(String(64), nullable=False, default='PENDING') # PENDING, IN_PROGRESS, COMPLETED, FAILED
-    created_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String(64), nullable=False, default='PENDING', index=True) # PENDING, IN_PROGRESS, COMPLETED, FAILED
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
     # JSONL import metadata.  Nullable keeps the existing batch OCR workflow intact.
     jsonl_uri = Column(String(1024), nullable=True)
     pdf_uri = Column(String(1024), nullable=True)
-    job_type = Column(String(64), nullable=False, default='BATCH_OCR')
+    job_type = Column(String(64), nullable=False, default='BATCH_OCR', index=True)
     extract_metadata = Column(Boolean, nullable=False, default=False)
 
     items = relationship('BatchItem', back_populates='job', cascade='all, delete-orphan')
@@ -27,12 +27,12 @@ class BatchItem(Base):
     __tablename__ = 'batch_items'
 
     id = Column(Integer, primary_key=True)
-    job_id = Column(Integer, ForeignKey('batch_jobs.id'), nullable=False)
+    job_id = Column(Integer, ForeignKey('batch_jobs.id'), nullable=False, index=True)
     file_path = Column(String(1024), nullable=False)
     mime_type = Column(String(128), nullable=True)
-    project_id = Column(Integer, ForeignKey('proof_projects.id', ondelete='SET NULL'), nullable=True)
+    project_id = Column(Integer, ForeignKey('proof_projects.id', ondelete='SET NULL'), nullable=True, index=True)
     
-    status = Column(String(64), nullable=False, default='PENDING') # PENDING, DOWNLOADED, IMAGES_EXTRACTED, OCR_IN_PROGRESS, COMPLETED, FAILED
+    status = Column(String(64), nullable=False, default='PENDING', index=True) # PENDING, DOWNLOADED, IMAGES_EXTRACTED, OCR_IN_PROGRESS, COMPLETED, FAILED
     
     # Metrics
     source_size_bytes = Column(Integer, nullable=True)
@@ -54,7 +54,7 @@ class BatchItem(Base):
     total_chars = Column(Integer, nullable=True)
     total_engine_latency_ms = Column(Float, nullable=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
     # Stable identity and source location for JSONL/PDF imports.
@@ -99,7 +99,7 @@ class BatchOcrPage(Base):
     chunk_id = Column(Integer, ForeignKey('batch_ocr_chunks.id', ondelete='CASCADE'), nullable=True, index=True)
     batch_item_id = Column(Integer, ForeignKey('batch_items.id', ondelete='CASCADE'), nullable=False, index=True)
     page_number = Column(Integer, nullable=False)
-    status = Column(String(64), nullable=False, default='PENDING') # PENDING, IN_PROGRESS, COMPLETED, FAILED
+    status = Column(String(64), nullable=False, default='PENDING', index=True) # PENDING, IN_PROGRESS, COMPLETED, FAILED
     attempt_count = Column(Integer, nullable=False, default=0)
     # Per-page metrics
     ocr_latency_ms = Column(Float, nullable=True)

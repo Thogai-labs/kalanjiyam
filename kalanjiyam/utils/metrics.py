@@ -216,8 +216,12 @@ def get_latency_metrics_summary(days: int = 7) -> Dict[str, Any]:
     session = q.get_session()
     cutoff = datetime.utcnow() - timedelta(days=days)
 
-    metrics = (
-        session.query(db.SystemMetricLog)
+    metrics_rows = (
+        session.query(
+            db.SystemMetricLog.name,
+            db.SystemMetricLog.latency_ms,
+            db.SystemMetricLog.category,
+        )
         .filter(
             db.SystemMetricLog.category.in_(["latency", "ocr", "translation"]),
             db.SystemMetricLog.created_at >= cutoff,
@@ -226,7 +230,7 @@ def get_latency_metrics_summary(days: int = 7) -> Dict[str, Any]:
         .all()
     )
 
-    if not metrics:
+    if not metrics_rows:
         return {
             "avg_web_latency": 0,
             "avg_ocr_latency": 0,
@@ -236,9 +240,9 @@ def get_latency_metrics_summary(days: int = 7) -> Dict[str, Any]:
             "recent_latencies": [],
         }
 
-    web_latencies = [m.latency_ms for m in metrics if "web" in m.name or "route" in m.name or m.name.startswith("/")]
-    ocr_latencies = [m.latency_ms for m in metrics if "ocr" in m.name]
-    trans_latencies = [m.latency_ms for m in metrics if "translation" in m.name or "translate" in m.name]
+    web_latencies = [row.latency_ms for row in metrics_rows if "web" in row.name or "route" in row.name or row.name.startswith("/")]
+    ocr_latencies = [row.latency_ms for row in metrics_rows if "ocr" in row.name]
+    trans_latencies = [row.latency_ms for row in metrics_rows if "translation" in row.name or "translate" in row.name]
 
     def _avg(lst):
         return round(sum(lst) / len(lst), 2) if lst else 0
@@ -252,11 +256,11 @@ def get_latency_metrics_summary(days: int = 7) -> Dict[str, Any]:
 
     # Group by service/name
     services_dict = {}
-    for m in metrics:
-        s_name = m.name
+    for row in metrics_rows:
+        s_name = row.name
         if s_name not in services_dict:
             services_dict[s_name] = []
-        services_dict[s_name].append(m.latency_ms)
+        services_dict[s_name].append(row.latency_ms)
 
     by_service = []
     for s_name, lat_list in services_dict.items():
@@ -271,7 +275,18 @@ def get_latency_metrics_summary(days: int = 7) -> Dict[str, Any]:
 
     by_service.sort(key=lambda x: x["count"], reverse=True)
 
-    recent_latencies = [m.to_dict() for m in sorted(metrics, key=lambda x: x.created_at, reverse=True)[:30]]
+    recent_metric_objs = (
+        session.query(db.SystemMetricLog)
+        .filter(
+            db.SystemMetricLog.category.in_(["latency", "ocr", "translation"]),
+            db.SystemMetricLog.created_at >= cutoff,
+            db.SystemMetricLog.latency_ms.isnot(None),
+        )
+        .order_by(desc(db.SystemMetricLog.created_at))
+        .limit(30)
+        .all()
+    )
+    recent_latencies = [m.to_dict() for m in recent_metric_objs]
 
     return {
         "avg_web_latency": _avg(web_latencies),
