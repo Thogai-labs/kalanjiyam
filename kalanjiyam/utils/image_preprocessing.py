@@ -2,7 +2,7 @@
 
 Provides named enhancement profiles:
 - 'document_cleanup': Illumination normalization, background stain removal, and CLAHE
-- 'clahe': Contrast-Limited Adaptive Histogram Equalization
+- 'bg_clahe': Illumination normalization / background removal followed by CLAHE
 - 'sharpen': Controlled edge unsharp masking
 - 'text_enhancement': Faint text boost via tone curve and stroke enhancement
 """
@@ -51,14 +51,16 @@ DEFAULT_PREPROCESSING_CONFIG = PreprocessingConfig()
 
 SUPPORTED_ENHANCEMENT_PROFILES = (
     "document_cleanup",
-    "clahe",
+    "bg_clahe",
     "sharpen",
     "text_enhancement",
 )
 
 PROFILE_ALIASES = {
-    "background_clahe": "document_cleanup",
-    "clahe_1": "clahe",
+    "background_clahe": "bg_clahe",
+    "bg+clahe": "bg_clahe",
+    "clahe": "bg_clahe",
+    "clahe_1": "bg_clahe",
 }
 
 
@@ -174,16 +176,31 @@ def apply_document_cleanup(
     return cleaned
 
 
-def apply_clahe_pipeline(
+def apply_bg_clahe_pipeline(
     img: Image.Image,
     config: PreprocessingConfig = DEFAULT_PREPROCESSING_CONFIG,
 ) -> Image.Image:
-    """CLAHE pipeline: Adaptive local contrast enhancement."""
-    return apply_clahe(
-        img,
+    """BG + CLAHE pipeline: Illumination normalization / background removal followed by CLAHE."""
+    is_rgb = img.mode == "RGB"
+    gray = img.convert("L")
+
+    # Estimate background illumination surface with Gaussian blur
+    bg = gray.filter(ImageFilter.GaussianBlur(radius=config.cleanup_bg_blur_radius))
+
+    # Flatten illumination to normalize paper background level
+    inv_bg = ImageOps.invert(bg)
+    norm = ImageChops.add(gray, inv_bg, scale=1.0, offset=0)
+
+    # Apply adaptive histogram equalization (CLAHE)
+    enhanced = apply_clahe(
+        norm,
         grid_size=config.clahe_grid_size,
         clip_limit=config.clahe_clip_limit,
     )
+
+    if is_rgb:
+        return enhanced.convert("RGB")
+    return enhanced
 
 
 def apply_sharpen_pipeline(
@@ -244,7 +261,9 @@ PipelineFunc = Callable[[Image.Image, PreprocessingConfig], Image.Image]
 
 PREPROCESSING_REGISTRY: dict[str, PipelineFunc] = {
     "document_cleanup": apply_document_cleanup,
-    "clahe": apply_clahe_pipeline,
+    "bg_clahe": apply_bg_clahe_pipeline,
+    "background_clahe": apply_bg_clahe_pipeline,
+    "clahe": apply_bg_clahe_pipeline,
     "sharpen": apply_sharpen_pipeline,
     "text_enhancement": apply_text_enhancement_pipeline,
 }

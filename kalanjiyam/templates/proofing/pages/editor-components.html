@@ -408,11 +408,11 @@ these components in our help text and documentation.
             <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">{{ _('Remove stains & normalize background') }}</span>
           </button>
 
-          <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'clahe'"
+          <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'bg_clahe'"
                   class="p-1.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between"
-                  :class="selectedEnhancementProfile === 'clahe' ? 'border-violet-500 bg-violet-50/70 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
-            <div class="text-xs">{{ _('CLAHE') }}</div>
-            <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">{{ _('Adaptive local contrast') }}</span>
+                  :class="selectedEnhancementProfile === 'bg_clahe' || selectedEnhancementProfile === 'background_clahe' ? 'border-violet-500 bg-violet-50/70 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
+            <div class="text-xs">{{ _('BG + CLAHE') }}</div>
+            <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">{{ _('Flatten lighting & contrast') }}</span>
           </button>
 
           <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'sharpen'"

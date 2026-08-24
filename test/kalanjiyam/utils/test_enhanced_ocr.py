@@ -158,12 +158,12 @@ def test_enhanced_ocr_runs_with_dots(test_image, mock_ocr_response):
         resp = run_enhanced_ocr(
             test_image,
             engine_name="dots-ocr",
-            profile="clahe",
+            profile="bg_clahe",
             language="sa",
         )
         assert resp.ocr_mode == "enhanced"
         assert resp.engine == "dots_ocr"
-        assert resp.enhancement_profile == "clahe"
+        assert resp.enhancement_profile == "bg_clahe"
         assert resp.enhancement_version == "1.0"
         mock_remote.assert_called_once()
 
@@ -234,9 +234,9 @@ def test_custom_preprocessing_config(test_image):
             text_gamma=0.40,
         )
 
-        res_clahe_def = preprocess_image(img, "clahe", config=cfg_default)
-        res_clahe_custom = preprocess_image(img, "clahe", config=cfg_custom)
-        assert list(res_clahe_def.getdata()) != list(res_clahe_custom.getdata())
+        res_bg_clahe_def = preprocess_image(img, "bg_clahe", config=cfg_default)
+        res_bg_clahe_custom = preprocess_image(img, "bg_clahe", config=cfg_custom)
+        assert list(res_bg_clahe_def.getdata()) != list(res_bg_clahe_custom.getdata())
 
         res_sharp_def = preprocess_image(img, "sharpen", config=cfg_default)
         res_sharp_custom = preprocess_image(img, "sharpen", config=cfg_custom)
@@ -270,8 +270,11 @@ def test_invalid_enhancement_profile_is_rejected(test_image):
 # 10. Alias resolution works
 # ---------------------------------------------------------------------------
 def test_profile_alias_resolution():
-    assert validate_enhancement_profile("background_clahe") == "document_cleanup"
-    assert validate_enhancement_profile("clahe_1") == "clahe"
+    assert validate_enhancement_profile("background_clahe") == "bg_clahe"
+    assert validate_enhancement_profile("bg_clahe") == "bg_clahe"
+    assert validate_enhancement_profile("bg+clahe") == "bg_clahe"
+    assert validate_enhancement_profile("clahe") == "bg_clahe"
+    assert validate_enhancement_profile("clahe_1") == "bg_clahe"
     assert validate_enhancement_profile("DOCUMENT_CLEANUP") == "document_cleanup"
     assert validate_enhancement_profile("SHARPEN") == "sharpen"
     assert validate_enhancement_profile("text_enhancement") == "text_enhancement"
@@ -347,13 +350,13 @@ def test_json_gzip_compression_and_decompression(flask_app):
         mem_storage = MemoryStorage()
         with patch("kalanjiyam.utils.storage.get_storage", return_value=mem_storage):
 
-            key = page_enhanced_ocr_key("proj", "19", "dots-ocr", "clahe")
+            key = page_enhanced_ocr_key("proj", "19", "dots-ocr", "bg_clahe")
             data = {
                 "ocr_mode": "enhanced",
                 "engine": "dots-ocr",
                 "enhancement_version": "1.0",
-                "enhancement": {"profile": "clahe", "version": "1.0"},
-                "preprocessing": {"profile": "clahe", "version": "1.0"},
+                "enhancement": {"profile": "bg_clahe", "version": "1.0"},
+                "preprocessing": {"profile": "bg_clahe", "version": "1.0"},
                 "blocks": [{"id": "b1", "content": "compressed text"}],
             }
             mem_storage.save_json_gz(key, data)
@@ -396,14 +399,14 @@ def test_different_combinations_produce_distinguishable_results(flask_app):
         # Keys for combinations on page 19:
         key1 = page_enhanced_ocr_key("cool-book", "19", "dots-ocr", "document_cleanup")
         key2 = page_enhanced_ocr_key("cool-book", "19", "gemma-ocr", "document_cleanup")
-        key3 = page_enhanced_ocr_key("cool-book", "19", "dots-ocr", "clahe")
+        key3 = page_enhanced_ocr_key("cool-book", "19", "dots-ocr", "bg_clahe")
         key4 = page_enhanced_ocr_key("cool-book", "19", "dots-ocr", "text_enhancement")
 
         assert len({key1, key2, key3, key4}) == 4
 
         assert "dots-ocr/document_cleanup/19.json.gz" in key1
         assert "gemma-ocr/document_cleanup/19.json.gz" in key2
-        assert "dots-ocr/clahe/19.json.gz" in key3
+        assert "dots-ocr/bg_clahe/19.json.gz" in key3
         assert "dots-ocr/text_enhancement/19.json.gz" in key4
 
         # Revision tags for version tracks:
@@ -416,7 +419,7 @@ def test_different_combinations_produce_distinguishable_results(flask_app):
 
         rev1 = MockRevision("ocr:enhanced:dots_ocr:document_cleanup")
         rev2 = MockRevision("ocr:enhanced:gemma_ocr:document_cleanup")
-        rev3 = MockRevision("ocr:enhanced:dots_ocr:clahe")
+        rev3 = MockRevision("ocr:enhanced:dots_ocr:bg_clahe")
         rev4 = MockRevision("ocr:enhanced:dots_ocr:text_enhancement")
         rev_normal = MockRevision("ocr:dots_ocr")
 
@@ -428,7 +431,7 @@ def test_different_combinations_produce_distinguishable_results(flask_app):
 
         assert tag1 == "ocr-enhanced-dots-ocr_document-cleanup"
         assert tag2 == "ocr-enhanced-gemma-ocr_document-cleanup"
-        assert tag3 == "ocr-enhanced-dots-ocr_clahe"
+        assert tag3 == "ocr-enhanced-dots-ocr_bg-clahe"
         assert tag4 == "ocr-enhanced-dots-ocr_text-enhancement"
         assert tag_normal == "ocr-dots-ocr"
 
@@ -501,12 +504,12 @@ def test_enhanced_ocr_api_endpoint(flask_app, mock_ocr_response, tmp_path):
                 data_text_enh = resp_text_enh.get_json()
                 assert data_text_enh["enhancement"]["profile"] == "text_enhancement"
 
-                # Test alias route /api/ocr/enhanced/ with alias background_clahe -> document_cleanup
+                # Test alias route /api/ocr/enhanced/ with alias background_clahe -> bg_clahe
                 resp_alias = client.get(
                     f"/api/ocr/enhanced/{project.slug}/{page.slug}/?engine=dots_ocr&enhancement=background_clahe&language=sa"
                 )
                 assert resp_alias.status_code == 200
-                assert resp_alias.get_json()["enhancement"]["profile"] == "document_cleanup"
+                assert resp_alias.get_json()["enhancement"]["profile"] == "bg_clahe"
 
                 # Test invalid enhancement profile via API returns 400
                 bad_resp = client.get(
