@@ -328,6 +328,7 @@ class BharatGenTranslateEngine(TranslationEngine):
         import httpx
         from flask import current_app, has_app_context
 
+        import os
         api_url = self._api_url
         api_key = self._api_key
         timeout = 300.0
@@ -336,15 +337,41 @@ class BharatGenTranslateEngine(TranslationEngine):
             if not api_url:
                 api_url = current_app.config.get("BHARATGEN_TRANSLATION_API_URL")
             if not api_key:
-                api_key = current_app.config.get("BHARATGEN_TRANSLATION_API_KEY")
+                api_key = current_app.config.get(
+                    "BHARATGEN_TRANSLATION_API_KEY"
+                ) or current_app.config.get("BHARATGEN_API_KEY")
             timeout = float(
                 current_app.config.get("BHARATGEN_TRANSLATION_TIMEOUT", 300)
             )
 
         if not api_url:
-            api_url = "https://api.bharatgen.dev/v1/chat/completions"
+            api_url = (
+                os.environ.get("BHARATGEN_TRANSLATION_API_URL")
+                or "https://api.bharatgen.dev/v1/chat/completions"
+            )
+
         if not api_key:
-            api_key = ""
+            api_key = os.environ.get(
+                "BHARATGEN_TRANSLATION_API_KEY"
+            ) or os.environ.get("BHARATGEN_API_KEY")
+
+        if not api_key:
+            try:
+                from dotenv import load_dotenv
+                load_dotenv()
+                api_key = os.environ.get(
+                    "BHARATGEN_TRANSLATION_API_KEY"
+                ) or os.environ.get("BHARATGEN_API_KEY")
+            except Exception:
+                pass
+
+        if not api_key or not str(api_key).strip():
+            raise RuntimeError(
+                "BHARATGEN_TRANSLATION_API_KEY is not configured on the server. "
+                "Please add BHARATGEN_TRANSLATION_API_KEY to your .env file or server environment variables."
+            )
+
+        api_key = str(api_key).strip().strip("'").strip('"')
 
         language_map = {
             "en": "English",
@@ -394,13 +421,12 @@ class BharatGenTranslateEngine(TranslationEngine):
 
         headers = {
             "Content-Type": "application/json",
-        }
-        if api_key:
-            headers["Authorization"] = (
+            "Authorization": (
                 f"Bearer {api_key}"
                 if not api_key.startswith("Bearer ")
                 else api_key
-            )
+            ),
+        }
 
         try:
             with httpx.Client(timeout=timeout) as client:
