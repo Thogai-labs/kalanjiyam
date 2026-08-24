@@ -33,7 +33,7 @@ __all__ = [
 def run_enhanced_ocr(
     file_path: Path | str,
     engine_name: str,
-    profile: str = "background_clahe",
+    profile: str = "document_cleanup",
     language: str = "sa",
     gpu_config=None,
 ) -> OcrResponse:

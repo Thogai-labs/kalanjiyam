@@ -135,7 +135,7 @@ export default () => ({
   // OCR dropdown state
   ocrDropdownOpen: false,
   enhancedOcrDropdownOpen: false,
-  selectedEnhancementProfile: 'background_clahe',
+  selectedEnhancementProfile: 'document_cleanup',
   showOcrEngineInfo: false,
 
   // Confidence review state
@@ -1389,7 +1389,7 @@ export default () => ({
 
     const engineKey = window._ocrSelectedEngine || this.selectedEngine;
     const decodedEngine = this.decodeEngine(engineKey);
-    const profile = this.selectedEnhancementProfile || 'background_clahe';
+    const profile = this.selectedEnhancementProfile || 'document_cleanup';
     const combinedLanguage = this.getCombinedLanguage();
     const pathname = (window.location && window.location.pathname) || '';
     let url = pathname.replace('/proofing/', '/api/enhanced-ocr/') + `?engine=${decodedEngine}&enhancement=${profile}`;

@@ -399,35 +399,34 @@ these components in our help text and documentation.
       <div>
         <label class="block text-[11px] text-slate-500 mb-1 font-medium">{{ _('Enhancement Profile') }}</label>
         <div class="grid grid-cols-2 gap-1.5">
-          <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'background_clahe'"
+          <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'document_cleanup'"
                   class="p-1.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between"
-                  :class="selectedEnhancementProfile === 'background_clahe' ? 'border-violet-500 bg-violet-50/70 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
+                  :class="selectedEnhancementProfile === 'document_cleanup' ? 'border-violet-500 bg-violet-50/70 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
             <div class="flex items-center justify-between w-full">
-              <span class="text-xs">Bg + CLAHE</span>
-              <span class="text-[8px] bg-amber-100 text-amber-800 font-bold px-1 rounded">Best</span>
+              <span class="text-xs">{{ _('Document Cleanup') }}</span>
             </div>
-            <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">Remove tint & CLAHE</span>
+            <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">{{ _('Remove stains & normalize background') }}</span>
           </button>
 
-          <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'clahe_1'"
+          <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'clahe'"
                   class="p-1.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between"
-                  :class="selectedEnhancementProfile === 'clahe_1' ? 'border-violet-500 bg-violet-50/70 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
-            <div class="text-xs">CLAHE</div>
-            <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">Adaptive contrast</span>
+                  :class="selectedEnhancementProfile === 'clahe' ? 'border-violet-500 bg-violet-50/70 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
+            <div class="text-xs">{{ _('CLAHE') }}</div>
+            <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">{{ _('Adaptive local contrast') }}</span>
           </button>
 
           <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'sharpen'"
                   class="p-1.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between"
                   :class="selectedEnhancementProfile === 'sharpen' ? 'border-violet-500 bg-violet-50/70 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
-            <div class="text-xs">Sharpen</div>
-            <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">Glyph edges</span>
+            <div class="text-xs">{{ _('Sharpen') }}</div>
+            <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">{{ _('Enhance glyph edges') }}</span>
           </button>
 
-          <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'normal'"
+          <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'text_enhancement'"
                   class="p-1.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between"
-                  :class="selectedEnhancementProfile === 'normal' ? 'border-violet-500 bg-violet-50 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
-            <div class="text-xs">Normal</div>
-            <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">Original scan</span>
+                  :class="selectedEnhancementProfile === 'text_enhancement' ? 'border-violet-500 bg-violet-50/70 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
+            <div class="text-xs">{{ _('Text Enhancement') }}</div>
+            <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">{{ _('Improve faint text') }}</span>
           </button>
         </div>
       </div>

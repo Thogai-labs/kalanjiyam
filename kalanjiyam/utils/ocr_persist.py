@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +19,7 @@ def _stamp_provenance(doc: PageDocument, engine: str, model: dict | None) -> Non
     """
     source: dict[str, Any] = {
         "engine": engine,
-        "ocr_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "ocr_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
     if model and model.get("name"):
         version = model.get("version")
@@ -152,9 +152,17 @@ def ocr_response_to_api_dict(
         result["model"] = ocr.model
     if getattr(ocr, "ocr_mode", "standard") == "enhanced":
         result["ocr_mode"] = "enhanced"
-        result["enhancement_version"] = getattr(ocr, "enhancement_version", "1.0") or "1.0"
+        version_str = getattr(ocr, "enhancement_version", "1.0") or "1.0"
+        result["enhancement_version"] = version_str
         if getattr(ocr, "enhancement_profile", None):
-            result["preprocessing"] = {"profile": ocr.enhancement_profile}
+            result["enhancement"] = {
+                "profile": ocr.enhancement_profile,
+                "version": version_str,
+            }
+            result["preprocessing"] = {
+                "profile": ocr.enhancement_profile,
+                "version": version_str,
+            }
         if getattr(ocr, "preprocessing_latency_ms", None) is not None:
             result["preprocessing_latency_ms"] = ocr.preprocessing_latency_ms
     return result

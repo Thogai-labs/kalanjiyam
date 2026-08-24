@@ -1385,7 +1385,7 @@ def enhanced_ocr(project_slug, page_slug):
             )
 
     engine = request.values.get('engine', 'dots_ocr')
-    profile = request.values.get('enhancement') or request.values.get('profile', 'background_clahe')
+    profile = request.values.get('enhancement') or request.values.get('profile', 'document_cleanup')
     language = request.values.get('language', 'sa')
 
     from kalanjiyam.utils.enhanced_ocr import run_enhanced_ocr

@@ -319,7 +319,7 @@ def _run_enhanced_ocr_for_page_inner(
     project_slug: str,
     page_slug: str,
     engine: str = "dots_ocr",
-    profile: str = "background_clahe",
+    profile: str = "document_cleanup",
     language: str = "auto",
 ):
     """Run Enhanced OCR in application context."""
@@ -424,7 +424,7 @@ def run_enhanced_ocr_for_page(
     project_slug: str,
     page_slug: str,
     engine: str = "dots_ocr",
-    profile: str = "background_clahe",
+    profile: str = "document_cleanup",
     language: str = "auto",
 ):
     _run_enhanced_ocr_for_page_inner(
@@ -441,7 +441,7 @@ def run_enhanced_ocr_for_project(
     app_env: str,
     project: db.Project,
     engine: str = "dots_ocr",
-    profile: str = "background_clahe",
+    profile: str = "document_cleanup",
     language: str = "auto",
     queue: str | None = None,
 ) -> GroupResult | None:

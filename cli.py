@@ -1567,7 +1567,7 @@ def metadata_runs(slug, limit):
 @click.option("--project", "project_slug", required=True, help="Project slug")
 @click.option("--page", "page_slug", required=True, help="Page slug (e.g. '1', '19')")
 @click.option("--engine", "ocr_engine", default="dots_ocr", help="OCR engine (e.g. 'dots-ocr', 'gemma-ocr')")
-@click.option("--enhancement", "--profile", "enhancement", default="background_clahe", help="Enhancement profile ('clahe_1', 'background_clahe', 'sharpen', 'normal')")
+@click.option("--enhancement", "--profile", "enhancement", default="document_cleanup", help="Enhancement profile ('document_cleanup', 'clahe', 'sharpen', 'text_enhancement')")
 @click.option("--lang", "lang", default="sa", help="Language code (default: 'sa')")
 @click.option("--env", "app_env", default=None, help="Kalanjiyam environment")
 def enhanced_ocr_cmd(project_slug, page_slug, ocr_engine, enhancement, lang, app_env):

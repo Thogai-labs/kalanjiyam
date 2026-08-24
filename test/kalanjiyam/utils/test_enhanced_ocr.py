@@ -4,15 +4,20 @@ Covers:
 1. Normal OCR remains unchanged.
 2. Enhanced OCR can run with Gemma.
 3. Enhanced OCR can run with Dots.
-4. Each supported preprocessing profile works (clahe_1, background_clahe, sharpen, normal).
-5. Invalid engine is rejected.
-6. Invalid enhancement profile is rejected.
-7. Enhanced result is marked as enhanced (ocr_mode='enhanced', enhancement_version='1.0').
-8. Engine and preprocessing metadata are stored.
-9. Enhanced result does not overwrite normal OCR.
-10. JSON is correctly gzip-compressed and can be read back.
-11. Page dimensions / coordinate space remain correct.
-12. Different engine + preprocessing combinations produce distinguishable versions/results.
+4. Each supported preprocessing profile works (document_cleanup, clahe, sharpen, text_enhancement).
+5. Output dimensions are preserved and source image is not modified in-place.
+6. Each profile produces a distinct preprocessed output.
+7. Preprocessing parameters and custom PreprocessingConfig work.
+8. Invalid engine is rejected.
+9. Invalid enhancement profile (including "normal") is rejected cleanly.
+10. Alias resolution works (background_clahe -> document_cleanup, clahe_1 -> clahe).
+11. Enhanced result is marked as enhanced with both 'enhancement' and 'preprocessing' metadata.
+12. Enhanced result does not overwrite normal OCR.
+13. JSON is correctly gzip-compressed and can be read back.
+14. Page dimensions / coordinate space remain correct.
+15. Different engine + preprocessing combinations produce distinguishable versions/results.
+16. API Route for Enhanced OCR.
+17. Background Task for Enhanced OCR.
 """
 
 import gzip
@@ -21,10 +26,13 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from kalanjiyam.utils.document_storage import derive_revision_tag
 from kalanjiyam.utils.image_preprocessing import (
+    DEFAULT_PREPROCESSING_CONFIG,
+    SUPPORTED_ENHANCEMENT_PROFILES,
+    PreprocessingConfig,
     preprocess_image,
     preprocess_image_to_tempfile,
     validate_enhancement_profile,
@@ -37,9 +45,16 @@ from kalanjiyam.utils.storage import MemoryStorage, page_enhanced_ocr_key, page_
 
 @pytest.fixture
 def test_image(tmp_path) -> Path:
-    """Create a temporary test image with realistic dimensions and color."""
+    """Create a temporary test image with realistic scanned page content (text, background, stain)."""
     img_path = tmp_path / "test_page_19.jpg"
-    im = Image.new("RGB", (400, 600), color=(245, 240, 230))
+    im = Image.new("RGB", (400, 600), color=(235, 225, 205))  # Aged paper color
+    draw = ImageDraw.Draw(im)
+    # Add simulated lines of text / strokes
+    for y in range(50, 550, 30):
+        draw.line([(30, y), (370, y)], fill=(40, 35, 30), width=3)
+    # Add uneven illumination gradient / stain
+    for i in range(100):
+        draw.rectangle([i, i, 400 - i, 600 - i], outline=(220 - i // 2, 210 - i // 2, 190 - i // 2))
     im.save(img_path, format="JPEG")
     return img_path
 
@@ -87,6 +102,7 @@ def test_normal_ocr_remains_unchanged(test_image, mock_ocr_response):
         # Verify normal API dict output does not inject enhanced fields
         api_dict = ocr_response_to_api_dict(resp, "dots_ocr", image_width=400, image_height=600)
         assert "ocr_mode" not in api_dict
+        assert "enhancement" not in api_dict
         assert "preprocessing" not in api_dict
         assert api_dict["engine"] == "dots_ocr"
         assert api_dict["coordinate_space"] == "pixel"
@@ -120,16 +136,15 @@ def test_enhanced_ocr_runs_with_gemma(test_image, mock_ocr_response):
         resp = run_enhanced_ocr(
             test_image,
             engine_name="gemma-ocr",
-            profile="background_clahe",
+            profile="document_cleanup",
             language="sa",
         )
         assert resp.ocr_mode == "enhanced"
         assert resp.engine == "gemma_ocr"
-        assert resp.enhancement_profile == "background_clahe"
+        assert resp.enhancement_profile == "document_cleanup"
         assert resp.enhancement_version == "1.0"
         assert resp.preprocessing_latency_ms is not None
         mock_remote.assert_called_once()
-        # Verify the file sent to OCR was preprocessed, and engine normalized
         args, _ = mock_remote.call_args
         assert args[1] == "gemma_ocr"
         assert args[2] == "sa"
@@ -143,12 +158,12 @@ def test_enhanced_ocr_runs_with_dots(test_image, mock_ocr_response):
         resp = run_enhanced_ocr(
             test_image,
             engine_name="dots-ocr",
-            profile="clahe_1",
+            profile="clahe",
             language="sa",
         )
         assert resp.ocr_mode == "enhanced"
         assert resp.engine == "dots_ocr"
-        assert resp.enhancement_profile == "clahe_1"
+        assert resp.enhancement_profile == "clahe"
         assert resp.enhancement_version == "1.0"
         mock_remote.assert_called_once()
 
@@ -156,14 +171,17 @@ def test_enhanced_ocr_runs_with_dots(test_image, mock_ocr_response):
 # ---------------------------------------------------------------------------
 # 4. Each supported preprocessing profile works
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize("profile", ["clahe_1", "background_clahe", "sharpen", "normal"])
+@pytest.mark.parametrize("profile", SUPPORTED_ENHANCEMENT_PROFILES)
 def test_each_preprocessing_profile_works(test_image, profile):
     with Image.open(test_image) as img:
         orig_size = img.size
+        orig_pixels = list(img.getdata())
         processed = preprocess_image(img, profile)
         assert processed is not None
         assert processed.size == orig_size
         assert isinstance(processed, Image.Image)
+        # Verify source image was not mutated in-place
+        assert list(img.getdata()) == orig_pixels
 
     with preprocess_image_to_tempfile(test_image, profile) as tmp_file:
         assert tmp_file.exists()
@@ -172,51 +190,112 @@ def test_each_preprocessing_profile_works(test_image, profile):
 
 
 # ---------------------------------------------------------------------------
-# 5. Invalid engine is rejected
+# 5. Output dimensions are preserved and source image is not modified
+# ---------------------------------------------------------------------------
+def test_dimensions_and_source_immutability(test_image):
+    with Image.open(test_image) as original:
+        orig_data = list(original.getdata())
+
+        for profile in SUPPORTED_ENHANCEMENT_PROFILES:
+            result = preprocess_image(original, profile)
+            assert result.size == (400, 600)
+            # Original remains identical
+            assert list(original.getdata()) == orig_data
+
+
+# ---------------------------------------------------------------------------
+# 6. Each profile produces a distinct preprocessed output
+# ---------------------------------------------------------------------------
+def test_distinct_preprocessing_outputs(test_image):
+    with Image.open(test_image) as img:
+        outputs = {}
+        for profile in SUPPORTED_ENHANCEMENT_PROFILES:
+            proc = preprocess_image(img, profile)
+            # Store pixel sample hash
+            outputs[profile] = list(proc.convert("L").getdata())
+
+        # Verify all profiles produce mutually distinct pixel arrays
+        profiles = list(SUPPORTED_ENHANCEMENT_PROFILES)
+        for i in range(len(profiles)):
+            for j in range(i + 1, len(profiles)):
+                p1, p2 = profiles[i], profiles[j]
+                assert outputs[p1] != outputs[p2], f"Outputs of {p1} and {p2} should be distinct"
+
+
+# ---------------------------------------------------------------------------
+# 7. Preprocessing parameters and custom PreprocessingConfig work
+# ---------------------------------------------------------------------------
+def test_custom_preprocessing_config(test_image):
+    with Image.open(test_image) as img:
+        cfg_default = DEFAULT_PREPROCESSING_CONFIG
+        cfg_custom = PreprocessingConfig(
+            clahe_clip_limit=5.0,
+            sharpen_percent=250,
+            text_gamma=0.40,
+        )
+
+        res_clahe_def = preprocess_image(img, "clahe", config=cfg_default)
+        res_clahe_custom = preprocess_image(img, "clahe", config=cfg_custom)
+        assert list(res_clahe_def.getdata()) != list(res_clahe_custom.getdata())
+
+        res_sharp_def = preprocess_image(img, "sharpen", config=cfg_default)
+        res_sharp_custom = preprocess_image(img, "sharpen", config=cfg_custom)
+        assert list(res_sharp_def.getdata()) != list(res_sharp_custom.getdata())
+
+
+# ---------------------------------------------------------------------------
+# 8. Invalid engine is rejected
 # ---------------------------------------------------------------------------
 def test_invalid_engine_is_rejected(test_image):
     with pytest.raises(ValueError, match="Unsupported OCR engine"):
-        run_enhanced_ocr(test_image, engine_name="unsupported_engine_xyz", profile="background_clahe")
+        run_enhanced_ocr(test_image, engine_name="unsupported_engine_xyz", profile="document_cleanup")
 
 
 # ---------------------------------------------------------------------------
-# 6. Invalid enhancement profile is rejected
+# 9. Invalid enhancement profile (including 'normal') is rejected
 # ---------------------------------------------------------------------------
 def test_invalid_enhancement_profile_is_rejected(test_image):
     with pytest.raises(ValueError, match="Unsupported enhancement profile"):
         run_enhanced_ocr(test_image, engine_name="dots-ocr", profile="invalid_magic_profile")
+
+    # "normal" profile is intentionally removed and must be rejected
+    with pytest.raises(ValueError, match="Unsupported enhancement profile"):
+        validate_enhancement_profile("normal")
 
     with pytest.raises(ValueError, match="Unsupported enhancement profile"):
         validate_enhancement_profile("unknown_profile")
 
 
 # ---------------------------------------------------------------------------
-# 7. Enhanced result is marked as enhanced
+# 10. Alias resolution works
 # ---------------------------------------------------------------------------
-def test_enhanced_result_marked_as_enhanced(test_image, mock_ocr_response):
+def test_profile_alias_resolution():
+    assert validate_enhancement_profile("background_clahe") == "document_cleanup"
+    assert validate_enhancement_profile("clahe_1") == "clahe"
+    assert validate_enhancement_profile("DOCUMENT_CLEANUP") == "document_cleanup"
+    assert validate_enhancement_profile("SHARPEN") == "sharpen"
+    assert validate_enhancement_profile("text_enhancement") == "text_enhancement"
+
+
+# ---------------------------------------------------------------------------
+# 11. Enhanced result is marked as enhanced with enhancement & preprocessing metadata
+# ---------------------------------------------------------------------------
+def test_enhanced_result_metadata(test_image, mock_ocr_response):
     with patch("kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=mock_ocr_response):
-        resp = run_enhanced_ocr(test_image, engine_name="dots-ocr", profile="background_clahe")
+        resp = run_enhanced_ocr(test_image, engine_name="dots-ocr", profile="document_cleanup")
         api_dict = ocr_response_to_api_dict(resp, "dots_ocr", image_width=400, image_height=600)
         assert api_dict["ocr_mode"] == "enhanced"
         assert api_dict["enhancement_version"] == "1.0"
         assert api_dict["contract_version"] == "2.2"
-
-
-# ---------------------------------------------------------------------------
-# 8. Engine and preprocessing metadata are stored
-# ---------------------------------------------------------------------------
-def test_engine_and_preprocessing_metadata_stored(test_image, mock_ocr_response):
-    with patch("kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=mock_ocr_response):
-        resp = run_enhanced_ocr(test_image, engine_name="dots-ocr", profile="background_clahe")
-        api_dict = ocr_response_to_api_dict(resp, "dots_ocr", image_width=400, image_height=600)
         assert api_dict["engine"] == "dots_ocr"
-        assert api_dict["preprocessing"] == {"profile": "background_clahe"}
+        assert api_dict["enhancement"] == {"profile": "document_cleanup", "version": "1.0"}
+        assert api_dict["preprocessing"] == {"profile": "document_cleanup", "version": "1.0"}
         assert api_dict["model"] == {"name": "dots-ocr", "version": "1.0.0"}
         assert "preprocessing_latency_ms" in api_dict
 
 
 # ---------------------------------------------------------------------------
-# 9. Enhanced result does not overwrite normal OCR
+# 12. Enhanced result does not overwrite normal OCR
 # ---------------------------------------------------------------------------
 def test_enhanced_result_does_not_overwrite_normal_ocr(flask_app):
     with flask_app.app_context():
@@ -232,13 +311,14 @@ def test_enhanced_result_does_not_overwrite_normal_ocr(flask_app):
             mem_storage.save_json_gz(normal_key, normal_payload)
 
             # 2. Store enhanced OCR
-            enhanced_key = page_enhanced_ocr_key(project_slug, page_slug, "dots-ocr", "background_clahe")
+            enhanced_key = page_enhanced_ocr_key(project_slug, page_slug, "dots-ocr", "document_cleanup")
             enhanced_payload = {
                 "contract_version": "2.2",
                 "ocr_mode": "enhanced",
                 "enhancement_version": "1.0",
                 "engine": "dots-ocr",
-                "preprocessing": {"profile": "background_clahe"},
+                "enhancement": {"profile": "document_cleanup", "version": "1.0"},
+                "preprocessing": {"profile": "document_cleanup", "version": "1.0"},
                 "blocks": [],
             }
             mem_storage.save_json_gz(enhanced_key, enhanced_payload)
@@ -256,23 +336,24 @@ def test_enhanced_result_does_not_overwrite_normal_ocr(flask_app):
             # Assert loading enhanced OCR returns enhanced content
             loaded_enhanced = mem_storage.load_json_gz(enhanced_key)
             assert loaded_enhanced["ocr_mode"] == "enhanced"
-            assert loaded_enhanced["preprocessing"]["profile"] == "background_clahe"
+            assert loaded_enhanced["enhancement"]["profile"] == "document_cleanup"
 
 
 # ---------------------------------------------------------------------------
-# 10. JSON is correctly gzip-compressed and can be read back
+# 13. JSON is correctly gzip-compressed and can be read back
 # ---------------------------------------------------------------------------
 def test_json_gzip_compression_and_decompression(flask_app):
     with flask_app.app_context():
         mem_storage = MemoryStorage()
         with patch("kalanjiyam.utils.storage.get_storage", return_value=mem_storage):
 
-            key = page_enhanced_ocr_key("proj", "19", "dots-ocr", "clahe_1")
+            key = page_enhanced_ocr_key("proj", "19", "dots-ocr", "clahe")
             data = {
                 "ocr_mode": "enhanced",
                 "engine": "dots-ocr",
                 "enhancement_version": "1.0",
-                "preprocessing": {"profile": "clahe_1"},
+                "enhancement": {"profile": "clahe", "version": "1.0"},
+                "preprocessing": {"profile": "clahe", "version": "1.0"},
                 "blocks": [{"id": "b1", "content": "compressed text"}],
             }
             mem_storage.save_json_gz(key, data)
@@ -289,11 +370,11 @@ def test_json_gzip_compression_and_decompression(flask_app):
 
 
 # ---------------------------------------------------------------------------
-# 11. Page dimensions / coordinate space remain correct
+# 14. Page dimensions / coordinate space remain correct
 # ---------------------------------------------------------------------------
 def test_page_dimensions_and_coordinate_space(test_image, mock_ocr_response):
     with patch("kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=mock_ocr_response):
-        resp = run_enhanced_ocr(test_image, engine_name="dots-ocr", profile="background_clahe")
+        resp = run_enhanced_ocr(test_image, engine_name="dots-ocr", profile="text_enhancement")
         api_dict = ocr_response_to_api_dict(resp, "dots_ocr", image_width=400, image_height=600)
         assert api_dict["page_width"] == 400
         assert api_dict["page_height"] == 600
@@ -308,25 +389,22 @@ def test_page_dimensions_and_coordinate_space(test_image, mock_ocr_response):
 
 
 # ---------------------------------------------------------------------------
-# 12. Different engine + preprocessing combinations produce distinguishable versions/results
+# 15. Different engine + preprocessing combinations produce distinguishable versions/results
 # ---------------------------------------------------------------------------
 def test_different_combinations_produce_distinguishable_results(flask_app):
     with flask_app.app_context():
-        # Keys for 3 combinations on page 19:
-        # page 19 + dots + background_clahe
-        # page 19 + gemma + background_clahe
-        # page 19 + dots + clahe_1
-        key1 = page_enhanced_ocr_key("cool-book", "19", "dots-ocr", "background_clahe")
-        key2 = page_enhanced_ocr_key("cool-book", "19", "gemma-ocr", "background_clahe")
-        key3 = page_enhanced_ocr_key("cool-book", "19", "dots-ocr", "clahe_1")
+        # Keys for combinations on page 19:
+        key1 = page_enhanced_ocr_key("cool-book", "19", "dots-ocr", "document_cleanup")
+        key2 = page_enhanced_ocr_key("cool-book", "19", "gemma-ocr", "document_cleanup")
+        key3 = page_enhanced_ocr_key("cool-book", "19", "dots-ocr", "clahe")
+        key4 = page_enhanced_ocr_key("cool-book", "19", "dots-ocr", "text_enhancement")
 
-        assert key1 != key2
-        assert key1 != key3
-        assert key2 != key3
+        assert len({key1, key2, key3, key4}) == 4
 
-        assert "dots-ocr/background_clahe/19.json.gz" in key1
-        assert "gemma-ocr/background_clahe/19.json.gz" in key2
-        assert "dots-ocr/clahe_1/19.json.gz" in key3
+        assert "dots-ocr/document_cleanup/19.json.gz" in key1
+        assert "gemma-ocr/document_cleanup/19.json.gz" in key2
+        assert "dots-ocr/clahe/19.json.gz" in key3
+        assert "dots-ocr/text_enhancement/19.json.gz" in key4
 
         # Revision tags for version tracks:
         class MockRevision:
@@ -336,26 +414,29 @@ def test_different_combinations_produce_distinguishable_results(flask_app):
                 self.translations = []
                 self.author = None
 
-        rev1 = MockRevision("ocr:enhanced:dots_ocr:background_clahe")
-        rev2 = MockRevision("ocr:enhanced:gemma_ocr:background_clahe")
-        rev3 = MockRevision("ocr:enhanced:dots_ocr:clahe_1")
+        rev1 = MockRevision("ocr:enhanced:dots_ocr:document_cleanup")
+        rev2 = MockRevision("ocr:enhanced:gemma_ocr:document_cleanup")
+        rev3 = MockRevision("ocr:enhanced:dots_ocr:clahe")
+        rev4 = MockRevision("ocr:enhanced:dots_ocr:text_enhancement")
         rev_normal = MockRevision("ocr:dots_ocr")
 
         tag1 = derive_revision_tag(rev1)
         tag2 = derive_revision_tag(rev2)
         tag3 = derive_revision_tag(rev3)
+        tag4 = derive_revision_tag(rev4)
         tag_normal = derive_revision_tag(rev_normal)
 
-        assert tag1 == "ocr-enhanced-dots-ocr_background-clahe"
-        assert tag2 == "ocr-enhanced-gemma-ocr_background-clahe"
-        assert tag3 == "ocr-enhanced-dots-ocr_clahe-1"
+        assert tag1 == "ocr-enhanced-dots-ocr_document-cleanup"
+        assert tag2 == "ocr-enhanced-gemma-ocr_document-cleanup"
+        assert tag3 == "ocr-enhanced-dots-ocr_clahe"
+        assert tag4 == "ocr-enhanced-dots-ocr_text-enhancement"
         assert tag_normal == "ocr-dots-ocr"
 
-        assert len({tag1, tag2, tag3, tag_normal}) == 4
+        assert len({tag1, tag2, tag3, tag4, tag_normal}) == 5
 
 
 # ---------------------------------------------------------------------------
-# 13. API Route for Enhanced OCR
+# 16. API Route for Enhanced OCR
 # ---------------------------------------------------------------------------
 def test_enhanced_ocr_api_endpoint(flask_app, mock_ocr_response, tmp_path):
     import kalanjiyam.database as db
@@ -400,21 +481,32 @@ def test_enhanced_ocr_api_endpoint(flask_app, mock_ocr_response, tmp_path):
                     u.is_p1 = True
                     u.id = 1
 
+                # Test document_cleanup
                 resp = client.get(
-                    f"/api/enhanced-ocr/{project.slug}/{page.slug}/?engine=dots_ocr&enhancement=background_clahe&language=sa"
+                    f"/api/enhanced-ocr/{project.slug}/{page.slug}/?engine=dots_ocr&enhancement=document_cleanup&language=sa"
                 )
                 assert resp.status_code == 200
                 data = resp.get_json()
                 assert data["ocr_mode"] == "enhanced"
                 assert data["enhancement_version"] == "1.0"
-                assert data["preprocessing"]["profile"] == "background_clahe"
+                assert data["enhancement"]["profile"] == "document_cleanup"
+                assert data["preprocessing"]["profile"] == "document_cleanup"
                 assert data["engine"] == "dots_ocr"
 
-                # Test alias route /api/ocr/enhanced/
+                # Test text_enhancement
+                resp_text_enh = client.get(
+                    f"/api/enhanced-ocr/{project.slug}/{page.slug}/?engine=dots_ocr&enhancement=text_enhancement&language=sa"
+                )
+                assert resp_text_enh.status_code == 200
+                data_text_enh = resp_text_enh.get_json()
+                assert data_text_enh["enhancement"]["profile"] == "text_enhancement"
+
+                # Test alias route /api/ocr/enhanced/ with alias background_clahe -> document_cleanup
                 resp_alias = client.get(
                     f"/api/ocr/enhanced/{project.slug}/{page.slug}/?engine=dots_ocr&enhancement=background_clahe&language=sa"
                 )
                 assert resp_alias.status_code == 200
+                assert resp_alias.get_json()["enhancement"]["profile"] == "document_cleanup"
 
                 # Test invalid enhancement profile via API returns 400
                 bad_resp = client.get(
@@ -424,7 +516,7 @@ def test_enhanced_ocr_api_endpoint(flask_app, mock_ocr_response, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# 14. Background Task for Enhanced OCR
+# 17. Background Task for Enhanced OCR
 # ---------------------------------------------------------------------------
 def test_enhanced_ocr_background_task(flask_app, mock_ocr_response, tmp_path):
     import kalanjiyam.database as db
@@ -463,10 +555,11 @@ def test_enhanced_ocr_background_task(flask_app, mock_ocr_response, tmp_path):
                 project_slug=project.slug,
                 page_slug=page.slug,
                 engine="dots-ocr",
-                profile="background_clahe",
+                profile="document_cleanup",
                 language="sa",
             )
             assert result is not None
             assert result["ocr_mode"] == "enhanced"
-            assert result["preprocessing"]["profile"] == "background_clahe"
+            assert result["enhancement"]["profile"] == "document_cleanup"
+            assert result["preprocessing"]["profile"] == "document_cleanup"
             assert result["engine"] == "dots_ocr"
