@@ -1563,5 +1563,28 @@ def metadata_runs(slug, limit):
                 click.echo(f"      error: {run.error_message}")
 
 
+@cli.command("enhanced-ocr")
+@click.option("--project", "project_slug", required=True, help="Project slug")
+@click.option("--page", "page_slug", required=True, help="Page slug (e.g. '1', '19')")
+@click.option("--engine", "ocr_engine", default="dots_ocr", help="OCR engine (e.g. 'dots-ocr', 'gemma-ocr')")
+@click.option("--enhancement", "--profile", "enhancement", default="background_clahe", help="Enhancement profile ('clahe_1', 'background_clahe', 'sharpen', 'normal')")
+@click.option("--lang", "lang", default="sa", help="Language code (default: 'sa')")
+@click.option("--env", "app_env", default=None, help="Kalanjiyam environment")
+def enhanced_ocr_cmd(project_slug, page_slug, ocr_engine, enhancement, lang, app_env):
+    """Run Enhanced OCR on a single page with image preprocessing."""
+    from kalanjiyam.tasks.ocr import _run_enhanced_ocr_for_page_inner
+    env = app_env or os.environ.get("KALANJIYAM_ENVIRONMENT", "development")
+    click.echo(f"Running Enhanced OCR for {project_slug}/{page_slug} (engine={ocr_engine}, enhancement={enhancement}, lang={lang})...")
+    result = _run_enhanced_ocr_for_page_inner(
+        app_env=env,
+        project_slug=project_slug,
+        page_slug=page_slug,
+        engine=ocr_engine,
+        profile=enhancement,
+        language=lang,
+    )
+    click.echo(f"Enhanced OCR completed: {result.get('blocks_count', 0)} blocks, mode={result.get('ocr_mode')}, profile={enhancement}")
+
+
 if __name__ == "__main__":
     cli()

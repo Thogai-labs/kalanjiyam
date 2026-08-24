@@ -18,7 +18,26 @@ __all__ = [
     "SUPPORTED_ENGINES",
     "normalize_engine",
     "run_ocr",
+    "run_enhanced_ocr",
 ]
+
+
+def run_enhanced_ocr(
+    file_path: Path,
+    engine_name: str,
+    profile: str = "background_clahe",
+    language: str = "sa",
+    gpu_config=None,
+) -> OcrResponse:
+    from kalanjiyam.utils.enhanced_ocr import run_enhanced_ocr as _run_enhanced_ocr
+
+    return _run_enhanced_ocr(
+        file_path=file_path,
+        engine_name=engine_name,
+        profile=profile,
+        language=language,
+        gpu_config=gpu_config,
+    )
 
 
 def run_ocr(

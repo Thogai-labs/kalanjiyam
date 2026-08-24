@@ -1349,6 +1349,217 @@ def ocr(project_slug, page_slug):
         abort(500, description=_l("OCR failed: %(error)s", error=str(e)))
 
 
+@api.route("/enhanced-ocr/<project_slug>/<page_slug>/", methods=["GET", "POST"])
+@api.route("/ocr/enhanced/<project_slug>/<page_slug>/", methods=["GET", "POST"])
+@p2_required
+def enhanced_ocr(project_slug, page_slug):
+    """Apply Enhanced OCR with preprocessing profile to the given page."""
+    import time
+    start_time = time.time()
+    if current_user.is_authenticated and current_user.is_super_admin:
+        abort(403, description=_l("Superadmins are not allowed to access project data."))
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+    if not q.user_can_view_proofing_project(current_user, project_):
+        abort(403)
+
+    page_ = q.page(project_.id, page_slug)
+    if not page_:
+        abort(404)
+
+    # Enforce guest daily OCR limit
+    if not current_user.is_authenticated:
+        from kalanjiyam.utils.rate_limit import is_rate_limited
+        ip_address = request.remote_addr
+        fingerprint_id = request.cookies.get("device_fingerprint")
+        settings = q.get_system_settings()
+        limit = settings.unregistered_user_ocr_limit
+        if is_rate_limited("run_ocr", ip_address, fingerprint_id, limit=limit):
+            abort(
+                429,
+                description=_l(
+                    "Rate limit exceeded. Guests can only run OCR %(limit)s times per 24 hours.",
+                    limit=limit,
+                ),
+            )
+
+    engine = request.values.get('engine', 'dots_ocr')
+    profile = request.values.get('enhancement') or request.values.get('profile', 'background_clahe')
+    language = request.values.get('language', 'sa')
+
+    from kalanjiyam.utils.enhanced_ocr import run_enhanced_ocr
+    from kalanjiyam.utils.image_preprocessing import (
+        SUPPORTED_ENHANCEMENT_PROFILES,
+        validate_enhancement_profile,
+    )
+    from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES, normalize_engine
+
+    try:
+        profile = validate_enhancement_profile(profile)
+    except ValueError as val_err:
+        abort(400, description=str(val_err))
+
+    engine = normalize_engine(engine)
+    if engine not in SUPPORTED_ENGINES:
+        abort(400, description=_l("Unsupported OCR engine: %(engine)s", engine=engine))
+
+    image_path = get_page_image_filepath(project_slug, page_slug)
+    if not image_path.exists():
+        abort(404, description=_l("Page source image not found."))
+
+    try:
+        ensure_ocr_quota_for_project(project_)
+        ocr_response = run_enhanced_ocr(
+            image_path,
+            engine_name=engine,
+            profile=profile,
+            language=language,
+        )
+        consume_ocr_credit_for_project(project_)
+
+        # Extract visual elements if blocks are returned
+        if ocr_response.blocks and image_path:
+            from kalanjiyam.utils.ocr_cropper import crop_ocr_response_elements
+            try:
+                crop_ocr_response_elements(
+                    doc_path=str(image_path),
+                    ocr_response=ocr_response,
+                    project_slug=project_slug,
+                    output_dir=str(image_path.parent)
+                )
+            except Exception as e:
+                logging.exception(f"Failed to crop visual elements: {e}")
+
+        # Target PageVersion track for enhanced OCR
+        version_key = f"ocr:enhanced:{engine}:{profile}"
+        session = q.get_session()
+        pv = session.query(db.PageVersion).filter_by(
+            page_id=page_.id,
+            version_key=version_key
+        ).first()
+        current_ver = pv.version if pv else 0
+
+        # Build PageDocument from OCR response
+        from kalanjiyam.utils.ocr_persist import image_size, _stamp_provenance
+        from kalanjiyam.utils.page_document import normalize_geometry
+        from kalanjiyam.utils.ocr_types import OcrResponse as OcrResponseObj
+
+        image_w = image_h = None
+        if image_path:
+            size = image_size(image_path)
+            if size:
+                image_w, image_h = size
+
+        boxes, blocks_data, pw, ph = normalize_geometry(
+            ocr_response.bounding_boxes,
+            ocr_response.blocks,
+            ocr_width=ocr_response.page_width,
+            ocr_height=ocr_response.page_height,
+            image_width=image_w or page_.page_width,
+            image_height=image_h or page_.page_height,
+            coordinate_space=ocr_response.coordinate_space,
+        )
+
+        if pw:
+            page_.page_width = int(pw)
+        elif image_w:
+            page_.page_width = image_w
+        if ph:
+            page_.page_height = int(ph)
+        elif image_h:
+            page_.page_height = image_h
+
+        normalized = OcrResponseObj(
+            text_content=ocr_response.text_content,
+            bounding_boxes=boxes,
+            layout_html=ocr_response.layout_html,
+            blocks=blocks_data if blocks_data is not None else ocr_response.blocks,
+            content_format=ocr_response.content_format,
+            page_width=pw or ocr_response.page_width or image_w,
+            page_height=ph or ocr_response.page_height or image_h,
+            pipeline=ocr_response.pipeline,
+            source_type=ocr_response.source_type,
+            coordinate_space="pixel",
+            model=ocr_response.model,
+            contract_version=ocr_response.contract_version,
+            ocr_mode="enhanced",
+            enhancement_profile=profile,
+            enhancement_version=ocr_response.enhancement_version,
+            preprocessing_latency_ms=ocr_response.preprocessing_latency_ms,
+        )
+        doc = PageDocument.from_ocr_response(
+            normalized,
+            image_width=pw or image_w,
+            image_height=ph or image_h,
+        )
+        _stamp_provenance(doc, engine, ocr_response.model)
+
+        # Save a new revision to the ocr:enhanced:{engine}:{profile} version track
+        add_revision(
+            page_,
+            summary=f"Enhanced OCR run ({engine}, {profile})",
+            content=doc.to_plain_text(),
+            status=SitePageStatus.R0.value,
+            version=current_ver,
+            author_id=current_user.id if current_user.is_authenticated else None,
+            document=doc.to_dict(),
+            content_format="blocks",
+            version_key=version_key,
+        )
+
+        session.add(page_)
+        session.commit()
+
+        # Log usage action for guests
+        if not current_user.is_authenticated:
+            from kalanjiyam.utils.rate_limit import log_usage_action
+            log_usage_action(
+                action="run_ocr",
+                ip_address=request.remote_addr,
+                fingerprint_id=request.cookies.get("device_fingerprint"),
+                project_slug=project_slug
+            )
+
+        payload = ocr_response_to_api_dict(
+            ocr_response,
+            engine,
+            image_width=page_.page_width,
+            image_height=page_.page_height,
+        )
+
+        from kalanjiyam.utils.document_storage import save_page_enhanced_ocr
+        save_page_enhanced_ocr(page_, payload, engine, profile)
+
+        # Prepend APPLICATION_URL_PREFIX to image paths in the returned JSON blocks
+        prefix = current_app.config.get("APPLICATION_URL_PREFIX") or ""
+        if prefix and payload.get("blocks"):
+            for block in payload["blocks"]:
+                if "content" in block and block["content"]:
+                    block["content"] = block["content"].replace(f'{prefix}/static/uploads/', '/static/uploads/').replace('/static/uploads/', f'{prefix}/static/uploads/')
+
+        logging.info(
+            "Enhanced OCR completed successfully for %s/%s with profile=%s engine=%s, returning %s blocks",
+            project_slug,
+            page_slug,
+            profile,
+            engine,
+            len(payload.get("blocks") or []),
+        )
+        return jsonify(payload)
+    except Exception as e:
+        logging.error(
+            "Enhanced OCR failed for %s/%s with engine %s and profile %s: %s",
+            project_slug,
+            page_slug,
+            engine,
+            profile,
+            e,
+            exc_info=True,
+        )
+        abort(500, description=_l("Enhanced OCR failed: %(error)s", error=str(e)))
+
+
 def _is_matching_language(text: str, lang: str) -> bool:
     """Check if the text segment matches the selected source language."""
     import re

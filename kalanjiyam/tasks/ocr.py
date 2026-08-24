@@ -313,3 +313,177 @@ def run_ocr_for_project(
     else:
         return None
 
+
+def _run_enhanced_ocr_for_page_inner(
+    app_env: str,
+    project_slug: str,
+    page_slug: str,
+    engine: str = "dots_ocr",
+    profile: str = "background_clahe",
+    language: str = "auto",
+):
+    """Run Enhanced OCR in application context."""
+    import time
+    import json
+    from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrPage
+    from kalanjiyam.utils.storage import page_enhanced_ocr_key
+    from kalanjiyam.utils.document_storage import save_page_enhanced_ocr
+    from kalanjiyam.utils.ocr_persist import ocr_response_to_api_dict
+    from kalanjiyam.utils.enhanced_ocr import run_enhanced_ocr
+    from kalanjiyam.utils.image_preprocessing import validate_enhancement_profile
+    from kalanjiyam.utils.ocr_types import normalize_engine
+
+    page_start_time = time.time()
+    flask_app = create_config_only_app(app_env)
+    with flask_app.app_context():
+        bot_user = q.user(consts.BOT_USERNAME)
+        if bot_user is None:
+            raise ValueError(f'User "{consts.BOT_USERNAME}" is not defined.')
+
+        image_path = get_page_image_filepath(project_slug, page_slug)
+        engine = normalize_engine(engine)
+        profile = validate_enhancement_profile(profile)
+
+        ocr_response = run_enhanced_ocr(
+            image_path,
+            engine_name=engine,
+            profile=profile,
+            language=language,
+        )
+
+        # Extract visual elements if blocks are returned
+        if ocr_response.blocks:
+            from kalanjiyam.utils.ocr_cropper import crop_ocr_response_elements
+            try:
+                crop_ocr_response_elements(
+                    doc_path=str(image_path),
+                    ocr_response=ocr_response,
+                    project_slug=project_slug,
+                    output_dir=str(image_path.parent)
+                )
+            except Exception as e:
+                logging.exception(f"Failed to crop visual elements: {e}")
+
+        session = q.get_session()
+        project = q.project(project_slug)
+        if project is None:
+            raise ValueError(f'Project "{project_slug}" not found.')
+        ensure_ocr_quota_for_project(project)
+
+        page = q.page(project.id, page_slug)
+        if page is None:
+            raise ValueError(f'Page "{page_slug}" not found in project "{project_slug}".')
+
+        doc = apply_ocr_to_page(page, ocr_response, engine, image_path=image_path)
+        session.add(page)
+        session.commit()
+
+        # Save standalone enhanced OCR JSON (.json.gz) to separate storage path
+        payload_dict = ocr_response_to_api_dict(
+            ocr_response,
+            engine,
+            image_width=page.page_width,
+            image_height=page.page_height,
+        )
+        save_page_enhanced_ocr(page, payload_dict, engine, profile)
+
+        # Track revision under dedicated enhanced OCR version track
+        version_key = f"ocr:enhanced:{engine}:{profile}"
+        pv = session.query(db.PageVersion).filter_by(
+            page_id=page.id,
+            version_key=version_key
+        ).first()
+        current_ver = pv.version if pv else 0
+
+        summary = f"Enhanced OCR run ({engine}, {profile})"
+        try:
+            revision_id = add_revision(
+                page=page,
+                summary=summary,
+                content=doc.to_plain_text() or ocr_response.text_content,
+                status=SitePageStatus.R0,
+                version=current_ver,
+                author_id=bot_user.id,
+                document=doc.to_dict(),
+                content_format=doc.content_format,
+                version_key=version_key,
+            )
+            consume_ocr_credit_for_project(project)
+        except Exception as e:
+            logging.exception(f"Failed to save revision for enhanced OCR: {e}")
+            raise
+
+    return payload_dict
+
+
+@app.task(bind=True)
+def run_enhanced_ocr_for_page(
+    self,
+    *,
+    app_env: str,
+    project_slug: str,
+    page_slug: str,
+    engine: str = "dots_ocr",
+    profile: str = "background_clahe",
+    language: str = "auto",
+):
+    _run_enhanced_ocr_for_page_inner(
+        app_env,
+        project_slug,
+        page_slug,
+        engine,
+        profile,
+        language,
+    )
+
+
+def run_enhanced_ocr_for_project(
+    app_env: str,
+    project: db.Project,
+    engine: str = "dots_ocr",
+    profile: str = "background_clahe",
+    language: str = "auto",
+    queue: str | None = None,
+) -> GroupResult | None:
+    """Create a `group` task to run Enhanced OCR on a project."""
+    flask_app = create_config_only_app(app_env)
+    with flask_app.app_context():
+        from sqlalchemy import or_
+        session = q.get_session()
+        bot_user = q.user(consts.BOT_USERNAME)
+        bot_user_id = bot_user.id if bot_user else None
+
+        db_project = session.query(db.Project).get(project.id)
+        if not db_project:
+            return None
+
+        edited_page_ids = {
+            row[0]
+            for row in session.query(db.Revision.page_id)
+            .filter(db.Revision.project_id == db_project.id)
+            .filter(or_(db.Revision.author_id == None, db.Revision.author_id != bot_user_id))
+            .all()
+        }
+        unedited_pages = [p for p in db_project.pages if p.id not in edited_page_ids]
+
+    if unedited_pages:
+        tasks = group(
+            run_enhanced_ocr_for_page.s(
+                app_env=app_env,
+                project_slug=project.slug,
+                page_slug=p.slug,
+                engine=engine,
+                profile=profile,
+                language=language,
+            )
+            for p in unedited_pages
+        )
+        if queue:
+            ret = tasks.apply_async(queue=queue)
+        else:
+            ret = tasks.apply_async()
+        ret.save()
+        return ret
+    else:
+        return None
+

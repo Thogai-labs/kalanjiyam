@@ -98,6 +98,65 @@ def save_page_ocr(page: Any, ocr_text: str) -> bool:
         return False
 
 
+def save_page_enhanced_ocr(
+    page: Any,
+    payload: dict | list | str,
+    engine: str,
+    profile: str,
+) -> bool:
+    """Persist Enhanced OCR JSON payload to object storage as .json.gz.
+
+    Returns True if successfully written to storage, False otherwise.
+    """
+    from kalanjiyam.utils.storage import get_project_org_slug, get_storage, page_enhanced_ocr_key
+
+    try:
+        project = getattr(page, "project", None)
+        project_slug = getattr(project, "slug", str(project))
+        org_slug = get_project_org_slug(project)
+        page_slug = getattr(page, "slug", str(page))
+        key = page_enhanced_ocr_key(project_slug, page_slug, engine, profile, org_slug=org_slug)
+        get_storage().save_json_gz(key, payload)
+        return True
+    except Exception as err:
+        LOG.warning(
+            "S3/VersityGW write failed for page %s Enhanced OCR (%s/%s): %s",
+            getattr(page, "slug", page),
+            engine,
+            profile,
+            err,
+        )
+        return False
+
+
+def load_page_enhanced_ocr(
+    page: Any,
+    engine: str,
+    profile: str,
+) -> dict | list | str | None:
+    """Load Enhanced OCR payload for a page from object storage."""
+    from kalanjiyam.utils.storage import get_project_org_slug, get_storage, page_enhanced_ocr_key
+
+    project = getattr(page, "project", None)
+    if project is None:
+        return None
+    try:
+        project_slug = getattr(project, "slug", str(project))
+        org_slug = get_project_org_slug(project)
+        page_slug = getattr(page, "slug", str(page))
+        key = page_enhanced_ocr_key(project_slug, page_slug, engine, profile, org_slug=org_slug)
+        return get_storage().load_json_gz(key)
+    except Exception as err:
+        LOG.warning(
+            "Failed to fetch page %s Enhanced OCR (%s/%s) from storage: %s",
+            getattr(page, "slug", page),
+            engine,
+            profile,
+            err,
+        )
+        return None
+
+
 def load_page_ocr(page: Any) -> str | None:
     """Load OCR bounding-box text for a page.
 
@@ -221,7 +280,17 @@ def derive_revision_tag(revision: Any) -> str:
 
     # 1. Check version_key first
     if version_key:
-        if version_key.startswith("ocr:"):
+        if version_key.startswith("ocr:enhanced:"):
+            parts = version_key.split("ocr:enhanced:", 1)[1].split(":", 1)
+            eng = parts[0] if parts else "model"
+            prof = parts[1] if len(parts) > 1 else "default"
+            return f"ocr-enhanced-{slugify(eng)}_{slugify(prof)}"
+        elif version_key.startswith("enhanced_ocr:"):
+            parts = version_key.split("enhanced_ocr:", 1)[1].split(":", 1)
+            eng = parts[0] if parts else "model"
+            prof = parts[1] if len(parts) > 1 else "default"
+            return f"ocr-enhanced-{slugify(eng)}_{slugify(prof)}"
+        elif version_key.startswith("ocr:"):
             engine = version_key.split("ocr:", 1)[1]
             return f"ocr-{slugify(engine)}"
         elif version_key.startswith("translation:"):

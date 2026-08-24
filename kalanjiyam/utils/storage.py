@@ -129,6 +129,24 @@ def comparison_result_key(project_slug: str, comparison_id: int, org_slug: str =
     return f"projects/{org}/{project_slug}/comparisons/{comparison_id}.json.gz"
 
 
+def page_enhanced_ocr_key(
+    project_slug: str,
+    page_slug: str,
+    engine: str,
+    profile: str,
+    org_slug: str = None,
+) -> str:
+    """Key for a page's Enhanced OCR payload (gzipped JSON).
+
+    Separates enhanced OCR results by engine and enhancement profile so normal
+    and enhanced OCR results never overwrite each other.
+    """
+    org = resolve_org_slug(project_slug, org_slug)
+    engine_tag = (engine or "model").lower().strip().replace("_", "-")
+    profile_tag = (profile or "default").lower().strip()
+    return f"projects/{org}/{project_slug}/ocr/enhanced/{engine_tag}/{profile_tag}/{page_slug}.json.gz"
+
+
 
 # Storage interface
 # -----------------

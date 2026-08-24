@@ -54,6 +54,14 @@ class OcrResponse:
     chars_count: int | None = None
     #: Engine API latency in milliseconds.
     engine_latency_ms: float | None = None
+    #: OCR mode: 'standard' or 'enhanced'.
+    ocr_mode: str = "standard"
+    #: Enhancement profile used when ocr_mode == 'enhanced'.
+    enhancement_profile: str | None = None
+    #: Enhancement pipeline version (e.g. '1.0').
+    enhancement_version: str | None = None
+    #: Preprocessing duration in milliseconds.
+    preprocessing_latency_ms: float | None = None
 
 
 def calculate_p05_confidence(
