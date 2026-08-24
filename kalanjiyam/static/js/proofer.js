@@ -134,6 +134,8 @@ export default () => ({
 
   // OCR dropdown state
   ocrDropdownOpen: false,
+  enhancedOcrDropdownOpen: false,
+  selectedEnhancementProfile: 'background_clahe',
   showOcrEngineInfo: false,
 
   // Confidence review state
@@ -150,6 +152,7 @@ export default () => ({
   // Internal-only
   layoutClasses: CLASSES_SIDE_BY_SIDE,
   isRunningOCR: false,
+  isRunningEnhancedOCR: false,
   isRunningTranslation: false,
   hasUnsavedChanges: false,
   _isProgrammaticUpdate: false,
@@ -1372,6 +1375,44 @@ export default () => ({
     }
 
     this.isRunningOCR = false;
+  },
+
+  async runEnhancedOCR() {
+    this.isRunningEnhancedOCR = true;
+
+    const engineKey = window._ocrSelectedEngine || this.selectedEngine;
+    const decodedEngine = this.decodeEngine(engineKey);
+    const profile = this.selectedEnhancementProfile || 'background_clahe';
+    const combinedLanguage = this.getCombinedLanguage();
+    const pathname = (window.location && window.location.pathname) || '';
+    const url = pathname.replace('/proofing/', '/api/enhanced-ocr/') + `?engine=${decodedEngine}&enhancement=${profile}&language=${combinedLanguage}`;
+
+    try {
+      const response = await fetch(url);
+      if (response && response.ok) {
+        const contentType = (response.headers && response.headers.get && response.headers.get('content-type')) || '';
+        if (contentType.includes('application/json')) {
+          const payload = await response.json();
+          this.applyOcrPayload(payload);
+        } else {
+          const content = await response.text();
+          this.applyOcrPayload({ text: content });
+        }
+        this.showNotification('Enhanced OCR completed successfully!', 'success');
+      } else {
+        const errorText = await this.getErrorMessage(response);
+        this.showNotification(`Enhanced OCR failed: ${errorText}`, 'error');
+        const contentTextarea = document.getElementById('content');
+        if (contentTextarea) {
+          contentTextarea.value = errorText;
+        }
+      }
+    } catch (error) {
+      console.error('Enhanced OCR error:', error);
+      this.showNotification('Enhanced OCR failed: Network error', 'error');
+    }
+
+    this.isRunningEnhancedOCR = false;
   },
 
   // Translation controls
