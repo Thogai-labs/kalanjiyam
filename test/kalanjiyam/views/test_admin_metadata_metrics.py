@@ -147,6 +147,8 @@ def test_the_dashboard_reports_tokens_and_coverage(
     assert "Time / Win" in resp.text
     assert "Avg Engine Time" in resp.text
     assert "Avg Time Taken" in resp.text
+    assert "freeze-columns-select" in resp.text
+    assert "metadata-metrics-table" in resp.text
 
 
 def test_filtering_by_status_excludes_the_others(superadmin_client, two_orgs_with_runs):
