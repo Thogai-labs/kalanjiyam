@@ -516,6 +516,16 @@ these components in our help text and documentation.
                   :class="selectedTranslationEngine === 'gemma' ? 'active' : ''">
             Gemma 4 12B
           </button>
+          <button @click.prevent.stop="selectedTranslationEngine = 'param_lc_translate_ep4'; saveSettings()" 
+                  class="ocr-engine-btn"
+                  :class="selectedTranslationEngine === 'param_lc_translate_ep4' ? 'active' : ''">
+            Param LC Translate EP4
+          </button>
+          <button @click.prevent.stop="selectedTranslationEngine = 'translation_1b_exp_40'; saveSettings()" 
+                  class="ocr-engine-btn"
+                  :class="selectedTranslationEngine === 'translation_1b_exp_40' ? 'active' : ''">
+            Translation 1B Exp 40
+          </button>
           {% endfor %}
         </div>
       </li>

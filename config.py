@@ -235,6 +235,22 @@ class BaseConfig:
     #: Timeout in seconds for translation service HTTP requests.
     TRANSLATION_SERVICE_TIMEOUT = int(_env("TRANSLATION_SERVICE_TIMEOUT", "300") or "300")
 
+    #: Base URL for BharatGen translation chat completions API.
+    BHARATGEN_TRANSLATION_API_URL = _env(
+        "BHARATGEN_TRANSLATION_API_URL", "https://api.bharatgen.dev/v1/chat/completions"
+    )
+
+    #: API key / Bearer token for BharatGen translation requests.
+    BHARATGEN_TRANSLATION_API_KEY = _env(
+        "BHARATGEN_TRANSLATION_API_KEY",
+        _env("BHARATGEN_API_KEY", ""),
+    )
+
+    #: Timeout in seconds for BharatGen translation HTTP requests.
+    BHARATGEN_TRANSLATION_TIMEOUT = int(
+        _env("BHARATGEN_TRANSLATION_TIMEOUT", "300") or "300"
+    )
+
     #: Default OCR engine/model.
     DEFAULT_OCR_ENGINE = _env("DEFAULT_OCR_ENGINE", "tesseract")
 

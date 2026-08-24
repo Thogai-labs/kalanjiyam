@@ -284,6 +284,8 @@ def get_version_display_name(version_key: str) -> str:
             'gemma': 'Gemma 4 12B',
             'google': 'Google',
             'openai': 'OpenAI',
+            'param_lc_translate_ep4': 'Param LC Translate EP4',
+            'translation_1b_exp_40': 'Translation 1B Exp 40',
         }
         engine_label = label_map.get(engine_name, engine_name.capitalize())
         return _l("Translation: %(engine)s (%(languages)s)", engine=engine_label, languages=lang_display)

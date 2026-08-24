@@ -308,34 +308,211 @@ class GenericTranslationEngine(TranslationEngine):
         return ['en', 'hi', 'bn', 'ta', 'te', 'mr', 'gu', 'kn', 'ml', 'pa', 'ur', 'or', 'as', 'sa', 'ks', 'sd', 'mni', 'sat', 'npi', 'gom', 'doi', 'brx', 'mai']
 
 
+class BharatGenTranslateEngine(TranslationEngine):
+    """Translation engine using BharatGen chat completions API."""
+
+    def __init__(
+        self,
+        model_name: str = "param_lc_translate_ep4",
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+    ):
+        self.model_name = model_name
+        self.version = model_name
+        self._api_url = api_url
+        self._api_key = api_key
+
+    def translate(
+        self, text: str, source_lang: str, target_lang: str, **kwargs
+    ) -> TranslationResponse:
+        import httpx
+        from flask import current_app, has_app_context
+
+        api_url = self._api_url
+        api_key = self._api_key
+        timeout = 300.0
+
+        if has_app_context():
+            if not api_url:
+                api_url = current_app.config.get("BHARATGEN_TRANSLATION_API_URL")
+            if not api_key:
+                api_key = current_app.config.get("BHARATGEN_TRANSLATION_API_KEY")
+            timeout = float(
+                current_app.config.get("BHARATGEN_TRANSLATION_TIMEOUT", 300)
+            )
+
+        if not api_url:
+            api_url = "https://api.bharatgen.dev/v1/chat/completions"
+        if not api_key:
+            api_key = ""
+
+        language_map = {
+            "en": "English",
+            "hi": "Hindi",
+            "bn": "Bengali",
+            "ta": "Tamil",
+            "te": "Telugu",
+            "mr": "Marathi",
+            "gu": "Gujarati",
+            "kn": "Kannada",
+            "ml": "Malayalam",
+            "pa": "Punjabi",
+            "ur": "Urdu",
+            "or": "Odia",
+            "as": "Assamese",
+            "sa": "Sanskrit",
+            "ks": "Kashmiri",
+            "sd": "Sindhi",
+            "mni": "Manipuri",
+            "sat": "Santali",
+            "npi": "Nepali",
+            "gom": "Konkani",
+            "doi": "Dogri",
+            "brx": "Bodo",
+            "mai": "Maithili",
+        }
+
+        target_name = language_map.get(target_lang, target_lang.capitalize())
+
+        user_content = f"Translate this to {target_name}: {text}"
+        if kwargs.get("glossary"):
+            user_content = f"Translate this to {target_name} using glossary ({kwargs['glossary']}): {text}"
+
+        payload = {
+            "model": self.model_name,
+            "temperature": kwargs.get("temperature", 0.5),
+            "repetition_penalty": kwargs.get("repetition_penalty", 1.02),
+            "max_length": kwargs.get("max_length", 2048),
+            "chat_template_kwargs": {
+                "enable_thinking": kwargs.get("enable_thinking", True)
+            },
+            "messages": [
+                {"role": "system", "content": "You are helpful translator."},
+                {"role": "user", "content": user_content},
+            ],
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+        }
+        if api_key:
+            headers["Authorization"] = (
+                f"Bearer {api_key}"
+                if not api_key.startswith("Bearer ")
+                else api_key
+            )
+
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                response = client.post(api_url, json=payload, headers=headers)
+
+            if response.status_code >= 400:
+                detail = response.text
+                try:
+                    res_json = response.json()
+                    detail = (
+                        res_json.get("detail")
+                        or res_json.get("error", {}).get("message")
+                        or detail
+                    )
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    f"BharatGen translation service error ({response.status_code}): {detail}"
+                )
+
+            result = response.json()
+            choices = result.get("choices", [])
+            if not choices:
+                raise RuntimeError(
+                    f"Invalid response from BharatGen translation API: {result}"
+                )
+
+            content = choices[0].get("message", {}).get("content", "")
+            # Strip <think>...</think> tags if model returned thinking reasoning
+            content = re.sub(r"(?s)<think>.*?</think>", "", content).strip()
+
+            return TranslationResponse(
+                translated_text=content,
+                source_language=source_lang,
+                target_language=target_lang,
+                engine=self.model_name,
+                metadata={"model": self.model_name, "usage": result.get("usage")},
+            )
+        except Exception as e:
+            logging.error(
+                f"BharatGen translation service failed for model {self.model_name}: {e}"
+            )
+            raise
+
+    def get_supported_languages(self) -> List[str]:
+        return [
+            "en",
+            "hi",
+            "bn",
+            "ta",
+            "te",
+            "mr",
+            "gu",
+            "kn",
+            "ml",
+            "pa",
+            "ur",
+            "or",
+            "as",
+            "sa",
+            "ks",
+            "sd",
+            "mni",
+            "sat",
+            "npi",
+            "gom",
+            "doi",
+            "brx",
+            "mai",
+        ]
+
+
 # Backward-compatible alias
 IndicTransEngine = GenericTranslationEngine
 
 
 class TranslationEngineFactory:
     """Dynamic factory for creating translation engines."""
-    
+
     _engines = {
-        'indictrans2': lambda: GenericTranslationEngine('indictrans2'),
-        'gemma': lambda: GenericTranslationEngine('gemma'),
+        "indictrans2": lambda: GenericTranslationEngine("indictrans2"),
+        "gemma": lambda: GenericTranslationEngine("gemma"),
+        "param_lc_translate_ep4": lambda: BharatGenTranslateEngine(
+            "param_lc_translate_ep4"
+        ),
+        "translation_1b_exp_40": lambda: BharatGenTranslateEngine(
+            "translation_1b_exp_40"
+        ),
     }
-    
+
     @classmethod
     def create(cls, engine_name: str, **kwargs) -> TranslationEngine:
         """Create a translation engine instance dynamically.
-        
-        :param engine_name: Name of the engine ('indictrans2', 'gemma', or any backend model)
+
+        :param engine_name: Name of the engine ('indictrans2', 'gemma', 'param_lc_translate_ep4', 'translation_1b_exp_40', or any backend model)
         :param kwargs: Additional arguments for the engine
         :return: Translation engine instance
         :raises: ValueError if engine name is not supported
         """
         if not engine_name or engine_name in ["unsupported"]:
             raise ValueError(f"Unsupported translation engine: {engine_name}")
-        
+
         if engine_name in cls._engines:
             return cls._engines[engine_name]()
+        if (
+            engine_name in ("param_lc_translate_ep4", "translation_1b_exp_40")
+            or "param_lc" in engine_name
+            or "translation_1b" in engine_name
+        ):
+            return BharatGenTranslateEngine(engine_name)
         return GenericTranslationEngine(engine_name)
-    
+
     @classmethod
     def get_supported_engines(cls) -> List[str]:
         """Get list of supported translation engines dynamically."""
@@ -575,68 +752,105 @@ def segment_text_for_translation(text: str, max_length: int = 1000) -> List[str]
 
 
 def get_available_translation_engines() -> List[Dict[str, str]]:
-    """Fetch available translation engines dynamically from the translation service endpoint."""
+    """Fetch available translation engines dynamically from the translation service endpoint and include BharatGen models."""
     import httpx
     from flask import current_app, has_app_context
-    if not has_app_context():
-        return []
-    base_url = current_app.config.get("TRANSLATION_SERVICE_URL", "").rstrip("/")
-    if not base_url:
-        return []
-    url = f"{base_url}/models"
-    api_key = current_app.config.get("TRANSLATION_SERVICE_API_KEY", "")
-    headers = {"X-API-Key": api_key} if api_key else {}
-    try:
-        # Use a short timeout (5s) for fetching available models to avoid blocking the app
-        timeout = 5.0
-        with httpx.Client(timeout=timeout) as client:
-            response = client.get(url, headers=headers)
-        if response.status_code == 200:
-            models = response.json()
-            seen_engines = {}
-            for m in models:
-                # Use backend provided engine/label or derive intelligently
-                engine_val = m.get("engine")
-                if not engine_val:
-                    name = m.get("model_name", "")
-                    parts = name.split('/')
-                    if len(parts) > 1:
-                        family_part = parts[1]
-                        if family_part.startswith("indictrans"):
-                            engine_val = family_part.split('-')[0]
-                        elif "gemma" in family_part.lower():
-                            engine_val = "gemma"
-                        else:
-                            engine_val = family_part.split('-')[0]
-                    else:
-                        engine_val = "gemma" if "gemma" in name.lower() else name
-                
-                label_val = m.get("label")
-                if not label_val:
-                    label_map = {
-                        'indictrans2': 'IndicTrans v2',
-                        'indictrans3': 'IndicTrans v3',
-                        'gemma': 'Gemma 4 12B',
-                        'gemma4': 'Gemma 4 12B',
-                    }
-                    label_val = label_map.get(engine_val, engine_val.replace('_', ' ').replace('-', ' ').title())
 
-                if engine_val not in seen_engines:
-                    seen_engines[engine_val] = {
-                        'value': engine_val,
-                        'label': label_val,
-                        'model_name': m.get("model_name", ""),
-                    }
+    seen_engines = {}
 
-            sort_order = {'indictrans2': 0, 'gemma': 1, 'indictrans3': 2}
-            sorted_choices = sorted(
-                list(seen_engines.values()),
-                key=lambda x: sort_order.get(x['value'], 99)
-            )
-            return sorted_choices
-    except Exception as e:
-        logging.error(f"Failed to fetch translation models: {e}")
-    return []
+    if has_app_context():
+        base_url = current_app.config.get("TRANSLATION_SERVICE_URL", "").rstrip("/")
+        if base_url:
+            url = f"{base_url}/models"
+            api_key = current_app.config.get("TRANSLATION_SERVICE_API_KEY", "")
+            headers = {"X-API-Key": api_key} if api_key else {}
+            try:
+                # Use a short timeout (5s) for fetching available models to avoid blocking the app
+                timeout = 5.0
+                with httpx.Client(timeout=timeout) as client:
+                    response = client.get(url, headers=headers)
+                if response.status_code == 200:
+                    models = response.json()
+                    for m in models:
+                        # Use backend provided engine/label or derive intelligently
+                        engine_val = m.get("engine")
+                        if not engine_val:
+                            name = m.get("model_name", "")
+                            parts = name.split('/')
+                            if len(parts) > 1:
+                                family_part = parts[1]
+                                if family_part.startswith("indictrans"):
+                                    engine_val = family_part.split('-')[0]
+                                elif "gemma" in family_part.lower():
+                                    engine_val = "gemma"
+                                else:
+                                    engine_val = family_part.split('-')[0]
+                            else:
+                                engine_val = "gemma" if "gemma" in name.lower() else name
+                        
+                        label_val = m.get("label")
+                        if not label_val:
+                            label_map = {
+                                'indictrans2': 'IndicTrans v2',
+                                'indictrans3': 'IndicTrans v3',
+                                'gemma': 'Gemma 4 12B',
+                                'gemma4': 'Gemma 4 12B',
+                                'param_lc_translate_ep4': 'Param LC Translate EP4',
+                                'translation_1b_exp_40': 'Translation 1B Exp 40',
+                            }
+                            label_val = label_map.get(engine_val, engine_val.replace('_', ' ').replace('-', ' ').title())
+
+                        if engine_val not in seen_engines:
+                            seen_engines[engine_val] = {
+                                'value': engine_val,
+                                'label': label_val,
+                                'model_name': m.get("model_name", ""),
+                            }
+            except Exception as e:
+                logging.error(f"Failed to fetch translation models: {e}")
+
+    # Fallback to default remote engines if none discovered
+    if not seen_engines:
+        seen_engines['indictrans2'] = {
+            'value': 'indictrans2',
+            'label': 'IndicTrans v2',
+            'model_name': 'ai4bharat/indictrans2',
+        }
+        seen_engines['gemma'] = {
+            'value': 'gemma',
+            'label': 'Gemma 4 12B',
+            'model_name': 'google/gemma-4-12b-it',
+        }
+
+    # Add BharatGen models
+    bharatgen_models = [
+        {
+            'value': 'param_lc_translate_ep4',
+            'label': 'Param LC Translate EP4',
+            'model_name': 'param_lc_translate_ep4',
+        },
+        {
+            'value': 'translation_1b_exp_40',
+            'label': 'Translation 1B Exp 40',
+            'model_name': 'translation_1b_exp_40',
+        },
+    ]
+    for bg in bharatgen_models:
+        if bg['value'] not in seen_engines:
+            seen_engines[bg['value']] = bg
+
+    sort_order = {
+        'indictrans2': 0,
+        'gemma': 1,
+        'param_lc_translate_ep4': 2,
+        'translation_1b_exp_40': 3,
+        'indictrans3': 4,
+    }
+    sorted_choices = sorted(
+        list(seen_engines.values()),
+        key=lambda x: sort_order.get(x['value'], 99)
+    )
+    return sorted_choices
 
 
 def get_supported_languages_list() -> List[Dict[str, str]]:
