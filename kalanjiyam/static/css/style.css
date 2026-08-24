@@ -650,7 +650,17 @@
   }
 
   .ocr-osd-overlay rect {
+    pointer-events: all;
+    cursor: pointer;
     transition: fill 0.15s ease, stroke 0.15s ease;
+  }
+
+  .ocr-osd-overlay rect:hover {
+    fill-opacity: 0.35;
+  }
+
+  .ocr-osd-overlay rect.is-selected {
+    stroke-width: 3px;
   }
 
   .book-editor-dpad {

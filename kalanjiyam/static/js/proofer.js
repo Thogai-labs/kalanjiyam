@@ -888,8 +888,17 @@ export default () => ({
       }
       if (this.imageViewer) {
         this._bboxOverlay = new OsdBboxOverlay(this.imageViewer, {
-          onBoxClick: ({ block }) => {
-            if (block && this._replicaView) {
+          onBoxClick: ({ block, box }) => {
+            const blockId = block ? block.id : (box ? (box.blockId || box.id) : null);
+            if (blockId && this._bboxOverlay) {
+              this._bboxOverlay.highlightBlockId(blockId);
+            }
+            if (block && this._replicaView && this.editorMode === 'replica') {
+              this._replicaView.focusBlock(block.id);
+            } else if (block && this.editorMode === 'flow') {
+              const el = document.querySelector(`#rich-editor [data-block-id="${block.id}"]`);
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else if (block && this._replicaView) {
               this._replicaView.highlightBlock(block.id);
             }
           },

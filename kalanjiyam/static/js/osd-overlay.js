@@ -139,7 +139,8 @@ export class OsdBboxOverlay {
     this._group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     this._svg.appendChild(this._group);
 
-    this._scaledBoxes().forEach((box) => {
+    const scaled = this._scaledBoxes();
+    scaled.forEach((box) => {
       const rect = this._boxToViewerRect(box);
       if (!rect || rect.width < 1 || rect.height < 1) return;
       const el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -147,31 +148,91 @@ export class OsdBboxOverlay {
       el.setAttribute('y', rect.y);
       el.setAttribute('width', rect.width);
       el.setAttribute('height', rect.height);
+
+      const isHighlighted = !!(
+        this.highlightedId &&
+        (box.blockId === this.highlightedId ||
+         box.id === this.highlightedId ||
+         (this._blocks && this._blocks.length && findBlockForBbox(this._blocks, [box.x1, box.y1, box.x2, box.y2])?.id === this.highlightedId))
+      );
+
       const { fill, stroke } = boxColors(box);
-      el.setAttribute('fill', fill);
-      el.setAttribute('stroke', stroke);
-      el.setAttribute('stroke-width', '2');
+      if (isHighlighted) {
+        el.setAttribute('fill', 'rgba(59, 130, 246, 0.35)');
+        el.setAttribute('stroke', '#2563eb');
+        el.setAttribute('stroke-width', '3');
+        el.classList.add('is-selected');
+      } else {
+        el.setAttribute('fill', fill);
+        el.setAttribute('stroke', stroke);
+        el.setAttribute('stroke-width', '2');
+      }
+
       el.setAttribute('vector-effect', 'non-scaling-stroke');
+      el.style.pointerEvents = 'all';
+      el.style.cursor = 'pointer';
+
       let pointerDownPos = null;
+      let isDragging = false;
+      let lastPos = null;
+
+      const onPointerMove = (me) => {
+        if (!pointerDownPos) return;
+        const totalDist = Math.hypot(me.clientX - pointerDownPos.x, me.clientY - pointerDownPos.y);
+        if (totalDist > 5) {
+          isDragging = true;
+          if (container) {
+            container.classList.add('is-grabbing');
+          }
+          if (lastPos && this.viewer && this.viewer.viewport && this.viewer.viewport.deltaPointsFromPixels) {
+            const dx = me.clientX - lastPos.x;
+            const dy = me.clientY - lastPos.y;
+            const delta = this.viewer.viewport.deltaPointsFromPixels(
+              new OpenSeadragon.Point(-dx, -dy),
+              true,
+            );
+            this.viewer.viewport.panBy(delta, false);
+            if (this.viewer.viewport.applyConstraints) {
+              this.viewer.viewport.applyConstraints();
+            }
+          }
+          lastPos = { x: me.clientX, y: me.clientY };
+        }
+      };
+
+      const onPointerUp = () => {
+        if (container) {
+          container.classList.remove('is-grabbing');
+        }
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        window.removeEventListener('pointercancel', onPointerUp);
+      };
+
       el.addEventListener('pointerdown', (e) => {
         pointerDownPos = { x: e.clientX, y: e.clientY };
+        lastPos = { x: e.clientX, y: e.clientY };
+        isDragging = false;
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+        window.addEventListener('pointercancel', onPointerUp);
       });
+
       el.addEventListener('click', (e) => {
-        if (pointerDownPos) {
-          const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
-          if (dist > 6) {
-            e.stopPropagation();
-            return;
-          }
+        if (isDragging || (pointerDownPos && Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y) > 6)) {
+          e.stopPropagation();
+          return;
         }
         e.stopPropagation();
         const bbox = [box.x1, box.y1, box.x2, box.y2];
+        const matchedBlock = findBlockForBbox(this._blocks || [], bbox);
         this.onBoxClick({
           bbox,
           box,
-          block: findBlockForBbox(this._blocks || [], bbox),
+          block: matchedBlock,
         });
       });
+
       this._group.appendChild(el);
     });
   }
