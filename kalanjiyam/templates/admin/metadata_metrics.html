@@ -45,23 +45,40 @@
     <nav class="flex items-center gap-1 bg-slate-100/80 p-1.5 rounded-xl text-xs font-semibold text-slate-600">
       {% for key, label in [('all', _('All')), ('completed', _('Complete')), ('partial', _('Partial')),
                             ('failed', _('Failed')), ('running', _('Running'))] %}
-        <a href="{{ url_for(view_endpoint, status=key, q=search_query) }}"
+        <a href="{{ url_for(view_endpoint, status=key, q=search_query, start_date=start_date, end_date=end_date) }}"
            class="px-4 py-2 rounded-lg transition-all {% if current_status == key %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
           {{ label }}
         </a>
       {% endfor %}
     </nav>
 
-    <form method="GET" action="{{ url_for(view_endpoint) }}" class="flex items-center gap-2">
+    <form method="GET" action="{{ url_for(view_endpoint) }}" class="flex flex-wrap items-center gap-2">
       <input type="hidden" name="status" value="{{ current_status }}">
+
+      <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs">
+        <label for="filter-start-date" class="text-slate-500 font-medium whitespace-nowrap">{{ _('From') }}</label>
+        <input type="date" id="filter-start-date" name="start_date" value="{{ start_date }}"
+               class="bg-transparent border-0 text-xs p-0 text-slate-700 focus:outline-none focus:ring-0">
+        <span class="text-slate-300">→</span>
+        <label for="filter-end-date" class="text-slate-500 font-medium whitespace-nowrap">{{ _('To') }}</label>
+        <input type="date" id="filter-end-date" name="end_date" value="{{ end_date }}"
+               class="bg-transparent border-0 text-xs p-0 text-slate-700 focus:outline-none focus:ring-0">
+      </div>
+
       <input type="text" name="q" value="{{ search_query }}" placeholder="{{ _('Search by project') }}"
-             class="rounded-xl border-slate-200 text-xs px-3 py-2 w-56">
-      <button type="submit" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700">
-        {{ _('Search') }}
+             class="rounded-xl border-slate-200 text-xs px-3 py-2 w-48">
+      <button type="submit" class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 transition-colors">
+        {{ _('Filter') }}
       </button>
+
+      {% if search_query or start_date or end_date or current_status != 'all' %}
+        <a href="{{ url_for(view_endpoint) }}" class="px-2.5 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors">
+          {{ _('Clear') }}
+        </a>
+      {% endif %}
     </form>
 
-    <a href="{{ url_for(export_endpoint) }}"
+    <a href="{{ url_for(export_endpoint, status=current_status, q=search_query, start_date=start_date, end_date=end_date) }}"
        class="ml-auto inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors shadow-sm">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>

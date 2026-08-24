@@ -5,6 +5,8 @@ a document's title, dates and the names of everyone in it, so one org admin
 seeing another org's runs is a content leak, not just an untidy list.
 """
 
+from datetime import datetime
+
 import pytest
 
 import kalanjiyam.database as db
@@ -178,3 +180,153 @@ def test_an_empty_dashboard_says_so(superadmin_client):
     resp = superadmin_client.get(f"{PLATFORM}?status=failed&q=nothing-matches-this")
     assert resp.status_code == 200
     assert "No extraction runs match" in resp.text
+
+
+def test_filtering_by_date_range(superadmin_client, flask_app, two_orgs_with_runs):
+    with flask_app.app_context():
+        session = get_session()
+        run_jan = db.MetadataExtractionRun(
+            project_id=two_orgs_with_runs["alpha"]["project_id"],
+            status="COMPLETED",
+            taxonomy_version=at.TAXONOMY_VERSION,
+            model_name="gemma-3-27b-it",
+            pages_total=10,
+            pages_read=10,
+            fields_filled=15,
+            fields_total=22,
+            total_prompt_tokens=1000,
+            total_completion_tokens=200,
+            created_at=datetime(2025, 1, 15, 10, 0, 0),
+        )
+        run_jun = db.MetadataExtractionRun(
+            project_id=two_orgs_with_runs["beta"]["project_id"],
+            status="COMPLETED",
+            taxonomy_version=at.TAXONOMY_VERSION,
+            model_name="gemma-3-27b-it",
+            pages_total=10,
+            pages_read=10,
+            fields_filled=15,
+            fields_total=22,
+            total_prompt_tokens=1000,
+            total_completion_tokens=200,
+            created_at=datetime(2025, 6, 15, 10, 0, 0),
+        )
+        session.add(run_jan)
+        session.add(run_jun)
+        session.commit()
+        jan_id = run_jan.id
+        jun_id = run_jun.id
+
+    # Filter with start_date only
+    resp = superadmin_client.get(f"{PLATFORM}?start_date=2025-06-01")
+    assert f"#{jun_id}" in resp.text
+    assert f"#{jan_id}" not in resp.text
+
+    # Filter with end_date only
+    resp = superadmin_client.get(f"{PLATFORM}?end_date=2025-02-01")
+    assert f"#{jan_id}" in resp.text
+    assert f"#{jun_id}" not in resp.text
+
+    # Filter with both start_date and end_date
+    resp = superadmin_client.get(
+        f"{PLATFORM}?start_date=2025-06-01&end_date=2025-06-30"
+    )
+    assert f"#{jun_id}" in resp.text
+    assert f"#{jan_id}" not in resp.text
+
+    # Date range with no match
+    resp = superadmin_client.get(
+        f"{PLATFORM}?start_date=2020-01-01&end_date=2020-01-31"
+    )
+    assert f"#{jan_id}" not in resp.text
+    assert f"#{jun_id}" not in resp.text
+    assert "No extraction runs match" in resp.text
+
+
+def test_csv_export_respects_date_range_and_filters(
+    superadmin_client, flask_app, two_orgs_with_runs
+):
+    with flask_app.app_context():
+        session = get_session()
+        run_jan = db.MetadataExtractionRun(
+            project_id=two_orgs_with_runs["alpha"]["project_id"],
+            status="COMPLETED",
+            taxonomy_version=at.TAXONOMY_VERSION,
+            model_name="gemma-3-27b-it",
+            pages_total=5,
+            pages_read=5,
+            fields_filled=10,
+            fields_total=20,
+            total_prompt_tokens=500,
+            total_completion_tokens=100,
+            created_at=datetime(2025, 1, 15, 10, 0, 0),
+        )
+        session.add(run_jan)
+        session.commit()
+        jan_id = run_jan.id
+
+    body = superadmin_client.get(
+        f"{PLATFORM}/export_csv?start_date=2025-01-01&end_date=2025-01-31"
+    ).text
+    assert f"{jan_id},alpha-mdbook" in body
+
+    body_empty = superadmin_client.get(
+        f"{PLATFORM}/export_csv?start_date=2020-01-01&end_date=2020-01-31"
+    ).text
+    assert f"{jan_id},alpha-mdbook" not in body_empty
+
+
+def test_org_admin_date_range_filtering_is_scoped(
+    flask_app, two_orgs_with_runs
+):
+    with flask_app.app_context():
+        session = get_session()
+        run_alpha_old = db.MetadataExtractionRun(
+            project_id=two_orgs_with_runs["alpha"]["project_id"],
+            status="COMPLETED",
+            taxonomy_version=at.TAXONOMY_VERSION,
+            model_name="gemma-3-27b-it",
+            pages_total=10,
+            pages_read=10,
+            fields_filled=15,
+            fields_total=22,
+            created_at=datetime(2025, 3, 1, 10, 0, 0),
+        )
+        run_beta_old = db.MetadataExtractionRun(
+            project_id=two_orgs_with_runs["beta"]["project_id"],
+            status="COMPLETED",
+            taxonomy_version=at.TAXONOMY_VERSION,
+            model_name="gemma-3-27b-it",
+            pages_total=10,
+            pages_read=10,
+            fields_filled=15,
+            fields_total=22,
+            created_at=datetime(2025, 3, 1, 10, 0, 0),
+        )
+        session.add(run_alpha_old)
+        session.add(run_beta_old)
+        session.commit()
+        alpha_id = run_alpha_old.id
+        beta_id = run_beta_old.id
+
+    alpha = _client_for(flask_app, two_orgs_with_runs["alpha"]["admin_id"])
+    resp = alpha.get(f"{ORG}?start_date=2025-02-01&end_date=2025-04-01")
+    assert resp.status_code == 200
+    assert f"#{alpha_id}" in resp.text
+    assert f"#{beta_id}" not in resp.text
+
+    csv_body = alpha.get(
+        f"{ORG}/export_csv?start_date=2025-02-01&end_date=2025-04-01"
+    ).text
+    assert "alpha-mdbook" in csv_body
+    assert "beta-mdbook" not in csv_body
+
+
+def test_invalid_date_format_does_not_error(
+    superadmin_client, two_orgs_with_runs
+):
+    resp = superadmin_client.get(
+        f"{PLATFORM}?start_date=not-a-date&end_date=also-bad"
+    )
+    assert resp.status_code == 200
+    assert "Alpha Secret File" in resp.text

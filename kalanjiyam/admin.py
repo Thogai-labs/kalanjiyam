@@ -26,7 +26,7 @@ from werkzeug.utils import secure_filename
 from slugify import slugify
 import json
 import zipfile
-from datetime import datetime
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -1517,13 +1517,21 @@ class PlatformView(AdminBaseView):
                 session,
                 status=request.args.get("status", "all"),
                 search=request.args.get("q", "").strip(),
+                start_date=request.args.get("start_date", "").strip(),
+                end_date=request.args.get("end_date", "").strip(),
             ),
         )
 
     @expose("/metadata_metrics/export_csv")
     def metadata_metrics_export_csv(self):
         require_platform_super_admin()
-        return _metadata_metrics_csv_response(q.get_session())
+        return _metadata_metrics_csv_response(
+            q.get_session(),
+            status=request.args.get("status", "all"),
+            search=request.args.get("q", "").strip(),
+            start_date=request.args.get("start_date", "").strip(),
+            end_date=request.args.get("end_date", "").strip(),
+        )
 
 
     @expose("/cli_batch_ocr/<int:job_id>/export_pages_csv")
@@ -2011,7 +2019,53 @@ def _org_project_ids(session, org_id: int) -> list[int]:
     ]
 
 
-def _metadata_runs(session, project_ids=None, status="all", search=""):
+def _parse_filter_date(val, is_end: bool = False) -> datetime | None:
+    """Parse a date string or date/datetime object for filtering runs by created_at."""
+    if not val:
+        return None
+    if isinstance(val, datetime):
+        return val
+    if isinstance(val, date):
+        return datetime.combine(val, time.max if is_end else time.min)
+    if isinstance(val, str):
+        val = val.strip()
+        if not val:
+            return None
+        try:
+            d = date.fromisoformat(val)
+            return datetime.combine(d, time.max if is_end else time.min)
+        except (ValueError, TypeError):
+            pass
+        try:
+            return datetime.fromisoformat(val)
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+def _format_date_str(val) -> str:
+    """Format a date/datetime or string to YYYY-MM-DD for form rendering."""
+    if not val:
+        return ""
+    if isinstance(val, str):
+        val = val.strip()
+        try:
+            return date.fromisoformat(val).strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            return val
+    if isinstance(val, (date, datetime)):
+        return val.strftime("%Y-%m-%d")
+    return ""
+
+
+def _metadata_runs(
+    session,
+    project_ids=None,
+    status="all",
+    search="",
+    start_date=None,
+    end_date=None,
+):
     """Extraction runs, newest first, joined to the project they describe.
 
     `project_ids=None` means every project; an empty list means none, which is
@@ -2048,14 +2102,37 @@ def _metadata_runs(session, project_ids=None, status="all", search=""):
             )
         )
 
+    start_dt = _parse_filter_date(start_date, is_end=False)
+    if start_dt is not None:
+        query = query.filter(Run.created_at >= start_dt)
+
+    end_dt = _parse_filter_date(end_date, is_end=True)
+    if end_dt is not None:
+        query = query.filter(Run.created_at <= end_dt)
+
     return query.order_by(Run.id.desc()).all()
 
 
 def _metadata_metrics_payload(
-    session, *, project_ids=None, is_org_admin=False, org=None, status="all", search=""
+    session,
+    *,
+    project_ids=None,
+    is_org_admin=False,
+    org=None,
+    status="all",
+    search="",
+    start_date="",
+    end_date="",
 ):
     """Rows and totals for the extraction dashboard."""
-    rows = _metadata_runs(session, project_ids, status, search)
+    rows = _metadata_runs(
+        session,
+        project_ids,
+        status=status,
+        search=search,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
     def _mean(values):
         values = [v for v in values if v is not None]
@@ -2115,12 +2192,21 @@ def _metadata_metrics_payload(
         },
         "current_status": status,
         "search_query": search,
+        "start_date": _format_date_str(start_date),
+        "end_date": _format_date_str(end_date),
         "is_org_admin": is_org_admin,
         "org": org,
     }
 
 
-def _metadata_metrics_csv_response(session, project_ids=None):
+def _metadata_metrics_csv_response(
+    session,
+    project_ids=None,
+    status="all",
+    search="",
+    start_date=None,
+    end_date=None,
+):
     """Per-document extraction metrics, one row per run.
 
     Deliberately its own export rather than extra columns on the batch-OCR CSV:
@@ -2137,7 +2223,14 @@ def _metadata_metrics_csv_response(session, project_ids=None):
 
     from flask import Response
 
-    rows = _metadata_runs(session, project_ids)
+    rows = _metadata_runs(
+        session,
+        project_ids,
+        status=status,
+        search=search,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -2712,6 +2805,8 @@ class OrgAdminView(AdminBaseView):
                 org=org,
                 status=request.args.get("status", "all"),
                 search=request.args.get("q", "").strip(),
+                start_date=request.args.get("start_date", "").strip(),
+                end_date=request.args.get("end_date", "").strip(),
             ),
         )
 
@@ -2723,7 +2818,12 @@ class OrgAdminView(AdminBaseView):
             abort(404)
         session = q.get_session()
         return _metadata_metrics_csv_response(
-            session, _org_project_ids(session, org.id)
+            session,
+            _org_project_ids(session, org.id),
+            status=request.args.get("status", "all"),
+            search=request.args.get("q", "").strip(),
+            start_date=request.args.get("start_date", "").strip(),
+            end_date=request.args.get("end_date", "").strip(),
         )
 
     @expose("/cli_batch_ocr")
