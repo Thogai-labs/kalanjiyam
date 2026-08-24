@@ -1223,6 +1223,13 @@ export default () => ({
 
   // OCR controls
 
+  get showLanguageSelect() {
+    const engine = this.selectedEngine;
+    const engineConfig = this.ocrEngines && this.ocrEngines[engine];
+    if (!engineConfig) return false;
+    return Array.isArray(engineConfig.languages) && engineConfig.languages.length > 0;
+  },
+
   selectOcrEngine(engineValue, save = false) {
     this.selectedEngine = engineValue;
     window._ocrSelectedEngine = engineValue;
@@ -1236,33 +1243,20 @@ export default () => ({
     // Small delay to ensure DOM is updated
     setTimeout(() => {
       const engine = this.selectedEngine;
-      const engineConfig = this.ocrEngines[engine];
+      const engineConfig = this.ocrEngines ? this.ocrEngines[engine] : null;
       const languageSelect = document.getElementById('language-select');
       const additionalLanguageSelect = document.getElementById('additional-language-select');
 
-      if (!languageSelect) {
-        return;
-      }
-
-      const languageContainer = languageSelect.closest('li, div.dropdown-item-no-hover, div');
       const hasLanguages = engineConfig && Array.isArray(engineConfig.languages) && engineConfig.languages.length > 0;
 
       if (!hasLanguages) {
-        // Hide language selection UI if engine detects languages on the fly or provides no language list
-        if (languageContainer) {
-          languageContainer.style.display = 'none';
-        }
-        languageSelect.innerHTML = '';
-        if (additionalLanguageSelect) {
-          const addContainer = additionalLanguageSelect.closest('li, div.dropdown-item-no-hover, div');
-          if (addContainer) addContainer.style.display = 'none';
-        }
+        if (languageSelect) languageSelect.innerHTML = '';
+        if (additionalLanguageSelect) additionalLanguageSelect.innerHTML = '';
         return;
       }
 
-      // Restore visibility when engine has language options
-      if (languageContainer) {
-        languageContainer.style.display = '';
+      if (!languageSelect) {
+        return;
       }
 
       // Clear existing options
@@ -1297,9 +1291,7 @@ export default () => ({
 
       // Update additional language options for bilingual support
       if (additionalLanguageSelect) {
-        const addContainer = additionalLanguageSelect.closest('li, div.dropdown-item-no-hover, div');
         if (engine === '2' || engine === '3') {
-          if (addContainer) addContainer.style.display = '';
           additionalLanguageSelect.innerHTML = '<option value="">None</option>';
           engineConfig.languages.forEach(lang => {
             const option = document.createElement('option');
@@ -1308,7 +1300,7 @@ export default () => ({
             additionalLanguageSelect.appendChild(option);
           });
         } else {
-          if (addContainer) addContainer.style.display = 'none';
+          additionalLanguageSelect.innerHTML = '';
         }
       }
     }, 0);
@@ -1336,8 +1328,11 @@ export default () => ({
 
   // Get combined language parameter for bilingual support
   getCombinedLanguage() {
+    if (!this.showLanguageSelect) {
+      return '';
+    }
     const engine = this.selectedEngine;
-    const primaryLanguage = this.selectedLanguage;
+    const primaryLanguage = this.selectedLanguage || 'sa';
     const additionalLanguageSelect = document.getElementById('additional-language-select');
     const additionalLanguage = additionalLanguageSelect ? additionalLanguageSelect.value : '';
     
@@ -1356,7 +1351,10 @@ export default () => ({
     const decodedEngine = this.decodeEngine(engineKey);
     const combinedLanguage = this.getCombinedLanguage();
     const pathname = (window.location && window.location.pathname) || '';
-    const url = pathname.replace('/proofing/', '/api/ocr/') + `?engine=${decodedEngine}&language=${combinedLanguage}`;
+    let url = pathname.replace('/proofing/', '/api/ocr/') + `?engine=${decodedEngine}`;
+    if (combinedLanguage) {
+      url += `&language=${combinedLanguage}`;
+    }
 
     try {
       const response = await fetch(url);
@@ -1394,7 +1392,10 @@ export default () => ({
     const profile = this.selectedEnhancementProfile || 'background_clahe';
     const combinedLanguage = this.getCombinedLanguage();
     const pathname = (window.location && window.location.pathname) || '';
-    const url = pathname.replace('/proofing/', '/api/enhanced-ocr/') + `?engine=${decodedEngine}&enhancement=${profile}&language=${combinedLanguage}`;
+    let url = pathname.replace('/proofing/', '/api/enhanced-ocr/') + `?engine=${decodedEngine}&enhancement=${profile}`;
+    if (combinedLanguage) {
+      url += `&language=${combinedLanguage}`;
+    }
 
     try {
       const response = await fetch(url);
