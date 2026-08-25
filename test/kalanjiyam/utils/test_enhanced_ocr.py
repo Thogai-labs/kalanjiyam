@@ -278,6 +278,10 @@ def test_profile_alias_resolution():
     assert validate_enhancement_profile("DOCUMENT_CLEANUP") == "document_cleanup"
     assert validate_enhancement_profile("SHARPEN") == "sharpen"
     assert validate_enhancement_profile("text_enhancement") == "text_enhancement"
+    assert validate_enhancement_profile("hybrid_binarization") == "hybrid_binarization"
+    assert validate_enhancement_profile("HYBRID") == "hybrid_binarization"
+    assert validate_enhancement_profile("historical_hybrid") == "hybrid_binarization"
+    assert validate_enhancement_profile("binarize") == "hybrid_binarization"
 
 
 # ---------------------------------------------------------------------------

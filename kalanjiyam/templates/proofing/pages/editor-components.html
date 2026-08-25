@@ -428,6 +428,16 @@ these components in our help text and documentation.
             <div class="text-xs">{{ _('Text Enhancement') }}</div>
             <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">{{ _('Improve faint text') }}</span>
           </button>
+
+          <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'hybrid_binarization'"
+                  class="p-1.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between col-span-2"
+                  :class="selectedEnhancementProfile === 'hybrid_binarization' || selectedEnhancementProfile === 'hybrid' ? 'border-violet-500 bg-violet-50/70 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
+            <div class="flex items-center justify-between w-full">
+              <span class="text-xs font-medium">{{ _('Hybrid Binarization') }}</span>
+              <span class="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-violet-100 text-violet-700 uppercase tracking-wider">{{ _('Manuscript') }}</span>
+            </div>
+            <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">{{ _('Adaptive TSMO + Nick for historical paper & bleed-through') }}</span>
+          </button>
         </div>
       </div>
 

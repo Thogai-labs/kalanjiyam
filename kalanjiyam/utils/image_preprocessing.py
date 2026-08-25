@@ -46,6 +46,20 @@ class PreprocessingConfig:
     text_sharpen_threshold: int = 2
     text_blend_ratio: float = 0.70
 
+    # Hybrid Binarization parameters (historical degraded manuscripts & bleed-through)
+    hybrid_t_ctr: float = 0.02
+    hybrid_t1: float = 0.03
+    hybrid_t2: float = 0.04
+    hybrid_t3: float = 0.085
+    hybrid_d_min: int = 5
+    hybrid_d_max: int = 25
+    hybrid_p_factor: float = 0.5
+    hybrid_k_smear: float = 1.5
+    hybrid_win_size_nick: int = 35
+    hybrid_k_nick: float = -0.12
+    hybrid_lambda_post: float = 15.0
+    hybrid_min_cc_area: int = 6
+
 
 DEFAULT_PREPROCESSING_CONFIG = PreprocessingConfig()
 
@@ -54,6 +68,7 @@ SUPPORTED_ENHANCEMENT_PROFILES = (
     "bg_clahe",
     "sharpen",
     "text_enhancement",
+    "hybrid_binarization",
 )
 
 PROFILE_ALIASES = {
@@ -61,6 +76,12 @@ PROFILE_ALIASES = {
     "bg+clahe": "bg_clahe",
     "clahe": "bg_clahe",
     "clahe_1": "bg_clahe",
+    "hybrid": "hybrid_binarization",
+    "historical_hybrid": "hybrid_binarization",
+    "historical_binarization": "hybrid_binarization",
+    "hybrid_binarize": "hybrid_binarization",
+    "binarize": "hybrid_binarization",
+    "binarization": "hybrid_binarization",
 }
 
 
@@ -256,6 +277,40 @@ def apply_text_enhancement_pipeline(
     return blended
 
 
+def apply_hybrid_binarization(
+    img: Image.Image,
+    config: PreprocessingConfig = DEFAULT_PREPROCESSING_CONFIG,
+) -> Image.Image:
+    """Multi-Phase Hybrid Binarization pipeline for degraded historical manuscripts.
+
+    Combines adaptive contrast evaluation, two-stage multi-threshold Otsu (TSMO),
+    Sokratis smear detection with selective Nick refinement, and non-deforming
+    micro-gap repair to cleanly separate faint foreground ink from back-to-front bleed-through.
+    """
+    from kalanjiyam.utils.hybrid_binarization import hybrid_binarize_image
+
+    is_rgb = img.mode == "RGB"
+    final_bin, _ = hybrid_binarize_image(
+        img,
+        t_ctr=config.hybrid_t_ctr,
+        t1=config.hybrid_t1,
+        t2=config.hybrid_t2,
+        t3=config.hybrid_t3,
+        d_min=config.hybrid_d_min,
+        d_max=config.hybrid_d_max,
+        p_factor=config.hybrid_p_factor,
+        k_smear=config.hybrid_k_smear,
+        win_size_nick=config.hybrid_win_size_nick,
+        k_nick=config.hybrid_k_nick,
+        lambda_post=config.hybrid_lambda_post,
+        min_cc_area=config.hybrid_min_cc_area,
+    )
+    result_img = Image.fromarray(final_bin)
+    if is_rgb:
+        return result_img.convert("RGB")
+    return result_img
+
+
 # Pipeline registry mapping profile identifiers to their preprocessing functions
 PipelineFunc = Callable[[Image.Image, PreprocessingConfig], Image.Image]
 
@@ -266,6 +321,13 @@ PREPROCESSING_REGISTRY: dict[str, PipelineFunc] = {
     "clahe": apply_bg_clahe_pipeline,
     "sharpen": apply_sharpen_pipeline,
     "text_enhancement": apply_text_enhancement_pipeline,
+    "hybrid_binarization": apply_hybrid_binarization,
+    "hybrid": apply_hybrid_binarization,
+    "historical_hybrid": apply_hybrid_binarization,
+    "historical_binarization": apply_hybrid_binarization,
+    "hybrid_binarize": apply_hybrid_binarization,
+    "binarize": apply_hybrid_binarization,
+    "binarization": apply_hybrid_binarization,
 }
 
 

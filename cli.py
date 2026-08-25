@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 import getpass
+from datetime import datetime
 
 import click
-from datetime import datetime
 from slugify import slugify
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -94,25 +94,25 @@ def change_password(username):
     """
     if not username:
         username = input("Username: ")
-    
+
     new_password = getpass.getpass("New password: ")
     confirm_password = getpass.getpass("Confirm password: ")
-    
+
     if new_password != confirm_password:
         raise click.ClickException("Passwords don't match.")
-    
+
     if not new_password.strip():
         raise click.ClickException("Password cannot be empty.")
-    
+
     with Session(engine) as session:
         u = session.query(db.User).where(db.User.username == username).first()
         if u is None:
             raise click.ClickException(f'User "{username}" does not exist.')
-        
+
         u.set_password(new_password)
         session.add(u)
         session.commit()
-    
+
     print(f'Changed password for user "{username}".')
 
 
@@ -311,65 +311,67 @@ def cleanup_uploads(days, force, app_env):
 @click.option("--extract-metadata", is_flag=True, default=False, help="Automatically run archival metadata extraction once OCR completes for each book")
 def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, ocr_engine, extract_metadata):
     """Start a Batch OCR process for PDFs and Image folders from S3 or Local."""
-    import boto3
+    import mimetypes
     import os
     from urllib.parse import urlparse
-    from kalanjiyam.models.batch import BatchJob, BatchItem
+
+    import boto3
+
+    from kalanjiyam.models.batch import BatchItem, BatchJob
     from kalanjiyam.tasks.s3_batch import process_s3_batch_item
     from kalanjiyam.utils.ocr_types import normalize_engine
-    import mimetypes
-    
+
     norm_engine = normalize_engine(ocr_engine)
-    
+
     if not s3_uri and not local_uri:
         raise click.UsageError("You must provide either --s3-uri or --local-uri")
-        
+
     if s3_uri and local_uri:
         raise click.UsageError("You cannot provide both --s3-uri and --local-uri")
-        
+
     if org:
         org = slugify(org)
         from kalanjiyam.models.group import Group
         with Session(engine) as session:
             if not session.query(Group).filter_by(slug=org).first():
                 raise click.ClickException(f"Organization '{org}' not found. Please provide a valid organization slug.")
-    
+
     # Logic for filtering
     process_pdfs = pdf or (not pdf and not image)
     process_images = image or (not pdf and not image)
-    
+
     items_to_process = []
     image_groups = {}
-    
+
     target_uri = s3_uri or local_uri
-    
+
     if s3_uri:
         parsed_uri = urlparse(s3_uri)
         if parsed_uri.scheme != 's3':
             raise click.ClickException("Target must be an S3 URI (s3://...)")
-            
+
         bucket_name = parsed_uri.netloc
         prefix = parsed_uri.path.lstrip('/')
-        
+
         click.echo(f"Scanning S3 s3://{bucket_name}/{prefix} recursively...")
-        
+
         s3_client = boto3.client('s3')
         paginator = s3_client.get_paginator('list_objects_v2')
-        
+
         for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
             for obj in page.get('Contents', []):
                 key = obj['Key']
                 # Skip folders
                 if key.endswith('/'):
                     continue
-                    
+
                 mime_type, _ = mimetypes.guess_type(key)
                 if not mime_type:
                     if key.lower().endswith('.pdf'):
                         mime_type = 'application/pdf'
                     else:
                         continue
-                    
+
                 if mime_type == 'application/pdf' and process_pdfs:
                     items_to_process.append({
                         'path': f"s3://{bucket_name}/{key}",
@@ -381,7 +383,7 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, ocr_engine, extract_meta
                     if parent_prefix not in image_groups:
                         image_groups[parent_prefix] = []
                     image_groups[parent_prefix].append(key)
-                    
+
         if process_images:
             for parent_prefix, keys in image_groups.items():
                 items_to_process.append({
@@ -390,28 +392,28 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, ocr_engine, extract_meta
                     'type': 'image_folder',
                     'count': len(keys)
                 })
-                
+
     elif local_uri:
         # Local processing
         local_path = os.path.abspath(local_uri)
         if not os.path.exists(local_path):
             raise click.ClickException(f"Local path '{local_path}' does not exist.")
-            
+
         click.echo(f"Scanning local path {local_path} recursively...")
-        
+
         for root, dirs, files in os.walk(local_path):
             for file in files:
                 file_path = os.path.join(root, file)
                 # Convert Windows paths to forward slashes for consistency if needed, but not strictly necessary for file://
                 file_path_clean = file_path.replace('\\', '/')
                 mime_type, _ = mimetypes.guess_type(file_path_clean)
-                
+
                 if not mime_type:
                     if file_path_clean.lower().endswith('.pdf'):
                         mime_type = 'application/pdf'
                     else:
                         continue
-                    
+
                 if mime_type == 'application/pdf' and process_pdfs:
                     items_to_process.append({
                         'path': f"file://{file_path_clean}",
@@ -423,7 +425,7 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, ocr_engine, extract_meta
                     if parent_path not in image_groups:
                         image_groups[parent_path] = []
                     image_groups[parent_path].append(file_path_clean)
-                    
+
         if process_images:
             for parent_path, image_keys in image_groups.items():
                 items_to_process.append({
@@ -432,18 +434,18 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, ocr_engine, extract_meta
                     'type': 'image_folder',
                     'count': len(image_keys)
                 })
-            
+
     if not items_to_process:
         click.echo("No matching files found. Exiting.")
         return
-        
+
     with Session(engine) as session:
         job = BatchJob(target_uri=target_uri, status='PENDING', extract_metadata=extract_metadata)
         session.add(job)
         session.flush()
-        
+
         click.echo(f"Created BatchJob ID: {job.id}. Dispatching items...")
-        
+
         db_items = []
         for item_data in items_to_process:
             item = BatchItem(
@@ -456,10 +458,10 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, ocr_engine, extract_meta
             session.add(item)
             session.flush()
             db_items.append(item)
-            
+
         # Commit items to DB so Celery can find them!
         session.commit()
-        
+
         for item in db_items:
             # Dispatch to Celery
             process_s3_batch_item.apply_async(
@@ -467,7 +469,7 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, ocr_engine, extract_meta
                 kwargs={"engine": norm_engine},
                 queue='s3_batch'
             )
-            
+
         click.echo(f"Dispatched {len(db_items)} items to the s3_batch Celery queue successfully!")
 
 
@@ -485,6 +487,7 @@ def batch_ocr(s3_uri, local_uri, org, pdf, image, lang, ocr_engine, extract_meta
 def import_jsonl(jsonl_uri, pdf_uri, org, dry_run, allow_duplicate):
     """Import PDF pages and JSONL OCR records from S3 or local filesystem (JSONL page numbers are 1-based)."""
     import os
+
     from kalanjiyam.models.group import Group
     from kalanjiyam.services.jsonl_import import ImportValidationError, run_import
 
@@ -604,14 +607,14 @@ def _format_duration(seconds):
 def batch_list(limit):
     """List recent batch jobs with their status, created time, and duration."""
     from kalanjiyam.models.batch import BatchJob
-    
+
     with Session(engine) as session:
         jobs = session.query(BatchJob).order_by(BatchJob.id.desc()).limit(limit).all()
 
         if not jobs:
             click.echo("No batch jobs found in database.")
             return
-            
+
         click.echo(f"{'ID':<5} | {'Status':<15} | {'Created At':<22} | {'Time Taken':<12} | Target")
         click.echo("-" * 95)
         for j in jobs:
@@ -630,20 +633,20 @@ def batch_list(limit):
 def batch_cancel(job_id):
     """Cancel a pending or in-progress Batch OCR job."""
     from kalanjiyam.models.batch import BatchJob
-    
+
     with Session(engine) as session:
         job = session.query(BatchJob).get(job_id)
         if not job:
             raise click.ClickException(f"BatchJob ID {job_id} not found.")
-            
+
         if job.status in ('COMPLETED', 'FAILED'):
             click.echo(f"Job {job.id} is already {job.status}.")
             return
-            
+
         job.status = 'FAILED'
         job.completed_at = datetime.utcnow()
         job.error_message = 'Cancelled by user'
-        
+
         cancelled_count = 0
         for item in job.items:
             if item.status in ('PENDING', 'IN_PROGRESS', 'DOWNLOADED', 'IMAGES_EXTRACTED', 'OCR_IN_PROGRESS'):
@@ -662,7 +665,7 @@ def batch_cancel(job_id):
                         ocr_p.status = 'FAILED'
                         ocr_p.error_message = 'Cancelled by user'
                         ocr_p.completed_at = datetime.utcnow()
-                
+
         session.commit()
         click.echo(f"Successfully cancelled BatchJob {job.id}. {cancelled_count} pending/active items marked as failed.")
 
@@ -680,8 +683,8 @@ def batch_retry(job_id, org, lang, ocr_engine, force, extract_metadata):
     Use --force to re-run OCR on all pages (including completed ones)
     without deleting projects.
     """
-    from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrChunk, BatchOcrPage
-    from kalanjiyam.tasks.s3_batch import process_s3_batch_item, process_s3_batch_chunk
+    from kalanjiyam.models.batch import BatchJob
+    from kalanjiyam.tasks.s3_batch import process_s3_batch_chunk, process_s3_batch_item
     from kalanjiyam.utils.ocr_types import normalize_engine as _norm_eng
 
     resolved_engine = _norm_eng(ocr_engine) if ocr_engine else None
@@ -692,7 +695,7 @@ def batch_retry(job_id, org, lang, ocr_engine, force, extract_metadata):
         with Session(engine) as session:
             if not session.query(Group).filter_by(slug=org).first():
                 raise click.ClickException(f"Organization '{org}' not found. Please provide a valid organization slug.")
-                
+
     with Session(engine) as session:
         job = session.query(BatchJob).get(job_id)
         if not job:
@@ -707,11 +710,11 @@ def batch_retry(job_id, org, lang, ocr_engine, force, extract_metadata):
                 if item.status in ('FAILED', 'PENDING', 'IN_PROGRESS', 'IMAGES_EXTRACTED')
                 or any(page.status == 'FAILED' for page in item.ocr_pages)
             ]
-        
+
         if not items_to_retry:
             click.echo(f"Job #{job_id} has no items to retry. Use --force to rerun completed pages.")
             return
-            
+
         job.status = 'IN_PROGRESS'
         job.error_message = None
         job.completed_at = None
@@ -720,7 +723,7 @@ def batch_retry(job_id, org, lang, ocr_engine, force, extract_metadata):
 
         chunks_dispatched = 0
         items_dispatched = 0
-        
+
         for item in items_to_retry:
             # Override engine if specified
             if resolved_engine:
@@ -736,20 +739,20 @@ def batch_retry(job_id, org, lang, ocr_engine, force, extract_metadata):
                 item.status = 'IN_PROGRESS'
                 item.error_message = None
                 item.completed_at = None
-                
+
                 for chunk in item.chunks:
                     has_failed_pages = any(page.status == 'FAILED' for page in chunk.pages)
                     if force or chunk.status in ('FAILED', 'PENDING', 'IN_PROGRESS') or has_failed_pages:
                         chunk.status = 'PENDING'
                         chunk.error_message = None
                         chunk.completed_at = None
-                        
+
                         for ocr_p in chunk.pages:
                             if force or ocr_p.status != 'COMPLETED':
                                 ocr_p.status = 'PENDING'
                                 ocr_p.error_message = None
                                 ocr_p.completed_at = None
-                                
+
                         session.commit()
                         dispatch_kwargs = {}
                         if item.engine:
@@ -777,7 +780,7 @@ def batch_retry(job_id, org, lang, ocr_engine, force, extract_metadata):
                     queue='s3_batch'
                 )
                 items_dispatched += 1
-            
+
         session.commit()
         mode = "FORCE rerun (all pages)" if force else "retry (failed only)"
         click.echo(f"[{mode}] Re-dispatched {chunks_dispatched} chunk tasks and {items_dispatched} preparation tasks for BatchJob #{job.id} successfully!")
@@ -787,8 +790,8 @@ def batch_retry(job_id, org, lang, ocr_engine, force, extract_metadata):
 @click.option("--job-id", required=False, type=int, help="Batch Job ID to inspect")
 def batch_status(job_id):
     """Check status and performance metrics for Batch OCR jobs."""
-    from kalanjiyam.models.batch import BatchJob, BatchItem
-    
+    from kalanjiyam.models.batch import BatchJob
+
     with Session(engine) as session:
         if job_id:
             job = session.query(BatchJob).get(job_id)
@@ -809,12 +812,12 @@ def batch_status(job_id):
             failed = sum(1 for i in items if i.status == 'FAILED')
             in_progress = sum(1 for i in items if i.status in ('IN_PROGRESS', 'DOWNLOADED', 'IMAGES_EXTRACTED', 'OCR_IN_PROGRESS'))
             pending = sum(1 for i in items if i.status == 'PENDING')
-            
+
             total_chunks = sum(len(i.chunks) for i in items)
             completed_chunks = sum(sum(1 for c in i.chunks if c.status == 'COMPLETED') for i in items)
             total_pages = sum(sum(len(c.pages) for c in i.chunks) for i in items)
             completed_pages = sum(sum(sum(1 for p in c.pages if p.status == 'COMPLETED') for c in i.chunks) for i in items)
-            
+
             avg_extraction = [i.extraction_latency_ms for i in items if i.extraction_latency_ms is not None]
             avg_ocr = [i.total_ocr_latency_ms for i in items if i.total_ocr_latency_ms is not None]
             total_bytes = sum(i.source_size_bytes for i in items if i.source_size_bytes is not None)
@@ -829,13 +832,13 @@ def batch_status(job_id):
             elif j.created_at and j.status in ('PENDING', 'IN_PROGRESS'):
                 dur_str = _format_duration((datetime.utcnow() - j.created_at).total_seconds())
                 click.echo(f"Time Elapsed: {dur_str} (Running)")
-                
+
             click.echo(f"Progress   : {completed}/{total} Items Completed ({failed} Failed, {in_progress} Processing, {pending} Pending)")
             if total_chunks > 0:
                 click.echo(f"Chunks     : {completed_chunks}/{total_chunks} Completed")
             if total_pages > 0:
                 click.echo(f"Pages      : {completed_pages}/{total_pages} Completed")
-            
+
             item_durations = [(i.completed_at - i.created_at).total_seconds() for i in items if i.completed_at and i.created_at]
             if item_durations:
                 avg_item_dur = _format_duration(sum(item_durations) / len(item_durations))
@@ -873,11 +876,11 @@ def batch_status(job_id):
                 meta_failed = sum(1 for r in latest_meta_by_proj.values() if r.status in ('FAILED', 'error'))
                 meta_total = len(project_ids)
                 click.echo(f"Metadata   : {meta_completed}/{meta_total} Described ({meta_in_prog} In Progress, {meta_failed} Failed) [enabled={getattr(j, 'extract_metadata', False)}]")
-                
+
                 total_fields = sum(r.fields_filled or 0 for r in latest_meta_by_proj.values())
                 total_tokens = sum((r.total_prompt_tokens or 0) + (r.total_completion_tokens or 0) for r in latest_meta_by_proj.values())
                 avg_cited = [r.evidence_verified_rate for r in latest_meta_by_proj.values() if r.evidence_verified_rate is not None]
-                
+
                 if latest_meta_by_proj:
                     click.echo(f"Meta Fields: {total_fields} total tags extracted across {len(latest_meta_by_proj)} project(s)")
                     if avg_cited:
@@ -897,10 +900,10 @@ def batch_status(job_id):
 @click.option("--job-id", required=False, type=int, help="Batch Job ID (optional)")
 def batch_promote_ocr(job_id):
     """Promote OCR output from ocr:tesseract track to role:p1 default active track."""
-    from kalanjiyam.models.batch import BatchJob, BatchItem
-    from kalanjiyam.utils.revisions import add_revision
     from kalanjiyam.enums import SitePageStatus
-    
+    from kalanjiyam.models.batch import BatchJob
+    from kalanjiyam.utils.revisions import add_revision
+
     with Session(engine) as session:
         if job_id:
             job = session.query(BatchJob).get(job_id)
@@ -910,7 +913,7 @@ def batch_promote_ocr(job_id):
 
         promoted_count = 0
         bot_user = q.user("kalanjiyam-bot")
-        
+
         for j in jobs:
             if not j:
                 continue
@@ -924,10 +927,10 @@ def batch_promote_ocr(job_id):
                     rev_ocr = session.query(db.Revision).filter_by(page_version_id=pv_ocr.id).order_by(db.Revision.id.desc()).first()
                     if not rev_ocr or not rev_ocr.content:
                         continue
-                        
+
                     pv_p1 = session.query(db.PageVersion).filter_by(page_id=page.id, version_key="role:p1").first()
                     p1_ver = pv_p1.version if pv_p1 else 0
-                    
+
                     from kalanjiyam.utils.document_storage import load_revision_document
 
                     add_revision(
@@ -942,7 +945,7 @@ def batch_promote_ocr(job_id):
                         version_key="role:p1",
                     )
                     promoted_count += 1
-                    
+
         click.echo(f"Successfully promoted {promoted_count} pages to the default active editor track (role:p1)!")
 
 
@@ -966,16 +969,14 @@ def migrate_to_s3(batch_size, clear_db, dry_run):
     This command is idempotent: records that already exist in object storage
     are skipped automatically.
     """
-    import gzip
-    import json
+
+    import os
 
     from kalanjiyam.utils.storage import (
         get_storage,
         page_ocr_key,
         revision_document_key,
     )
-
-    import os
 
     env_name = os.environ.get("KALANJIYAM_ENVIRONMENT", "development")
     app = kalanjiyam.create_app(env_name)
@@ -1162,9 +1163,12 @@ def migrate_to_s3(batch_size, clear_db, dry_run):
 @click.option("--limit", default=500, help="Maximum number of items to reconcile per run.")
 def reconcile_storage(limit):
     """Health check S3/VersityGW and push any temporary DB fallback data to S3."""
-    from kalanjiyam.utils.document_storage import is_storage_healthy, reconcile_db_to_storage
-
     import os
+
+    from kalanjiyam.utils.document_storage import (
+        is_storage_healthy,
+        reconcile_db_to_storage,
+    )
 
     env_name = os.environ.get("KALANJIYAM_ENVIRONMENT", "development")
     app = kalanjiyam.create_app(env_name)
@@ -1567,12 +1571,13 @@ def metadata_runs(slug, limit):
 @click.option("--project", "project_slug", required=True, help="Project slug")
 @click.option("--page", "page_slug", required=True, help="Page slug (e.g. '1', '19')")
 @click.option("--engine", "ocr_engine", default="dots_ocr", help="OCR engine (e.g. 'dots-ocr', 'gemma-ocr')")
-@click.option("--enhancement", "--profile", "enhancement", default="document_cleanup", help="Enhancement profile ('document_cleanup', 'bg_clahe', 'sharpen', 'text_enhancement')")
+@click.option("--enhancement", "--profile", "enhancement", default="document_cleanup", help="Enhancement profile ('document_cleanup', 'bg_clahe', 'sharpen', 'text_enhancement', 'hybrid_binarization')")
 @click.option("--lang", "lang", default="sa", help="Language code (default: 'sa')")
 @click.option("--env", "app_env", default=None, help="Kalanjiyam environment")
 def enhanced_ocr_cmd(project_slug, page_slug, ocr_engine, enhancement, lang, app_env):
     """Run Enhanced OCR on a single page with image preprocessing."""
     import os
+
     from kalanjiyam.tasks.ocr import _run_enhanced_ocr_for_page_inner
     env = app_env or os.environ.get("KALANJIYAM_ENVIRONMENT", "development")
     click.echo(f"Running Enhanced OCR for {project_slug}/{page_slug} (engine={ocr_engine}, enhancement={enhancement}, lang={lang})...")
