@@ -463,6 +463,7 @@
 {% set image_url = url_for("site.page_image", project_slug=project.slug, page_slug=cur.slug) %}
 <script type="text/javascript">
 const IMAGE_URL = {{ image_url|tojson }};
+window.IMAGE_URL = {{ image_url|tojson }};
 const PAGE_DOCUMENT_JSON = {{ page_document|tojson }};
 const OCR_BOUNDING_BOXES = {{ ocr_bounding_boxes|tojson }};
 const PAGE_WIDTH = {{ page_width|tojson }};

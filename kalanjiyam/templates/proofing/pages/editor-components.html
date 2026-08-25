@@ -527,8 +527,8 @@ these components in our help text and documentation.
           </svg>
         </div>
         <div>
-          <h3 class="text-sm font-bold text-slate-900 leading-tight">{{ _('Image Enhancement Preview & Replacement') }}</h3>
-          <p class="text-[11px] text-slate-500 leading-tight">{{ _('Compare enhancement profiles with original scan before running OCR or replacing active page image.') }}</p>
+          <h3 class="text-sm font-bold text-slate-900 leading-tight">{{ _('Image Enhancement Preview & Comparison') }}</h3>
+          <p class="text-[11px] text-slate-500 leading-tight">{{ _('Interactive pan/zoom comparison with original scan. Set as active page image or run OCR directly.') }}</p>
         </div>
       </div>
 
@@ -563,15 +563,16 @@ these components in our help text and documentation.
 
       <!-- Close Button -->
       <button type="button" @click="enhancementPreviewModalOpen = false"
-              class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 transition">
+              class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 transition cursor-pointer">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
         </svg>
       </button>
     </div>
 
-    <!-- Sub-toolbar: View Modes -->
-    <div class="px-5 py-2 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 text-xs">
+    <!-- Sub-toolbar: View Modes & Interactive Pan/Zoom Controls & OCR Engine -->
+    <div class="px-5 py-2 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-white shrink-0 text-xs">
+      <!-- Left: View Mode Pills -->
       <div class="flex items-center gap-1.5">
         <span class="text-slate-500 font-medium mr-1">{{ _('View:') }}</span>
         <button type="button" @click="enhancementPreviewViewMode = 'split'"
@@ -591,60 +592,119 @@ these components in our help text and documentation.
         </button>
       </div>
 
-      <div class="flex items-center gap-2 text-[11px] text-slate-500">
-        <span x-show="pageImageHasMasterBackup" class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium">
-          {{ _('Custom active image in use (master scan backed up)') }}
+      <!-- Middle: Interactive Pan/Zoom Controls -->
+      <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+        <button type="button" @click="zoomOutPreview()" title="{{ _('Zoom Out') }}"
+                class="p-1 text-slate-600 hover:text-slate-900 hover:bg-white rounded transition cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4"></path>
+          </svg>
+        </button>
+        <button type="button" @click="resetPreviewZoom()" title="{{ _('Reset Zoom & Position') }}"
+                class="px-2 py-0.5 text-[11px] font-bold text-slate-700 hover:bg-white rounded transition cursor-pointer">
+          <span x-text="Math.round(previewZoom * 100) + '%'"></span>
+        </button>
+        <button type="button" @click="zoomInPreview()" title="{{ _('Zoom In') }}"
+                class="p-1 text-slate-600 hover:text-slate-900 hover:bg-white rounded transition cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path>
+          </svg>
+        </button>
+        <button type="button" @click="resetPreviewZoom()" title="{{ _('Fit to view') }}"
+                class="px-1.5 py-0.5 text-[10px] uppercase font-semibold text-slate-500 hover:text-slate-800 hover:bg-white rounded transition cursor-pointer">
+          {{ _('Fit') }}
+        </button>
+        <span class="text-[10px] text-slate-400 pl-1.5 hidden md:inline border-l border-slate-200">
+          {{ _('Drag to pan • Scroll to zoom') }}
         </span>
+      </div>
+
+      <!-- Right: OCR Engine Selection inside Modal -->
+      <div class="flex items-center gap-2">
+        {% if engine_choices %}
+        <div class="flex items-center gap-1 bg-slate-100/90 rounded-lg px-2 py-1 border border-slate-200">
+          <label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{{ _('OCR:') }}</label>
+          <select class="text-xs bg-transparent border-0 font-semibold text-violet-900 focus:ring-0 py-0 pl-1 pr-6 cursor-pointer"
+                  x-model="selectedEngine"
+                  @change="selectOcrEngine(selectedEngine, true)">
+            {% for e in engine_choices %}
+            <option value="{{ e.value }}">{{ e.label }}{% if e.is_recommended %} ⭐{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% else %}
+        <div class="text-[11px] text-slate-500">
+          <span class="font-medium">{{ _('Engine:') }}</span>
+          <span class="font-bold text-violet-700" x-text="getOcrEngineName(selectedEngine)"></span>
+        </div>
+        {% endif %}
       </div>
     </div>
 
-    <!-- Modal Viewport Area -->
-    <div class="flex-1 bg-slate-950/95 overflow-auto p-4 flex items-center justify-center relative select-none">
+    <!-- Modal Viewport Area with Synchronized Drag & Zoom -->
+    <div class="flex-1 bg-slate-950/95 overflow-hidden p-3 flex items-center justify-center relative select-none"
+         @mousedown="startPreviewPan($event)"
+         @mousemove="onPreviewPan($event)"
+         @mouseup="stopPreviewPan()"
+         @mouseleave="stopPreviewPan()"
+         @wheel.prevent="handlePreviewWheel($event)"
+         :class="previewIsDragging ? 'cursor-grabbing' : 'cursor-grab'">
+      
       <!-- Loading indicator -->
       <div x-show="enhancementPreviewLoading"
-           class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs flex flex-col items-center justify-center gap-2 text-white z-10"
+           class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs flex flex-col items-center justify-center gap-2 text-white z-20 pointer-events-none"
            x-cloak>
         <div class="w-8 h-8 rounded-full border-2 border-white/20 border-t-violet-400 animate-spin"></div>
         <span class="text-xs text-slate-200 font-medium">{{ _('Applying enhancement profile ...') }}</span>
       </div>
 
-      <!-- Split View -->
-      <div x-show="enhancementPreviewViewMode === 'split'" class="w-full h-full grid grid-cols-2 gap-4">
+      <!-- Split View (Synchronized Pan & Zoom) -->
+      <div x-show="enhancementPreviewViewMode === 'split'" class="w-full h-full grid grid-cols-2 gap-3 pointer-events-none">
         <!-- Original Side -->
-        <div class="flex flex-col h-full bg-slate-900 rounded-xl overflow-hidden border border-slate-800">
-          <div class="px-3 py-1.5 bg-slate-800/90 text-slate-300 text-[11px] font-semibold flex items-center justify-between shrink-0 border-b border-slate-700">
+        <div class="flex flex-col h-full bg-slate-900 rounded-xl overflow-hidden border border-slate-800 relative">
+          <div class="px-3 py-1.5 bg-slate-800/90 text-slate-300 text-[11px] font-semibold flex items-center justify-between shrink-0 border-b border-slate-700 z-10">
             <span>{{ _('Original Master Scan') }}</span>
+            <span class="text-[10px] text-slate-400 font-mono" x-text="Math.round(previewZoom * 100) + '%'"></span>
           </div>
-          <div class="flex-1 overflow-auto p-2 flex items-center justify-center">
-            <img :src="window.IMAGE_URL" alt="Original Scan" class="max-w-full max-h-full object-contain rounded shadow-md" />
+          <div class="flex-1 overflow-hidden p-2 flex items-center justify-center relative">
+            <img :src="originalImageUrl"
+                 alt="Original Scan"
+                 class="max-w-none max-h-[82vh] object-contain rounded shadow-md transition-transform duration-75 select-none"
+                 :style="'transform: translate(' + previewPanX + 'px, ' + previewPanY + 'px) scale(' + previewZoom + '); transform-origin: center center;'" />
           </div>
         </div>
 
         <!-- Preprocessed Side -->
-        <div class="flex flex-col h-full bg-slate-900 rounded-xl overflow-hidden border border-slate-800">
-          <div class="px-3 py-1.5 bg-violet-950/80 text-violet-200 text-[11px] font-semibold flex items-center justify-between shrink-0 border-b border-violet-800/50">
+        <div class="flex flex-col h-full bg-slate-900 rounded-xl overflow-hidden border border-slate-800 relative">
+          <div class="px-3 py-1.5 bg-violet-950/80 text-violet-200 text-[11px] font-semibold flex items-center justify-between shrink-0 border-b border-violet-800/50 z-10">
             <span x-text="'{{ _('Preprocessed:') }} ' + (enhancementPreviewProfile || '').replace('_', ' ').toUpperCase()"></span>
+            <span class="text-[10px] text-violet-300 font-mono" x-text="Math.round(previewZoom * 100) + '%'"></span>
           </div>
-          <div class="flex-1 overflow-auto p-2 flex items-center justify-center">
+          <div class="flex-1 overflow-hidden p-2 flex items-center justify-center relative">
             <img :src="enhancementPreviewUrl"
                  @load="enhancementPreviewLoading = false"
                  alt="Preprocessed Image"
-                 class="max-w-full max-h-full object-contain rounded shadow-md" />
+                 class="max-w-none max-h-[82vh] object-contain rounded shadow-md transition-transform duration-75 select-none"
+                 :style="'transform: translate(' + previewPanX + 'px, ' + previewPanY + 'px) scale(' + previewZoom + '); transform-origin: center center;'" />
           </div>
         </div>
       </div>
 
       <!-- Preprocessed Only View -->
-      <div x-show="enhancementPreviewViewMode === 'preprocessed'" class="w-full h-full flex items-center justify-center">
+      <div x-show="enhancementPreviewViewMode === 'preprocessed'" class="w-full h-full flex items-center justify-center overflow-hidden pointer-events-none">
         <img :src="enhancementPreviewUrl"
              @load="enhancementPreviewLoading = false"
              alt="Preprocessed Image"
-             class="max-w-full max-h-full object-contain rounded shadow-2xl" />
+             class="max-w-none max-h-[85vh] object-contain rounded shadow-2xl transition-transform duration-75 select-none"
+             :style="'transform: translate(' + previewPanX + 'px, ' + previewPanY + 'px) scale(' + previewZoom + '); transform-origin: center center;'" />
       </div>
 
       <!-- Original Only View -->
-      <div x-show="enhancementPreviewViewMode === 'original'" class="w-full h-full flex items-center justify-center">
-        <img :src="window.IMAGE_URL" alt="Original Scan" class="max-w-full max-h-full object-contain rounded shadow-2xl" />
+      <div x-show="enhancementPreviewViewMode === 'original'" class="w-full h-full flex items-center justify-center overflow-hidden pointer-events-none">
+        <img :src="originalImageUrl"
+             alt="Original Scan"
+             class="max-w-none max-h-[85vh] object-contain rounded shadow-2xl transition-transform duration-75 select-none"
+             :style="'transform: translate(' + previewPanX + 'px, ' + previewPanY + 'px) scale(' + previewZoom + '); transform-origin: center center;'" />
       </div>
     </div>
 
@@ -675,11 +735,11 @@ these components in our help text and documentation.
         
         <button type="button"
                 @click="selectedEnhancementProfile = enhancementPreviewProfile; runEnhancedOCR(); enhancementPreviewModalOpen = false"
-                class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-violet-50 text-violet-800 hover:bg-violet-100 border border-violet-200 transition cursor-pointer flex items-center gap-1.5">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-violet-100 text-violet-900 hover:bg-violet-200 border border-violet-300 transition cursor-pointer flex items-center gap-1.5 shadow-xs">
+          <svg class="w-3.5 h-3.5 text-violet-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"></path>
           </svg>
-          <span>{{ _('Run Enhanced OCR with this') }}</span>
+          <span x-text="'{{ _("Run Enhanced OCR (") }}' + getOcrEngineName(selectedEngine) + ')'"></span>
         </button>
 
         <button type="button"

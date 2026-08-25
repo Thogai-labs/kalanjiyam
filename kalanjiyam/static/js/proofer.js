@@ -144,9 +144,18 @@ export default () => ({
   enhancementPreviewUrl: '',
   enhancementPreviewProfile: 'hybrid_binarization',
   enhancementPreviewViewMode: 'split', // 'split' | 'preprocessed' | 'original'
+  originalImageUrl: (typeof IMAGE_URL !== 'undefined') ? IMAGE_URL : (typeof window !== 'undefined' && window.IMAGE_URL ? window.IMAGE_URL : ''),
   isReplacingPageImage: false,
   isRevertingPageImage: false,
   pageImageHasMasterBackup: false,
+
+  // Pan & Zoom state for Comparison Modal
+  previewZoom: 1.0,
+  previewPanX: 0,
+  previewPanY: 0,
+  previewIsDragging: false,
+  previewDragStartX: 0,
+  previewDragStartY: 0,
 
   // Confidence review state
   uncertainCount: 0,
@@ -1435,8 +1444,57 @@ export default () => ({
     this.isRunningEnhancedOCR = false;
   },
 
+  getOcrEngineName(engineValue) {
+    const val = engineValue || window._ocrSelectedEngine || this.selectedEngine;
+    if (this.ocrEngines && this.ocrEngines[val] && this.ocrEngines[val].name) {
+      return this.ocrEngines[val].name;
+    }
+    const decoded = this.decodeEngine(val);
+    return decoded ? decoded.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Google OCR';
+  },
+
+  zoomInPreview(step = 0.25) {
+    this.previewZoom = Math.min(8.0, +(this.previewZoom + step).toFixed(2));
+  },
+
+  zoomOutPreview(step = 0.25) {
+    this.previewZoom = Math.max(0.25, +(this.previewZoom - step).toFixed(2));
+  },
+
+  resetPreviewZoom() {
+    this.previewZoom = 1.0;
+    this.previewPanX = 0;
+    this.previewPanY = 0;
+  },
+
+  handlePreviewWheel(e) {
+    if (!e) return;
+    const factor = e.deltaY < 0 ? 1.15 : 0.87;
+    const newZoom = Math.max(0.25, Math.min(8.0, +(this.previewZoom * factor).toFixed(2)));
+    this.previewZoom = newZoom;
+  },
+
+  startPreviewPan(e) {
+    if (!e) return;
+    this.previewIsDragging = true;
+    this.previewDragStartX = e.clientX - this.previewPanX;
+    this.previewDragStartY = e.clientY - this.previewPanY;
+  },
+
+  onPreviewPan(e) {
+    if (!this.previewIsDragging || !e) return;
+    this.previewPanX = e.clientX - this.previewDragStartX;
+    this.previewPanY = e.clientY - this.previewDragStartY;
+  },
+
+  stopPreviewPan() {
+    this.previewIsDragging = false;
+  },
+
   async openEnhancementPreview(profile) {
+    this.originalImageUrl = (typeof IMAGE_URL !== 'undefined' && IMAGE_URL) ? IMAGE_URL : (typeof window !== 'undefined' && window.IMAGE_URL ? window.IMAGE_URL : '');
     this.enhancementPreviewProfile = profile || this.selectedEnhancementProfile || 'hybrid_binarization';
+    this.resetPreviewZoom();
     this.enhancementPreviewModalOpen = true;
     this.enhancedOcrDropdownOpen = false;
     this.checkPageImageBackupStatus();
