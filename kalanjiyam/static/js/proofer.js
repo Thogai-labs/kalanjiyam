@@ -138,6 +138,16 @@ export default () => ({
   selectedEnhancementProfile: 'document_cleanup',
   showOcrEngineInfo: false,
 
+  // Enhancement Preview & Image Replacement state
+  enhancementPreviewModalOpen: false,
+  enhancementPreviewLoading: false,
+  enhancementPreviewUrl: '',
+  enhancementPreviewProfile: 'hybrid_binarization',
+  enhancementPreviewViewMode: 'split', // 'split' | 'preprocessed' | 'original'
+  isReplacingPageImage: false,
+  isRevertingPageImage: false,
+  pageImageHasMasterBackup: false,
+
   // Confidence review state
   uncertainCount: 0,
   _uncertainCursor: -1,
@@ -1423,6 +1433,114 @@ export default () => ({
     }
 
     this.isRunningEnhancedOCR = false;
+  },
+
+  async openEnhancementPreview(profile) {
+    this.enhancementPreviewProfile = profile || this.selectedEnhancementProfile || 'hybrid_binarization';
+    this.enhancementPreviewModalOpen = true;
+    this.enhancedOcrDropdownOpen = false;
+    this.checkPageImageBackupStatus();
+    this.loadEnhancementPreview();
+  },
+
+  async checkPageImageBackupStatus() {
+    try {
+      const pathname = (window.location && window.location.pathname) || '';
+      const url = pathname.replace('/proofing/', '/api/replace-page-image/') + '?action=status';
+      const resp = await fetch(url);
+      if (resp.ok) {
+        const data = await resp.json();
+        this.pageImageHasMasterBackup = !!data.has_master_backup;
+      }
+    } catch (e) {
+      console.warn('Failed to check master backup status:', e);
+    }
+  },
+
+  loadEnhancementPreview() {
+    this.enhancementPreviewLoading = true;
+    const pathname = (window.location && window.location.pathname) || '';
+    const profile = this.enhancementPreviewProfile || 'hybrid_binarization';
+    this.enhancementPreviewUrl = pathname.replace('/proofing/', '/api/preview-enhancement/') + `?profile=${profile}&t=${Date.now()}`;
+  },
+
+  async replacePageImageWithPreprocessed() {
+    if (!confirm('Replace the active page image with this preprocessed version? The original master scan will be safely backed up and can be reverted at any time.')) {
+      return;
+    }
+    this.isReplacingPageImage = true;
+    const pathname = (window.location && window.location.pathname) || '';
+    const profile = this.enhancementPreviewProfile || 'hybrid_binarization';
+    const url = pathname.replace('/proofing/', '/api/replace-page-image/');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'replace', profile: profile })
+      });
+      const resData = await response.json();
+      if (response.ok && resData.status === 'ok') {
+        this.showNotification('Active page image replaced successfully!', 'success');
+        this.pageImageHasMasterBackup = true;
+        this.reloadViewerImage();
+        this.enhancementPreviewModalOpen = false;
+      } else {
+        this.showNotification(`Image replacement failed: ${resData.message || 'Error'}`, 'error');
+      }
+    } catch (e) {
+      console.error('Failed to replace page image:', e);
+      this.showNotification('Network error while replacing page image', 'error');
+    } finally {
+      this.isReplacingPageImage = false;
+    }
+  },
+
+  async revertPageImageToMaster() {
+    if (!confirm('Revert the active page image back to the original master scan?')) {
+      return;
+    }
+    this.isRevertingPageImage = true;
+    const pathname = (window.location && window.location.pathname) || '';
+    const url = pathname.replace('/proofing/', '/api/replace-page-image/');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'revert' })
+      });
+      const resData = await response.json();
+      if (response.ok && resData.status === 'ok') {
+        this.showNotification('Reverted to original scan successfully!', 'success');
+        this.pageImageHasMasterBackup = false;
+        this.reloadViewerImage();
+        this.enhancementPreviewModalOpen = false;
+      } else {
+        this.showNotification(`Revert failed: ${resData.message || 'Error'}`, 'error');
+      }
+    } catch (e) {
+      console.error('Failed to revert page image:', e);
+      this.showNotification('Network error while reverting page image', 'error');
+    } finally {
+      this.isRevertingPageImage = false;
+    }
+  },
+
+  reloadViewerImage() {
+    if (this.imageViewer && typeof this.imageViewer.open === 'function') {
+      const base = window.IMAGE_URL || '';
+      const cacheBustUrl = base + (base.includes('?') ? '&' : '?') + 't=' + Date.now();
+      try {
+        this.imageViewer.open({
+          type: 'image',
+          url: cacheBustUrl,
+          buildPyramid: false,
+        });
+      } catch (err) {
+        console.warn('Could not reload OpenSeadragon viewer dynamically:', err);
+      }
+    }
   },
 
   // Translation controls

@@ -54,7 +54,9 @@ def test_image(tmp_path) -> Path:
         draw.line([(30, y), (370, y)], fill=(40, 35, 30), width=3)
     # Add uneven illumination gradient / stain
     for i in range(100):
-        draw.rectangle([i, i, 400 - i, 600 - i], outline=(220 - i // 2, 210 - i // 2, 190 - i // 2))
+        draw.rectangle(
+            [i, i, 400 - i, 600 - i], outline=(220 - i // 2, 210 - i // 2, 190 - i // 2)
+        )
     im.save(img_path, format="JPEG")
     return img_path
 
@@ -94,13 +96,17 @@ def mock_ocr_response():
 # 1. Normal OCR remains unchanged
 # ---------------------------------------------------------------------------
 def test_normal_ocr_remains_unchanged(test_image, mock_ocr_response):
-    with patch("kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=mock_ocr_response) as mock_remote:
+    with patch(
+        "kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=mock_ocr_response
+    ) as mock_remote:
         resp = run_ocr(test_image, engine_name="dots-ocr", language="sa")
         assert resp.ocr_mode == "standard"
         assert resp.enhancement_profile is None
         assert resp.enhancement_version is None
         # Verify normal API dict output does not inject enhanced fields
-        api_dict = ocr_response_to_api_dict(resp, "dots_ocr", image_width=400, image_height=600)
+        api_dict = ocr_response_to_api_dict(
+            resp, "dots_ocr", image_width=400, image_height=600
+        )
         assert "ocr_mode" not in api_dict
         assert "enhancement" not in api_dict
         assert "preprocessing" not in api_dict
@@ -132,7 +138,9 @@ def test_enhanced_ocr_runs_with_gemma(test_image, mock_ocr_response):
         contract_version="2.2",
         model={"name": "gemma-ocr", "version": "1.0.0"},
     )
-    with patch("kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=gemma_resp) as mock_remote:
+    with patch(
+        "kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=gemma_resp
+    ) as mock_remote:
         resp = run_enhanced_ocr(
             test_image,
             engine_name="gemma-ocr",
@@ -154,7 +162,9 @@ def test_enhanced_ocr_runs_with_gemma(test_image, mock_ocr_response):
 # 3. Enhanced OCR can run with Dots
 # ---------------------------------------------------------------------------
 def test_enhanced_ocr_runs_with_dots(test_image, mock_ocr_response):
-    with patch("kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=mock_ocr_response) as mock_remote:
+    with patch(
+        "kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=mock_ocr_response
+    ) as mock_remote:
         resp = run_enhanced_ocr(
             test_image,
             engine_name="dots-ocr",
@@ -219,7 +229,9 @@ def test_distinct_preprocessing_outputs(test_image):
         for i in range(len(profiles)):
             for j in range(i + 1, len(profiles)):
                 p1, p2 = profiles[i], profiles[j]
-                assert outputs[p1] != outputs[p2], f"Outputs of {p1} and {p2} should be distinct"
+                assert outputs[p1] != outputs[p2], (
+                    f"Outputs of {p1} and {p2} should be distinct"
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +260,9 @@ def test_custom_preprocessing_config(test_image):
 # ---------------------------------------------------------------------------
 def test_invalid_engine_is_rejected(test_image):
     with pytest.raises(ValueError, match="Unsupported OCR engine"):
-        run_enhanced_ocr(test_image, engine_name="unsupported_engine_xyz", profile="document_cleanup")
+        run_enhanced_ocr(
+            test_image, engine_name="unsupported_engine_xyz", profile="document_cleanup"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +270,9 @@ def test_invalid_engine_is_rejected(test_image):
 # ---------------------------------------------------------------------------
 def test_invalid_enhancement_profile_is_rejected(test_image):
     with pytest.raises(ValueError, match="Unsupported enhancement profile"):
-        run_enhanced_ocr(test_image, engine_name="dots-ocr", profile="invalid_magic_profile")
+        run_enhanced_ocr(
+            test_image, engine_name="dots-ocr", profile="invalid_magic_profile"
+        )
 
     # "normal" profile is intentionally removed and must be rejected
     with pytest.raises(ValueError, match="Unsupported enhancement profile"):
@@ -288,15 +304,27 @@ def test_profile_alias_resolution():
 # 11. Enhanced result is marked as enhanced with enhancement & preprocessing metadata
 # ---------------------------------------------------------------------------
 def test_enhanced_result_metadata(test_image, mock_ocr_response):
-    with patch("kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=mock_ocr_response):
-        resp = run_enhanced_ocr(test_image, engine_name="dots-ocr", profile="document_cleanup")
-        api_dict = ocr_response_to_api_dict(resp, "dots_ocr", image_width=400, image_height=600)
+    with patch(
+        "kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=mock_ocr_response
+    ):
+        resp = run_enhanced_ocr(
+            test_image, engine_name="dots-ocr", profile="document_cleanup"
+        )
+        api_dict = ocr_response_to_api_dict(
+            resp, "dots_ocr", image_width=400, image_height=600
+        )
         assert api_dict["ocr_mode"] == "enhanced"
         assert api_dict["enhancement_version"] == "1.0"
         assert api_dict["contract_version"] == "2.2"
         assert api_dict["engine"] == "dots_ocr"
-        assert api_dict["enhancement"] == {"profile": "document_cleanup", "version": "1.0"}
-        assert api_dict["preprocessing"] == {"profile": "document_cleanup", "version": "1.0"}
+        assert api_dict["enhancement"] == {
+            "profile": "document_cleanup",
+            "version": "1.0",
+        }
+        assert api_dict["preprocessing"] == {
+            "profile": "document_cleanup",
+            "version": "1.0",
+        }
         assert api_dict["model"] == {"name": "dots-ocr", "version": "1.0.0"}
         assert "preprocessing_latency_ms" in api_dict
 
@@ -308,7 +336,6 @@ def test_enhanced_result_does_not_overwrite_normal_ocr(flask_app):
     with flask_app.app_context():
         mem_storage = MemoryStorage()
         with patch("kalanjiyam.utils.storage.get_storage", return_value=mem_storage):
-
             project_slug = "cool-book"
             page_slug = "19"
 
@@ -318,7 +345,9 @@ def test_enhanced_result_does_not_overwrite_normal_ocr(flask_app):
             mem_storage.save_json_gz(normal_key, normal_payload)
 
             # 2. Store enhanced OCR
-            enhanced_key = page_enhanced_ocr_key(project_slug, page_slug, "dots-ocr", "document_cleanup")
+            enhanced_key = page_enhanced_ocr_key(
+                project_slug, page_slug, "dots-ocr", "document_cleanup"
+            )
             enhanced_payload = {
                 "contract_version": "2.2",
                 "ocr_mode": "enhanced",
@@ -353,7 +382,6 @@ def test_json_gzip_compression_and_decompression(flask_app):
     with flask_app.app_context():
         mem_storage = MemoryStorage()
         with patch("kalanjiyam.utils.storage.get_storage", return_value=mem_storage):
-
             key = page_enhanced_ocr_key("proj", "19", "dots-ocr", "bg_clahe")
             data = {
                 "ocr_mode": "enhanced",
@@ -380,9 +408,15 @@ def test_json_gzip_compression_and_decompression(flask_app):
 # 14. Page dimensions / coordinate space remain correct
 # ---------------------------------------------------------------------------
 def test_page_dimensions_and_coordinate_space(test_image, mock_ocr_response):
-    with patch("kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=mock_ocr_response):
-        resp = run_enhanced_ocr(test_image, engine_name="dots-ocr", profile="text_enhancement")
-        api_dict = ocr_response_to_api_dict(resp, "dots_ocr", image_width=400, image_height=600)
+    with patch(
+        "kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=mock_ocr_response
+    ):
+        resp = run_enhanced_ocr(
+            test_image, engine_name="dots-ocr", profile="text_enhancement"
+        )
+        api_dict = ocr_response_to_api_dict(
+            resp, "dots_ocr", image_width=400, image_height=600
+        )
         assert api_dict["page_width"] == 400
         assert api_dict["page_height"] == 600
         assert api_dict["coordinate_space"] == "pixel"
@@ -469,16 +503,29 @@ def test_enhanced_ocr_api_endpoint(flask_app, mock_ocr_response, tmp_path):
         session.commit()
 
         dummy_img = tmp_path / "page_1.jpg"
-        Image.new("RGB", (400, 600), color=(250, 250, 250)).save(dummy_img, format="JPEG")
+        Image.new("RGB", (400, 600), color=(250, 250, 250)).save(
+            dummy_img, format="JPEG"
+        )
 
         with flask_app.test_client() as client:
-            with patch("kalanjiyam.views.proofing.page.get_page_image_filepath", return_value=dummy_img), \
-                 patch("kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=mock_ocr_response), \
-                 patch("kalanjiyam.utils.quotas.ensure_ocr_quota_for_project"), \
-                 patch("kalanjiyam.utils.quotas.consume_ocr_credit_for_project"), \
-                 patch("kalanjiyam.views.proofing.page.q.user_can_view_proofing_project", return_value=True), \
-                 patch("kalanjiyam.views.proofing.decorators.current_user") as dec_user, \
-                 patch("kalanjiyam.views.proofing.page.current_user") as mock_user:
+            with (
+                patch(
+                    "kalanjiyam.views.proofing.page.get_page_image_filepath",
+                    return_value=dummy_img,
+                ),
+                patch(
+                    "kalanjiyam.utils.ocr_runner.run_ocr_remote",
+                    return_value=mock_ocr_response,
+                ),
+                patch("kalanjiyam.utils.quotas.ensure_ocr_quota_for_project"),
+                patch("kalanjiyam.utils.quotas.consume_ocr_credit_for_project"),
+                patch(
+                    "kalanjiyam.views.proofing.page.q.user_can_view_proofing_project",
+                    return_value=True,
+                ),
+                patch("kalanjiyam.views.proofing.decorators.current_user") as dec_user,
+                patch("kalanjiyam.views.proofing.page.current_user") as mock_user,
+            ):
                 for u in (dec_user, mock_user):
                     u.is_authenticated = True
                     u.is_super_admin = False
@@ -550,13 +597,21 @@ def test_enhanced_ocr_background_task(flask_app, mock_ocr_response, tmp_path):
         session.commit()
 
         dummy_img = tmp_path / "page_task.jpg"
-        Image.new("RGB", (400, 600), color=(250, 250, 250)).save(dummy_img, format="JPEG")
+        Image.new("RGB", (400, 600), color=(250, 250, 250)).save(
+            dummy_img, format="JPEG"
+        )
 
-        with patch("kalanjiyam.tasks.ocr.get_page_image_filepath", return_value=dummy_img), \
-             patch("kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=mock_ocr_response), \
-             patch("kalanjiyam.utils.quotas.ensure_ocr_quota_for_project"), \
-             patch("kalanjiyam.utils.quotas.consume_ocr_credit_for_project"):
-
+        with (
+            patch(
+                "kalanjiyam.tasks.ocr.get_page_image_filepath", return_value=dummy_img
+            ),
+            patch(
+                "kalanjiyam.utils.ocr_runner.run_ocr_remote",
+                return_value=mock_ocr_response,
+            ),
+            patch("kalanjiyam.utils.quotas.ensure_ocr_quota_for_project"),
+            patch("kalanjiyam.utils.quotas.consume_ocr_credit_for_project"),
+        ):
             result = _run_enhanced_ocr_for_page_inner(
                 app_env="testing",
                 project_slug=project.slug,
@@ -570,3 +625,167 @@ def test_enhanced_ocr_background_task(flask_app, mock_ocr_response, tmp_path):
             assert result["enhancement"]["profile"] == "document_cleanup"
             assert result["preprocessing"]["profile"] == "document_cleanup"
             assert result["engine"] == "dots_ocr"
+
+
+# ---------------------------------------------------------------------------
+# 18. Preview Enhancement API Endpoint
+# ---------------------------------------------------------------------------
+def test_preview_enhancement_endpoint(flask_app, tmp_path):
+    import kalanjiyam.database as db
+    import kalanjiyam.queries as q
+
+    with flask_app.app_context():
+        session = q.get_session()
+        board = session.query(db.Board).first() or db.Board(name="Test Board Preview")
+        session.add(board)
+        session.flush()
+
+        status = session.query(db.PageStatus).first()
+        project = db.Project(
+            slug="test-preview-book",
+            display_title="Test Preview Book",
+            board_id=board.id,
+        )
+        session.add(project)
+        session.flush()
+
+        page = db.Page(project_id=project.id, order=1, slug="1", status_id=status.id)
+        session.add(page)
+        session.commit()
+
+        dummy_img = tmp_path / "preview_page.jpg"
+        Image.new("RGB", (200, 300), color=(220, 220, 220)).save(
+            dummy_img, format="JPEG"
+        )
+
+        with flask_app.test_client() as client:
+            with (
+                patch(
+                    "kalanjiyam.views.proofing.page.get_page_image_filepath",
+                    return_value=dummy_img,
+                ),
+                patch(
+                    "kalanjiyam.views.proofing.page.q.user_can_view_proofing_project",
+                    return_value=True,
+                ),
+                patch("kalanjiyam.views.proofing.decorators.current_user") as dec_user,
+                patch("kalanjiyam.views.proofing.page.current_user") as mock_user,
+            ):
+                for u in (dec_user, mock_user):
+                    u.is_authenticated = True
+                    u.is_super_admin = True
+                    u.id = 1
+
+                # 1. Preview hybrid_binarization
+                resp = client.get(
+                    f"/api/preview-enhancement/{project.slug}/{page.slug}/?profile=hybrid_binarization"
+                )
+                assert resp.status_code == 200
+                assert resp.content_type == "image/jpeg"
+                assert len(resp.data) > 0
+
+                # 2. Preview document_cleanup
+                resp_doc = client.get(
+                    f"/api/preview-enhancement/{project.slug}/{page.slug}/?profile=document_cleanup"
+                )
+                assert resp_doc.status_code == 200
+                assert resp_doc.content_type == "image/jpeg"
+
+                # 3. Invalid profile returns 400
+                resp_bad = client.get(
+                    f"/api/preview-enhancement/{project.slug}/{page.slug}/?profile=bad_profile_xyz"
+                )
+                assert resp_bad.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# 19. Replace and Revert Page Image API Endpoint
+# ---------------------------------------------------------------------------
+def test_replace_and_revert_page_image_endpoint(flask_app, tmp_path):
+    import kalanjiyam.database as db
+    import kalanjiyam.queries as q
+
+    with flask_app.app_context():
+        session = q.get_session()
+        board = session.query(db.Board).first() or db.Board(name="Test Board Replace")
+        session.add(board)
+        session.flush()
+
+        status = session.query(db.PageStatus).first()
+        project = db.Project(
+            slug="test-replace-book",
+            display_title="Test Replace Book",
+            board_id=board.id,
+        )
+        session.add(project)
+        session.flush()
+
+        page = db.Page(project_id=project.id, order=1, slug="1", status_id=status.id)
+        session.add(page)
+        session.commit()
+
+        dummy_img = tmp_path / "replace_page.jpg"
+        Image.new("RGB", (200, 300), color=(200, 200, 200)).save(
+            dummy_img, format="JPEG"
+        )
+
+        from kalanjiyam.utils.storage import (
+            get_project_org_slug,
+            get_storage,
+            page_master_image_key,
+        )
+
+        storage = get_storage()
+        org_slug = get_project_org_slug(project)
+        m_key = page_master_image_key(project.slug, page.slug, org_slug=org_slug)
+        if storage.exists(m_key):
+            storage.delete(m_key)
+
+        with flask_app.test_client() as client:
+            with (
+                patch(
+                    "kalanjiyam.views.proofing.page.get_page_image_filepath",
+                    return_value=dummy_img,
+                ),
+                patch(
+                    "kalanjiyam.views.proofing.page.q.user_can_view_proofing_project",
+                    return_value=True,
+                ),
+                patch("kalanjiyam.views.proofing.decorators.current_user") as dec_user,
+                patch("kalanjiyam.views.proofing.page.current_user") as mock_user,
+            ):
+                for u in (dec_user, mock_user):
+                    u.is_authenticated = True
+                    u.is_super_admin = True
+                    u.id = 1
+
+                # Check initial status
+                status_resp = client.get(
+                    f"/api/replace-page-image/{project.slug}/{page.slug}/?action=status"
+                )
+                assert status_resp.status_code == 200
+                assert status_resp.get_json()["has_master_backup"] is False
+
+                # Replace with hybrid_binarization
+                replace_resp = client.post(
+                    f"/api/replace-page-image/{project.slug}/{page.slug}/",
+                    json={"action": "replace", "profile": "hybrid_binarization"},
+                )
+                assert replace_resp.status_code == 200
+                assert replace_resp.get_json()["status"] == "ok"
+                assert replace_resp.get_json()["is_preprocessed"] is True
+
+                # Status should now indicate master backup exists
+                status_after = client.get(
+                    f"/api/replace-page-image/{project.slug}/{page.slug}/?action=status"
+                )
+                assert status_after.get_json()["has_master_backup"] is True
+
+                # Revert back to original
+                revert_resp = client.post(
+                    f"/api/replace-page-image/{project.slug}/{page.slug}/",
+                    json={"action": "revert"},
+                )
+                assert revert_resp.status_code == 200
+                assert revert_resp.get_json()["status"] == "ok"
+                assert revert_resp.get_json()["is_preprocessed"] is False

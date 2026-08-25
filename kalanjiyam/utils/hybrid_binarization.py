@@ -29,6 +29,7 @@ from PIL import Image
 @dataclass
 class BinarizationMetadata:
     """Stores detailed metrics and execution statistics for the binarization pipeline."""
+
     initial_contrast: float = 0.0
     effective_contrast: float = 0.0
     clahe_applied: bool = False
@@ -48,9 +49,7 @@ class BinarizationMetadata:
 
 
 def compute_local_michelson_contrast(
-    img_gray: np.ndarray,
-    kernel_size: int = 3,
-    eps: float = 1e-6
+    img_gray: np.ndarray, kernel_size: int = 3, eps: float = 1e-6
 ) -> tuple[np.ndarray, float]:
     """
     Computes local Michelson contrast over a (kernel_size x kernel_size) sliding window
@@ -85,7 +84,7 @@ def adaptive_preprocessing(
     img_gray: np.ndarray,
     t_ctr: float = 0.02,
     clip_limit: float = 2.0,
-    tile_grid_size: tuple[int, int] = (8, 8)
+    tile_grid_size: tuple[int, int] = (8, 8),
 ) -> tuple[np.ndarray, float, bool, float]:
     """
     Stage 1: Adaptive Preprocessing.
@@ -97,16 +96,16 @@ def adaptive_preprocessing(
     if initial_contrast < t_ctr:
         clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
         enhanced_img = clahe.apply(img_gray)
-        _, effective_contrast = compute_local_michelson_contrast(enhanced_img, kernel_size=3)
+        _, effective_contrast = compute_local_michelson_contrast(
+            enhanced_img, kernel_size=3
+        )
         return enhanced_img, initial_contrast, True, effective_contrast
     else:
         return img_gray.copy(), initial_contrast, False, initial_contrast
 
 
 def vectorized_nick(
-    img_gray: np.ndarray,
-    win_size: int = 35,
-    k: float = -0.12
+    img_gray: np.ndarray, win_size: int = 35, k: float = -0.12
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Stage 2: Vectorized Nick's Method.
@@ -120,10 +119,14 @@ def vectorized_nick(
     img_f = img_gray.astype(np.float64)
     np_pixels = float(win_size * win_size)
 
-    mean = cv2.boxFilter(img_f, cv2.CV_64F, (win_size, win_size), borderType=cv2.BORDER_REFLECT)
-    mean_sq = cv2.boxFilter(img_f ** 2, cv2.CV_64F, (win_size, win_size), borderType=cv2.BORDER_REFLECT)
+    mean = cv2.boxFilter(
+        img_f, cv2.CV_64F, (win_size, win_size), borderType=cv2.BORDER_REFLECT
+    )
+    mean_sq = cv2.boxFilter(
+        img_f**2, cv2.CV_64F, (win_size, win_size), borderType=cv2.BORDER_REFLECT
+    )
 
-    variance_term = mean_sq - (mean ** 2) / np_pixels
+    variance_term = mean_sq - (mean**2) / np_pixels
     variance_term = np.maximum(variance_term, 0.0)
     thresh = mean + k * np.sqrt(variance_term)
 
@@ -159,15 +162,20 @@ def two_stage_multi_otsu(img_gray: np.ndarray) -> tuple[int, int]:
     w0_v = w0[valid]
     w1_v = w1[valid]
     w2_v = w2[valid]
+    if len(i_v) == 0:
+        otsu_val, _ = cv2.threshold(
+            img_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+        )
+        return max(1, int(otsu_val * 0.8)), max(2, int(otsu_val))
 
     mu0 = mu[i_v] / w0_v
     mu1 = (mu[j_v] - mu[i_v]) / w1_v
     mu2 = (mu[-1] - mu[j_v]) / w2_v
 
     sigma_b_squared = (
-        w0_v * ((mu0 - mu_total) ** 2) +
-        w1_v * ((mu1 - mu_total) ** 2) +
-        w2_v * ((mu2 - mu_total) ** 2)
+        w0_v * ((mu0 - mu_total) ** 2)
+        + w1_v * ((mu1 - mu_total) ** 2)
+        + w2_v * ((mu2 - mu_total) ** 2)
     )
 
     best_idx = np.argmax(sigma_b_squared)
@@ -178,7 +186,9 @@ def two_stage_multi_otsu(img_gray: np.ndarray) -> tuple[int, int]:
 
 def global_otsu(img_gray: np.ndarray) -> tuple[float, np.ndarray]:
     """Standard global Otsu thresholding."""
-    otsu_val, binary = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    otsu_val, binary = cv2.threshold(
+        img_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+    )
     return float(otsu_val), binary
 
 
@@ -190,7 +200,7 @@ def decision_tree_binarize(
     t3: float = 0.085,
     d_min: int = 5,
     d_max: int = 25,
-    p_factor: float = 0.5
+    p_factor: float = 0.5,
 ) -> tuple[np.ndarray, float, str, int, int, float]:
     """
     Stage 4: Decision Tree with Exact Verification Rules.
@@ -207,14 +217,16 @@ def decision_tree_binarize(
 
     if contrast <= t1:
         selected_thresh = float(to2)
-        category = f"Low-Contrast (Ctr={contrast:.5f} <= T1={t1}): Selected TSMO TO2={to2}"
+        category = (
+            f"Low-Contrast (Ctr={contrast:.5f} <= T1={t1}): Selected TSMO TO2={to2}"
+        )
     elif contrast <= t2:
         diff = abs(to2 - otsu_to)
         count_intermediate = np.count_nonzero((img_gray > otsu_to) & (img_gray <= to2))
         count_foreground = np.count_nonzero(img_gray <= otsu_to)
 
-        cond_distance = (d_min <= diff <= d_max)
-        cond_density = (count_intermediate <= p_factor * count_foreground)
+        cond_distance = d_min <= diff <= d_max
+        cond_density = count_intermediate <= p_factor * count_foreground
 
         if cond_distance and cond_density:
             selected_thresh = float(to2)
@@ -227,7 +239,9 @@ def decision_tree_binarize(
         category = f"Medium-Contrast (T2 < Ctr={contrast:.5f} <= T3={t3}): Selected Otsu TO={otsu_to:.1f}"
     else:
         selected_thresh = float(to1)
-        category = f"High-Contrast (Ctr={contrast:.5f} > T3={t3}): Selected TSMO TO1={to1}"
+        category = (
+            f"High-Contrast (Ctr={contrast:.5f} > T3={t3}): Selected TSMO TO1={to1}"
+        )
 
     binary_stage1 = np.where(img_gray <= selected_thresh, 0, 255).astype(np.uint8)
     return binary_stage1, selected_thresh, category, to1, to2, otsu_to
@@ -236,7 +250,7 @@ def decision_tree_binarize(
 def sokratis_smear_detection(
     binary_stage1: np.ndarray,
     tile_size: tuple[int, int] = (32, 32),
-    k_smear: float = 1.5
+    k_smear: float = 1.5,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """
     Stage 5 (Part A): Sokratis Smear Detection.
@@ -263,7 +277,9 @@ def sokratis_smear_detection(
         y0, y1 = y_coords[i], y1_coords[i]
         for j in range(len(x_coords)):
             x0, x1 = x_coords[j], x1_coords[j]
-            count = int_img[y1, x1] - int_img[y0, x1] - int_img[y1, x0] + int_img[y0, x0]
+            count = (
+                int_img[y1, x1] - int_img[y0, x1] - int_img[y1, x0] + int_img[y0, x0]
+            )
             area = (y1 - y0) * (x1 - x0)
             density = float(count / max(area, 1))
             densities.append(density)
@@ -290,7 +306,9 @@ def sokratis_smear_detection(
             flagged_tiles_count += 1
 
     fg_u8 = (binary_stage1 == 0).astype(np.uint8)
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(fg_u8, connectivity=8)
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+        fg_u8, connectivity=8
+    )
 
     smear_cc_mask = np.zeros((h, w), dtype=bool)
     flagged_ccs_count = 0
@@ -310,7 +328,7 @@ def sokratis_smear_detection(
         "raw_threshold": raw_threshold,
         "flagged_tiles": flagged_tiles_count,
         "flagged_ccs": flagged_ccs_count,
-        "total_tiles": len(densities)
+        "total_tiles": len(densities),
     }
     return smear_cc_mask, stats_dict
 
@@ -320,7 +338,7 @@ def selective_nick_refinement(
     binary_stage1: np.ndarray,
     smear_mask: np.ndarray,
     win_size: int = 35,
-    k_nick: float = -0.12
+    k_nick: float = -0.12,
 ) -> tuple[np.ndarray, int]:
     """
     Stage 5 (Part B): Selective Nick Binarization on Smear Regions.
@@ -337,9 +355,7 @@ def selective_nick_refinement(
 
 
 def post_processing_algorithm1(
-    binary_img: np.ndarray,
-    lambda_stat: float = 15.0,
-    min_cc_area: int = 6
+    binary_img: np.ndarray, lambda_stat: float = 15.0, min_cc_area: int = 6
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """
     Stage 6: Non-Deforming Post-Processing Pipeline.
@@ -352,9 +368,7 @@ def post_processing_algorithm1(
 
     # 1. Clean up isolated foreground pixels
     fg = (refined == 0).astype(np.uint8)
-    kernel_8 = np.array([[1, 1, 1],
-                         [1, 0, 1],
-                         [1, 1, 1]], dtype=np.uint8)
+    kernel_8 = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], dtype=np.uint8)
     neighbor_count_8 = cv2.filter2D(fg, -1, kernel_8, borderType=cv2.BORDER_CONSTANT)
     isolated_mask = (fg == 1) & (neighbor_count_8 == 0)
     isolated_removed = int(np.count_nonzero(isolated_mask))
@@ -362,20 +376,22 @@ def post_processing_algorithm1(
 
     # 2. Repair true interior pinhole micro-gaps (surrounded by 4 foreground neighbors)
     fg_current = (refined == 0).astype(np.uint8)
-    k_cross = np.array([[0, 1, 0],
-                        [1, 0, 1],
-                        [0, 1, 0]], dtype=np.uint8)
-    pinhole_mask = (refined == 255) & (cv2.filter2D(fg_current, -1, k_cross, borderType=cv2.BORDER_CONSTANT) == 4)
+    k_cross = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=np.uint8)
+    pinhole_mask = (refined == 255) & (
+        cv2.filter2D(fg_current, -1, k_cross, borderType=cv2.BORDER_CONSTANT) == 4
+    )
     gaps_filled = int(np.count_nonzero(pinhole_mask))
     refined[pinhole_mask] = 0
 
     # 3. Clean small isolated background noise specks (Area <= min_cc_area)
     fg_post = (refined == 0).astype(np.uint8)
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(fg_post, connectivity=8)
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+        fg_post, connectivity=8
+    )
     filtered_ccs = 0
     if num_labels > 2:
         areas = stats[1:, cv2.CC_STAT_AREA]
-        is_noise = (areas <= min_cc_area)
+        is_noise = areas <= min_cc_area
 
         noise_lut = np.zeros(num_labels, dtype=bool)
         noise_lut[1:] = is_noise
@@ -385,7 +401,7 @@ def post_processing_algorithm1(
     stats_post = {
         "isolated_pixels_removed": isolated_removed,
         "pinhole_gaps_filled": gaps_filled,
-        "filtered_noise_ccs": filtered_ccs
+        "filtered_noise_ccs": filtered_ccs,
     }
     return refined, stats_post
 
@@ -403,7 +419,7 @@ def hybrid_binarize_image(
     win_size_nick: int = 35,
     k_nick: float = -0.12,
     lambda_post: float = 15.0,
-    min_cc_area: int = 6
+    min_cc_area: int = 6,
 ) -> tuple[np.ndarray, BinarizationMetadata]:
     """
     Executes the full end-to-end Multi-Phase Hybrid Binarization Pipeline.
@@ -443,7 +459,7 @@ def hybrid_binarize_image(
         t3=t3,
         d_min=d_min,
         d_max=d_max,
-        p_factor=p_factor
+        p_factor=p_factor,
     )
     t1_time = time.perf_counter()
     meta.tsmo_to1 = to1
@@ -459,11 +475,7 @@ def hybrid_binarize_image(
         bin_stage1, tile_size=(32, 32), k_smear=k_smear
     )
     bin_stage2, refined_smear_pixels = selective_nick_refinement(
-        prep_img,
-        bin_stage1,
-        smear_mask,
-        win_size=win_size_nick,
-        k_nick=k_nick
+        prep_img, bin_stage1, smear_mask, win_size=win_size_nick, k_nick=k_nick
     )
     t1_time = time.perf_counter()
     meta.smear_mean_density = smear_stats["mean_density"]

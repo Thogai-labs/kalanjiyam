@@ -346,7 +346,9 @@ def preprocess_image(
 
     pipeline_fn = PREPROCESSING_REGISTRY.get(valid_profile)
     if not pipeline_fn:
-        raise ValueError(f"No preprocessing pipeline registered for profile: {valid_profile}")
+        raise ValueError(
+            f"No preprocessing pipeline registered for profile: {valid_profile}"
+        )
 
     orig_size = img.size
     result = pipeline_fn(img, active_config)
@@ -387,4 +389,3 @@ def preprocess_image_to_tempfile(
             yield tmp_path
         finally:
             tmp_path.unlink(missing_ok=True)
-
