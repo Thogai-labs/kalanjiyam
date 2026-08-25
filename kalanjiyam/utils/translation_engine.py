@@ -308,6 +308,57 @@ class GenericTranslationEngine(TranslationEngine):
         return ['en', 'hi', 'bn', 'ta', 'te', 'mr', 'gu', 'kn', 'ml', 'pa', 'ur', 'or', 'as', 'sa', 'ks', 'sd', 'mni', 'sat', 'npi', 'gom', 'doi', 'brx', 'mai']
 
 
+def clean_translation_preambles(text: str, target_name: str = "") -> str:
+    """Strip conversational prefixes, preambles, labels, and thinking tags from LLM translation output."""
+    if not text:
+        return ""
+
+    # Strip thinking tags <think>...</think>
+    text = re.sub(r"(?s)<think>.*?</think>", "", text).strip()
+
+    # Remove markdown code block wrappers if present (e.g. ```marathi ... ```)
+    if text.startswith("```") and text.endswith("```"):
+        lines = text.splitlines()
+        if len(lines) > 2:
+            text = "\n".join(lines[1:-1]).strip()
+
+    lang_names = r"(?:Marathi|Hindi|Tamil|Telugu|Bengali|Gujarati|Kannada|Malayalam|Punjabi|Odia|Urdu|Assamese|Sanskrit|English|Nepali|Konkani|Sindhi|Dogri|Bodo|Maithili|Santali|Kashmiri|Manipuri)"
+    if target_name:
+        lang_names = f"(?:{re.escape(target_name)}|{lang_names})"
+
+    patterns = [
+        # "Here is the Marathi translation:" / "Here is the translation to Marathi:" / "Here is the translation:"
+        rf"(?i)\bhere\s+is\s+(?:the\s+)?(?:{lang_names}\s+)?translation(?:\s+(?:to|in|into)\s+{lang_names})?\s*[:\-–—]?\s*",
+        # "Translated to Marathi:" / "Translated in Marathi:"
+        rf"(?i)\btranslated\s+(?:to|in|into)\s+{lang_names}\s*[:\-–—]?\s*",
+        # "In Marathi:" / "To Marathi:" / "Into Marathi:"
+        rf"(?i)\b(?:in|to|into)\s+{lang_names}(?:\s+translation)?\s*[:\-–—]\s*",
+        # "Marathi translation:"
+        rf"(?i)\b{lang_names}\s+translation\s*[:\-–—]?\s*",
+        # "Translation:"
+        r"(?i)\btranslation\s*[:\-–—]\s*",
+        # Language label prefix at line start: "Marathi: ..."
+        rf"(?im)^\s*{lang_names}\s*[:\-–—]\s*",
+        # Language label prefix after punctuation: "सेवा. Marathi: ..."
+        rf"(?i)(?<=[.!?।॥\n])\s*{lang_names}\s*[:\-–—]\s*",
+    ]
+
+    cleaned = text
+    for p in patterns:
+        cleaned = re.sub(p, "", cleaned)
+
+    # Clean whitespace per line while keeping line structure
+    cleaned_lines = [re.sub(r"[ \t]+", " ", line).strip() for line in cleaned.splitlines()]
+    result = []
+    for line in cleaned_lines:
+        if line:
+            result.append(line)
+        elif result and result[-1] != "":
+            result.append("")
+
+    return "\n".join(result).strip()
+
+
 class BharatGenTranslateEngine(TranslationEngine):
     """Translation engine using BharatGen chat completions API."""
 
@@ -399,22 +450,30 @@ class BharatGenTranslateEngine(TranslationEngine):
             "mai": "Maithili",
         }
 
+        source_name = language_map.get(source_lang, source_lang.capitalize())
         target_name = language_map.get(target_lang, target_lang.capitalize())
 
-        user_content = f"Translate this to {target_name}: {text}"
+        system_content = (
+            f"You are a professional machine translation system. Your sole task is to accurately translate text from {source_name} to {target_name}. "
+            f"Output ONLY the direct translated text. "
+            f"Do NOT write any introduction, notes, explanations, preambles, or labels (e.g. do NOT output 'Here is the translation', 'Translation:', 'In {target_name}:', '{target_name}:', 'Translated to {target_name}:'). "
+            f"Preserve all line breaks, formatting, and special tags exactly."
+        )
+
+        user_content = f"Translate the following text from {source_name} to {target_name}:\n\n{text}"
         if kwargs.get("glossary"):
-            user_content = f"Translate this to {target_name} using glossary ({kwargs['glossary']}): {text}"
+            user_content = f"Translate the following text from {source_name} to {target_name} using domain terms ({kwargs['glossary']}):\n\n{text}"
 
         payload = {
             "model": self.model_name,
-            "temperature": kwargs.get("temperature", 0.5),
+            "temperature": kwargs.get("temperature", 0.1),
             "repetition_penalty": kwargs.get("repetition_penalty", 1.02),
             "max_length": kwargs.get("max_length", 2048),
             "chat_template_kwargs": {
                 "enable_thinking": kwargs.get("enable_thinking", True)
             },
             "messages": [
-                {"role": "system", "content": "You are helpful translator."},
+                {"role": "system", "content": system_content},
                 {"role": "user", "content": user_content},
             ],
         }
@@ -455,8 +514,8 @@ class BharatGenTranslateEngine(TranslationEngine):
                 )
 
             content = choices[0].get("message", {}).get("content", "")
-            # Strip <think>...</think> tags if model returned thinking reasoning
-            content = re.sub(r"(?s)<think>.*?</think>", "", content).strip()
+            # Clean reasoning tags, markdown code blocks, and conversational preambles/labels
+            content = clean_translation_preambles(content, target_name)
 
             return TranslationResponse(
                 translated_text=content,

@@ -1618,11 +1618,13 @@ def _clean_translation_input(text: str) -> str:
 
 
 def _clean_translation_output(text: str) -> str:
-    """Clean translation output text to remove corrupted &nbsp; entities or trailing &nbsp;."""
+    """Clean translation output text to remove conversational preambles and corrupted &nbsp; entities."""
     if not text:
         return ""
+    from kalanjiyam.utils.translation_engine import clean_translation_preambles
+    cleaned = clean_translation_preambles(text)
     # Remove any stray &nbsp; or &nbsp;; or & nbsp;; or \xa0 resulting from translation
-    cleaned = re.sub(r'&\s*nbsp\s*;*', ' ', text)
+    cleaned = re.sub(r'&\s*nbsp\s*;*', ' ', cleaned)
     cleaned = cleaned.replace('\xa0', ' ')
     # Normalize multiple consecutive spaces to a single space
     cleaned = re.sub(r' +', ' ', cleaned)

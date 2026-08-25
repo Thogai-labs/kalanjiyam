@@ -9,6 +9,7 @@ from kalanjiyam.utils.translation_engine import (
     OpenAITranslateEngine,
     IndicTransEngine,
     BharatGenTranslateEngine,
+    clean_translation_preambles,
     TranslationEngineFactory,
     translate_text,
     segment_text_for_translation,
@@ -263,18 +264,16 @@ class TestBharatGenTranslateEngine:
             call_kwargs = mock_client.post.call_args[1]
             assert call_kwargs["headers"]["Authorization"] == "Bearer test-token"
             assert call_kwargs["json"]["model"] == "param_lc_translate_ep4"
-            assert call_kwargs["json"]["temperature"] == 0.5
+            assert call_kwargs["json"]["temperature"] == 0.1
             assert call_kwargs["json"]["repetition_penalty"] == 1.02
             assert call_kwargs["json"]["max_length"] == 2048
             assert call_kwargs["json"]["chat_template_kwargs"] == {"enable_thinking": True}
-            assert call_kwargs["json"]["messages"] == [
-                {"role": "system", "content": "You are helpful translator."},
-                {"role": "user", "content": "Translate this to Hindi: India is a great country"}
-            ]
+            assert "You are a professional machine translation system." in call_kwargs["json"]["messages"][0]["content"]
+            assert "Translate the following text from English to Hindi:" in call_kwargs["json"]["messages"][1]["content"]
 
     @patch('httpx.Client')
-    def test_translate_with_thinking_tags_stripped(self, mock_client_class):
-        """Test thinking tags <think>...</think> are stripped from response content."""
+    def test_translate_with_thinking_tags_and_preambles_stripped(self, mock_client_class):
+        """Test thinking tags and conversational preambles are cleanly stripped."""
         mock_client = Mock()
         mock_client_class.return_value.__enter__.return_value = mock_client
         mock_response = Mock()
@@ -284,7 +283,7 @@ class TestBharatGenTranslateEngine:
                 {
                     "message": {
                         "role": "assistant",
-                        "content": "<think>Thinking about translating from English to Tamil...</think>இந்தியா ஒரு சிறந்த நாடு."
+                        "content": "<think>Thinking...</think>Here is the Marathi translation:\nदोनशे युरोपियन पायदळाचे एक विभाग"
                     }
                 }
             ]
@@ -295,8 +294,8 @@ class TestBharatGenTranslateEngine:
         app = Flask("test_app")
         with app.app_context():
             engine = BharatGenTranslateEngine("translation_1b_exp_40")
-            response = engine.translate("India is a great country", "en", "ta")
-            assert response.translated_text == "இந்தியா ஒரு சிறந்த நாடு."
+            response = engine.translate("A division of two hundred European infantry", "en", "mr")
+            assert response.translated_text == "दोनशे युरोपियन पायदळाचे एक विभाग"
             assert response.engine == "translation_1b_exp_40"
 
     @patch('httpx.Client')
@@ -326,7 +325,7 @@ class TestBharatGenTranslateEngine:
             assert response.translated_text == "अनुवाद"
 
             call_kwargs = mock_client.post.call_args[1]
-            assert "using glossary (admin_terms)" in call_kwargs["json"]["messages"][1]["content"]
+            assert "using domain terms (admin_terms)" in call_kwargs["json"]["messages"][1]["content"]
 
     def test_get_supported_languages(self):
         """Test supported languages of BharatGen engine."""
@@ -337,6 +336,43 @@ class TestBharatGenTranslateEngine:
         assert "ta" in languages
         assert "te" in languages
         assert "sa" in languages
+
+
+class TestCleanTranslationPreambles:
+    """Test suite for stripping conversational LLM preambles from translation outputs."""
+
+    def test_strip_various_preamble_formats(self):
+        sample_output = """In Marathi:
+जी.ओ. Translated to Marathi:
+मेजर जनरल हेक्टर मुन्रो यांनी केले.
+Translated to Marathi:
+दोनशे युरोपियन पायदळाचे एक विभाग
+Here is the Marathi translation:
+आर्टिलरीच्या कॉर्प्सचा आणि एका बटालियनच्या शिपायांचा समावेश असेल
+Marathi: बॉम्बेच्या शॉर्टेस्ट रूटवर एक डॅचमेंट म्हणून.
+Translation:
+प्रत्येक युरोपियन बटालियनमध्ये एक कॅप्टन असतो."""
+
+        cleaned = clean_translation_preambles(sample_output, "Marathi")
+        assert "In Marathi:" not in cleaned
+        assert "Translated to Marathi:" not in cleaned
+        assert "Here is the Marathi translation:" not in cleaned
+        assert "Marathi:" not in cleaned
+        assert "Translation:" not in cleaned
+        assert "जी.ओ." in cleaned
+        assert "मेजर जनरल हेक्टर मुन्रो यांनी केले." in cleaned
+        assert "दोनशे युरोपियन पायदळाचे एक विभाग" in cleaned
+        assert "प्रत्येक युरोपियन बटालियनमध्ये एक कॅप्टन असतो." in cleaned
+
+    def test_strip_markdown_code_fences(self):
+        wrapped = "```marathi\nभारत एक महान देश आहे.\n```"
+        cleaned = clean_translation_preambles(wrapped, "Marathi")
+        assert cleaned == "भारत एक महान देश आहे."
+
+    def test_strip_thinking_tags(self):
+        with_thinking = "<think>Analysing English sentence...</think>भारत एक महान देश है।"
+        cleaned = clean_translation_preambles(with_thinking, "Hindi")
+        assert cleaned == "भारत एक महान देश है।"
 
 
 class TestAvailableTranslationEngines:
