@@ -36,7 +36,7 @@
     {{ form.csrf_token }}
     {% for field in form %}
       {% if field.name != 'csrf_token' %}
-      <div class="my-4" id="field-container-{{ field.name }}">
+      <div class="my-4" id="field-container-{{ field.name }}" {% if field.name == 'organization_ids' %}style="display: none;"{% endif %}>
         {{ mf.label(field.label) }}
         {% if field.type == 'SelectMultipleField' %}
         {{ field(class_='w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all bg-white text-slate-900', size=5) }}
@@ -91,36 +91,67 @@
 {{ super() }}
 {{ lib.form_js() }}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  const roleSelect = document.getElementById('role_ids');
-  const singleOrgContainer = document.getElementById('field-container-organization_pick');
-  const multiOrgContainer = document.getElementById('field-container-organization_ids');
+(function() {
+  function checkIsMasterUser() {
+    const roleSelect = document.getElementById('role_ids');
+    if (roleSelect && roleSelect.options) {
+      for (let i = 0; i < roleSelect.options.length; i++) {
+        const opt = roleSelect.options[i];
+        if (opt.selected) {
+          const text = (opt.text || '').toLowerCase();
+          const val = (opt.value || '').toLowerCase();
+          if (text.includes('master') || val === 'master_user') {
+            return true;
+          }
+        }
+      }
+    }
+    const checkedRoles = document.querySelectorAll('input[name="role_ids"]:checked');
+    for (let i = 0; i < checkedRoles.length; i++) {
+      const parent = checkedRoles[i].closest('label') || checkedRoles[i].parentElement;
+      const text = parent ? parent.textContent.toLowerCase() : '';
+      if (text.includes('master')) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   function updateOrgVisibility() {
-    if (!roleSelect) return;
-    let isMasterUser = false;
-    for (let i = 0; i < roleSelect.options.length; i++) {
-      const opt = roleSelect.options[i];
-      if (opt.selected && (opt.text.toLowerCase().includes('master_user') || opt.text.toLowerCase().includes('master'))) {
-        isMasterUser = true;
-        break;
-      }
+    const isMaster = checkIsMasterUser();
+    const singleOrg = document.getElementById('field-container-organization_pick');
+    const multiOrg = document.getElementById('field-container-organization_ids');
+
+    if (singleOrg) {
+      singleOrg.style.display = isMaster ? 'none' : 'block';
     }
-    if (singleOrgContainer && multiOrgContainer) {
-      if (isMasterUser) {
-        multiOrgContainer.style.display = 'block';
-        singleOrgContainer.style.display = 'none';
-      } else {
-        multiOrgContainer.style.display = 'none';
-        singleOrgContainer.style.display = 'block';
-      }
+    if (multiOrg) {
+      multiOrg.style.display = isMaster ? 'block' : 'none';
     }
   }
 
-  if (roleSelect) {
-    roleSelect.addEventListener('change', updateOrgVisibility);
+  function initListeners() {
+    const roleSelect = document.getElementById('role_ids');
+    if (roleSelect) {
+      ['change', 'click', 'input', 'mouseup', 'keyup'].forEach(function(evt) {
+        roleSelect.addEventListener(evt, updateOrgVisibility);
+      });
+    }
+    const roleInputs = document.querySelectorAll('input[name="role_ids"]');
+    roleInputs.forEach(function(input) {
+      input.addEventListener('change', updateOrgVisibility);
+    });
+    if (window.jQuery) {
+      window.jQuery(document).on('change select2:select select2:unselect', '#role_ids', updateOrgVisibility);
+    }
     updateOrgVisibility();
   }
-});
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initListeners);
+  } else {
+    initListeners();
+  }
+})();
 </script>
 {% endblock %}
