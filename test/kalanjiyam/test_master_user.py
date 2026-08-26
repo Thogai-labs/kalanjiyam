@@ -221,8 +221,8 @@ def test_master_user_proofing_dashboard_org_filtering_and_tags(client, flask_app
             org_slug=org2.slug,
         )
         _add_project_to_database(
-            display_title="Project Gamma Unregistered",
-            slug="proj-gamma-unreg",
+            display_title="Project Gamma Guest",
+            slug="proj-gamma-guest",
             num_pages=2,
             creator_id=None,
             fingerprint_id="test-fp-123",
@@ -234,17 +234,17 @@ def test_master_user_proofing_dashboard_org_filtering_and_tags(client, flask_app
             sess["_user_id"] = str(master_user.id)
             sess["_fresh"] = True
 
-        # Test index without org filter (shows both projects and tags)
+        # Test index without org filter (shows projects and org badges, but not creator_mode badges)
         res = client.get("/proofing/")
         assert res.status_code == 200
         html = res.get_data(as_text=True)
         assert "Project Alpha In Org 1" in html
         assert "Project Beta In Org 2" in html
-        assert "Project Gamma Unregistered" in html
+        assert "Project Gamma Guest" in html
         assert "Dashboard Org 1" in html
         assert "Dashboard Org 2" in html
-        assert "Enterprise" in html
-        assert "Unregistered" in html
+        assert "Enterprise" not in html
+        assert "Unregistered" not in html
 
         # Test filter by org1
         res_org1 = client.get(f"/proofing/?org={org1.slug}")
@@ -260,11 +260,5 @@ def test_master_user_proofing_dashboard_org_filtering_and_tags(client, flask_app
         assert "Project Beta In Org 2" in html_org2
         assert "Project Alpha In Org 1" not in html_org2
 
-        # Test filter by mode=unregistered
-        res_mode = client.get("/proofing/?mode=unregistered")
-        assert res_mode.status_code == 200
-        html_mode = res_mode.get_data(as_text=True)
-        assert "Project Gamma Unregistered" in html_mode
-        assert "Project Alpha In Org 1" not in html_mode
 
 
