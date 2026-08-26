@@ -8,23 +8,36 @@ from kalanjiyam.seed.utils.data_utils import create_db
 
 
 def run(engine=None):
-    """Create roles iff they don't exist already.
+    """Create roles and remove obsolete roles."""
 
-    NOTE: this script doesn't delete existing roles.
-    """
-
+    if engine is None:
+        try:
+            from flask import current_app
+            if current_app:
+                from kalanjiyam import queries as q
+                engine = q.get_engine()
+        except Exception:
+            pass
     engine = engine or create_db()
     with Session(engine) as session:
+        valid_roles = {r.value for r in SiteRole}
         roles = session.query(db.Role).all()
-        existing_names = {s.name for s in roles}
+
+        for r in roles:
+            if r.name not in valid_roles:
+                session.query(db.UserRoles).filter_by(role_id=r.id).delete()
+                session.delete(r)
+                logging.debug(f"Deleted obsolete role: {r.name}")
+
+        existing_names = {s.name for s in session.query(db.Role).all()}
         new_names = {r.value for r in SiteRole if r.value not in existing_names}
 
         if new_names:
             for name in new_names:
-                status = db.Role(name=name)
-                session.add(status)
+                role = db.Role(name=name)
+                session.add(role)
                 logging.debug(f"Created role: {name}")
-            session.commit()
+        session.commit()
 
     logging.debug("Done. The following roles are defined:")
     with Session(engine) as session:

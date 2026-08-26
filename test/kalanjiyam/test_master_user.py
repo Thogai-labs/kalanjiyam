@@ -166,3 +166,24 @@ def test_master_user_search_scope(flask_app):
         matching_terms = [clause for clause in filter_should if "terms" in clause]
         assert len(matching_terms) == 1
         assert sorted(matching_terms[0]["terms"]["group_ids"]) == sorted([org_x.id, org_y.id])
+
+
+def test_seed_lookup_role_cleans_obsolete_and_adds_master_user(flask_app):
+    from kalanjiyam.seed.lookup import role as seed_role
+
+    with flask_app.app_context():
+        session = q.get_session()
+        # Artificially insert obsolete role
+        obsolete_role = db.Role(name="obsolete_test_role")
+        session.add(obsolete_role)
+        session.commit()
+
+        # Run role seed
+        seed_role.run()
+
+        # Obsolete role should be deleted and master_user present
+        role_names = {r.name for r in session.query(db.Role).all()}
+        assert "obsolete_test_role" not in role_names
+        assert "master_user" in role_names
+        assert "super_admin" in role_names
+        assert "admin" not in role_names

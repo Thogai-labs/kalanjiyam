@@ -120,12 +120,12 @@ def _check_lookup_tables(session) -> list[str]:
         table_name = model.__tablename__
         for field_name in db_names - app_names:
             errors.append(
-                f'Enum field "{enum_name}.{field_name}" not defined on database table "{table_name}".'
+                f'Database row in table "{table_name}" (name = "{field_name}") is obsolete and not defined in enum "{enum_name}".'
             )
 
         for field_name in app_names - db_names:
             errors.append(
-                f'Table row ({table_name} where name = "{field_name}") not defined on enum "{enum_name}".'
+                f'Enum field "{enum_name}.{field_name}" is missing from database table "{table_name}".'
             )
 
     return errors
