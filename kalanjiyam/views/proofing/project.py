@@ -1,13 +1,13 @@
-import logging
-import re
-import os
 import json
+import logging
+import os
+import re
 from datetime import datetime
 
+import redis
 from celery.result import GroupResult
 from flask import (
     Blueprint,
-    abort as flask_abort,
     current_app,
     flash,
     jsonify,
@@ -16,11 +16,13 @@ from flask import (
     request,
     url_for,
 )
+from flask import (
+    abort as flask_abort,
+)
 from flask_babel import lazy_gettext as _l
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from markupsafe import Markup, escape
-from sqlalchemy import orm
 from sqlalchemy.orm.attributes import flag_modified
 from werkzeug.exceptions import abort
 from werkzeug.utils import redirect
@@ -36,27 +38,26 @@ from wtforms import (
 from wtforms.validators import DataRequired, ValidationError
 from wtforms.widgets import TextArea
 from wtforms_sqlalchemy.fields import QuerySelectField
-import redis
 
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
-from kalanjiyam.utils.translation_engine import (
-    get_available_translation_engines,
-    get_supported_languages_list,
-)
 from kalanjiyam.models.proofing import OCRComparison
 from kalanjiyam.tasks import app as celery_app
-from kalanjiyam.tasks import ocr as ocr_tasks
-from kalanjiyam.tasks.comparison import run_ocr_comparison_task
-from kalanjiyam.tasks import translation as translation_tasks
-from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
 from kalanjiyam.tasks import archival_extract as archival_tasks
 from kalanjiyam.tasks import metadata as metadata_tasks
+from kalanjiyam.tasks import ocr as ocr_tasks
+from kalanjiyam.tasks import translation as translation_tasks
+from kalanjiyam.tasks.comparison import run_ocr_comparison_task
 from kalanjiyam.utils import archival_description as ad
 from kalanjiyam.utils import archival_taxonomy as at
 from kalanjiyam.utils import project_metadata as pm
 from kalanjiyam.utils import project_utils, proofing_utils
+from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
 from kalanjiyam.utils.revisions import add_revision
+from kalanjiyam.utils.translation_engine import (
+    get_available_translation_engines,
+    get_supported_languages_list,
+)
 from kalanjiyam.views.proofing.decorators import moderator_required, p2_required
 from kalanjiyam.views.proofing.stats import calculate_stats
 
@@ -396,8 +397,8 @@ def activity(slug):
     for r in all_page_revisions:
         revisions_by_page.setdefault(r.page_id, []).append(r)
 
-    from kalanjiyam.utils.diff import revision_diff
     from kalanjiyam.utils import proofing_utils
+    from kalanjiyam.utils.diff import revision_diff
 
     for r in recent_revisions:
         page_revs = revisions_by_page.get(r.page_id, [])
@@ -885,7 +886,7 @@ def download(slug):
     if project_ is None:
         abort(404)
 
-    from kalanjiyam.utils.storage import project_docx_key, get_storage
+    from kalanjiyam.utils.storage import get_storage, project_docx_key
 
     is_docx = get_storage().exists(project_docx_key(slug))
 
@@ -935,14 +936,15 @@ def download_as_xml(slug):
     }
     project_meta = {k: v or "TODO" for k, v in project_meta.items()}
     from kalanjiyam.utils.document_storage import load_revision_document as _load_doc
-
     from kalanjiyam.utils.proofing_utils import get_main_revision
 
     has_blocks = any(
         (
-            lambda rev: rev
-            and getattr(rev, "content_format", "plain") == "blocks"
-            and _load_doc(rev)
+            lambda rev: (
+                rev
+                and getattr(rev, "content_format", "plain") == "blocks"
+                and _load_doc(rev)
+            )
         )(get_main_revision(p))
         for p in project_.pages
     )
@@ -1271,7 +1273,6 @@ def _select_changes(project_, selected_keys, query: str, replace: str):
         latest = page_.revisions[-1]
         matches = []
         for line_num, line in enumerate(latest.content.splitlines()):
-
             form_key = f"match{page_.slug}-{line_num}"
             replace_form_key = f"match{page_.slug}-{line_num}-replace"
 
@@ -1511,8 +1512,8 @@ def batch_ocr(slug):
     from kalanjiyam.utils.ocr_client import get_available_engines
     from kalanjiyam.utils.ocr_types import (
         ENGINE_MAP,
-        build_engine_choices,
         REVERSE_ENGINE_MAP,
+        build_engine_choices,
     )
 
     system_settings = q.get_system_settings()
@@ -1745,6 +1746,324 @@ def batch_ocr_status(task_id):
     return render_template(
         "include/ocr-progress.html",
         **data,
+    )
+
+
+def _clear_enhanced_ocr_task_from_redis(task_id):
+    """Clear Enhanced OCR task from Redis when it completes or fails."""
+    try:
+        for key in redis_client.scan_iter(match="enhanced_ocr_task:*"):
+            task_info = redis_client.get(key)
+            if task_info:
+                task_data = json.loads(task_info)
+                if task_data.get("task_id") == task_id:
+                    redis_client.delete(key)
+                    LOG.debug(
+                        f"Cleared Enhanced OCR task {task_id} from Redis key {key}"
+                    )
+                    break
+    except Exception as e:
+        LOG.warning(f"Error clearing Enhanced OCR task from Redis: {e}")
+
+
+@bp.route("/<slug>/batch-enhanced-ocr", methods=["GET", "POST"])
+@p2_required
+def batch_enhanced_ocr(slug):
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    # Check if there's an ongoing Enhanced OCR task using Redis
+    task_key = f"enhanced_ocr_task:{slug}"
+    task_info = redis_client.get(task_key)
+
+    if task_info:
+        try:
+            task_data = json.loads(task_info)
+            task_id = task_data.get("task_id")
+            engine = task_data.get("engine", "dots_ocr")
+            profile = task_data.get("profile", "hybrid_binarization")
+            language = task_data.get("language") or "auto"
+            save_enhanced_images = bool(task_data.get("save_enhanced_images", False))
+
+            r = GroupResult.restore(task_id, app=celery_app)
+            if r and r.results:
+                current = r.completed_count()
+                total = len(r.results)
+                if current < total:
+                    percent = (current / total * 100) if total > 0 else 0
+                    active_tasks = sum(
+                        1 for result in r.results if result.state == "STARTED"
+                    )
+                    pending_tasks = sum(
+                        1 for result in r.results if result.state == "PENDING"
+                    )
+                    failed_tasks = sum(1 for result in r.results if result.failed())
+
+                    from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
+
+                    numeric_value = REVERSE_ENGINE_MAP.get(engine, "12")
+                    engine_label = (
+                        f"OCR {numeric_value} ({profile.replace('_', ' ').title()})"
+                    )
+
+                    return render_template(
+                        "proofing/projects/batch-enhanced-ocr-post.html",
+                        project=project_,
+                        status="PROGRESS",
+                        current=current,
+                        total=total,
+                        percent=percent,
+                        task_id=task_id,
+                        active_tasks=active_tasks,
+                        pending_tasks=pending_tasks,
+                        failed_tasks=failed_tasks,
+                        engine=engine,
+                        profile=profile,
+                        engine_label=engine_label,
+                        language=language,
+                        save_enhanced_images=save_enhanced_images,
+                    )
+                else:
+                    redis_client.delete(task_key)
+            else:
+                redis_client.delete(task_key)
+        except Exception as e:
+            LOG.warning(f"Error checking Enhanced OCR task for {slug}: {e}")
+            redis_client.delete(task_key)
+
+    from kalanjiyam.utils.image_preprocessing import validate_enhancement_profile
+    from kalanjiyam.utils.ocr_client import get_available_engines
+    from kalanjiyam.utils.ocr_types import (
+        ENGINE_MAP,
+        REVERSE_ENGINE_MAP,
+        build_engine_choices,
+    )
+
+    system_settings = q.get_system_settings()
+    default_ocr_engine = system_settings.default_ocr_engine or "dots_ocr"
+    default_engine_value = REVERSE_ENGINE_MAP.get(default_ocr_engine, "12")
+    from kalanjiyam.utils.org_access import is_restricted_ocr_user
+
+    is_restricted_ocr = is_restricted_ocr_user(current_user)
+
+    if request.method == "POST":
+        if not current_user.is_authenticated:
+            from kalanjiyam.utils.rate_limit import is_rate_limited
+
+            ip_address = request.remote_addr
+            fingerprint_id = request.cookies.get("device_fingerprint")
+            limit = system_settings.unregistered_user_ocr_limit
+            if is_rate_limited("run_ocr", ip_address, fingerprint_id, limit=limit):
+                flash(
+                    _l(
+                        f"Rate limit exceeded. Guests can only run OCR {limit} times per 24 hours."
+                    ),
+                    "error",
+                )
+                return redirect(
+                    url_for("proofing.project.batch_enhanced_ocr", slug=slug)
+                )
+
+        engine_num = request.form.get("engine", "")
+        profile_raw = request.form.get("profile", "hybrid_binarization")
+        profile = validate_enhancement_profile(profile_raw)
+        language = request.form.get("language") or "auto"
+        save_enhanced_images = request.form.get("save_enhanced_images") == "1"
+
+        if is_restricted_ocr:
+            engine = default_ocr_engine
+        else:
+            engine = ENGINE_MAP.get(engine_num, engine_num)
+
+        if not engine or engine not in SUPPORTED_ENGINES:
+            flash(_l("Unsupported OCR engine selected."), "error")
+        else:
+            queue_name = "low_priority" if not current_user.is_authenticated else None
+            task = ocr_tasks.run_enhanced_ocr_for_project(
+                app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
+                project=project_,
+                engine=engine,
+                profile=profile,
+                language=language,
+                save_enhanced_images=save_enhanced_images,
+                queue=queue_name,
+            )
+            if task:
+                if not current_user.is_authenticated:
+                    from kalanjiyam.utils.rate_limit import log_usage_action
+
+                    log_usage_action(
+                        action="run_ocr",
+                        ip_address=request.remote_addr,
+                        fingerprint_id=request.cookies.get("device_fingerprint"),
+                        project_slug=slug,
+                    )
+                task_info = {
+                    "task_id": task.id,
+                    "engine": engine,
+                    "profile": profile,
+                    "language": language,
+                    "save_enhanced_images": save_enhanced_images,
+                    "started_at": datetime.utcnow().isoformat(),
+                    "project_slug": slug,
+                }
+                redis_client.setex(task_key, 86400, json.dumps(task_info))
+
+                from kalanjiyam.utils.user_tasks import (
+                    add_user_task,
+                    get_user_identifier,
+                )
+
+                user_id = get_user_identifier(current_user, request)
+                if user_id:
+                    add_user_task(
+                        user_identifier=user_id,
+                        task_id=task.id,
+                        task_type="enhanced_ocr",
+                        project_slug=slug,
+                        project_title=project_.display_title,
+                        extra_info={
+                            "engine": engine,
+                            "profile": profile,
+                            "language": language,
+                            "save_enhanced_images": save_enhanced_images,
+                        },
+                    )
+                numeric_value = REVERSE_ENGINE_MAP.get(engine, "12")
+                engine_label = (
+                    f"OCR {numeric_value} ({profile.replace('_', ' ').title()})"
+                )
+
+                return render_template(
+                    "proofing/projects/batch-enhanced-ocr-post.html",
+                    project=project_,
+                    status="PENDING",
+                    current=0,
+                    total=0,
+                    percent=0,
+                    task_id=task.id,
+                    active_tasks=0,
+                    pending_tasks=0,
+                    failed_tasks=0,
+                    engine=engine,
+                    profile=profile,
+                    language=language,
+                    save_enhanced_images=save_enhanced_images,
+                    engine_label=engine_label,
+                    is_restricted_ocr=is_restricted_ocr,
+                    default_engine_value=default_engine_value,
+                )
+            else:
+                flash(
+                    _l("All pages in this project have at least one edit already."),
+                    "error",
+                )
+
+    ocr_status = get_available_engines()
+    engine_choices = build_engine_choices(
+        ocr_status["engines"],
+        is_super_admin=current_user.is_super_admin,
+        recommended_engine=system_settings.recommended_ocr_engine or "dots_ocr",
+    )
+    return render_template(
+        "proofing/projects/batch-enhanced-ocr.html",
+        project=project_,
+        ocr_status=ocr_status["status"],
+        engine_choices=engine_choices,
+        is_restricted_ocr=is_restricted_ocr,
+        default_engine_value=default_engine_value,
+    )
+
+
+@bp.route("/batch-enhanced-ocr-status/<task_id>")
+def batch_enhanced_ocr_status(task_id):
+    r = GroupResult.restore(task_id, app=celery_app)
+    if not r or not r.results:
+        return render_template(
+            "include/ocr-progress.html",
+            status="PENDING",
+            current=0,
+            total=0,
+            percent=0,
+            active_tasks=0,
+            pending_tasks=0,
+            failed_tasks=0,
+            engine="dots_ocr",
+            language="auto",
+        )
+
+    engine = "dots_ocr"
+    profile = "hybrid_binarization"
+    language = "auto"
+    try:
+        for key in redis_client.scan_iter(match="enhanced_ocr_task:*"):
+            task_info = redis_client.get(key)
+            if task_info:
+                task_data = json.loads(task_info)
+                if task_data.get("task_id") == task_id:
+                    engine = task_data.get("engine", "dots_ocr")
+                    profile = task_data.get("profile", "hybrid_binarization")
+                    language = task_data.get("language") or "auto"
+                    break
+    except Exception as e:
+        LOG.warning(f"Error getting Enhanced OCR task info from Redis: {e}")
+
+    from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
+
+    numeric_value = REVERSE_ENGINE_MAP.get(engine, "12")
+    engine_label = f"OCR {numeric_value} ({profile.replace('_', ' ').title()})"
+
+    if r.results:
+        current = r.completed_count()
+        total = len(r.results)
+        percent = (current / total * 100) if total > 0 else 0
+
+        active_tasks = sum(1 for result in r.results if result.state == "STARTED")
+        pending_tasks = sum(1 for result in r.results if result.state == "PENDING")
+        failed_tasks = sum(1 for result in r.results if result.failed())
+        revoked_tasks = sum(1 for result in r.results if result.state == "REVOKED")
+
+        status = None
+        if total:
+            if current == total:
+                status = "SUCCESS"
+                _clear_enhanced_ocr_task_from_redis(task_id)
+            elif failed_tasks > 0:
+                status = "FAILURE"
+                _clear_enhanced_ocr_task_from_redis(task_id)
+            elif revoked_tasks > 0:
+                status = "CANCELLED"
+                _clear_enhanced_ocr_task_from_redis(task_id)
+            else:
+                status = "PROGRESS"
+
+        data = {
+            "status": status,
+            "current": current,
+            "total": total,
+            "percent": percent,
+            "active_tasks": active_tasks,
+            "pending_tasks": pending_tasks,
+            "failed_tasks": failed_tasks,
+            "engine": engine,
+            "language": language,
+            "engine_label": engine_label,
+        }
+        return render_template("include/ocr-progress.html", **data)
+
+    return render_template(
+        "include/ocr-progress.html",
+        status="PENDING",
+        current=0,
+        total=0,
+        percent=0,
+        active_tasks=0,
+        pending_tasks=0,
+        failed_tasks=0,
+        engine=engine,
+        language=language,
+        engine_label=engine_label,
     )
 
 

@@ -1,0 +1,75 @@
+{% extends "proofing/base.html" %}
+{% from "macros/forms.html" import field %}
+{% import "macros/proofing.html" as m %}
+
+{% block extra_css %}
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap");
+
+  .font-serif-title {
+    font-family: "Cinzel", Georgia, serif;
+  }
+
+  .project-hero {
+    background: #0b1120;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(124, 58, 237, 0.22) 0%, rgba(11, 17, 32, 0.95) 75%),
+      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
+      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
+    background-size: 100% 100%, 24px 24px, 24px 24px;
+  }
+</style>
+{% endblock %}
+
+{% block title %}{{ _("Enhanced Batch OCR Progress:") }} {{ project.display_title }} | Kalanjiyam{% endblock %}
+
+{% block hero %}
+<header class="project-hero text-slate-100 py-10 px-4 mb-8 border-b border-slate-800">
+  <div class="max-w-6xl mx-auto">
+    <!-- Category Badge -->
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/30 text-violet-300 text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"></path>
+      </svg>
+      <span>{{ _("Adaptive Image Enhancement & Batch OCR") }}</span>
+    </div>
+
+    <!-- Title -->
+    <h1 class="text-3xl sm:text-4xl font-bold font-serif-title tracking-tight mb-2 text-white">
+      {{ project.display_title }}
+    </h1>
+
+    <!-- Meta Info -->
+    <div class="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-slate-400 font-medium">
+      {% if project.author %}
+      <span class="text-slate-300 font-semibold">{{ project.author }}</span>
+      {% endif %}
+      {% if project.publication_year %}
+      <span class="text-slate-600">•</span>
+      <span>{{ project.publication_year }}</span>
+      {% endif %}
+      {% if project.publisher %}
+      <span class="text-slate-600">•</span>
+      <span>{{ project.publisher }}</span>
+      {% endif %}
+      <span class="text-slate-600">•</span>
+      <span class="text-violet-400 font-semibold">{{ project.pages|length }} {{ _("pages") }}</span>
+    </div>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="w-full">
+  <div class="mb-6">
+    {{ m.project_tabs(project=project, active="batch_processes", is_mod=current_user.is_moderator) }}
+  </div>
+
+  {% set url = url_for("proofing.project.batch_enhanced_ocr_status", task_id=task_id) %}
+  <div id="progress" x-data="htmlPoller('{{ url }}')">
+    {% with current=current, total=total, percent=percent, slug=slug, status=status, active_tasks=active_tasks, pending_tasks=pending_tasks, failed_tasks=failed_tasks, engine=engine, language=language, engine_label=engine_label %}
+      {% include "include/ocr-progress.html" %}
+    {% endwith %}
+  </div>
+</div>
+{% endblock %}

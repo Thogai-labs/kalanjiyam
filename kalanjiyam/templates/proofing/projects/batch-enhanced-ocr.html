@@ -1,0 +1,294 @@
+{% extends "proofing/base.html" %}
+{% import "macros/components.html" as components %}
+{% from "macros/forms.html" import field %}
+{% import "macros/proofing.html" as m %}
+
+{% block extra_css %}
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap");
+
+  .font-serif-title {
+    font-family: "Cinzel", Georgia, serif;
+  }
+
+  .project-hero {
+    background: #0b1120;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(124, 58, 237, 0.22) 0%, rgba(11, 17, 32, 0.95) 75%),
+      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
+      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
+    background-size: 100% 100%, 24px 24px, 24px 24px;
+  }
+</style>
+{% endblock %}
+
+{% block title %}{{ _("Enhanced Batch OCR:") }} {{ project.display_title }} | Kalanjiyam{% endblock %}
+
+{% block hero %}
+<header class="project-hero text-slate-100 py-10 px-4 mb-8 border-b border-slate-800">
+  <div class="max-w-6xl mx-auto">
+    <!-- Category Badge -->
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/30 text-violet-300 text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"></path>
+      </svg>
+      <span>{{ _("Adaptive Image Enhancement & Batch OCR") }}</span>
+    </div>
+
+    <!-- Title -->
+    <h1 class="text-3xl sm:text-4xl font-bold font-serif-title tracking-tight mb-2 text-white">
+      {{ project.display_title }}
+    </h1>
+
+    <!-- Meta Info -->
+    <div class="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-slate-400 font-medium">
+      {% if project.author %}
+      <span class="text-slate-300 font-semibold">{{ project.author }}</span>
+      {% endif %}
+      {% if project.publication_year %}
+      <span class="text-slate-600">•</span>
+      <span>{{ project.publication_year }}</span>
+      {% endif %}
+      {% if project.publisher %}
+      <span class="text-slate-600">•</span>
+      <span>{{ project.publisher }}</span>
+      {% endif %}
+      <span class="text-slate-600">•</span>
+      <span class="text-violet-400 font-semibold">{{ project.pages|length }} {{ _("pages") }}</span>
+    </div>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="w-full">
+  <div class="mb-6">
+    {{ m.project_tabs(project=project, active="batch_processes", is_mod=current_user.is_moderator) }}
+  </div>
+
+  <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 mb-8" x-data="{ enhancementProfile: 'hybrid_binarization', saveImagesMode: '0' }">
+    <div class="flex items-center justify-between gap-4 mb-4">
+      <div>
+        <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-violet-600"></span>
+          {{ _("Enhanced Batch OCR Pipeline") }}
+        </h2>
+        <p class="text-xs text-slate-500 mt-1">
+          {{ _("Applies specialized multi-stage computer vision binarization and contrast enhancement to faint, bled-through, or degraded historical pages before running OCR.") }}
+        </p>
+      </div>
+      <a href="{{ url_for("proofing.project.batch_processes", slug=project.slug) }}" 
+         class="text-xs font-semibold text-slate-500 hover:text-violet-700 flex items-center gap-1 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        {{ _("All Batch Pipelines") }}
+      </a>
+    </div>
+
+    {% if ocr_status == "unavailable" %}
+      <div class="bg-red-50 border border-red-200 rounded-2xl p-4 my-4 text-red-700 font-medium text-xs flex items-center gap-3">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span>{{ _("OCR service is currently unavailable. Please try again later.") }}</span>
+      </div>
+    {% elif ocr_status == "no_engines" %}
+      <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 my-4 text-amber-800 font-medium text-xs flex items-center gap-3">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        <span>{{ _("OCR service is running but no engines are available.") }}</span>
+      </div>
+    {% else %}
+      {% set is_restricted_ocr = is_restricted_ocr_user(current_user) %}
+      <form method="POST" class="mt-6 space-y-6">
+        
+        <!-- Step 1: Enhancement Profile Selection -->
+        <div>
+          <label class="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5">
+            {{ _("1. Choose Image Enhancement Profile") }}
+          </label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            
+            <!-- Hybrid Binarization -->
+            <label class="relative p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between"
+                   :class="enhancementProfile === 'hybrid_binarization' ? 'border-violet-600 bg-violet-50/50 shadow-xs' : 'border-slate-200 hover:border-slate-300 bg-white'">
+              <input type="radio" name="profile" value="hybrid_binarization" x-model="enhancementProfile" class="sr-only" />
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-xs font-bold text-slate-900">{{ _("Hybrid Binarization") }}</span>
+                  <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800">{{ _("Recommended") }}</span>
+                </div>
+                <p class="text-[11px] text-slate-600 leading-relaxed">
+                  {{ _("Multi-phase TSMO 3-class separation, Michelson contrast, selective Nick binarization & Sokratis smear cleanup. Best for 100+ yr manuscripts and heavy bleed-through.") }}
+                </p>
+              </div>
+            </label>
+
+            <!-- Document Cleanup -->
+            <label class="relative p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between"
+                   :class="enhancementProfile === 'document_cleanup' ? 'border-violet-600 bg-violet-50/50 shadow-xs' : 'border-slate-200 hover:border-slate-300 bg-white'">
+              <input type="radio" name="profile" value="document_cleanup" x-model="enhancementProfile" class="sr-only" />
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-xs font-bold text-slate-900">{{ _("Document Cleanup") }}</span>
+                </div>
+                <p class="text-[11px] text-slate-600 leading-relaxed">
+                  {{ _("Adaptive non-local means denoising, background illumination flattening & high-frequency unsharp masking. Great for general noisy or yellowed scans.") }}
+                </p>
+              </div>
+            </label>
+
+            <!-- BG + CLAHE -->
+            <label class="relative p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between"
+                   :class="enhancementProfile === 'bg_clahe' ? 'border-violet-600 bg-violet-50/50 shadow-xs' : 'border-slate-200 hover:border-slate-300 bg-white'">
+              <input type="radio" name="profile" value="bg_clahe" x-model="enhancementProfile" class="sr-only" />
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-xs font-bold text-slate-900">{{ _("BG + CLAHE") }}</span>
+                </div>
+                <p class="text-[11px] text-slate-600 leading-relaxed">
+                  {{ _("Morphological rolling-ball background division followed by Contrast Limited Adaptive Histogram Equalization. Perfect for shadow gradients and uneven lighting.") }}
+                </p>
+              </div>
+            </label>
+
+            <!-- Sharpen -->
+            <label class="relative p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between"
+                   :class="enhancementProfile === 'sharpen' ? 'border-violet-600 bg-violet-50/50 shadow-xs' : 'border-slate-200 hover:border-slate-300 bg-white'">
+              <input type="radio" name="profile" value="sharpen" x-model="enhancementProfile" class="sr-only" />
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-xs font-bold text-slate-900">{{ _("Edge Sharpening") }}</span>
+                </div>
+                <p class="text-[11px] text-slate-600 leading-relaxed">
+                  {{ _("Gaussian unsharp mask with selective edge boost. Ideal for soft-focus captures or slightly blurry character strokes.") }}
+                </p>
+              </div>
+            </label>
+
+            <!-- Text Boost -->
+            <label class="relative p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between"
+                   :class="enhancementProfile === 'text_enhancement' ? 'border-violet-600 bg-violet-50/50 shadow-xs' : 'border-slate-200 hover:border-slate-300 bg-white'">
+              <input type="radio" name="profile" value="text_enhancement" x-model="enhancementProfile" class="sr-only" />
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-xs font-bold text-slate-900">{{ _("Text Boost") }}</span>
+                </div>
+                <p class="text-[11px] text-slate-600 leading-relaxed">
+                  {{ _("Adaptive Otsu thresholding with CLAHE contrast expansion for high contrast dark-on-white text separation.") }}
+                </p>
+              </div>
+            </label>
+
+          </div>
+        </div>
+
+        <!-- Step 2: Image Storage & Replacement Mode -->
+        <div class="pt-4 border-t border-slate-100">
+          <label class="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5">
+            {{ _("2. Active Page Image Destination") }}
+          </label>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            <!-- Mode 0: Keep Original Images -->
+            <label class="p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3.5"
+                   :class="saveImagesMode === '0' ? 'border-violet-600 bg-violet-50/50 shadow-xs' : 'border-slate-200 hover:border-slate-300 bg-white'">
+              <input type="radio" name="save_enhanced_images" value="0" x-model="saveImagesMode" class="mt-1 text-violet-600 focus:ring-violet-500" />
+              <div>
+                <span class="block text-xs font-bold text-slate-900">{{ _("Keep Original Extracted Scans as Active Images") }}</span>
+                <span class="block text-[11px] text-slate-600 mt-1 leading-relaxed">
+                  {{ _("Enhancement is applied in-memory specifically for OCR recognition. The page images displayed in the proofing viewer remain the original raw scans.") }}
+                </span>
+              </div>
+            </label>
+
+            <!-- Mode 1: Replace Active Images -->
+            <label class="p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3.5"
+                   :class="saveImagesMode === '1' ? 'border-emerald-600 bg-emerald-50/50 shadow-xs' : 'border-slate-200 hover:border-slate-300 bg-white'">
+              <input type="radio" name="save_enhanced_images" value="1" x-model="saveImagesMode" class="mt-1 text-emerald-600 focus:ring-emerald-500" />
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="block text-xs font-bold text-slate-900">{{ _("Set Enhanced Images as Active Page Images") }}</span>
+                  <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">{{ _("Auto Backup") }}</span>
+                </div>
+                <span class="block text-[11px] text-slate-600 mt-1 leading-relaxed">
+                  {{ _("Replaces active page images with the cleaned, enhanced version for clearer visual proofing. Raw master scans are safely preserved and can be reverted at any time.") }}
+                </span>
+              </div>
+            </label>
+
+          </div>
+        </div>
+
+        <!-- Step 3: OCR Engine & Language Selection -->
+        <div class="pt-4 border-t border-slate-100">
+          <label class="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5">
+            {{ _("3. OCR Engine & Language") }}
+          </label>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% if is_restricted_ocr %}
+              <input type="hidden" name="engine" id="engine" value="{{ default_engine_value }}">
+            {% else %}
+              <div>
+                <label for="engine" class="block text-xs font-semibold text-slate-600 mb-1.5">
+                  {{ _("OCR Engine") }}
+                </label>
+                <select name="engine" id="engine" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-violet-600 focus:ring-2 focus:ring-violet-500/20 outline-none transition-all">
+                  {% for e in engine_choices %}
+                    <option value="{{ e.value }}"{% if e.is_recommended %} selected{% endif %}>{{ e.label }}{% if e.is_recommended %} ★ (Recommended){% endif %}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            {% endif %}
+            
+            <div>
+              <label for="language" class="block text-xs font-semibold text-slate-600 mb-1.5">
+                {{ _("Primary Language") }}
+              </label>
+              <select name="language" id="language" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-violet-600 focus:ring-2 focus:ring-violet-500/20 outline-none transition-all">
+                <option value="sa" selected>{{ _("Sanskrit (sa)") }}</option>
+                <option value="hi">{{ _("Hindi (hi)") }}</option>
+                <option value="te">{{ _("Telugu (te)") }}</option>
+                <option value="mr">{{ _("Marathi (mr)") }}</option>
+                <option value="bn">{{ _("Bengali (bn)") }}</option>
+                <option value="gu">{{ _("Gujarati (gu)") }}</option>
+                <option value="kn">{{ _("Kannada (kn)") }}</option>
+                <option value="ml">{{ _("Malayalam (ml)") }}</option>
+                <option value="ta">{{ _("Tamil (ta)") }}</option>
+                <option value="pa">{{ _("Punjabi (pa)") }}</option>
+                <option value="or">{{ _("Odia (or)") }}</option>
+                <option value="ur">{{ _("Urdu (ur)") }}</option>
+                <option value="en">{{ _("English (en)") }}</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex items-center justify-between pt-4 border-t border-slate-100">
+          <span class="text-xs text-slate-500">
+            {{ _("Runs asynchronously in the background across unedited pages.") }}
+          </span>
+          <button type="submit" 
+                  class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-bold text-xs shadow-md shadow-violet-500/20 transition-all cursor-pointer">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"></path>
+            </svg>
+            {{ _("Run Enhanced Batch OCR") }}
+          </button>
+        </div>
+      </form>
+    {% endif %}
+  </div>
+
+  <!-- Information Card -->
+  <div class="bg-violet-50/60 border border-violet-200/80 rounded-2xl p-6 text-xs text-slate-700 space-y-2.5">
+    <h3 class="font-bold text-violet-950 flex items-center gap-2 text-sm">
+      <svg class="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+      {{ _("About Enhanced Batch OCR & Image Management") }}
+    </h3>
+    <ul class="list-disc list-inside space-y-1.5 text-slate-600 pl-1">
+      <li><strong>{{ _('Dedicated Revision Track:') }}</strong> {{ _('Enhanced OCR output is recorded in its own version track (e.g. ocr:enhanced:dots_ocr:hybrid_binarization) alongside standalone .json.gz storage.') }}</li>
+      <li><strong>{{ _('Non-Destructive Image Replacement:') }}</strong> {{ _('When "Set Enhanced Images as Active Page Images" is enabled, original master scans are safely preserved and can be reverted at any time.') }}</li>
+      <li><strong>{{ _('Unedited Pages Only:') }}</strong> {{ _('Only pages without manual user edits are processed, preserving all proofed work.') }}</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

@@ -22,6 +22,7 @@ Covers:
 
 import gzip
 import json
+import uuid
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -789,3 +790,103 @@ def test_replace_and_revert_page_image_endpoint(flask_app, tmp_path):
                 assert revert_resp.status_code == 200
                 assert revert_resp.get_json()["status"] == "ok"
                 assert revert_resp.get_json()["is_preprocessed"] is False
+
+
+# ---------------------------------------------------------------------------
+# 20. Batch Enhanced OCR Endpoints and Task Dispatch
+# ---------------------------------------------------------------------------
+def test_batch_enhanced_ocr_get_and_post(flask_app, tmp_path):
+    import kalanjiyam.database as db
+    import kalanjiyam.queries as q
+
+    with flask_app.app_context():
+        session = q.get_session()
+        board = session.query(db.Board).first() or db.Board(
+            name="Test Board Batch Enhanced"
+        )
+        session.add(board)
+        session.flush()
+
+        project = db.Project(
+            slug=f"test-batch-enh-{uuid.uuid4().hex[:6]}",
+            board_id=board.id,
+            display_title="Test Batch Enhanced OCR Project",
+        )
+        session.add(project)
+        session.flush()
+
+        status = session.query(db.PageStatus).first() or db.PageStatus(
+            name="Status Batch"
+        )
+        session.add(status)
+        session.flush()
+
+        page1 = db.Page(project_id=project.id, order=1, slug="1", status_id=status.id)
+        page2 = db.Page(project_id=project.id, order=2, slug="2", status_id=status.id)
+        session.add_all([page1, page2])
+        session.commit()
+
+        with flask_app.test_client() as client:
+            with (
+                patch(
+                    "kalanjiyam.views.proofing.project.q.user_can_view_proofing_project",
+                    return_value=True,
+                ),
+                patch("kalanjiyam.views.proofing.decorators.current_user") as dec_user,
+                patch("kalanjiyam.views.proofing.project.current_user") as mock_user,
+                patch("kalanjiyam.views.proofing.project.redis_client") as mock_redis,
+                patch(
+                    "kalanjiyam.views.proofing.project.ocr_tasks.run_enhanced_ocr_for_project"
+                ) as mock_run_proj,
+            ):
+                mock_redis.get.return_value = None
+                mock_redis.scan_iter.return_value = []
+                for u in (dec_user, mock_user):
+                    u.is_authenticated = True
+                    u.is_super_admin = True
+                    u.is_moderator = True
+                    u.id = 1
+
+                # Mock task return
+                mock_task = MagicMock()
+                mock_task.id = "test-enhanced-task-id-123"
+                mock_run_proj.return_value = mock_task
+
+                # 1. GET Batch Enhanced OCR config form
+                get_resp = client.get(f"/proofing/{project.slug}/batch-enhanced-ocr")
+                assert get_resp.status_code == 200
+                assert b"Enhanced Batch OCR Pipeline" in get_resp.data
+                assert b"Hybrid Binarization" in get_resp.data
+
+                # 2. POST to trigger Enhanced Batch OCR with save_enhanced_images=1
+                post_resp = client.post(
+                    f"/proofing/{project.slug}/batch-enhanced-ocr",
+                    data={
+                        "engine": "12",
+                        "profile": "hybrid_binarization",
+                        "language": "sa",
+                        "save_enhanced_images": "1",
+                    },
+                )
+                assert post_resp.status_code == 200
+                mock_run_proj.assert_called_once()
+                call_kwargs = mock_run_proj.call_args.kwargs
+                assert call_kwargs["engine"] == "dots_ocr"
+                assert call_kwargs["profile"] == "hybrid_binarization"
+                assert call_kwargs["save_enhanced_images"] is True
+
+                # 3. Check status endpoint
+                with patch(
+                    "kalanjiyam.views.proofing.project.GroupResult.restore"
+                ) as mock_restore:
+                    mock_group_res = MagicMock()
+                    mock_group_res.results = [
+                        MagicMock(state="SUCCESS", failed=lambda: False)
+                    ]
+                    mock_group_res.completed_count.return_value = 1
+                    mock_restore.return_value = mock_group_res
+
+                    status_resp = client.get(
+                        f"/proofing/batch-enhanced-ocr-status/{mock_task.id}"
+                    )
+                    assert status_resp.status_code == 200

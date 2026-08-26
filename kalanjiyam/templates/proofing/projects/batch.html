@@ -66,11 +66,30 @@
   </div>
 
   {% set ocr_url = url_for("proofing.project.batch_ocr", slug=project.slug)  %}
+  {% set enhanced_ocr_url = url_for("proofing.project.batch_enhanced_ocr", slug=project.slug)  %}
   {% set translate_url = url_for("proofing.project.batch_translate", slug=project.slug)  %}
 
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-4xl">
-    <a href="{{ ocr_url }}" class="flex items-center gap-5 p-6 bg-white border border-slate-200 hover:border-royalblue/50 hover:bg-royalblue/[0.02] shadow-sm hover:shadow-md rounded-2xl transition-all duration-300 group no-underline">
-      <div class="w-14 h-14 rounded-2xl bg-royalblue/10 border border-royalblue/20 flex items-center justify-center text-royalblue group-hover:scale-110 transition-transform shrink-0">
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl">
+    <a href="{{ enhanced_ocr_url }}" class="flex flex-col p-6 bg-white border border-violet-200 hover:border-violet-400 hover:bg-violet-50/30 shadow-sm hover:shadow-md rounded-2xl transition-all duration-300 group no-underline relative overflow-hidden">
+      <div class="absolute -top-6 -right-6 w-24 h-24 bg-violet-100/60 rounded-full blur-xl pointer-events-none group-hover:bg-violet-200/60 transition-colors"></div>
+      <div class="flex items-center gap-4 mb-3">
+        <div class="w-13 h-13 rounded-2xl bg-violet-100 border border-violet-200 flex items-center justify-center text-violet-700 group-hover:scale-110 transition-transform shrink-0">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"></path>
+          </svg>
+        </div>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-violet-100 text-violet-800 border border-violet-200">
+          {{ _('Enhanced / Adaptive') }}
+        </span>
+      </div>
+      <div>
+        <span class="block font-bold text-base text-slate-900 group-hover:text-violet-700 transition-colors">{{ _('Run Enhanced Batch OCR') }}</span>
+        <span class="block text-xs text-slate-500 font-medium mt-1.5 leading-relaxed">{{ _('Enhance degraded/manuscript scans with adaptive binarization, cleanup, and run AI OCR on enhanced or original images') }}</span>
+      </div>
+    </a>
+
+    <a href="{{ ocr_url }}" class="flex flex-col p-6 bg-white border border-slate-200 hover:border-royalblue/50 hover:bg-royalblue/[0.02] shadow-sm hover:shadow-md rounded-2xl transition-all duration-300 group no-underline">
+      <div class="w-13 h-13 rounded-2xl bg-royalblue/10 border border-royalblue/20 flex items-center justify-center text-royalblue group-hover:scale-110 transition-transform shrink-0 mb-3">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
           <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
@@ -81,17 +100,17 @@
       </div>
       <div>
         <span class="block font-bold text-base text-slate-900 group-hover:text-royalblue transition-colors">{{ _('Run batch OCR') }}</span>
-        <span class="block text-xs text-slate-500 font-medium mt-1 leading-relaxed">{{ _('Perform AI text recognition and layout extraction on selected pages') }}</span>
+        <span class="block text-xs text-slate-500 font-medium mt-1.5 leading-relaxed">{{ _('Perform standard AI text recognition and layout extraction on unedited raw pages') }}</span>
       </div>
     </a>
 
-    <a href="{{ translate_url }}" class="flex items-center gap-5 p-6 bg-white border border-slate-200 hover:border-royalblue/50 hover:bg-royalblue/[0.02] shadow-sm hover:shadow-md rounded-2xl transition-all duration-300 group no-underline">
-      <div class="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform shrink-0">
+    <a href="{{ translate_url }}" class="flex flex-col p-6 bg-white border border-slate-200 hover:border-emerald-500/50 hover:bg-emerald-50/[0.02] shadow-sm hover:shadow-md rounded-2xl transition-all duration-300 group no-underline">
+      <div class="w-13 h-13 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform shrink-0 mb-3">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5c-.313 1.565-.953 3.051-1.893 4.407m-.88-1.377A17.964 17.964 0 0015.548 5h-2.797z"></path></svg>
       </div>
       <div>
-        <span class="block font-bold text-base text-slate-900 group-hover:text-royalblue transition-colors">{{ _('Run batch translation') }}</span>
-        <span class="block text-xs text-slate-500 font-medium mt-1 leading-relaxed">{{ _('Translate page texts across multiple languages using neural translation') }}</span>
+        <span class="block font-bold text-base text-slate-900 group-hover:text-emerald-700 transition-colors">{{ _('Run batch translation') }}</span>
+        <span class="block text-xs text-slate-500 font-medium mt-1.5 leading-relaxed">{{ _('Translate page texts across multiple languages using neural machine translation') }}</span>
       </div>
     </a>
   </div>
