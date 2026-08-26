@@ -261,4 +261,137 @@ def test_master_user_proofing_dashboard_org_filtering_and_tags(client, flask_app
         assert "Project Alpha In Org 1" not in html_org2
 
 
+def test_master_user_metrics_access_and_restrictions(client, flask_app):
+    flask_app.config["MULTI_TENANT_MODE"] = True
+    flask_app.config["ENFORCE_ORG_ACCESS"] = True
+
+    with flask_app.app_context():
+        session = q.get_session()
+        org1 = _make_org(session, "metrics-org-1", "Metrics Org 1")
+        org2 = _make_org(session, "metrics-org-2", "Metrics Org 2")
+        other_org = _make_org(session, "metrics-other-org", "Other Org")
+
+        master_user = _make_user(session, "master_metrics_user", [SiteRole.MASTER_USER.value])
+        master_user.organization_id = org1.id
+        session.add(db.UserGroups(user_id=master_user.id, group_id=org1.id))
+        session.add(db.UserGroups(user_id=master_user.id, group_id=org2.id))
+        session.commit()
+
+        # Create batch jobs for org1 and other_org
+        from kalanjiyam.models.batch import BatchJob, BatchItem
+
+        job1 = BatchJob(
+            target_uri="test/uri/job1",
+            job_type="BATCH_OCR",
+            status="COMPLETED",
+        )
+        job_other = BatchJob(
+            target_uri="test/uri/job_other",
+            job_type="BATCH_OCR",
+            status="COMPLETED",
+        )
+        session.add(job1)
+        session.add(job_other)
+        session.flush()
+
+        _add_project_to_database(
+            display_title="Master Proj 1",
+            slug="m-proj-1",
+            num_pages=3,
+            creator_id=master_user.id,
+            require_org=True,
+            org_slug=org1.slug,
+        )
+        _add_project_to_database(
+            display_title="Other Proj",
+            slug="m-proj-other",
+            num_pages=3,
+            creator_id=None,
+            require_org=True,
+            org_slug=other_org.slug,
+        )
+
+        proj1 = session.query(db.Project).filter_by(slug="m-proj-1").one()
+        proj_other = session.query(db.Project).filter_by(slug="m-proj-other").one()
+
+        item1 = BatchItem(
+            job_id=job1.id,
+            project_id=proj1.id,
+            file_path="page1.pdf",
+            total_pages=5,
+            total_ocr_latency_ms=1200.0,
+            status="COMPLETED",
+        )
+        item_other = BatchItem(
+            job_id=job_other.id,
+            project_id=proj_other.id,
+            file_path="other_page.pdf",
+            total_pages=5,
+            total_ocr_latency_ms=1500.0,
+            status="COMPLETED",
+        )
+        session.add(item1)
+        session.add(item_other)
+        session.commit()
+
+        with client.session_transaction() as sess:
+            sess["_user_id"] = str(master_user.id)
+            sess["_fresh"] = True
+
+        # 1. /admin/ should redirect to master metrics
+        res_admin = client.get("/admin/")
+        assert res_admin.status_code == 302
+        assert "/admin/master_metrics/cli_batch_ocr" in res_admin.location
+
+        # 2. /admin/master_metrics/cli_batch_ocr should list job1 but not job_other
+        res_batch = client.get("/admin/master_metrics/cli_batch_ocr")
+        assert res_batch.status_code == 200
+        batch_html = res_batch.get_data(as_text=True)
+        assert "OCR & Translation Metrics" in batch_html
+        assert f"Job #{job1.id}" in batch_html
+        assert f"Job #{job_other.id}" not in batch_html
+
+        # 3. Job details for accessible job
+        res_job1 = client.get(f"/admin/master_metrics/cli_batch_ocr/{job1.id}")
+        assert res_job1.status_code == 200
+        job1_html = res_job1.get_data(as_text=True)
+        assert "page1.pdf" in job1_html
+        assert "test/uri/job1" in job1_html
+
+        # 4. Job details for unassigned job should be 403
+        res_job_other = client.get(f"/admin/master_metrics/cli_batch_ocr/{job_other.id}")
+        assert res_job_other.status_code == 403
+
+        # 5. Metadata metrics access & CSV export
+        res_meta = client.get("/admin/master_metrics/metadata_metrics")
+        assert res_meta.status_code == 200
+        assert "Metadata Extraction Metrics" in res_meta.get_data(as_text=True)
+
+        res_meta_csv = client.get("/admin/master_metrics/metadata_metrics/export_csv")
+        assert res_meta_csv.status_code == 200
+        assert res_meta_csv.content_type.startswith("text/csv")
+
+        # 6. Telemetry metrics & API
+        res_telemetry = client.get("/admin/master_metrics/metrics")
+        assert res_telemetry.status_code == 200
+        telemetry_html = res_telemetry.get_data(as_text=True)
+        assert "System Metrics & Logs" in telemetry_html
+        assert "Clear Logs" not in telemetry_html  # Clear logs button hidden for master user
+
+        res_api = client.get("/admin/master_metrics/metrics/api?tab=queues")
+        assert res_api.status_code == 200
+        assert res_api.is_json
+
+        # 7. Restricted platform routes (Master user should NOT have full admin access)
+        res_platform = client.get("/admin/platform/")
+        assert res_platform.status_code in (403, 404)
+
+        res_users = client.get("/admin/user/")
+        assert res_users.status_code in (403, 404)
+
+        res_groups = client.get("/admin/groups/")
+        assert res_groups.status_code in (403, 404)
+
+
+
 

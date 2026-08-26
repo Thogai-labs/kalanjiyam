@@ -13,8 +13,8 @@
 {% endblock %}
 
 {% block content %}
-{% set view_endpoint = 'org_admin_view.metadata_metrics' if is_org_admin else 'platform_view.metadata_metrics' %}
-{% set export_endpoint = 'org_admin_view.metadata_metrics_export_csv' if is_org_admin else 'platform_view.metadata_metrics_export_csv' %}
+{% set view_endpoint = 'master_metrics_view.metadata_metrics' if is_master_user else ('org_admin_view.metadata_metrics' if is_org_admin else 'platform_view.metadata_metrics') %}
+{% set export_endpoint = 'master_metrics_view.metadata_metrics_export_csv' if is_master_user else ('org_admin_view.metadata_metrics_export_csv' if is_org_admin else 'platform_view.metadata_metrics_export_csv') %}
 
 {{ admin.page_header(_('Metadata Extraction Metrics'),
     _('Per-document runs of the archival description extractor: coverage, citation quality, and token cost.')) }}

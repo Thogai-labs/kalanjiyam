@@ -72,7 +72,7 @@
     </li>
 
     {% set is_admin_active = request.endpoint and ('admin' in request.endpoint or 'platform_view' in request.endpoint or
-    'groups_view' in request.endpoint or 'org_admin_view' in request.endpoint) %}
+    'groups_view' in request.endpoint or 'org_admin_view' in request.endpoint or 'master_metrics_view' in request.endpoint) %}
     {% if current_user.is_super_admin %}
     <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
       @mouseenter="moveCursor($el)">
@@ -86,6 +86,13 @@
       <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
         if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
         href="{{ url_for('org_admin_view.index') }}">{{ _('Dashboard') }}</a>
+    </li>
+    {% elif current_user.is_master_user %}
+    <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+      @mouseenter="moveCursor($el)">
+      <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
+        if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+        href="{{ url_for('master_metrics_view.cli_batch_ocr') }}">{{ _('Metrics') }}</a>
     </li>
     {% elif current_user.is_admin %}
     <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"

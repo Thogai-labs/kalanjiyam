@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block content %}
-{% set view_endpoint = 'org_admin_view.cli_batch_ocr' if is_org_admin else 'platform_view.cli_batch_ocr' %}
+{% set view_endpoint = 'master_metrics_view.cli_batch_ocr' if is_master_user else ('org_admin_view.cli_batch_ocr' if is_org_admin else 'platform_view.cli_batch_ocr') %}
 
 {% if is_job_list %}
 <!-- PAGE 1: STANDALONE BATCH JOBS LIST -->
@@ -38,7 +38,7 @@
       {{ _('Per-document runs of the description extractor: page coverage, field coverage, evidence-verified rate, token cost. Tracked per project rather than per batch job, so it is not in the table below.') }}
     </p>
   </div>
-  <a href="{{ url_for('platform_view.metadata_metrics_export_csv') }}"
+  <a href="{{ url_for('master_metrics_view.metadata_metrics_export_csv' if is_master_user else 'platform_view.metadata_metrics_export_csv') }}"
      class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors shadow-sm shrink-0">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
@@ -216,8 +216,8 @@
 {% else %}
 
 <!-- PAGE 2: STANDALONE JOB METRICS & DETAILS -->
-{% set export_summary_endpoint = 'org_admin_view.cli_batch_ocr_export_summary_csv' if is_org_admin else 'platform_view.cli_batch_ocr_export_summary_csv' %}
-{% set export_pages_endpoint = 'org_admin_view.cli_batch_ocr_export_pages_csv' if is_org_admin else 'platform_view.cli_batch_ocr_export_pages_csv' %}
+{% set export_summary_endpoint = 'master_metrics_view.cli_batch_ocr_export_summary_csv' if is_master_user else ('org_admin_view.cli_batch_ocr_export_summary_csv' if is_org_admin else 'platform_view.cli_batch_ocr_export_summary_csv') %}
+{% set export_pages_endpoint = 'master_metrics_view.cli_batch_ocr_export_pages_csv' if is_master_user else ('org_admin_view.cli_batch_ocr_export_pages_csv' if is_org_admin else 'platform_view.cli_batch_ocr_export_pages_csv') %}
 
 <div class="mb-6">
   <a href="{{ url_for(view_endpoint) }}" class="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors">

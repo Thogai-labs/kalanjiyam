@@ -25,6 +25,7 @@
         </svg>
         <span>{{ _('Refresh') }}</span>
       </button>
+      {% if not is_master_user and current_user.is_super_admin %}
       <form action="{{ url_for('platform_view.metrics_clear') }}" method="POST" onsubmit="return confirm('Are you sure you want to clear metrics logs?');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="category" value="ALL">
@@ -32,6 +33,7 @@
           {{ _('Clear Logs') }}
         </button>
       </form>
+      {% endif %}
     </div>
   </div>
 
@@ -460,7 +462,7 @@
 </div>
 
 <script>
-const metricsApiUrl = "{{ url_for('platform_view.metrics_api') }}";
+const metricsApiUrl = "{{ url_for('master_metrics_view.metrics_api') if is_master_user else url_for('platform_view.metrics_api') }}";
 let currentTab = 'queues';
 let searchDebounceTimer = null;
 
