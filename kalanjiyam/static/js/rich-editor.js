@@ -13,6 +13,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import Link from '@tiptap/extension-link';
 import Mathematics from '@tiptap/extension-mathematics';
 import { marked } from 'marked';
+import { Markdown } from 'tiptap-markdown';
 import 'katex/dist/katex.min.css';
 
 
@@ -28,7 +29,10 @@ const BlockId = Extension.create({
         attributes: {
           'data-block-id': {
             default: null,
-            parseHTML: (element) => element.getAttribute('data-block-id'),
+            parseHTML: (element) => (
+              element.getAttribute('data-block-id')
+              || element.closest('[data-block-id]')?.getAttribute('data-block-id')
+            ),
             renderHTML: (attributes) => (
               attributes['data-block-id']
                 ? { 'data-block-id': attributes['data-block-id'] }
@@ -321,6 +325,13 @@ export function createRichEditor(elementId, options = {}) {
       }),
       BlockId,
       DocxColumnSection,
+      Markdown.configure({
+        html: true,
+        tightLists: true,
+        bulletListMarker: '-',
+        transformPastedText: true,
+        breaks: false,
+      }),
     ],
     content,
     onUpdate: ({ editor }) => {
@@ -397,6 +408,16 @@ export function setEditorContent(editor, html) {
 export function getEditorText(editor) {
   if (!editor) return '';
   return editor.getText();
+}
+
+/**
+ * Get markdown content from editor
+ * @param {Editor} editor - TipTap editor instance
+ * @returns {string} Markdown content
+ */
+export function getEditorMarkdown(editor) {
+  if (!editor || !editor.storage?.markdown) return '';
+  return editor.storage.markdown.getMarkdown();
 }
 
 /**

@@ -219,7 +219,7 @@ export function documentToFlowHtml(doc) {
       parts.push(content);
       return;
     }
-    if (block.type === 'table' || /<table[\s>]/i.test(content)) {
+    if (block.type === 'table' || /<table[\s>]/i.test(content) || isMarkdownTable(content)) {
       parts.push(
         `<div class="ocr-detected-table-wrap" data-block-id="${block.id}">${blockReplicaInnerHtml(block)}</div>`,
       );
@@ -352,6 +352,7 @@ export function fromOcrPayload(payload) {
         ...b,
         id: b.id || newBlockId(),
         reading_order: b.reading_order || i + 1,
+        type: (b.type === 'table' || isMarkdownTable(b.content || '') || /<table[\s>]/i.test(b.content || '')) ? 'table' : (b.type || 'paragraph'),
         content: normalizeUnicodeText(b.content || ''),
         confidence: b.confidence ?? null,
         language: b.language ?? null,
@@ -370,7 +371,7 @@ export function fromOcrPayload(payload) {
     blocks: [
       {
         id: newBlockId(),
-        type: 'paragraph',
+        type: isMarkdownTable(text) ? 'table' : 'paragraph',
         bbox: [0, 0, 0, 0],
         content: normalizeUnicodeText(text),
         reading_order: 1,
@@ -645,9 +646,23 @@ export function reorderBlocks(blocks) {
   });
 }
 
+export function isMarkdownTable(text) {
+  if (!text || typeof text !== 'string') return false;
+  const lines = text.trim().split('\n').map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2) return false;
+  for (let i = 0; i < lines.length - 1; i += 1) {
+    const line = lines[i];
+    const nextLine = lines[i + 1];
+    if (line.includes('|') && /^\|?(\s*:?-+:?\s*\|)+\s*:?-+:?\s*\|?$/.test(nextLine)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function blockReplicaInnerHtml(block) {
   const content = String(block.content || '').trim();
-  if (block.type === 'table' || /<table[\s>]/i.test(content)) {
+  if (block.type === 'table' || /<table[\s>]/i.test(content) || isMarkdownTable(content)) {
     if (/<table[\s>]/i.test(content)) return content;
     return plainTextToHtmlTable(content);
   }
@@ -659,9 +674,13 @@ export function blockReplicaInnerHtml(block) {
     .replace(/\n/g, '<br>');
 }
 
-function plainTextToHtmlTable(text) {
+export function plainTextToHtmlTable(text) {
   const rows = [];
-  text.split('\n').forEach((line) => {
+  const lines = text.split('\n');
+  let hasSeparator = false;
+  let headerIndex = -1;
+
+  lines.forEach((line) => {
     const trimmed = line.trim();
     if (!trimmed) return;
     let cells;
@@ -672,10 +691,17 @@ function plainTextToHtmlTable(text) {
     } else {
       cells = [trimmed];
     }
-    if (cells.length && !cells.every((c) => /^-+$/.test(c))) {
+    const isSeparatorRow = cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c) || /^-+$/.test(c));
+    if (isSeparatorRow) {
+      hasSeparator = true;
+      if (headerIndex === -1 && rows.length > 0) {
+        headerIndex = rows.length - 1;
+      }
+    } else if (cells.length) {
       rows.push(cells);
     }
   });
+
   if (!rows.length) {
     return String(text)
       .replace(/&/g, '&amp;')
@@ -683,17 +709,23 @@ function plainTextToHtmlTable(text) {
       .replace(/>/g, '&gt;')
       .replace(/\n/g, '<br>');
   }
+
   const cols = Math.max(...rows.map((r) => r.length));
   const esc = (s) =>
-    String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    autoWrapMath(
+      String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+    );
+
   let html = '<table class="ocr-detected-table">';
-  rows.forEach((row) => {
+  rows.forEach((row, rIdx) => {
     html += '<tr>';
+    const isHeader = (hasSeparator && rIdx === headerIndex) || (!hasSeparator && rIdx === 0 && rows.length > 1);
+    const cellTag = isHeader ? 'th' : 'td';
     for (let i = 0; i < cols; i += 1) {
-      html += `<td>${esc(row[i] || '')}</td>`;
+      html += `<${cellTag}>${esc(row[i] || '')}</${cellTag}>`;
     }
     html += '</tr>';
   });
