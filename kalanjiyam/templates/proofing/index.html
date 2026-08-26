@@ -139,7 +139,20 @@
             </button>
           </div>
         </div>
-        {% if current_user.is_super_admin %}
+        {% if (current_user.is_master_user or current_user.is_super_admin) and user_organizations %}
+        <div class="flex items-center gap-2 w-full md:w-auto">
+          <label class="text-xs font-semibold text-slate-500 whitespace-nowrap">{{ _('Organization:') }}</label>
+          <select name="org" x-model="org"
+            class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all flex-1 md:flex-initial"
+            @change="fetchResults(1)">
+            <option value="all" {% if selected_org == 'all' %}selected{% endif %}>{{ _('All Organizations') }}</option>
+            {% for org in user_organizations %}
+            <option value="{{ org.slug }}" {% if selected_org == org.slug %}selected{% endif %}>{{ org.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        {% if current_user.is_super_admin or current_user.is_master_user %}
         <div class="flex items-center gap-2 w-full md:w-auto">
           <label class="text-xs font-semibold text-slate-500 whitespace-nowrap">{{ _('Mode:') }}</label>
           <select name="mode" x-model="mode"
@@ -199,6 +212,7 @@ function proofingDashboard() {
   return {
     query: {{ search_query|tojson }},
     mode: {{ selected_mode|tojson }},
+    org: {{ selected_org|tojson }},
     sort: {{ sort_field|tojson }},
     order: {{ sort_order|tojson }},
     page: {{ page }},
@@ -211,6 +225,7 @@ function proofingDashboard() {
         const params = new URLSearchParams(window.location.search);
         this.query = params.get('q') || params.get('query') || '';
         this.mode = params.get('mode') || 'all';
+        this.org = params.get('org') || 'all';
         this.sort = params.get('sort') || 'created';
         this.order = params.get('order') || 'desc';
         this.page = parseInt(params.get('page') || '1', 10);
@@ -229,6 +244,7 @@ function proofingDashboard() {
       const params = new URLSearchParams();
       if (this.query && this.query.trim()) params.set('q', this.query.trim());
       if (this.mode && this.mode !== 'all') params.set('mode', this.mode);
+      if (this.org && this.org !== 'all') params.set('org', this.org);
       if (this.sort && this.sort !== 'created') params.set('sort', this.sort);
       if (this.order && this.order !== 'desc') params.set('order', this.order);
       if (this.page && this.page > 1) params.set('page', this.page);
@@ -280,6 +296,7 @@ function proofingDashboard() {
     clearFilters() {
       this.query = '';
       this.mode = 'all';
+      this.org = 'all';
       this.sort = 'created';
       this.order = 'desc';
       this.fetchResults(1);

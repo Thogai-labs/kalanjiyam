@@ -187,3 +187,84 @@ def test_seed_lookup_role_cleans_obsolete_and_adds_master_user(flask_app):
         assert "master_user" in role_names
         assert "super_admin" in role_names
         assert "admin" not in role_names
+
+
+def test_master_user_proofing_dashboard_org_filtering_and_tags(client, flask_app):
+    flask_app.config["MULTI_TENANT_MODE"] = True
+    flask_app.config["ENFORCE_ORG_ACCESS"] = True
+
+    with flask_app.app_context():
+        session = q.get_session()
+        org1 = _make_org(session, "dashboard-org-1", "Dashboard Org 1")
+        org2 = _make_org(session, "dashboard-org-2", "Dashboard Org 2")
+
+        master_user = _make_user(session, "master_dash_user", [SiteRole.MASTER_USER.value])
+        master_user.organization_id = org1.id
+        session.add(db.UserGroups(user_id=master_user.id, group_id=org1.id))
+        session.add(db.UserGroups(user_id=master_user.id, group_id=org2.id))
+        session.commit()
+
+        _add_project_to_database(
+            display_title="Project Alpha In Org 1",
+            slug="proj-alpha-1",
+            num_pages=3,
+            creator_id=master_user.id,
+            require_org=True,
+            org_slug=org1.slug,
+        )
+        _add_project_to_database(
+            display_title="Project Beta In Org 2",
+            slug="proj-beta-2",
+            num_pages=4,
+            creator_id=master_user.id,
+            require_org=True,
+            org_slug=org2.slug,
+        )
+        _add_project_to_database(
+            display_title="Project Gamma Unregistered",
+            slug="proj-gamma-unreg",
+            num_pages=2,
+            creator_id=None,
+            fingerprint_id="test-fp-123",
+            require_org=True,
+            org_slug=org1.slug,
+        )
+
+        with client.session_transaction() as sess:
+            sess["_user_id"] = str(master_user.id)
+            sess["_fresh"] = True
+
+        # Test index without org filter (shows both projects and tags)
+        res = client.get("/proofing/")
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert "Project Alpha In Org 1" in html
+        assert "Project Beta In Org 2" in html
+        assert "Project Gamma Unregistered" in html
+        assert "Dashboard Org 1" in html
+        assert "Dashboard Org 2" in html
+        assert "Enterprise" in html
+        assert "Unregistered" in html
+
+        # Test filter by org1
+        res_org1 = client.get(f"/proofing/?org={org1.slug}")
+        assert res_org1.status_code == 200
+        html_org1 = res_org1.get_data(as_text=True)
+        assert "Project Alpha In Org 1" in html_org1
+        assert "Project Beta In Org 2" not in html_org1
+
+        # Test filter by org2
+        res_org2 = client.get(f"/proofing/?org={org2.slug}")
+        assert res_org2.status_code == 200
+        html_org2 = res_org2.get_data(as_text=True)
+        assert "Project Beta In Org 2" in html_org2
+        assert "Project Alpha In Org 1" not in html_org2
+
+        # Test filter by mode=unregistered
+        res_mode = client.get("/proofing/?mode=unregistered")
+        assert res_mode.status_code == 200
+        html_mode = res_mode.get_data(as_text=True)
+        assert "Project Gamma Unregistered" in html_mode
+        assert "Project Alpha In Org 1" not in html_mode
+
+

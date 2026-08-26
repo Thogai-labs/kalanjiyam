@@ -103,6 +103,7 @@ def index():
 
     search_query = (request.args.get("q", "") or request.args.get("query", "")).strip()
     selected_mode = (request.args.get("mode", "all")).strip().lower()
+    selected_org = (request.args.get("org", "all")).strip()
     sort_field = (request.args.get("sort", "created")).strip().lower()
     sort_order = (request.args.get("order", "desc")).strip().lower()
 
@@ -118,20 +119,43 @@ def index():
 
     session = q.get_session()
 
-    # 2. Eagerly load groups to perform authorization check without N+1 queries
+    # 2. Collect available organizations for filtering
+    user_organizations = []
+    if current_user.is_authenticated:
+        if getattr(current_user, "is_super_admin", False):
+            user_organizations = list(q.groups())
+        elif getattr(current_user, "is_master_user", False):
+            if getattr(current_user, "groups", None):
+                user_organizations = list(current_user.groups)
+            elif getattr(current_user, "id", None):
+                user_organizations = (
+                    session.query(db.Group)
+                    .join(db.UserGroups, db.UserGroups.group_id == db.Group.id)
+                    .filter(db.UserGroups.user_id == current_user.id)
+                    .all()
+                )
+
+    # 3. Eagerly load groups to perform authorization check without N+1 queries
     all_projects = (
         session.query(db.Project)
         .options(orm.selectinload(db.Project.groups))
         .all()
     )
 
-    # 3. Filter projects based on user access permissions (tenant scope)
+    # 4. Filter projects based on user access permissions (tenant scope)
     accessible_projects = [p for p in all_projects if q.user_can_view_proofing_project(current_user, p)]
     has_any_projects = bool(accessible_projects)
 
     projects = accessible_projects
 
-    # 4. Filter by creator mode if specified
+    # 5. Filter by organization if specified
+    if selected_org and selected_org != "all":
+        projects = [
+            p for p in projects
+            if any(g.slug == selected_org for g in p.groups)
+        ]
+
+    # 6. Filter by creator mode if specified
     if selected_mode and selected_mode != "all":
         projects = [p for p in projects if getattr(p, "creator_mode", None) == selected_mode]
 
@@ -252,6 +276,8 @@ def index():
         "total_projects": total_projects,
         "search_query": search_query,
         "selected_mode": selected_mode,
+        "selected_org": selected_org,
+        "user_organizations": user_organizations,
         "sort_field": sort_field,
         "sort_order": sort_order,
         "has_any_projects": has_any_projects,
