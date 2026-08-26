@@ -81,13 +81,24 @@ def test_super_admin_is_unrestricted(app_ctx):
     assert scope.filters == []
 
 
-def test_legacy_admin_is_not_unrestricted(app_ctx):
-    """Only super_admin bypasses tenancy; the legacy `admin` role does not."""
-    user = FakeUser(organization_id=7, roles={SiteRole.ADMIN.value})
+def test_master_user_is_not_unrestricted(app_ctx):
+    """Only super_admin bypasses tenancy; the master_user role scopes to assigned orgs."""
+    user = FakeUser(organization_id=7, roles={SiteRole.MASTER_USER.value})
     scope = acl.search_scope(user, PREFIX)
 
     assert scope.unrestricted is False
     assert scope.filters
+
+
+def test_master_user_multi_org_scope(app_ctx):
+    """Master user with multiple organizations searches across all assigned orgs."""
+    user = FakeUser(organization_id=7, roles={SiteRole.MASTER_USER.value})
+    user.groups = [type("FakeGroup", (), {"id": 7})(), type("FakeGroup", (), {"id": 12})()]
+    scope = acl.search_scope(user, PREFIX)
+
+    assert scope.unrestricted is False
+    filter_clause = scope.filters[0]["bool"]["should"]
+    assert {"terms": {"group_ids": [7, 12]}} in filter_clause or {"term": {"is_public": True}} in filter_clause
 
 
 def test_user_without_organization_falls_back_to_open_tenant(app_ctx):

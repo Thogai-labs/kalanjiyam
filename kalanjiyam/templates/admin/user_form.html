@@ -36,7 +36,7 @@
     {{ form.csrf_token }}
     {% for field in form %}
       {% if field.name != 'csrf_token' %}
-      <div class="my-4">
+      <div class="my-4" id="field-container-{{ field.name }}">
         {{ mf.label(field.label) }}
         {% if field.type == 'SelectMultipleField' %}
         {{ field(class_='w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all bg-white text-slate-900', size=5) }}
@@ -90,4 +90,37 @@
 {% block tail %}
 {{ super() }}
 {{ lib.form_js() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const roleSelect = document.getElementById('role_ids');
+  const singleOrgContainer = document.getElementById('field-container-organization_pick');
+  const multiOrgContainer = document.getElementById('field-container-organization_ids');
+
+  function updateOrgVisibility() {
+    if (!roleSelect) return;
+    let isMasterUser = false;
+    for (let i = 0; i < roleSelect.options.length; i++) {
+      const opt = roleSelect.options[i];
+      if (opt.selected && (opt.text.toLowerCase().includes('master_user') || opt.text.toLowerCase().includes('master'))) {
+        isMasterUser = true;
+        break;
+      }
+    }
+    if (singleOrgContainer && multiOrgContainer) {
+      if (isMasterUser) {
+        multiOrgContainer.style.display = 'block';
+        singleOrgContainer.style.display = 'none';
+      } else {
+        multiOrgContainer.style.display = 'none';
+        singleOrgContainer.style.display = 'block';
+      }
+    }
+  }
+
+  if (roleSelect) {
+    roleSelect.addEventListener('change', updateOrgVisibility);
+    updateOrgVisibility();
+  }
+});
+</script>
 {% endblock %}

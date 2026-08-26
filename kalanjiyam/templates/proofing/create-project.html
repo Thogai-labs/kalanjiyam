@@ -369,6 +369,22 @@
       </section>
 
       <div x-show="!isDocx || docxWorkflow === 'project'" x-transition class="space-y-6">
+        {% if user_organizations and user_organizations|length > 1 %}
+        <!-- Organization Assignment for Master Users / Multi-Org Users -->
+        <section class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
+          {{ step('★', _('Assign Organization'), _('Select which assigned organization this project belongs to')) }}
+          <div>
+            <label for="selected_org_slug" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{{ _('Organization') }}</label>
+            <select id="selected_org_slug" name="selected_org_slug" class="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all bg-slate-50 font-semibold text-slate-900">
+              {% for org in user_organizations %}
+              <option value="{{ org.slug }}" {% if loop.first %}selected{% endif %}>{{ org.name }} ({{ org.slug }})</option>
+              {% endfor %}
+            </select>
+            <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ _('As a Master User with multiple organizations, specify which organization this project belongs to.') }}</p>
+          </div>
+        </section>
+        {% endif %}
+
         <!-- Step 3: Describe -->
         <section class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
           {{ step(3, _('Describe'), _('Provide a recognizable title for this text')) }}

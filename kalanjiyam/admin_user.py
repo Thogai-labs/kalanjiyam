@@ -17,7 +17,7 @@ WEB_ASSIGNABLE_ROLES = (
     SiteRole.P1.value,
     SiteRole.P2.value,
     SiteRole.MODERATOR.value,
-    SiteRole.ADMIN.value,
+    SiteRole.MASTER_USER.value,
     SiteRole.ORG_ADMIN.value,
 )
 
@@ -37,6 +37,13 @@ def count_super_admins(session) -> int:
 
 def organization_choices() -> list[tuple[int, str]]:
     choices = [(0, "(none)")]
+    for org in q.groups():
+        choices.append((org.id, f"{org.name} ({org.slug})"))
+    return choices
+
+
+def organization_multi_choices() -> list[tuple[int, str]]:
+    choices = []
     for org in q.groups():
         choices.append((org.id, f"{org.name} ({org.slug})"))
     return choices
@@ -105,25 +112,34 @@ def sync_user_org_and_roles(form, model: db.User, session, *, is_created: bool) 
                 new_roles.append(role)
 
     model.roles = new_roles
+    is_master = any(r.name == SiteRole.MASTER_USER.value for r in new_roles)
 
-    org_id = getattr(form, "organization_pick", None)
-    org_id = org_id.data if org_id is not None else form.organization_id.data
-    org_id = org_id or None
-    if org_id == 0:
-        org_id = None
-    if org_id is None:
+    selected_org_ids: list[int] = []
+    if is_master and getattr(form, "organization_ids", None) and form.organization_ids.data:
+        selected_org_ids = [int(oid) for oid in form.organization_ids.data if oid and int(oid) != 0]
+    elif getattr(form, "organization_pick", None) and form.organization_pick.data:
+        if form.organization_pick.data != 0:
+            selected_org_ids = [int(form.organization_pick.data)]
+    elif getattr(form, "organization_id", None) and form.organization_id.data:
+        if form.organization_id.data != 0:
+            selected_org_ids = [int(form.organization_id.data)]
+
+    if not selected_org_ids:
         try:
-            org_id = q.get_or_create_open_tenant().id
+            open_tenant = q.get_or_create_open_tenant()
+            selected_org_ids = [open_tenant.id]
         except Exception:
             pass
-    model.organization_id = org_id
+
+    model.organization_id = selected_org_ids[0] if selected_org_ids else None
 
     session.flush()
     session.query(db.UserGroups).filter_by(user_id=model.id).delete()
-    if org_id:
+    for org_id in selected_org_ids:
         session.add(db.UserGroups(user_id=model.id, group_id=org_id))
-        if any(r.name == SiteRole.ORG_ADMIN.value for r in model.roles):
-            org = session.query(db.Group).filter_by(id=org_id).first()
-            if org is not None:
-                org.admin_user_id = model.id
-                session.add(org)
+
+    if any(r.name == SiteRole.ORG_ADMIN.value for r in model.roles) and model.organization_id:
+        org = session.query(db.Group).filter_by(id=model.organization_id).first()
+        if org is not None:
+            org.admin_user_id = model.id
+            session.add(org)

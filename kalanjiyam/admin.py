@@ -38,6 +38,7 @@ from kalanjiyam.admin_user import (
     WEB_ASSIGNABLE_ROLES,
     assignable_role_choices,
     organization_choices,
+    organization_multi_choices,
     soft_delete_user,
     sync_user_org_and_roles,
     validate_user_deletable,
@@ -3436,12 +3437,12 @@ class UserView(BaseView):
     create_template = "admin/user_form.html"
     edit_template = "admin/user_form.html"
     column_list = ["username", "email", "organization_id"]
-    column_labels = {"organization_id": "Organization"}
+    column_labels = {"organization_id": "Organization(s)"}
     column_formatters = {
         "organization_id": lambda v, c, m, p: (
-            f"{m.organization.name} ({m.organization.slug})"
-            if m.organization
-            else "—"
+            ", ".join(f"{g.name} ({g.slug})" for g in m.groups)
+            if m.groups
+            else (f"{m.organization.name} ({m.organization.slug})" if m.organization else "—")
         ),
         "email": lambda v, c, m, p: (
             f"{m.email}  [{', '.join(sorted(r.name for r in m.roles))}]"
@@ -3460,7 +3461,14 @@ class UserView(BaseView):
         "roles",
         "organization",
     ]
-    form_columns = ["username", "email", "password", "organization_pick", "role_ids"]
+    form_columns = [
+        "username",
+        "email",
+        "password",
+        "role_ids",
+        "organization_pick",
+        "organization_ids",
+    ]
     form_extra_fields = {
         "password": PasswordField(
             "Password",
@@ -3472,6 +3480,14 @@ class UserView(BaseView):
             coerce=int,
             choices=[],
             validators=[validators.Optional()],
+            description="Assigned organization for standard users.",
+        ),
+        "organization_ids": SelectMultipleField(
+            "Organizations (Multiple)",
+            coerce=int,
+            choices=[],
+            validators=[validators.Optional()],
+            description="Assigned organizations for Master Users (hold Ctrl/Cmd to select multiple).",
         ),
         "role_ids": SelectMultipleField("Roles", coerce=int, choices=[]),
     }
@@ -3486,11 +3502,19 @@ class UserView(BaseView):
     def _prepare_user_form(self, form, model=None):
         form.role_ids.choices = assignable_role_choices(self.session)
         form.organization_pick.choices = organization_choices()
+        if hasattr(form, "organization_ids"):
+            form.organization_ids.choices = organization_multi_choices()
         if model is not None and request.method != "POST":
             form.role_ids.data = [
                 r.id for r in model.roles if r.name in WEB_ASSIGNABLE_ROLES
             ]
             form.organization_pick.data = model.organization_id or 0
+            if hasattr(form, "organization_ids"):
+                user_group_ids = [
+                    ug.group_id
+                    for ug in self.session.query(db.UserGroups).filter_by(user_id=model.id).all()
+                ]
+                form.organization_ids.data = user_group_ids
 
     def create_form(self, obj=None):
         form = super().create_form(obj)

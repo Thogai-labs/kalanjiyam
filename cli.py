@@ -68,10 +68,6 @@ def add_role(username, role):
         r = session.query(db.Role).where(db.Role.name == role).first()
         if r is None:
             raise click.ClickException(f'Role "{role}" does not exist.')
-        if role == SiteRole.ADMIN.value:
-            click.echo(
-                "Warning: `admin` is deprecated for production. Use `super_admin` instead."
-            )
         if role == SiteRole.SUPER_ADMIN.value:
             raise click.ClickException(
                 'Use `create-super-admin` to grant super_admin (not add-role).'

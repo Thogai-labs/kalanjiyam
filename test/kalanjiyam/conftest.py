@@ -113,21 +113,21 @@ def initialize_test_db():
     p1_role = session.query(db.Role).filter_by(name="p1").one()
     p2_role = session.query(db.Role).filter_by(name="p2").one()
     moderator_role = session.query(db.Role).filter_by(name="moderator").one()
-    admin_role = session.query(db.Role).filter_by(name="admin").one()
+    master_user_role = session.query(db.Role).filter_by(name="master_user").one()
     super_admin_role = session.query(db.Role).filter_by(name="super_admin").one()
 
     session.add(p1_role)
     session.add(p2_role)
     session.add(moderator_role)
-    session.add(admin_role)
+    session.add(master_user_role)
     session.add(super_admin_role)
     session.flush()
 
     u_basic.roles = [p1_role, p2_role]
     moderator.roles = [p1_role, p2_role, moderator_role]
-    admin.roles = [p1_role, p2_role, admin_role]
-    super_admin.roles = [p1_role, p2_role, admin_role, super_admin_role]
-    deleted_admin.roles = [p1_role, p2_role, admin_role]
+    admin.roles = [p1_role, p2_role, super_admin_role]
+    super_admin.roles = [p1_role, p2_role, super_admin_role]
+    deleted_admin.roles = [p1_role, p2_role, super_admin_role]
     banned.roles = [p1_role]
     session.add(u_basic)
     session.add(moderator)

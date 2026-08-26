@@ -26,6 +26,26 @@ def user_organization_id(user) -> int | None:
     return org_id
 
 
+def user_organization_ids(user) -> set[int]:
+    if not getattr(user, "is_authenticated", False):
+        return set()
+    org_ids: set[int] = set()
+    if getattr(user, "groups", None):
+        org_ids.update(g.id for g in user.groups)
+    elif getattr(user, "id", None):
+        from kalanjiyam import queries as q
+        try:
+            session = q.get_session()
+            rows = session.query(db.UserGroups.group_id).filter_by(user_id=user.id).all()
+            org_ids.update(r[0] for r in rows)
+        except Exception:
+            pass
+    primary_id = user_organization_id(user)
+    if primary_id:
+        org_ids.add(primary_id)
+    return org_ids
+
+
 def is_project_publicly_viewable(project: db.Project) -> bool:
     return bool(getattr(project, "is_publicly_viewable", False))
 
@@ -36,8 +56,6 @@ def user_can_access_project(user, project: db.Project) -> bool:
         return True
 
     if getattr(user, "is_super_admin", False):
-        return True
-    if getattr(user, "is_admin", False) and not is_multi_tenant_enabled():
         return True
 
     # 1. Device fingerprint check for guest-owned projects (only if user is not signed in)
@@ -67,18 +85,16 @@ def user_can_access_project(user, project: db.Project) -> bool:
     if not getattr(user, "is_authenticated", False):
         return False
 
-    org_id = user_organization_id(user)
-    if org_id is None:
+    user_orgs = user_organization_ids(user)
+    if not user_orgs:
         return False
 
-    return any(g.id == org_id for g in project.groups)
+    return any(g.id in user_orgs for g in project.groups)
 
 
 def user_can_access_text(user, text: db.Text) -> bool:
     """True if user can access a text under current tenancy rules."""
     if getattr(user, "is_super_admin", False):
-        return True
-    if getattr(user, "is_admin", False) and not is_multi_tenant_enabled():
         return True
 
     if not is_multi_tenant_enabled():
@@ -89,10 +105,10 @@ def user_can_access_text(user, text: db.Text) -> bool:
     if not getattr(user, "is_authenticated", False):
         return False
 
-    org_id = user_organization_id(user)
-    if org_id is None:
+    user_orgs = user_organization_ids(user)
+    if not user_orgs:
         return False
-    return any(g.id == org_id for g in text.groups)
+    return any(g.id in user_orgs for g in text.groups)
 
 
 def require_project_access(user, project: db.Project) -> None:
@@ -157,9 +173,9 @@ def user_can_view_proofing_project(user, project: db.Project) -> bool:
             if project.fingerprint_id and device_fp and project.fingerprint_id == device_fp:
                 return True
             
-        # Allow user of the same organization
-        org_id = user_organization_id(user)
-        if org_id and any(g.id == org_id for g in project.groups):
+        # Allow user of the same organization(s)
+        user_orgs = user_organization_ids(user)
+        if user_orgs and any(g.id in user_orgs for g in project.groups):
             return True
             
         return False

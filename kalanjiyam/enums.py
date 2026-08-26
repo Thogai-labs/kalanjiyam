@@ -12,8 +12,8 @@ class SiteRole(str, Enum):
     #: Moderator. Can delete projects, promote and ban users, and run
     #: operations across the entire proofing effort.
     MODERATOR = "moderator"
-    #: Administrator. Has full access to the database.
-    ADMIN = "admin"
+    #: Master user. Can belong to multiple organizations and create/view projects across them.
+    MASTER_USER = "master_user"
     #: Super administrator. Can manage all organizations and quotas.
     SUPER_ADMIN = "super_admin"
     #: Organization-level administrator.

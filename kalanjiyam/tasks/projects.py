@@ -52,6 +52,7 @@ def _add_project_to_database(
     creator_id: int | None,
     require_org: bool,
     fingerprint_id: str | None = None,
+    org_slug: str = "open-tenant",
 ):
     """Create a project on the database.
 
@@ -89,12 +90,19 @@ def _add_project_to_database(
             )
         )
     creator = session.query(db.User).filter_by(id=creator_id).first() if creator_id else None
-    # Auto-assign projects to the creator's organization for tenant isolation.
-    from kalanjiyam.utils.org_access import user_organization_id
-    creator_org_id = user_organization_id(creator) if creator else None
-    if creator_org_id:
-        session.add(db.ProjectGroups(group_id=creator_org_id, project_id=project.id))
-    elif not creator_org_id and fingerprint_id:
+    # Auto-assign projects to the target or creator's organization for tenant isolation.
+    target_group = None
+    if org_slug and org_slug != "open-tenant":
+        target_group = session.query(db.Group).filter_by(slug=org_slug).first()
+    if not target_group and creator:
+        from kalanjiyam.utils.org_access import user_organization_id
+        creator_org_id = user_organization_id(creator)
+        if creator_org_id:
+            target_group = session.query(db.Group).filter_by(id=creator_org_id).first()
+
+    if target_group:
+        session.add(db.ProjectGroups(group_id=target_group.id, project_id=project.id))
+    elif not creator and fingerprint_id:
         # Guests default to the open-tenant workspace
         try:
             open_tenant = q.get_or_create_open_tenant()
@@ -611,6 +619,7 @@ def create_project_inner(
                 creator_id=creator_id,
                 require_org=require_org,
                 fingerprint_id=fingerprint_id,
+                org_slug=org_slug,
             )
 
             db_project = session.query(db.Project).filter_by(slug=slug).one()
@@ -735,6 +744,7 @@ def create_project_inner(
                 creator_id=creator_id,
                 require_org=require_org,
                 fingerprint_id=fingerprint_id,
+                org_slug=org_slug,
             )
 
             # Update DB project metadata and metrics log

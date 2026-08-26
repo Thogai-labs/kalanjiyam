@@ -302,11 +302,26 @@ def create_project():
 
     # Authorization checks
     is_p2_or_admin = (
-        getattr(current_user, "is_p2", False)
+        getattr(current_user, "is_p1", False)
+        or getattr(current_user, "is_p2", False)
         or getattr(current_user, "is_moderator", False)
+        or getattr(current_user, "is_master_user", False)
         or getattr(current_user, "is_org_admin", False)
         or getattr(current_user, "is_super_admin", False)
     )
+
+    session = q.get_session()
+    user_organizations = []
+    if current_user.is_authenticated:
+        if getattr(current_user, "groups", None):
+            user_organizations = list(current_user.groups)
+        elif getattr(current_user, "id", None):
+            user_organizations = (
+                session.query(db.Group)
+                .join(db.UserGroups, db.Group.id == db.UserGroups.group_id)
+                .filter(db.UserGroups.user_id == current_user.id)
+                .all()
+            )
 
     is_open_tenant = False
     if current_user.is_authenticated:
@@ -358,12 +373,12 @@ def create_project():
         file = request.files.get("local_file")
         if not file or not file.filename:
             flash(_l("Please upload a file."), "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
 
         filename = file.filename
         if Path(filename).suffix not in (".docx", ".doc"):
             flash(_l("Please upload a Word document (.docx)."), "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
 
         source_lang = request.form.get("source_lang", "sa")
         target_lang = request.form.get("target_lang", "en")
@@ -374,7 +389,7 @@ def create_project():
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
         if not TranslationEngineFactory.is_supported(engine):
             flash(_l("Unsupported translation engine selected."), "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
 
         docx_id = str(uuid.uuid4())
         from kalanjiyam.utils.storage import get_storage, docx_upload_key
@@ -431,34 +446,37 @@ def create_project():
         if current_user.is_authenticated:
             if current_app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True) and not getattr(
                 current_user, "organization_id", None
-            ):
+            ) and not user_organizations:
                 flash(_l("Your account is not assigned to an organization."), "error")
-                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
+                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
         title = form.local_title.data
 
         slug = slugify(title)
-
-        session = q.get_session()
 
         # Check DB before writing files to storage to prevent overwriting existing project files
         existing_proj = session.query(db.Project).filter_by(slug=slug).first()
         if existing_proj:
             flash(_l('Project "%(title)s" already exists. Please choose a different title.', title=title), "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
 
+        selected_org_slug = request.form.get("selected_org_slug")
         org_slug = "open-tenant"
         if current_user.is_authenticated:
-            from kalanjiyam.utils.org_access import user_organization_id
-            org_id = user_organization_id(current_user)
-            if org_id:
-                group = session.query(db.Group).get(org_id)
-                if group:
-                    org_slug = group.slug
+            user_org_map = {g.slug: g for g in user_organizations} if user_organizations else {}
+            if selected_org_slug and selected_org_slug in user_org_map:
+                org_slug = selected_org_slug
+            else:
+                from kalanjiyam.utils.org_access import user_organization_id
+                org_id = user_organization_id(current_user)
+                if org_id:
+                    group = session.query(db.Group).get(org_id)
+                    if group:
+                        org_slug = group.slug
 
         filename = form.local_file.raw_data[0].filename
         if not _is_allowed_document_file(filename):
             flash(_l("Please upload a PDF or DOCX."), "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
         upload_size = 0
         if form.local_file.data and hasattr(form.local_file.data, "stream"):
             cur_pos = form.local_file.data.stream.tell()
@@ -477,7 +495,7 @@ def create_project():
                     ),
                     "error",
                 )
-                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
+                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
 
         # Save the original file so that it can be processed/downloaded later.
         # The Celery worker fetches it from storage by key, so web and worker
@@ -551,7 +569,7 @@ def create_project():
             task_id=task.id,
         )
 
-    return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages)
+    return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
 
 
 @bp.route("/status/<task_id>")
