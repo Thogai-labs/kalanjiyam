@@ -85,13 +85,18 @@
   </form>
 </div>
 {% endif %}
-{% endblock %}
 
-{% block tail %}
-{{ super() }}
-{{ lib.form_js() }}
+{% set master_role_ids = [] %}
+{% for cid, clabel in form.role_ids.choices %}
+  {% if 'master' in (clabel|string)|lower %}
+    {% set _ = master_role_ids.append(cid|string) %}
+  {% endif %}
+{% endfor %}
+
 <script>
 (function() {
+  const masterRoleIds = {{ master_role_ids|tojson }};
+
   function checkIsMasterUser() {
     const roleSelect = document.getElementById('role_ids');
     if (roleSelect && roleSelect.options) {
@@ -99,18 +104,38 @@
         const opt = roleSelect.options[i];
         if (opt.selected) {
           const text = (opt.text || '').toLowerCase();
-          const val = (opt.value || '').toLowerCase();
-          if (text.includes('master') || val === 'master_user') {
+          const val = String(opt.value || '');
+          if (masterRoleIds.includes(val) || text.includes('master') || val.includes('master')) {
             return true;
           }
         }
       }
     }
+    if (roleSelect && roleSelect.selectedOptions) {
+      for (let i = 0; i < roleSelect.selectedOptions.length; i++) {
+        const opt = roleSelect.selectedOptions[i];
+        const text = (opt.text || '').toLowerCase();
+        const val = String(opt.value || '');
+        if (masterRoleIds.includes(val) || text.includes('master') || val.includes('master')) {
+          return true;
+        }
+      }
+    }
+    // Select2 rendered pill tags
+    const select2Choices = document.querySelectorAll('.select2-selection__choice, .select2-selection__rendered');
+    for (let i = 0; i < select2Choices.length; i++) {
+      const text = (select2Choices[i].textContent || select2Choices[i].getAttribute('title') || '').toLowerCase();
+      if (text.includes('master')) {
+        return true;
+      }
+    }
+    // Radio / checkbox inputs with name role_ids
     const checkedRoles = document.querySelectorAll('input[name="role_ids"]:checked');
     for (let i = 0; i < checkedRoles.length; i++) {
+      const val = String(checkedRoles[i].value || '');
       const parent = checkedRoles[i].closest('label') || checkedRoles[i].parentElement;
-      const text = parent ? parent.textContent.toLowerCase() : '';
-      if (text.includes('master')) {
+      const text = (parent ? parent.textContent : '').toLowerCase();
+      if (masterRoleIds.includes(val) || text.includes('master') || val.includes('master')) {
         return true;
       }
     }
@@ -123,27 +148,41 @@
     const multiOrg = document.getElementById('field-container-organization_ids');
 
     if (singleOrg) {
-      singleOrg.style.display = isMaster ? 'none' : 'block';
+      if (isMaster) {
+        singleOrg.classList.add('hidden');
+        singleOrg.style.setProperty('display', 'none', 'important');
+      } else {
+        singleOrg.classList.remove('hidden');
+        singleOrg.style.setProperty('display', 'block', 'important');
+      }
     }
     if (multiOrg) {
-      multiOrg.style.display = isMaster ? 'block' : 'none';
+      if (isMaster) {
+        multiOrg.classList.remove('hidden');
+        multiOrg.style.setProperty('display', 'block', 'important');
+      } else {
+        multiOrg.classList.add('hidden');
+        multiOrg.style.setProperty('display', 'none', 'important');
+      }
     }
   }
 
   function initListeners() {
-    const roleSelect = document.getElementById('role_ids');
-    if (roleSelect) {
-      ['change', 'click', 'input', 'mouseup', 'keyup'].forEach(function(evt) {
-        roleSelect.addEventListener(evt, updateOrgVisibility);
-      });
-    }
-    const roleInputs = document.querySelectorAll('input[name="role_ids"]');
-    roleInputs.forEach(function(input) {
-      input.addEventListener('change', updateOrgVisibility);
+    ['change', 'click', 'input', 'mouseup', 'keyup', 'select2:select', 'select2:unselect', 'select2:close'].forEach(function(evt) {
+      document.addEventListener(evt, updateOrgVisibility, true);
     });
+
     if (window.jQuery) {
-      window.jQuery(document).on('change select2:select select2:unselect', '#role_ids', updateOrgVisibility);
+      window.jQuery(document).on('change select2:select select2:unselect select2:close', updateOrgVisibility);
+      window.jQuery(document).on('change', '#role_ids', updateOrgVisibility);
     }
+
+    try {
+      const observer = new MutationObserver(updateOrgVisibility);
+      observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+    } catch (e) {}
+
+    setInterval(updateOrgVisibility, 150);
     updateOrgVisibility();
   }
 
