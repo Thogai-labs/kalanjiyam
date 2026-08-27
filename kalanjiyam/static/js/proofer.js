@@ -633,6 +633,8 @@ export default () => ({
         "dots_ocr": "12",
         "gemma_ocr": "13",
         "gemma_4": "13",
+        "gemma-4-31b": "13",
+        "gemma_4_31b": "13",
         "llm_gemma": "13",
         "llm-gemma": "13"
       };
@@ -667,6 +669,10 @@ export default () => ({
         'openai': '7',
         'llm_gemma': '8',
         'llm-gemma': '8',
+        'gemma_4_31b': '9',
+        'gemma-4-31b': '9',
+        'gemma_31b': '9',
+        'gemma-31b': '9',
       };
       const num = engineMap[engine] || engine;
       const modelLabel = /^\d+$/.test(num) ? 'Translation ' + num : (num.charAt(0).toUpperCase() + num.slice(1));
@@ -1388,6 +1394,7 @@ export default () => ({
       '6': 'google',
       '7': 'openai',
       '8': 'llm_gemma',
+      '9': 'gemma_4_31b',
     };
     return engineMap[engineValue] || engineValue || 'indictrans2';
   },
@@ -1409,6 +1416,10 @@ export default () => ({
       'openai': '7',
       'llm_gemma': '8',
       'llm-gemma': '8',
+      'gemma_4_31b': '9',
+      'gemma-4-31b': '9',
+      'gemma_31b': '9',
+      'gemma-31b': '9',
     };
     const num = revMap[engine] || engine;
     return /^\d+$/.test(num) ? `Translation ${num}` : (num.charAt(0).toUpperCase() + num.slice(1));

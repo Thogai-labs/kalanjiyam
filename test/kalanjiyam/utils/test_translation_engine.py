@@ -168,6 +168,32 @@ class TestIndicTransEngine:
             assert call_kwargs["json"]["target_language"] == "Tamil"
 
     @patch('httpx.Client')
+    def test_translate_gemma_4_31b_text(self, mock_client_class):
+        """Test Gemma-4-31B text translation uses google/gemma-4-31b-it."""
+        mock_client = Mock()
+        mock_client_class.return_value.__enter__.return_value = mock_client
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"text": "வணக்கம் உலகம்"}
+        mock_client.post.return_value = mock_response
+
+        from flask import Flask
+        app = Flask("test_app")
+        app.config["TRANSLATION_SERVICE_URL"] = "http://localhost:8888"
+
+        with app.app_context():
+            engine = IndicTransEngine("gemma_4_31b")
+            response = engine.translate("Hello world", "en", "ta")
+
+            assert response.translated_text == "வணக்கம் உலகம்"
+            assert response.engine == "gemma_4_31b"
+
+            call_kwargs = mock_client.post.call_args[1]
+            assert call_kwargs["json"]["model_name"] == "google/gemma-4-31b-it"
+            assert call_kwargs["json"]["source_language"] == "English"
+            assert call_kwargs["json"]["target_language"] == "Tamil"
+
+    @patch('httpx.Client')
     def test_translate_with_api_key(self, mock_client_class):
         """Test text translation sends X-API-Key header when configured."""
         mock_client = Mock()
@@ -453,10 +479,15 @@ class TestTranslationMaskingAndChoices:
         assert normalize_translation_engine("6") == "google"
         assert normalize_translation_engine("7") == "openai"
         assert normalize_translation_engine("8") == "llm_gemma"
+        assert normalize_translation_engine("9") == "gemma_4_31b"
 
         # Service aliases
         assert normalize_translation_engine("gemma-4") == "gemma"
         assert normalize_translation_engine("gemma4") == "gemma"
+        assert normalize_translation_engine("gemma-4-31b") == "gemma_4_31b"
+        assert normalize_translation_engine("gemma_4_31b") == "gemma_4_31b"
+        assert normalize_translation_engine("gemma-31b") == "gemma_4_31b"
+        assert normalize_translation_engine("gemma_31b") == "gemma_4_31b"
         assert normalize_translation_engine("llm-gemma") == "llm_gemma"
         assert normalize_translation_engine("llm_gemma") == "llm_gemma"
         assert normalize_translation_engine("param-lc-translate-ep4") == "param_lc_translate_ep4"
@@ -467,6 +498,7 @@ class TestTranslationMaskingAndChoices:
         # Canonical names unchanged
         assert normalize_translation_engine("indictrans2") == "indictrans2"
         assert normalize_translation_engine("gemma") == "gemma"
+        assert normalize_translation_engine("gemma_4_31b") == "gemma_4_31b"
         assert normalize_translation_engine("llm_gemma") == "llm_gemma"
 
     def test_build_translation_choices_regular_user(self):
@@ -475,17 +507,18 @@ class TestTranslationMaskingAndChoices:
         engines = [
             {"value": "indictrans2", "label": "IndicTrans v2"},
             {"value": "gemma", "label": "Gemma 4 12B"},
+            {"value": "gemma_4_31b", "label": "Gemma 4 31B"},
             {"value": "llm_gemma", "label": "LLM Gemma"},
             {"value": "param_lc_translate_ep4", "label": "Param LC Translate EP4"},
         ]
         choices = build_translation_choices(
             available_engines=engines,
             is_super_admin=False,
-            recommended_engine="llm_gemma",
+            recommended_engine="gemma_4_31b",
             default_engine="indictrans2",
         )
 
-        assert len(choices) == 4
+        assert len(choices) == 5
         # Masked names for regular users
         assert choices[0]["value"] == "1"
         assert choices[0]["label"] == "Translation 1"
@@ -495,13 +528,17 @@ class TestTranslationMaskingAndChoices:
         assert choices[1]["value"] == "2"
         assert choices[1]["label"] == "Translation 2"
 
-        assert choices[2]["value"] == "8"
-        assert choices[2]["label"] == "Translation 8"
+        assert choices[2]["value"] == "9"
+        assert choices[2]["label"] == "Translation 9"
         assert choices[2]["is_recommended"] is True
 
-        assert choices[3]["value"] == "3"
-        assert choices[3]["label"] == "Translation 3"
+        assert choices[3]["value"] == "8"
+        assert choices[3]["label"] == "Translation 8"
         assert choices[3]["is_recommended"] is False
+
+        assert choices[4]["value"] == "3"
+        assert choices[4]["label"] == "Translation 3"
+        assert choices[4]["is_recommended"] is False
 
     def test_build_translation_choices_super_admin(self):
         from kalanjiyam.utils.translation_engine import build_translation_choices
@@ -509,16 +546,17 @@ class TestTranslationMaskingAndChoices:
         engines = [
             {"value": "indictrans2", "label": "IndicTrans v2"},
             {"value": "gemma", "label": "Gemma 4 12B"},
+            {"value": "gemma_4_31b", "label": "Gemma 4 31B"},
             {"value": "llm_gemma", "label": "LLM Gemma"},
         ]
         choices = build_translation_choices(
             available_engines=engines,
             is_super_admin=True,
-            recommended_engine="8",  # Can also be passed by numeric ID
+            recommended_engine="9",  # Can also be passed by numeric ID
             default_engine="1",
         )
 
-        assert len(choices) == 3
+        assert len(choices) == 4
         # Real labels for super admin
         assert choices[0]["value"] == "1"
         assert choices[0]["label"] == "IndicTrans v2"
@@ -527,9 +565,12 @@ class TestTranslationMaskingAndChoices:
         assert choices[1]["value"] == "2"
         assert choices[1]["label"] == "Gemma 4 12B"
 
-        assert choices[2]["value"] == "8"
-        assert choices[2]["label"] == "LLM Gemma"
+        assert choices[2]["value"] == "9"
+        assert choices[2]["label"] == "Gemma 4 31B"
         assert choices[2]["is_recommended"] is True
+
+        assert choices[3]["value"] == "8"
+        assert choices[3]["label"] == "LLM Gemma"
 
     def test_factory_with_numeric_keys(self):
         # Should be able to create engines by numeric ID
@@ -540,6 +581,14 @@ class TestTranslationMaskingAndChoices:
         engine2 = TranslationEngineFactory.create("2")
         assert isinstance(engine2, IndicTransEngine)
         assert engine2.version == "gemma"
+
+        engine9 = TranslationEngineFactory.create("9")
+        assert isinstance(engine9, IndicTransEngine)
+        assert engine9.version == "gemma_4_31b"
+
+        engine_31b_name = TranslationEngineFactory.create("gemma-4-31b")
+        assert isinstance(engine_31b_name, IndicTransEngine)
+        assert engine_31b_name.version == "gemma_4_31b"
 
         engine8 = TranslationEngineFactory.create("8")
         from kalanjiyam.utils.translation_engine import LlmGemmaTranslateEngine
@@ -557,6 +606,9 @@ class TestTranslationMaskingAndChoices:
         assert TranslationEngineFactory.is_supported("3") is True
         assert TranslationEngineFactory.is_supported("4") is True
         assert TranslationEngineFactory.is_supported("8") is True
+        assert TranslationEngineFactory.is_supported("9") is True
+        assert TranslationEngineFactory.is_supported("gemma-4-31b") is True
+        assert TranslationEngineFactory.is_supported("gemma_4_31b") is True
         assert TranslationEngineFactory.is_supported("llm_gemma") is True
         assert TranslationEngineFactory.is_supported("llm-gemma") is True
         assert TranslationEngineFactory.is_supported("unsupported") is False

@@ -513,6 +513,15 @@ def test_get_version_display_name_translation():
         str(get_version_display_name("translation:translation_1b_exp_40:en->ta"))
         == "Translation 4 (EN → TA)"
     )
+    # Gemma 4 31B is mapped to 9
+    assert (
+        str(get_version_display_name("translation:gemma_4_31b:en->ta"))
+        == "Translation 9 (EN → TA)"
+    )
+    assert (
+        str(get_version_display_name("translation:gemma-4-31b:en->ta"))
+        == "Translation 9 (EN → TA)"
+    )
 
 
 

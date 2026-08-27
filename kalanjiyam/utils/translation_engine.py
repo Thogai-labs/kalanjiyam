@@ -262,6 +262,8 @@ class GenericTranslationEngine(TranslationEngine):
             else:
                 direction = 'indic-indic'
             model_name = f"ai4bharat/{self.engine_name}-{direction}-1B"
+        elif "31b" in self.engine_name.lower() and "gemma" in self.engine_name.lower():
+            model_name = "google/gemma-4-31b-it"
         elif "gemma" in self.engine_name.lower():
             model_name = "google/gemma-4-12b-it"
         else:
@@ -809,6 +811,7 @@ IndicTransEngine = GenericTranslationEngine
 SUPPORTED_TRANSLATION_ENGINES = [
     "indictrans2",
     "gemma",
+    "gemma_4_31b",
     "llm_gemma",
     "param_lc_translate_ep4",
     "translation_1b_exp_40",
@@ -825,6 +828,14 @@ TRANSLATION_SERVICE_ENGINE_ALIASES = {
     "gemma-4": "gemma",
     "gemma4": "gemma",
     "gemma_4": "gemma",
+    "gemma-4-12b": "gemma",
+    "gemma_4_12b": "gemma",
+    "gemma-12b": "gemma",
+    "gemma_12b": "gemma",
+    "gemma-4-31b": "gemma_4_31b",
+    "gemma_4_31b": "gemma_4_31b",
+    "gemma-31b": "gemma_4_31b",
+    "gemma_31b": "gemma_4_31b",
     "llm-gemma": "llm_gemma",
     "llm_gemma": "llm_gemma",
     "param-lc-translate-ep4": "param_lc_translate_ep4",
@@ -842,6 +853,7 @@ TRANSLATION_ENGINE_MAP = {
     "6": "google",
     "7": "openai",
     "8": "llm_gemma",
+    "9": "gemma_4_31b",
 }
 
 REVERSE_TRANSLATION_ENGINE_MAP = {v: k for k, v in TRANSLATION_ENGINE_MAP.items()}
@@ -849,6 +861,7 @@ REVERSE_TRANSLATION_ENGINE_MAP = {v: k for k, v in TRANSLATION_ENGINE_MAP.items(
 TRANSLATION_ENGINE_LABELS = {
     "indictrans2": "IndicTrans v2",
     "gemma": "Gemma 4 12B",
+    "gemma_4_31b": "Gemma 4 31B",
     "llm_gemma": "LLM Gemma",
     "param_lc_translate_ep4": "Param LC Translate EP4",
     "translation_1b_exp_40": "Translation 1B Exp 40",
@@ -949,6 +962,7 @@ class TranslationEngineFactory:
     _engines = {
         "indictrans2": lambda: GenericTranslationEngine("indictrans2"),
         "gemma": lambda: GenericTranslationEngine("gemma"),
+        "gemma_4_31b": lambda: GenericTranslationEngine("gemma_4_31b"),
         "llm_gemma": lambda: LlmGemmaTranslateEngine(),
         "param_lc_translate_ep4": lambda: BharatGenTranslateEngine(
             "param_lc_translate_ep4"
@@ -1259,6 +1273,8 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
                                 elif "gemma" in family_part.lower():
                                     if "llm" in family_part.lower():
                                         engine_val = "llm_gemma"
+                                    elif "31b" in family_part.lower():
+                                        engine_val = "gemma_4_31b"
                                     else:
                                         engine_val = "gemma"
                                 else:
@@ -1266,6 +1282,8 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
                             else:
                                 if "llm" in name.lower() and "gemma" in name.lower():
                                     engine_val = "llm_gemma"
+                                elif "31b" in name.lower() and "gemma" in name.lower():
+                                    engine_val = "gemma_4_31b"
                                 else:
                                     engine_val = "gemma" if "gemma" in name.lower() else name
                         
@@ -1276,6 +1294,10 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
                                 'indictrans3': 'IndicTrans v3',
                                 'gemma': 'Gemma 4 12B',
                                 'gemma4': 'Gemma 4 12B',
+                                'gemma_4_31b': 'Gemma 4 31B',
+                                'gemma-4-31b': 'Gemma 4 31B',
+                                'gemma_31b': 'Gemma 4 31B',
+                                'gemma-31b': 'Gemma 4 31B',
                                 'llm_gemma': 'LLM Gemma',
                                 'llm-gemma': 'LLM Gemma',
                                 'param_lc_translate_ep4': 'Param LC Translate EP4',
@@ -1303,6 +1325,11 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
             'value': 'gemma',
             'label': 'Gemma 4 12B',
             'model_name': 'google/gemma-4-12b-it',
+        }
+        seen_engines['gemma_4_31b'] = {
+            'value': 'gemma_4_31b',
+            'label': 'Gemma 4 31B',
+            'model_name': 'google/gemma-4-31b-it',
         }
         seen_engines['llm_gemma'] = {
             'value': 'llm_gemma',
@@ -1339,10 +1366,11 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
     sort_order = {
         'indictrans2': 0,
         'gemma': 1,
-        'llm_gemma': 2,
-        'param_lc_translate_ep4': 3,
-        'translation_1b_exp_40': 4,
-        'indictrans3': 5,
+        'gemma_4_31b': 2,
+        'llm_gemma': 3,
+        'param_lc_translate_ep4': 4,
+        'translation_1b_exp_40': 5,
+        'indictrans3': 6,
     }
     sorted_choices = sorted(
         list(seen_engines.values()),
