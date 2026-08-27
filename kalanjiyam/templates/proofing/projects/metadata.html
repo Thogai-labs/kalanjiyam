@@ -61,16 +61,7 @@
 
 {% block content %}
 <div class="w-full">
-  <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-    <div class="flex-1 min-w-0">
-      {{ m.project_tabs(project=project, active='metadata', is_mod=current_user.is_moderator) }}
-    </div>
-    <button type="submit" form="metadata-form"
-      class="inline-flex items-center gap-2 px-6 py-2.5 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-md text-xs shrink-0 cursor-pointer">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
-      <span>{{ _('Save metadata') }}</span>
-    </button>
-  </div>
+  {{ m.project_tabs(project=project, active='metadata', is_mod=current_user.is_moderator) }}
 
 {{ mf.show_errors_if_any(form.errors) }}
 
