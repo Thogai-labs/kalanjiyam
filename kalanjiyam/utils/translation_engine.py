@@ -559,7 +559,7 @@ class BharatGenTranslateEngine(TranslationEngine):
 
 
 class LlmGemmaTranslateEngine(TranslationEngine):
-    """Translation engine using the OCR service /v1/ocr endpoint with llm-gemma."""
+    """Translation engine using llm-gemma via /v1/chat/completions or /v1/ocr."""
 
     def __init__(
         self,
@@ -591,7 +591,12 @@ class LlmGemmaTranslateEngine(TranslationEngine):
                 if not api_url:
                     ocr_base = (current_app.config.get("OCR_SERVICE_URL") or "").rstrip("/")
                     if ocr_base:
-                        api_url = ocr_base if ocr_base.endswith("/v1/ocr") else f"{ocr_base}/v1/ocr"
+                        if ocr_base.endswith("/v1/ocr"):
+                            api_url = ocr_base[:-7] + "/v1/chat/completions"
+                        elif ocr_base.endswith("/v1"):
+                            api_url = ocr_base + "/chat/completions"
+                        else:
+                            api_url = ocr_base + "/v1/chat/completions"
             if not api_key:
                 api_key = (
                     current_app.config.get("LLM_GEMMA_TRANSLATION_API_KEY")
@@ -609,7 +614,12 @@ class LlmGemmaTranslateEngine(TranslationEngine):
             api_url = os.environ.get("LLM_GEMMA_TRANSLATION_API_URL")
             if not api_url:
                 ocr_base = (os.environ.get("OCR_SERVICE_URL") or "http://localhost:8000").rstrip("/")
-                api_url = ocr_base if ocr_base.endswith("/v1/ocr") else f"{ocr_base}/v1/ocr"
+                if ocr_base.endswith("/v1/ocr"):
+                    api_url = ocr_base[:-7] + "/v1/chat/completions"
+                elif ocr_base.endswith("/v1"):
+                    api_url = ocr_base + "/chat/completions"
+                else:
+                    api_url = ocr_base + "/v1/chat/completions"
 
         if not api_key:
             api_key = (
@@ -654,36 +664,29 @@ class LlmGemmaTranslateEngine(TranslationEngine):
         )
         prompt = (
             f"You are a professional machine translation system. "
-            f"Translate the following text from {source_name} to {target_name}.{glossary_part} "
-            f"Maintain the original formatting, line breaks, and structure. "
+            f"Translate the following text from {source_name} to {target_name}.{glossary_part}\n"
+            f"Maintain the original formatting, line breaks, and structure.\n"
             f"Output ONLY the direct translated text. Do not add any explanations, notes, labels, or preamble.\n\n"
             f"Text to translate:\n{text}"
         )
-
-        payload = {
-            "text": text,
-            "prompt": prompt,
-            "model_name": self.model_name,
-            "engine": self.model_name,
-            "source_language": source_name,
-            "target_language": target_name,
-            "source_lang": source_lang,
-            "target_lang": target_lang,
-        }
 
         headers = {"Content-Type": "application/json"}
         if api_key and str(api_key).strip():
             clean_key = str(api_key).strip().strip("'").strip('"')
             headers["X-API-Key"] = clean_key
 
-        try:
+        def _call_chat(url: str):
+            chat_payload = {
+                "model": self.model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.1,
+            }
             with httpx.Client(timeout=timeout) as client:
-                response = client.post(api_url, json=payload, headers=headers)
-
-            if response.status_code >= 400:
-                detail = response.text
+                res = client.post(url, json=chat_payload, headers=headers)
+            if res.status_code >= 400:
+                detail = res.text
                 try:
-                    res_json = response.json()
+                    res_json = res.json()
                     detail = (
                         res_json.get("detail")
                         or res_json.get("error", {}).get("message")
@@ -692,23 +695,65 @@ class LlmGemmaTranslateEngine(TranslationEngine):
                 except Exception:
                     pass
                 raise RuntimeError(
-                    f"LLM Gemma translation service error ({response.status_code}): {detail}"
+                    f"LLM Gemma translation service error ({res.status_code}): {detail}"
                 )
+            res_json = res.json()
+            choices = res_json.get("choices") or []
+            translated_str = ""
+            if choices and isinstance(choices, list):
+                msg = choices[0].get("message") or {}
+                translated_str = msg.get("content") or ""
+            return translated_str, res_json
 
-            result = response.json()
-            translated = (
-                result.get("translated_text")
-                or result.get("text")
-                or result.get("text_content")
-            )
-            if not translated and "choices" in result and result["choices"]:
-                translated = result["choices"][0].get("message", {}).get("content", "")
-            if not translated and "blocks" in result and isinstance(result["blocks"], list):
-                translated = "\n\n".join(
-                    b.get("content", "")
-                    for b in result["blocks"]
-                    if isinstance(b, dict) and b.get("content")
+        def _call_ocr(url: str):
+            ocr_payload = {
+                "text": text,
+                "prompt": prompt,
+                "model_name": self.model_name,
+                "engine": self.model_name,
+                "source_language": source_name,
+                "target_language": target_name,
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+            }
+            with httpx.Client(timeout=timeout) as client:
+                res = client.post(url, json=ocr_payload, headers=headers)
+            if res.status_code >= 400:
+                detail = res.text
+                try:
+                    res_json = res.json()
+                    detail = (
+                        res_json.get("detail")
+                        or res_json.get("error", {}).get("message")
+                        or detail
+                    )
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    f"LLM Gemma translation service error ({res.status_code}): {detail}"
                 )
+            res_json = res.json()
+            translated_str = (
+                res_json.get("translated_text")
+                or res_json.get("text")
+                or res_json.get("text_content")
+            )
+            return translated_str or "", res_json
+
+        try:
+            if api_url.endswith("/v1/ocr"):
+                try:
+                    translated, result = _call_ocr(api_url)
+                except Exception as ocr_err:
+                    logging.warning(
+                        f"LLM Gemma translation via /v1/ocr failed ({ocr_err}), falling back to /v1/chat/completions"
+                    )
+                    chat_url = api_url[:-7] + "/v1/chat/completions"
+                    translated, result = _call_chat(chat_url)
+                    api_url = chat_url
+            else:
+                translated, result = _call_chat(api_url)
+
             if translated is None:
                 translated = ""
 

@@ -251,7 +251,7 @@ class BaseConfig:
         _env("BHARATGEN_TRANSLATION_TIMEOUT", "300") or "300"
     )
 
-    #: Optional URL override for llm-gemma translation API (defaults to {OCR_SERVICE_URL}/v1/ocr).
+    #: Optional URL override for llm-gemma translation API (defaults to {OCR_SERVICE_URL}/v1/chat/completions with automatic fallback if /v1/ocr is given).
     LLM_GEMMA_TRANSLATION_API_URL = _env("LLM_GEMMA_TRANSLATION_API_URL", "")
 
     #: Optional API key override for llm-gemma translation (defaults to OCR_SERVICE_API_KEY).

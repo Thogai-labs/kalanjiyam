@@ -586,14 +586,18 @@ class TestLlmGemmaTranslateEngine:
     """Test LlmGemmaTranslateEngine calling /v1/ocr."""
 
     @patch("httpx.Client")
-    def test_translate_llm_gemma_calls_ocr_endpoint(self, mock_client_class):
+    def test_translate_llm_gemma_calls_chat_completions(self, mock_client_class):
         mock_client = Mock()
         mock_client_class.return_value.__enter__.return_value = mock_client
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "text": "Hello world in English",
-            "model_name": "llm-gemma",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "Hello world in English"},
+                }
+            ]
         }
         mock_client.post.return_value = mock_response
 
@@ -615,16 +619,43 @@ class TestLlmGemmaTranslateEngine:
             call_url = mock_client.post.call_args[0][0]
             call_kwargs = mock_client.post.call_args[1]
 
-            assert call_url == "http://ocr.test/v1/ocr"
+            assert call_url == "http://ocr.test/v1/chat/completions"
             assert call_kwargs["headers"]["X-API-Key"] == "test-secret"
             assert call_kwargs["headers"]["Content-Type"] == "application/json"
-            assert call_kwargs["json"]["model_name"] == "llm-gemma"
-            assert call_kwargs["json"]["engine"] == "llm-gemma"
-            assert call_kwargs["json"]["source_language"] == "Hindi"
-            assert call_kwargs["json"]["target_language"] == "English"
-            assert "prompt" in call_kwargs["json"]
-            assert "Translate the following text from Hindi to English" in call_kwargs["json"]["prompt"]
-            assert "नमस्ते दुनिया" in call_kwargs["json"]["text"]
+            assert call_kwargs["json"]["model"] == "llm-gemma"
+            assert "Translate the following text from Hindi to English" in call_kwargs["json"]["messages"][0]["content"]
+            assert "नमस्ते दुनिया" in call_kwargs["json"]["messages"][0]["content"]
+
+    @patch("httpx.Client")
+    def test_translate_llm_gemma_fallback_from_ocr(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value.__enter__.return_value = mock_client
+
+        # First call to /v1/ocr fails (e.g. 422 missing image), second call to /v1/chat/completions succeeds
+        ocr_fail = Mock()
+        ocr_fail.status_code = 422
+        ocr_fail.text = "Missing image"
+        ocr_fail.json.return_value = {"detail": "Missing image"}
+
+        chat_success = Mock()
+        chat_success.status_code = 200
+        chat_success.json.return_value = {
+            "choices": [{"message": {"content": "Fallback translation"}}]
+        }
+
+        mock_client.post.side_effect = [ocr_fail, chat_success]
+
+        from kalanjiyam.utils.translation_engine import LlmGemmaTranslateEngine
+
+        engine = LlmGemmaTranslateEngine(
+            api_url="http://ocr.test/v1/ocr", api_key="test-secret"
+        )
+        response = engine.translate("Test text", "en", "mr")
+
+        assert response.translated_text == "Fallback translation"
+        assert mock_client.post.call_count == 2
+        assert mock_client.post.call_args_list[0][0][0] == "http://ocr.test/v1/ocr"
+        assert mock_client.post.call_args_list[1][0][0] == "http://ocr.test/v1/chat/completions"
 
     @patch("httpx.Client")
     def test_translate_llm_gemma_custom_url_override(self, mock_client_class):
@@ -632,7 +663,9 @@ class TestLlmGemmaTranslateEngine:
         mock_client_class.return_value.__enter__.return_value = mock_client
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"translated_text": "Translated"}
+        mock_response.json.return_value = {
+            "choices": [{"message": {"content": "Translated"}}]
+        }
         mock_client.post.return_value = mock_response
 
         from flask import Flask
@@ -640,7 +673,7 @@ class TestLlmGemmaTranslateEngine:
 
         app = Flask("test_app")
         app.config["OCR_SERVICE_URL"] = "http://ocr.test"
-        app.config["LLM_GEMMA_TRANSLATION_API_URL"] = "http://custom-llm.test/v1/ocr"
+        app.config["LLM_GEMMA_TRANSLATION_API_URL"] = "http://custom-llm.test/v1/chat/completions"
         app.config["LLM_GEMMA_TRANSLATION_API_KEY"] = "custom-key"
 
         with app.app_context():
@@ -649,7 +682,7 @@ class TestLlmGemmaTranslateEngine:
 
             assert response.translated_text == "Translated"
             call_url = mock_client.post.call_args[0][0]
-            assert call_url == "http://custom-llm.test/v1/ocr"
+            assert call_url == "http://custom-llm.test/v1/chat/completions"
             assert mock_client.post.call_args[1]["headers"]["X-API-Key"] == "custom-key"
 
     @patch("httpx.Client")
@@ -659,7 +692,13 @@ class TestLlmGemmaTranslateEngine:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "text": "<think>some thinking</think>\nHere is the English translation:\nDirect text."
+            "choices": [
+                {
+                    "message": {
+                        "content": "<think>thinking</think>\nHere is the English translation:\nDirect text."
+                    }
+                }
+            ]
         }
         mock_client.post.return_value = mock_response
 
