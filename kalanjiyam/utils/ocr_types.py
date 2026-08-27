@@ -116,6 +116,8 @@ SERVICE_ENGINE_ALIASES = {
     "dots-ocr": "dots_ocr",
     "gemma-ocr": "gemma_ocr",
     "gemma-4": "gemma_ocr",
+    "llm-gemma": "gemma_ocr",
+    "llm_gemma": "gemma_ocr",
 }
 
 ENGINE_MAP = {

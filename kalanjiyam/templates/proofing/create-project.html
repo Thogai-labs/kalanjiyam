@@ -368,8 +368,10 @@
             <div class="text-left">
               <label for="engine" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">{{ _('Translation Engine') }}</label>
               <select id="engine" name="engine" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all" {% if not engines %}disabled{% endif %}>
+                {% set has_rec = engines|selectattr('is_recommended')|list|length > 0 %}
+                {% set has_def = engines|selectattr('is_default')|list|length > 0 %}
                 {% for eng in engines %}
-                  <option value="{{ eng.value }}" {% if loop.first %}selected{% endif %}>{{ eng.label }}</option>
+                  <option value="{{ eng.value }}" {% if eng.is_recommended or (not has_rec and eng.is_default) or (not has_rec and not has_def and loop.first) %}selected{% endif %}>{{ eng.label }}{% if eng.is_recommended %} ★{% endif %}</option>
                 {% else %}
                   <option value="" disabled selected>{{ _('No translation models available') }}</option>
                 {% endfor %}

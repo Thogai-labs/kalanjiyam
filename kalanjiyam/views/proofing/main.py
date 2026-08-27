@@ -402,8 +402,26 @@ def create_project():
             )
             return redirect(url_for("proofing.index"))
 
-    from kalanjiyam.utils.translation_engine import get_available_translation_engines, get_supported_languages_list
-    engines = get_available_translation_engines()
+    system_settings = q.get_system_settings()
+    default_trans_engine = (
+        getattr(system_settings, "default_translation_engine", "indictrans2")
+        or "indictrans2"
+    )
+    rec_trans_engine = getattr(
+        system_settings, "recommended_translation_engine", None
+    )
+    is_super_admin = getattr(current_user, "is_super_admin", False)
+
+    from kalanjiyam.utils.translation_engine import (
+        build_translation_choices,
+        normalize_translation_engine,
+        get_supported_languages_list,
+    )
+    engines = build_translation_choices(
+        is_super_admin=is_super_admin,
+        recommended_engine=rec_trans_engine,
+        default_engine=default_trans_engine,
+    )
     languages = get_supported_languages_list()
 
     form = CreateProjectForm()
@@ -427,7 +445,8 @@ def create_project():
 
         source_lang = request.form.get("source_lang", "sa")
         target_lang = request.form.get("target_lang", "en")
-        engine = request.form.get("engine", "indictrans2")
+        engine_val = request.form.get("engine", default_trans_engine)
+        engine = normalize_translation_engine(engine_val)
         glossary = request.form.get("glossary") or None
 
         # Validate engine
@@ -908,10 +927,28 @@ def docx_translate():
     import redis
     import os
     from flask import abort
-    from kalanjiyam.utils.translation_engine import get_available_translation_engines, get_supported_languages_list
+    system_settings = q.get_system_settings()
+    default_trans_engine = (
+        getattr(system_settings, "default_translation_engine", "indictrans2")
+        or "indictrans2"
+    )
+    rec_trans_engine = getattr(
+        system_settings, "recommended_translation_engine", None
+    )
+    is_super_admin = getattr(current_user, "is_super_admin", False)
+
+    from kalanjiyam.utils.translation_engine import (
+        build_translation_choices,
+        normalize_translation_engine,
+        get_supported_languages_list,
+    )
     from kalanjiyam.tasks.translation import run_docx_translation
 
-    engines = get_available_translation_engines()
+    engines = build_translation_choices(
+        is_super_admin=is_super_admin,
+        recommended_engine=rec_trans_engine,
+        default_engine=default_trans_engine,
+    )
     languages = get_supported_languages_list()
 
     if request.method == "POST":
@@ -928,7 +965,8 @@ def docx_translate():
 
         source_lang = request.form.get("source_lang", "sa")
         target_lang = request.form.get("target_lang", "en")
-        engine = request.form.get("engine", "indictrans2")
+        engine_val = request.form.get("engine", default_trans_engine)
+        engine = normalize_translation_engine(engine_val)
         glossary = request.form.get("glossary") or None
 
         # Validate engine

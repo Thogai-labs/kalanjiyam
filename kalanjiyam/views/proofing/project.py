@@ -2074,7 +2074,28 @@ def batch_translate(slug):
     if project_ is None:
         abort(404)
 
-    engines = get_available_translation_engines()
+    system_settings = q.get_system_settings()
+    default_trans_engine = (
+        getattr(system_settings, "default_translation_engine", "indictrans2")
+        or "indictrans2"
+    )
+    rec_trans_engine = getattr(
+        system_settings, "recommended_translation_engine", None
+    )
+    is_super_admin = getattr(current_user, "is_super_admin", False)
+
+    from kalanjiyam.utils.translation_engine import (
+        build_translation_choices,
+        normalize_translation_engine,
+        REVERSE_TRANSLATION_ENGINE_MAP,
+        TRANSLATION_ENGINE_LABELS,
+    )
+
+    engines = build_translation_choices(
+        is_super_admin=is_super_admin,
+        recommended_engine=rec_trans_engine,
+        default_engine=default_trans_engine,
+    )
     languages = get_supported_languages_list()
 
     # Check if there's an ongoing translation task using Redis
@@ -2089,6 +2110,16 @@ def batch_translate(slug):
         try:
             task_data = json.loads(task_info)
             task_id = task_data.get("task_id")
+            running_engine = task_data.get("engine", default_trans_engine)
+            norm_running_engine = normalize_translation_engine(running_engine)
+            numeric_value = REVERSE_TRANSLATION_ENGINE_MAP.get(norm_running_engine, "1")
+            engine_label = (
+                TRANSLATION_ENGINE_LABELS.get(
+                    norm_running_engine, norm_running_engine.replace("_", " ").title()
+                )
+                if is_super_admin
+                else f"Translation {numeric_value}"
+            )
 
             # Try to restore the task to check if it's still active
             r = GroupResult.restore(task_id, app=celery_app)
@@ -2119,6 +2150,8 @@ def batch_translate(slug):
                         active_tasks=active_tasks,
                         pending_tasks=pending_tasks,
                         failed_tasks=failed_tasks,
+                        engine=norm_running_engine,
+                        engine_label=engine_label,
                         engines=engines,
                         languages=languages,
                     )
@@ -2137,7 +2170,8 @@ def batch_translate(slug):
         # Get translation parameters from form
         source_lang = request.form.get("source_lang", "sa")
         target_lang = request.form.get("target_lang", "en")
-        engine = request.form.get("engine", "google")
+        engine_val = request.form.get("engine", default_trans_engine)
+        engine = normalize_translation_engine(engine_val)
         glossary = request.form.get("glossary") or None
 
         if source_lang == target_lang:
@@ -2152,7 +2186,7 @@ def batch_translate(slug):
         # Validate engine
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
 
-        if engine not in TranslationEngineFactory.get_supported_engines():
+        if not TranslationEngineFactory.is_supported(engine):
             flash(_l("Unsupported translation engine selected."), "error")
             return render_template(
                 "proofing/projects/batch-translate.html",
@@ -2204,6 +2238,15 @@ def batch_translate(slug):
                     },
                 )
 
+            numeric_value = REVERSE_TRANSLATION_ENGINE_MAP.get(engine, "1")
+            engine_label = (
+                TRANSLATION_ENGINE_LABELS.get(
+                    engine, engine.replace("_", " ").title()
+                )
+                if is_super_admin
+                else f"Translation {numeric_value}"
+            )
+
             return render_template(
                 "proofing/projects/batch-translate.html",
                 project=project_,
@@ -2215,6 +2258,8 @@ def batch_translate(slug):
                 active_tasks=0,
                 pending_tasks=0,
                 failed_tasks=0,
+                engine=engine,
+                engine_label=engine_label,
                 engines=engines,
                 languages=languages,
             )
@@ -2243,6 +2288,39 @@ def batch_translate_status(task_id):
             pending_tasks=0,
             failed_tasks=0,
         )
+
+    engine = "indictrans2"
+    source_lang = "sa"
+    target_lang = "en"
+    try:
+        for key in redis_client.scan_iter(match="translation_task:*"):
+            task_info = redis_client.get(key)
+            if task_info:
+                task_data = json.loads(task_info)
+                if task_data.get("task_id") == task_id:
+                    engine = task_data.get("engine", "indictrans2")
+                    source_lang = task_data.get("source_lang", "sa")
+                    target_lang = task_data.get("target_lang", "en")
+                    break
+    except Exception as e:
+        LOG.warning(f"Error getting translation task info from Redis: {e}")
+
+    from kalanjiyam.utils.translation_engine import (
+        REVERSE_TRANSLATION_ENGINE_MAP,
+        TRANSLATION_ENGINE_LABELS,
+        normalize_translation_engine,
+    )
+
+    norm_engine = normalize_translation_engine(engine)
+    numeric_value = REVERSE_TRANSLATION_ENGINE_MAP.get(norm_engine, "1")
+    is_super_admin = getattr(current_user, "is_super_admin", False)
+    engine_label = (
+        TRANSLATION_ENGINE_LABELS.get(
+            norm_engine, norm_engine.replace("_", " ").title()
+        )
+        if is_super_admin
+        else f"Translation {numeric_value}"
+    )
 
     if r.results:
         current = r.completed_count()
@@ -2291,6 +2369,10 @@ def batch_translate_status(task_id):
             "active_tasks": active_tasks,
             "pending_tasks": pending_tasks,
             "failed_tasks": failed_tasks,
+            "engine": norm_engine,
+            "engine_label": engine_label,
+            "source_lang": source_lang,
+            "target_lang": target_lang,
         }
     else:
         data = {
@@ -2301,6 +2383,10 @@ def batch_translate_status(task_id):
             "active_tasks": 0,
             "pending_tasks": 0,
             "failed_tasks": 0,
+            "engine": norm_engine,
+            "engine_label": engine_label,
+            "source_lang": source_lang,
+            "target_lang": target_lang,
         }
 
     return render_template(

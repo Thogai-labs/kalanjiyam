@@ -558,8 +558,344 @@ class BharatGenTranslateEngine(TranslationEngine):
         ]
 
 
+class LlmGemmaTranslateEngine(TranslationEngine):
+    """Translation engine using the OCR service /v1/ocr endpoint with llm-gemma."""
+
+    def __init__(
+        self,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        timeout: float = 300.0,
+    ):
+        self.engine_name = "llm_gemma"
+        self.model_name = "llm-gemma"
+        self.version = "llm-gemma"
+        self._api_url = api_url
+        self._api_key = api_key
+        self._timeout = timeout
+
+    def translate(
+        self, text: str, source_lang: str, target_lang: str, **kwargs
+    ) -> TranslationResponse:
+        import httpx
+        from flask import current_app, has_app_context
+        import os
+
+        api_url = self._api_url
+        api_key = self._api_key
+        timeout = self._timeout
+
+        if has_app_context():
+            if not api_url:
+                api_url = current_app.config.get("LLM_GEMMA_TRANSLATION_API_URL")
+                if not api_url:
+                    ocr_base = (current_app.config.get("OCR_SERVICE_URL") or "").rstrip("/")
+                    if ocr_base:
+                        api_url = ocr_base if ocr_base.endswith("/v1/ocr") else f"{ocr_base}/v1/ocr"
+            if not api_key:
+                api_key = (
+                    current_app.config.get("LLM_GEMMA_TRANSLATION_API_KEY")
+                    or current_app.config.get("OCR_SERVICE_API_KEY")
+                    or ""
+                )
+            timeout = float(
+                current_app.config.get(
+                    "LLM_GEMMA_TRANSLATION_TIMEOUT",
+                    current_app.config.get("OCR_SERVICE_TIMEOUT", 300),
+                )
+            )
+
+        if not api_url:
+            api_url = os.environ.get("LLM_GEMMA_TRANSLATION_API_URL")
+            if not api_url:
+                ocr_base = (os.environ.get("OCR_SERVICE_URL") or "http://localhost:8000").rstrip("/")
+                api_url = ocr_base if ocr_base.endswith("/v1/ocr") else f"{ocr_base}/v1/ocr"
+
+        if not api_key:
+            api_key = (
+                os.environ.get("LLM_GEMMA_TRANSLATION_API_KEY")
+                or os.environ.get("OCR_SERVICE_API_KEY")
+                or ""
+            )
+
+        language_map = {
+            "en": "English",
+            "hi": "Hindi",
+            "bn": "Bengali",
+            "ta": "Tamil",
+            "te": "Telugu",
+            "mr": "Marathi",
+            "gu": "Gujarati",
+            "kn": "Kannada",
+            "ml": "Malayalam",
+            "pa": "Punjabi",
+            "ur": "Urdu",
+            "or": "Odia",
+            "as": "Assamese",
+            "sa": "Sanskrit",
+            "ks": "Kashmiri",
+            "sd": "Sindhi",
+            "mni": "Manipuri",
+            "sat": "Santali",
+            "npi": "Nepali",
+            "gom": "Konkani",
+            "doi": "Dogri",
+            "brx": "Bodo",
+            "mai": "Maithili",
+        }
+
+        source_name = language_map.get(source_lang, source_lang.capitalize())
+        target_name = language_map.get(target_lang, target_lang.capitalize())
+
+        glossary_part = (
+            f" Use domain glossary terms: {kwargs['glossary']}."
+            if kwargs.get("glossary")
+            else ""
+        )
+        prompt = (
+            f"You are a professional machine translation system. "
+            f"Translate the following text from {source_name} to {target_name}.{glossary_part} "
+            f"Maintain the original formatting, line breaks, and structure. "
+            f"Output ONLY the direct translated text. Do not add any explanations, notes, labels, or preamble.\n\n"
+            f"Text to translate:\n{text}"
+        )
+
+        payload = {
+            "text": text,
+            "prompt": prompt,
+            "model_name": self.model_name,
+            "engine": self.model_name,
+            "source_language": source_name,
+            "target_language": target_name,
+            "source_lang": source_lang,
+            "target_lang": target_lang,
+        }
+
+        headers = {"Content-Type": "application/json"}
+        if api_key and str(api_key).strip():
+            clean_key = str(api_key).strip().strip("'").strip('"')
+            headers["X-API-Key"] = clean_key
+
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                response = client.post(api_url, json=payload, headers=headers)
+
+            if response.status_code >= 400:
+                detail = response.text
+                try:
+                    res_json = response.json()
+                    detail = (
+                        res_json.get("detail")
+                        or res_json.get("error", {}).get("message")
+                        or detail
+                    )
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    f"LLM Gemma translation service error ({response.status_code}): {detail}"
+                )
+
+            result = response.json()
+            translated = (
+                result.get("translated_text")
+                or result.get("text")
+                or result.get("text_content")
+            )
+            if not translated and "choices" in result and result["choices"]:
+                translated = result["choices"][0].get("message", {}).get("content", "")
+            if not translated and "blocks" in result and isinstance(result["blocks"], list):
+                translated = "\n\n".join(
+                    b.get("content", "")
+                    for b in result["blocks"]
+                    if isinstance(b, dict) and b.get("content")
+                )
+            if translated is None:
+                translated = ""
+
+            translated = clean_translation_preambles(translated, target_name)
+
+            return TranslationResponse(
+                translated_text=translated,
+                source_language=source_lang,
+                target_language=target_lang,
+                engine=self.engine_name,
+                metadata={
+                    "model": self.model_name,
+                    "endpoint": api_url,
+                    "usage": result.get("usage"),
+                },
+            )
+        except Exception as e:
+            logging.error(f"LLM Gemma translation failed for {self.model_name}: {e}")
+            raise
+
+    def get_supported_languages(self) -> List[str]:
+        return [
+            "en",
+            "hi",
+            "bn",
+            "ta",
+            "te",
+            "mr",
+            "gu",
+            "kn",
+            "ml",
+            "pa",
+            "ur",
+            "or",
+            "as",
+            "sa",
+            "ks",
+            "sd",
+            "mni",
+            "sat",
+            "npi",
+            "gom",
+            "doi",
+            "brx",
+            "mai",
+        ]
+
+
 # Backward-compatible alias
 IndicTransEngine = GenericTranslationEngine
+
+
+SUPPORTED_TRANSLATION_ENGINES = [
+    "indictrans2",
+    "gemma",
+    "llm_gemma",
+    "param_lc_translate_ep4",
+    "translation_1b_exp_40",
+    "indictrans3",
+    "google",
+    "openai",
+]
+
+TRANSLATION_SERVICE_ENGINE_ALIASES = {
+    "indictrans-2": "indictrans2",
+    "indictrans_2": "indictrans2",
+    "indictrans-3": "indictrans3",
+    "indictrans_3": "indictrans3",
+    "gemma-4": "gemma",
+    "gemma4": "gemma",
+    "gemma_4": "gemma",
+    "llm-gemma": "llm_gemma",
+    "llm_gemma": "llm_gemma",
+    "param-lc-translate-ep4": "param_lc_translate_ep4",
+    "param_lc": "param_lc_translate_ep4",
+    "translation-1b-exp-40": "translation_1b_exp_40",
+    "translation_1b": "translation_1b_exp_40",
+}
+
+TRANSLATION_ENGINE_MAP = {
+    "1": "indictrans2",
+    "2": "gemma",
+    "3": "param_lc_translate_ep4",
+    "4": "translation_1b_exp_40",
+    "5": "indictrans3",
+    "6": "google",
+    "7": "openai",
+    "8": "llm_gemma",
+}
+
+REVERSE_TRANSLATION_ENGINE_MAP = {v: k for k, v in TRANSLATION_ENGINE_MAP.items()}
+
+TRANSLATION_ENGINE_LABELS = {
+    "indictrans2": "IndicTrans v2",
+    "gemma": "Gemma 4 12B",
+    "llm_gemma": "LLM Gemma",
+    "param_lc_translate_ep4": "Param LC Translate EP4",
+    "translation_1b_exp_40": "Translation 1B Exp 40",
+    "indictrans3": "IndicTrans v3",
+    "google": "Google",
+    "openai": "OpenAI",
+}
+
+
+def normalize_translation_service_engine(engine: str) -> str:
+    """Map a translation service engine id or alias to the Kalanjiyam internal id."""
+    name = (engine or "").lower().strip().replace("-", "_")
+    for service_id, app_id in TRANSLATION_SERVICE_ENGINE_ALIASES.items():
+        if name == service_id.replace("-", "_"):
+            return app_id
+    return name
+
+
+def normalize_translation_engine(engine: str) -> str:
+    """Normalize numeric masked key or alias to canonical translation engine name."""
+    if not engine:
+        return ""
+    stripped = str(engine).strip()
+    if stripped in TRANSLATION_ENGINE_MAP:
+        return TRANSLATION_ENGINE_MAP[stripped]
+    return normalize_translation_service_engine(stripped)
+
+
+def build_translation_choices(
+    available_engines: Optional[List[Any]] = None,
+    is_super_admin: bool = False,
+    recommended_engine: Optional[str] = None,
+    default_engine: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Build the list of translation engine choices for forms and UI.
+
+    Value is the stable numeric key (matches JS decodeTranslationEngine).
+    Label is "Translation N" for regular users, real name for super admins.
+    """
+    if available_engines is None:
+        raw_list = get_available_translation_engines()
+    else:
+        raw_list = available_engines
+
+    choices = []
+    seq = 1
+    seen_engines = set()
+
+    for item in raw_list:
+        if isinstance(item, dict):
+            raw_name = (
+                item.get("value")
+                or item.get("engine")
+                or item.get("model_name")
+                or ""
+            )
+            item_label = item.get("label")
+        else:
+            raw_name = str(item)
+            item_label = None
+
+        engine_name = normalize_translation_engine(raw_name)
+        if not engine_name or engine_name in seen_engines:
+            continue
+        seen_engines.add(engine_name)
+
+        numeric_value = REVERSE_TRANSLATION_ENGINE_MAP.get(engine_name, str(seq))
+        real_name = item_label or TRANSLATION_ENGINE_LABELS.get(
+            engine_name, engine_name.replace("_", " ").title()
+        )
+        label = real_name if is_super_admin else f"Translation {numeric_value}"
+        is_rec = bool(
+            recommended_engine
+            and (engine_name == recommended_engine or numeric_value == recommended_engine)
+        )
+        is_def = bool(
+            default_engine
+            and (engine_name == default_engine or numeric_value == default_engine)
+        )
+
+        choices.append(
+            {
+                "value": numeric_value,
+                "label": label,
+                "engine": engine_name,
+                "is_recommended": is_rec,
+                "is_default": is_def,
+            }
+        )
+        seq += 1
+
+    return choices
 
 
 class TranslationEngineFactory:
@@ -568,6 +904,7 @@ class TranslationEngineFactory:
     _engines = {
         "indictrans2": lambda: GenericTranslationEngine("indictrans2"),
         "gemma": lambda: GenericTranslationEngine("gemma"),
+        "llm_gemma": lambda: LlmGemmaTranslateEngine(),
         "param_lc_translate_ep4": lambda: BharatGenTranslateEngine(
             "param_lc_translate_ep4"
         ),
@@ -580,16 +917,23 @@ class TranslationEngineFactory:
     def create(cls, engine_name: str, **kwargs) -> TranslationEngine:
         """Create a translation engine instance dynamically.
 
-        :param engine_name: Name of the engine ('indictrans2', 'gemma', 'param_lc_translate_ep4', 'translation_1b_exp_40', or any backend model)
+        :param engine_name: Name of the engine ('indictrans2', 'gemma', 'llm_gemma', 'param_lc_translate_ep4', 'translation_1b_exp_40', or any backend model)
         :param kwargs: Additional arguments for the engine
         :return: Translation engine instance
         :raises: ValueError if engine name is not supported
         """
+        engine_name = normalize_translation_engine(engine_name)
         if not engine_name or engine_name in ["unsupported"]:
             raise ValueError(f"Unsupported translation engine: {engine_name}")
 
         if engine_name in cls._engines:
             return cls._engines[engine_name]()
+        if engine_name == "google":
+            return GoogleTranslateEngine()
+        if engine_name == "openai":
+            return OpenAITranslateEngine(**kwargs)
+        if engine_name in ("llm_gemma", "llm-gemma"):
+            return LlmGemmaTranslateEngine(**kwargs)
         if (
             engine_name in ("param_lc_translate_ep4", "translation_1b_exp_40")
             or "param_lc" in engine_name
@@ -609,6 +953,7 @@ class TranslationEngineFactory:
     @classmethod
     def is_supported(cls, engine_name: str) -> bool:
         """Check if the translation engine is supported."""
+        engine_name = normalize_translation_engine(engine_name)
         if not engine_name or engine_name in ["unsupported"]:
             return False
         return True
@@ -867,11 +1212,17 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
                                 if family_part.startswith("indictrans"):
                                     engine_val = family_part.split('-')[0]
                                 elif "gemma" in family_part.lower():
-                                    engine_val = "gemma"
+                                    if "llm" in family_part.lower():
+                                        engine_val = "llm_gemma"
+                                    else:
+                                        engine_val = "gemma"
                                 else:
                                     engine_val = family_part.split('-')[0]
                             else:
-                                engine_val = "gemma" if "gemma" in name.lower() else name
+                                if "llm" in name.lower() and "gemma" in name.lower():
+                                    engine_val = "llm_gemma"
+                                else:
+                                    engine_val = "gemma" if "gemma" in name.lower() else name
                         
                         label_val = m.get("label")
                         if not label_val:
@@ -880,6 +1231,8 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
                                 'indictrans3': 'IndicTrans v3',
                                 'gemma': 'Gemma 4 12B',
                                 'gemma4': 'Gemma 4 12B',
+                                'llm_gemma': 'LLM Gemma',
+                                'llm-gemma': 'LLM Gemma',
                                 'param_lc_translate_ep4': 'Param LC Translate EP4',
                                 'translation_1b_exp_40': 'Translation 1B Exp 40',
                             }
@@ -906,6 +1259,20 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
             'label': 'Gemma 4 12B',
             'model_name': 'google/gemma-4-12b-it',
         }
+        seen_engines['llm_gemma'] = {
+            'value': 'llm_gemma',
+            'label': 'LLM Gemma',
+            'model_name': 'llm-gemma',
+        }
+
+    # Add llm-gemma model
+    llm_gemma_model = {
+        'value': 'llm_gemma',
+        'label': 'LLM Gemma',
+        'model_name': 'llm-gemma',
+    }
+    if llm_gemma_model['value'] not in seen_engines:
+        seen_engines[llm_gemma_model['value']] = llm_gemma_model
 
     # Add BharatGen models
     bharatgen_models = [
@@ -927,9 +1294,10 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
     sort_order = {
         'indictrans2': 0,
         'gemma': 1,
-        'param_lc_translate_ep4': 2,
-        'translation_1b_exp_40': 3,
-        'indictrans3': 4,
+        'llm_gemma': 2,
+        'param_lc_translate_ep4': 3,
+        'translation_1b_exp_40': 4,
+        'indictrans3': 5,
     }
     sorted_choices = sorted(
         list(seen_engines.values()),

@@ -1666,6 +1666,18 @@ class PlatformView(AdminBaseView):
                 default="",
                 description="The recommended OCR engine displayed with a star icon for users."
             )
+            default_translation_engine = SelectField(
+                "Default Translation Model",
+                choices=[],
+                default="indictrans2",
+                description="The translation model that registered (non-super-admin) and unregistered users will use by default."
+            )
+            recommended_translation_engine = SelectField(
+                "Best / Recommended Translation Model",
+                choices=[],
+                default="",
+                description="The best/recommended translation model displayed with a star icon for users."
+            )
             auto_cleanup_days = SelectField(
                 "Source File Retention Period",
                 coerce=int,
@@ -1704,6 +1716,54 @@ class PlatformView(AdminBaseView):
         rec_choices = [("", "None (No recommended engine)")] + [(eng, ENGINE_LABELS.get(eng, eng.capitalize())) for eng in sorted_rec_engines]
         form.recommended_ocr_engine.choices = rec_choices
         
+        # Populate translation engine choices
+        from kalanjiyam.utils.translation_engine import (
+            SUPPORTED_TRANSLATION_ENGINES,
+            TRANSLATION_ENGINE_LABELS,
+            get_available_translation_engines,
+        )
+        available_trans_models = get_available_translation_engines()
+        active_trans_engines = [m["value"] for m in available_trans_models if "value" in m]
+        trans_choices_set = {
+            eng
+            for eng in active_trans_engines
+            if eng in SUPPORTED_TRANSLATION_ENGINES and eng not in ("google", "openai")
+        }
+        trans_choices_set.add("indictrans2")
+        curr_def_trans = getattr(system_settings, "default_translation_engine", None)
+        if curr_def_trans and curr_def_trans not in ("google", "openai"):
+            trans_choices_set.add(curr_def_trans)
+
+        sorted_trans_engines = [
+            eng for eng in SUPPORTED_TRANSLATION_ENGINES if eng in trans_choices_set
+        ]
+        for eng in trans_choices_set:
+            if eng not in sorted_trans_engines:
+                sorted_trans_engines.append(eng)
+
+        form.default_translation_engine.choices = [
+            (eng, TRANSLATION_ENGINE_LABELS.get(eng, eng.replace("_", " ").title()))
+            for eng in sorted_trans_engines
+        ]
+
+        # Populate recommended translation model choices
+        rec_trans_choices_set = set(trans_choices_set)
+        curr_rec_trans = getattr(system_settings, "recommended_translation_engine", None)
+        if curr_rec_trans and curr_rec_trans not in ("google", "openai"):
+            rec_trans_choices_set.add(curr_rec_trans)
+        sorted_rec_trans_engines = [
+            eng for eng in SUPPORTED_TRANSLATION_ENGINES if eng in rec_trans_choices_set
+        ]
+        for eng in rec_trans_choices_set:
+            if eng not in sorted_rec_trans_engines:
+                sorted_rec_trans_engines.append(eng)
+
+        rec_trans_choices = [("", "None (No recommended model)")] + [
+            (eng, TRANSLATION_ENGINE_LABELS.get(eng, eng.replace("_", " ").title()))
+            for eng in sorted_rec_trans_engines
+        ]
+        form.recommended_translation_engine.choices = rec_trans_choices
+
         cleanup_enabled = current_app.config.get("AUTO_UPLOADED_FILES_CLEANUP", False)
 
         if form.validate_on_submit():
@@ -1712,6 +1772,16 @@ class PlatformView(AdminBaseView):
             system_settings.unregistered_user_upload_limit = form.unregistered_user_upload_limit.data if form.unregistered_user_upload_limit.data is not None else 10
             system_settings.default_ocr_engine = form.default_ocr_engine.data if form.default_ocr_engine.data else "tesseract"
             system_settings.recommended_ocr_engine = form.recommended_ocr_engine.data if form.recommended_ocr_engine.data else None
+            system_settings.default_translation_engine = (
+                form.default_translation_engine.data
+                if form.default_translation_engine.data
+                else "indictrans2"
+            )
+            system_settings.recommended_translation_engine = (
+                form.recommended_translation_engine.data
+                if form.recommended_translation_engine.data
+                else None
+            )
             system_settings.auto_cleanup_days = form.auto_cleanup_days.data if form.auto_cleanup_days.data is not None else 7
             
             session.add(system_settings)
@@ -1725,6 +1795,14 @@ class PlatformView(AdminBaseView):
             form.unregistered_user_upload_limit.data = getattr(system_settings, "unregistered_user_upload_limit", 10)
             form.default_ocr_engine.data = system_settings.default_ocr_engine
             form.recommended_ocr_engine.data = system_settings.recommended_ocr_engine or ""
+            form.default_translation_engine.data = (
+                getattr(system_settings, "default_translation_engine", "indictrans2")
+                or "indictrans2"
+            )
+            form.recommended_translation_engine.data = (
+                getattr(system_settings, "recommended_translation_engine", "")
+                or ""
+            )
             form.auto_cleanup_days.data = getattr(system_settings, "auto_cleanup_days", 7) or 7
             
         return render_template("admin/platform_settings.html", form=form, cleanup_enabled=cleanup_enabled)

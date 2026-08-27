@@ -1,10 +1,10 @@
 {% extends 'header-main-footer.html' %}
 
-{% set mailing_url = 'https://groups.google.com/g/siddhasagaram-announce' %}
-{% set code_url = 'https://github.com/siddhasagaram/kalanjiyam' %}
+{% set mailing_url = 'https://groups.google.com/g/kalanjiyam-announce' %}
+{% set code_url = 'https://github.com/kalanjiyam-org/kalanjiyam' %}
 {% set contact_url = url_for('about.contact') %}
 
-{% block title %}{{ _('Kalanjiyam - Siddha Knowledge Digital Library') }}{% endblock %}
+{% block title %}{{ _('Kalanjiyam - Digital Library | Powered by BharatGen') }}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -129,6 +129,12 @@
   <!-- Hero Content Section -->
   <div class="relative z-5 text-center px-6 max-w-5xl mx-auto my-auto pt-8 pb-12">
     
+    <!-- Powered by BharatGen Badge -->
+    <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-400/20 text-blue-300 text-xs font-semibold uppercase tracking-wider mb-6">
+      <span class="w-2 h-2 rounded-full bg-royalblue animate-pulse"></span>
+      <span>{{ _('Powered by BharatGen') }}</span>
+    </div>
+
     <!-- Page Title -->
     <h1 class="text-4xl sm:text-6xl font-bold font-serif-title tracking-tight mb-6 text-white leading-tight">
       {{ _('Digital Library') }}
@@ -136,7 +142,7 @@
 
     <!-- Subtitle -->
     <p class="mx-auto text-lg sm:text-xl text-slate-300 max-w-3xl font-normal leading-relaxed mb-10">
-      {{ _('A formal digital archive dedicated to the preservation, scholarly transcription, and public access of traditional Siddha medical literature and palm-leaf manuscripts.') }}
+      {{ _('A formal digital archive dedicated to the preservation, scholarly transcription, and public access of traditional heritage medical literature and palm-leaf manuscripts. Powered by BharatGen.') }}
     </p>
 
     <!-- Search Box -->

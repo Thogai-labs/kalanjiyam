@@ -251,8 +251,22 @@ class BaseConfig:
         _env("BHARATGEN_TRANSLATION_TIMEOUT", "300") or "300"
     )
 
+    #: Optional URL override for llm-gemma translation API (defaults to {OCR_SERVICE_URL}/v1/ocr).
+    LLM_GEMMA_TRANSLATION_API_URL = _env("LLM_GEMMA_TRANSLATION_API_URL", "")
+
+    #: Optional API key override for llm-gemma translation (defaults to OCR_SERVICE_API_KEY).
+    LLM_GEMMA_TRANSLATION_API_KEY = _env("LLM_GEMMA_TRANSLATION_API_KEY", "")
+
+    #: Timeout in seconds for llm-gemma translation HTTP requests.
+    LLM_GEMMA_TRANSLATION_TIMEOUT = int(
+        _env("LLM_GEMMA_TRANSLATION_TIMEOUT", "300") or "300"
+    )
+
     #: Default OCR engine/model.
     DEFAULT_OCR_ENGINE = _env("DEFAULT_OCR_ENGINE", "tesseract")
+
+    #: Default Translation engine/model.
+    DEFAULT_TRANSLATION_ENGINE = _env("DEFAULT_TRANSLATION_ENGINE", "indictrans2")
 
     # Full-text search (OpenSearch)
     # ----------------------------

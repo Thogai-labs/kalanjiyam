@@ -159,7 +159,9 @@ def test_translate_api_post(rama_client):
     session = get_session()
     session.query(db.Translation).delete()
     session.query(db.Revision).filter(db.Revision.id > 1).delete()
+    session.query(db.PageVersion).delete()
     session.commit()
+    session.expire_all()
 
     with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
         mock_translate.return_value = TranslationResponse(
@@ -197,7 +199,11 @@ def test_translate_api_post(rama_client):
         assert pv is not None
         assert len(pv.revisions) == 1
         assert pv.revisions[0].content == "Translated Hello Block"
-        assert pv.revisions[0].document["blocks"][0]["content"] == "Translated Hello Block"
+        with rama_client.application.app_context():
+            from kalanjiyam.utils.document_storage import load_revision_document
+            doc = load_revision_document(pv.revisions[0]) or pv.revisions[0].document
+            assert doc is not None
+            assert doc["blocks"][0]["content"] == "Translated Hello Block"
 
 
 def test_translate_api_post_preserves_html(rama_client):
@@ -429,8 +435,84 @@ def test_translate_api_post_docx_html(rama_client):
         ).first()
         assert pv is not None
         assert pv.revisions[0].content_format == "html"
-        assert pv.revisions[0].document is not None
-        assert pv.revisions[0].document["blocks"][0]["content"] == "<p>नमस्ते</p>"
+        with rama_client.application.app_context():
+            from kalanjiyam.utils.document_storage import load_revision_document
+            doc = load_revision_document(pv.revisions[0]) or pv.revisions[0].document
+            assert doc is not None
+            assert doc["blocks"][0]["content"] == "<p>नमस्ते</p>"
+
+
+def test_translate_api_with_masked_numeric_engine(rama_client):
+    from unittest.mock import patch
+    from kalanjiyam.utils.translation_engine import TranslationResponse
+    from kalanjiyam.queries import get_session
+    import kalanjiyam.database as db
+
+    session = get_session()
+    session.query(db.Translation).delete()
+    session.query(db.Revision).filter(db.Revision.id > 1).delete()
+    session.commit()
+
+    with patch("kalanjiyam.views.proofing.page.translate_text") as mock_translate:
+        mock_translate.return_value = TranslationResponse(
+            translated_text="नमस्ते दुनिया",
+            source_language="en",
+            target_language="hi",
+            engine="indictrans2",
+        )
+
+        payload = {
+            "blocks": [
+                {
+                    "id": "b1",
+                    "type": "paragraph",
+                    "content": "Hello world.",
+                }
+            ]
+        }
+        # Pass engine="1" (numeric masked key for indictrans2)
+        r = rama_client.post(
+            "/api/translate/test-project/1/?source_lang=en&target_lang=hi&engine=1",
+            json=payload,
+        )
+        assert r.status_code == 200
+        # Check that translate_text received the canonical engine name "indictrans2"
+        mock_translate.assert_called_once_with(
+            "Hello world.", "en", "hi", "indictrans2"
+        )
+
+        # Check version key created is canonical
+        pv = (
+            session.query(db.PageVersion)
+            .filter_by(page_id=1, version_key="translation:indictrans2:en->hi")
+            .first()
+        )
+        assert pv is not None
+
+
+def test_get_version_display_name_translation():
+    from kalanjiyam.views.proofing.page import get_version_display_name
+
+    # IndicTrans v2 is mapped to 1
+    assert (
+        str(get_version_display_name("translation:indictrans2:sa->en"))
+        == "Translation 1 (SA → EN)"
+    )
+    # Gemma is mapped to 2
+    assert (
+        str(get_version_display_name("translation:gemma:en->hi"))
+        == "Translation 2 (EN → HI)"
+    )
+    # Param LC Translate is mapped to 3
+    assert (
+        str(get_version_display_name("translation:param_lc_translate_ep4:en->ta"))
+        == "Translation 3 (EN → TA)"
+    )
+    # Translation 1B Exp 40 is mapped to 4
+    assert (
+        str(get_version_display_name("translation:translation_1b_exp_40:en->ta"))
+        == "Translation 4 (EN → TA)"
+    )
 
 
 

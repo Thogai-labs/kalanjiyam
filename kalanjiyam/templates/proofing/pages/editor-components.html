@@ -63,7 +63,7 @@ these components in our help text and documentation.
 
 
 {# Compact toolbar for book editing: navigation + OCR/tools + publish. #}
-{% macro book_toolbar(ctx, page_number, image_number, num_images, ocr_status="unavailable", engine_choices=[], can_save=false, translation_engines=[], cur_page_issues=[]) %}
+{% macro book_toolbar(ctx, page_number, image_number, num_images, ocr_status="unavailable", engine_choices=[], can_save=false, translation_engines=[], cur_page_issues=[], default_translation_value="1") %}
 {% set project = ctx.project %}
 {% set button_css = "p-2 rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors" %}
 <header class="book-editor-toolbar">
@@ -145,7 +145,7 @@ these components in our help text and documentation.
     <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block" x-show="!isDocx" x-cloak></span>
 
     {# Translation #}
-    {{ _book_translation_controls(button_css, translation_engines) }}
+    {{ _book_translation_controls(button_css, translation_engines, default_translation_value) }}
 
     <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></span>
 
@@ -758,7 +758,7 @@ these components in our help text and documentation.
 {% endmacro %}
 
 
-{% macro _book_translation_controls(button_css, translation_engines=[]) %}
+{% macro _book_translation_controls(button_css, translation_engines=[], default_translation_value="1") %}
 <div class="relative" @click.outside="translationDropdownOpen=false">
   <button class="{{ button_css }} flex items-center justify-center"
      @click.prevent="translationDropdownOpen=!translationDropdownOpen"
@@ -771,33 +771,38 @@ these components in our help text and documentation.
     <ul class="text-sm">
       <li class="mb-3 px-3 pt-2">
         <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Translation engine') }}</label>
-        <div class="grid grid-cols-2 gap-2" x-init="if (![{% for e in translation_engines %}'{{ e.value }}',{% endfor %}].includes(selectedTranslationEngine)) { selectedTranslationEngine = '{{ translation_engines[0].value if translation_engines else 'indictrans2' }}'; }">
+        <div class="grid grid-cols-2 gap-2" x-init="if (![{% for e in translation_engines %}'{{ e.value }}',{% endfor %}].includes(selectedTranslationEngine)) { selectedTranslationEngine = '{{ default_translation_value }}'; }">
           {% for e in translation_engines %}
           <button @click.prevent.stop="selectedTranslationEngine = '{{ e.value }}'; saveSettings()" 
-                  class="ocr-engine-btn"
+                  class="ocr-engine-btn flex items-center justify-between gap-1 py-1.5 px-2 text-xs"
                   :class="selectedTranslationEngine === '{{ e.value }}' ? 'active' : ''">
-            {{ e.label }}
+            <span class="truncate">{{ e.label }}</span>
+            {% if e.is_recommended %}
+            <svg class="w-3.5 h-3.5 text-amber-400 fill-current shrink-0" viewBox="0 0 20 20" title="{{ _('Recommended') }}">
+              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+            </svg>
+            {% endif %}
           </button>
           {% else %}
-          <button @click.prevent.stop="selectedTranslationEngine = 'indictrans2'; saveSettings()" 
+          <button @click.prevent.stop="selectedTranslationEngine = '1'; saveSettings()" 
                   class="ocr-engine-btn"
-                  :class="selectedTranslationEngine === 'indictrans2' ? 'active' : ''">
-            IndicTrans v2
+                  :class="selectedTranslationEngine === '1' ? 'active' : ''">
+            Translation 1
           </button>
-          <button @click.prevent.stop="selectedTranslationEngine = 'gemma'; saveSettings()" 
+          <button @click.prevent.stop="selectedTranslationEngine = '2'; saveSettings()" 
                   class="ocr-engine-btn"
-                  :class="selectedTranslationEngine === 'gemma' ? 'active' : ''">
-            Gemma 4 12B
+                  :class="selectedTranslationEngine === '2' ? 'active' : ''">
+            Translation 2
           </button>
-          <button @click.prevent.stop="selectedTranslationEngine = 'param_lc_translate_ep4'; saveSettings()" 
+          <button @click.prevent.stop="selectedTranslationEngine = '3'; saveSettings()" 
                   class="ocr-engine-btn"
-                  :class="selectedTranslationEngine === 'param_lc_translate_ep4' ? 'active' : ''">
-            Param LC Translate EP4
+                  :class="selectedTranslationEngine === '3' ? 'active' : ''">
+            Translation 3
           </button>
-          <button @click.prevent.stop="selectedTranslationEngine = 'translation_1b_exp_40'; saveSettings()" 
+          <button @click.prevent.stop="selectedTranslationEngine = '4'; saveSettings()" 
                   class="ocr-engine-btn"
-                  :class="selectedTranslationEngine === 'translation_1b_exp_40' ? 'active' : ''">
-            Translation 1B Exp 40
+                  :class="selectedTranslationEngine === '4' ? 'active' : ''">
+            Translation 4
           </button>
           {% endfor %}
         </div>

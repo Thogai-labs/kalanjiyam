@@ -284,19 +284,26 @@ def get_version_display_name(version_key: str) -> str:
             lang_display = f"{src.upper()} → {target.upper()}"
         else:
             lang_display = lang_str.upper()
-        label_map = {
-            "indictrans2": "IndicTrans v2",
-            "indictrans3": "IndicTrans v3",
-            "gemma": "Gemma 4 12B",
-            "google": "Google",
-            "openai": "OpenAI",
-            "param_lc_translate_ep4": "Param LC Translate EP4",
-            "translation_1b_exp_40": "Translation 1B Exp 40",
-        }
-        engine_label = label_map.get(engine_name, engine_name.capitalize())
+        from kalanjiyam.utils.translation_engine import (
+            REVERSE_TRANSLATION_ENGINE_MAP,
+            TRANSLATION_ENGINE_LABELS,
+            normalize_translation_engine,
+        )
+
+        norm_engine = normalize_translation_engine(engine_name)
+        num = REVERSE_TRANSLATION_ENGINE_MAP.get(norm_engine, norm_engine)
+        if num.isdigit():
+            return _l(
+                "Translation %(number)s (%(languages)s)",
+                number=num,
+                languages=lang_display,
+            )
+        real_label = TRANSLATION_ENGINE_LABELS.get(
+            norm_engine, norm_engine.replace("_", " ").title()
+        )
         return _l(
             "Translation: %(engine)s (%(languages)s)",
-            engine=engine_label,
+            engine=real_label,
             languages=lang_display,
         )
     return version_key
@@ -508,7 +515,27 @@ def _editor_template_kwargs(
     from kalanjiyam.utils.org_access import is_restricted_ocr_user
 
     is_restricted_ocr = is_restricted_ocr_user(current_user)
-    from kalanjiyam.utils.translation_engine import get_available_translation_engines
+
+    from kalanjiyam.utils.translation_engine import (
+        build_translation_choices,
+        REVERSE_TRANSLATION_ENGINE_MAP,
+    )
+    default_trans_engine = (
+        getattr(system_settings, "default_translation_engine", "indictrans2")
+        or "indictrans2"
+    )
+    default_translation_value = REVERSE_TRANSLATION_ENGINE_MAP.get(
+        default_trans_engine, "1"
+    )
+    rec_trans_engine = getattr(
+        system_settings, "recommended_translation_engine", None
+    )
+    is_super_admin = getattr(current_user, "is_super_admin", False)
+    translation_choices = build_translation_choices(
+        is_super_admin=is_super_admin,
+        recommended_engine=rec_trans_engine,
+        default_engine=default_trans_engine,
+    )
 
     page_rules = project_utils.parse_page_number_spec(ctx.project.page_numbers)
     page_titles = project_utils.apply_rules(len(ctx.project.pages), page_rules)
@@ -610,7 +637,9 @@ def _editor_template_kwargs(
         "is_restricted_ocr": is_restricted_ocr,
         "default_engine_value": default_engine_value,
         "available_versions": available_versions,
-        "translation_engines": get_available_translation_engines(),
+        "translation_engines": translation_choices,
+        "default_translation_value": default_translation_value,
+        "default_translation_engine": default_trans_engine,
         "is_docx": is_docx,
         "original_html": original_html,
     }
@@ -1149,6 +1178,9 @@ def revision(project_slug, page_slug, revision_id):
             break
         else:
             prev_revision = r
+
+    if cur_revision is None:
+        abort(404)
 
     from kalanjiyam.utils import proofing_utils
 
@@ -2354,7 +2386,12 @@ def translate(project_slug, page_slug):
     glossary = request.args.get("glossary") or doc_data.get("glossary") or None
 
     # Validate engine
-    from kalanjiyam.utils.translation_engine import TranslationEngineFactory
+    from kalanjiyam.utils.translation_engine import (
+        TranslationEngineFactory,
+        normalize_translation_engine,
+    )
+
+    engine = normalize_translation_engine(engine)
 
     if not TranslationEngineFactory.is_supported(engine):
         abort(

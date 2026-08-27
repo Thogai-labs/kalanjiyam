@@ -398,15 +398,17 @@ class TestAvailableTranslationEngines:
 
         with app.app_context():
             engines = get_available_translation_engines()
-            assert len(engines) == 4
+            assert len(engines) == 5
             assert engines[0]["value"] == "indictrans2"
             assert engines[0]["label"] == "IndicTrans v2"
             assert engines[1]["value"] == "gemma"
             assert engines[1]["label"] == "Gemma 4 12B"
-            assert engines[2]["value"] == "param_lc_translate_ep4"
-            assert engines[2]["label"] == "Param LC Translate EP4"
-            assert engines[3]["value"] == "translation_1b_exp_40"
-            assert engines[3]["label"] == "Translation 1B Exp 40"
+            assert engines[2]["value"] == "llm_gemma"
+            assert engines[2]["label"] == "LLM Gemma"
+            assert engines[3]["value"] == "param_lc_translate_ep4"
+            assert engines[3]["label"] == "Param LC Translate EP4"
+            assert engines[4]["value"] == "translation_1b_exp_40"
+            assert engines[4]["label"] == "Translation 1B Exp 40"
 
             mock_client.get.assert_called_once()
             call_kwargs = mock_client.get.call_args[1]
@@ -434,3 +436,240 @@ class TestTranslateTextFunction:
         assert response.translated_text == "Hello world"
         mock_factory.create.assert_called_once_with("indictrans2")
         mock_engine.translate.assert_called_once_with("नमस्ते दुनिया", "sa", "en")
+
+
+class TestTranslationMaskingAndChoices:
+    """Test numeric engine masking and choice builders for translation models."""
+
+    def test_normalize_translation_engine(self):
+        from kalanjiyam.utils.translation_engine import normalize_translation_engine
+
+        # Numeric keys
+        assert normalize_translation_engine("1") == "indictrans2"
+        assert normalize_translation_engine("2") == "gemma"
+        assert normalize_translation_engine("3") == "param_lc_translate_ep4"
+        assert normalize_translation_engine("4") == "translation_1b_exp_40"
+        assert normalize_translation_engine("5") == "indictrans3"
+        assert normalize_translation_engine("6") == "google"
+        assert normalize_translation_engine("7") == "openai"
+        assert normalize_translation_engine("8") == "llm_gemma"
+
+        # Service aliases
+        assert normalize_translation_engine("gemma-4") == "gemma"
+        assert normalize_translation_engine("gemma4") == "gemma"
+        assert normalize_translation_engine("llm-gemma") == "llm_gemma"
+        assert normalize_translation_engine("llm_gemma") == "llm_gemma"
+        assert normalize_translation_engine("param-lc-translate-ep4") == "param_lc_translate_ep4"
+        assert normalize_translation_engine("translation-1b-exp-40") == "translation_1b_exp_40"
+        assert normalize_translation_engine("indictrans-2") == "indictrans2"
+        assert normalize_translation_engine("indictrans-3") == "indictrans3"
+
+        # Canonical names unchanged
+        assert normalize_translation_engine("indictrans2") == "indictrans2"
+        assert normalize_translation_engine("gemma") == "gemma"
+        assert normalize_translation_engine("llm_gemma") == "llm_gemma"
+
+    def test_build_translation_choices_regular_user(self):
+        from kalanjiyam.utils.translation_engine import build_translation_choices
+
+        engines = [
+            {"value": "indictrans2", "label": "IndicTrans v2"},
+            {"value": "gemma", "label": "Gemma 4 12B"},
+            {"value": "llm_gemma", "label": "LLM Gemma"},
+            {"value": "param_lc_translate_ep4", "label": "Param LC Translate EP4"},
+        ]
+        choices = build_translation_choices(
+            available_engines=engines,
+            is_super_admin=False,
+            recommended_engine="llm_gemma",
+            default_engine="indictrans2",
+        )
+
+        assert len(choices) == 4
+        # Masked names for regular users
+        assert choices[0]["value"] == "1"
+        assert choices[0]["label"] == "Translation 1"
+        assert choices[0]["is_default"] is True
+        assert choices[0]["is_recommended"] is False
+
+        assert choices[1]["value"] == "2"
+        assert choices[1]["label"] == "Translation 2"
+
+        assert choices[2]["value"] == "8"
+        assert choices[2]["label"] == "Translation 8"
+        assert choices[2]["is_recommended"] is True
+
+        assert choices[3]["value"] == "3"
+        assert choices[3]["label"] == "Translation 3"
+        assert choices[3]["is_recommended"] is False
+
+    def test_build_translation_choices_super_admin(self):
+        from kalanjiyam.utils.translation_engine import build_translation_choices
+
+        engines = [
+            {"value": "indictrans2", "label": "IndicTrans v2"},
+            {"value": "gemma", "label": "Gemma 4 12B"},
+            {"value": "llm_gemma", "label": "LLM Gemma"},
+        ]
+        choices = build_translation_choices(
+            available_engines=engines,
+            is_super_admin=True,
+            recommended_engine="8",  # Can also be passed by numeric ID
+            default_engine="1",
+        )
+
+        assert len(choices) == 3
+        # Real labels for super admin
+        assert choices[0]["value"] == "1"
+        assert choices[0]["label"] == "IndicTrans v2"
+        assert choices[0]["is_default"] is True
+
+        assert choices[1]["value"] == "2"
+        assert choices[1]["label"] == "Gemma 4 12B"
+
+        assert choices[2]["value"] == "8"
+        assert choices[2]["label"] == "LLM Gemma"
+        assert choices[2]["is_recommended"] is True
+
+    def test_factory_with_numeric_keys(self):
+        # Should be able to create engines by numeric ID
+        engine = TranslationEngineFactory.create("1")
+        assert isinstance(engine, IndicTransEngine)
+        assert engine.version == "indictrans2"
+
+        engine2 = TranslationEngineFactory.create("2")
+        assert isinstance(engine2, IndicTransEngine)
+        assert engine2.version == "gemma"
+
+        engine8 = TranslationEngineFactory.create("8")
+        from kalanjiyam.utils.translation_engine import LlmGemmaTranslateEngine
+        assert isinstance(engine8, LlmGemmaTranslateEngine)
+        assert engine8.model_name == "llm-gemma"
+
+        engine_by_name = TranslationEngineFactory.create("llm_gemma")
+        assert isinstance(engine_by_name, LlmGemmaTranslateEngine)
+
+        engine_by_alias = TranslationEngineFactory.create("llm-gemma")
+        assert isinstance(engine_by_alias, LlmGemmaTranslateEngine)
+
+        assert TranslationEngineFactory.is_supported("1") is True
+        assert TranslationEngineFactory.is_supported("2") is True
+        assert TranslationEngineFactory.is_supported("3") is True
+        assert TranslationEngineFactory.is_supported("4") is True
+        assert TranslationEngineFactory.is_supported("8") is True
+        assert TranslationEngineFactory.is_supported("llm_gemma") is True
+        assert TranslationEngineFactory.is_supported("llm-gemma") is True
+        assert TranslationEngineFactory.is_supported("unsupported") is False
+
+    def test_system_settings_translation_fields(self):
+        from kalanjiyam.models.settings import SystemSetting
+
+        setting = SystemSetting()
+        assert setting.default_translation_engine == "indictrans2"
+        assert setting.recommended_translation_engine is None
+
+        # Test property aliases
+        setting.default_translation_model = "llm_gemma"
+        assert setting.default_translation_engine == "llm_gemma"
+        assert setting.default_translation_model == "llm_gemma"
+
+        setting.recommended_translation_model = "param_lc_translate_ep4"
+        assert setting.recommended_translation_engine == "param_lc_translate_ep4"
+        assert setting.recommended_translation_model == "param_lc_translate_ep4"
+
+        setting.best_translation_model = "translation_1b_exp_40"
+        assert setting.recommended_translation_engine == "translation_1b_exp_40"
+        assert setting.best_translation_model == "translation_1b_exp_40"
+
+
+class TestLlmGemmaTranslateEngine:
+    """Test LlmGemmaTranslateEngine calling /v1/ocr."""
+
+    @patch("httpx.Client")
+    def test_translate_llm_gemma_calls_ocr_endpoint(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value.__enter__.return_value = mock_client
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "text": "Hello world in English",
+            "model_name": "llm-gemma",
+        }
+        mock_client.post.return_value = mock_response
+
+        from flask import Flask
+        from kalanjiyam.utils.translation_engine import LlmGemmaTranslateEngine
+
+        app = Flask("test_app")
+        app.config["OCR_SERVICE_URL"] = "http://ocr.test"
+        app.config["OCR_SERVICE_API_KEY"] = "test-secret"
+
+        with app.app_context():
+            engine = LlmGemmaTranslateEngine()
+            response = engine.translate("नमस्ते दुनिया", "hi", "en")
+
+            assert response.translated_text == "Hello world in English"
+            assert response.engine == "llm_gemma"
+
+            mock_client.post.assert_called_once()
+            call_url = mock_client.post.call_args[0][0]
+            call_kwargs = mock_client.post.call_args[1]
+
+            assert call_url == "http://ocr.test/v1/ocr"
+            assert call_kwargs["headers"]["X-API-Key"] == "test-secret"
+            assert call_kwargs["headers"]["Content-Type"] == "application/json"
+            assert call_kwargs["json"]["model_name"] == "llm-gemma"
+            assert call_kwargs["json"]["engine"] == "llm-gemma"
+            assert call_kwargs["json"]["source_language"] == "Hindi"
+            assert call_kwargs["json"]["target_language"] == "English"
+            assert "prompt" in call_kwargs["json"]
+            assert "Translate the following text from Hindi to English" in call_kwargs["json"]["prompt"]
+            assert "नमस्ते दुनिया" in call_kwargs["json"]["text"]
+
+    @patch("httpx.Client")
+    def test_translate_llm_gemma_custom_url_override(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value.__enter__.return_value = mock_client
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"translated_text": "Translated"}
+        mock_client.post.return_value = mock_response
+
+        from flask import Flask
+        from kalanjiyam.utils.translation_engine import LlmGemmaTranslateEngine
+
+        app = Flask("test_app")
+        app.config["OCR_SERVICE_URL"] = "http://ocr.test"
+        app.config["LLM_GEMMA_TRANSLATION_API_URL"] = "http://custom-llm.test/v1/ocr"
+        app.config["LLM_GEMMA_TRANSLATION_API_KEY"] = "custom-key"
+
+        with app.app_context():
+            engine = LlmGemmaTranslateEngine()
+            response = engine.translate("Text", "en", "ta")
+
+            assert response.translated_text == "Translated"
+            call_url = mock_client.post.call_args[0][0]
+            assert call_url == "http://custom-llm.test/v1/ocr"
+            assert mock_client.post.call_args[1]["headers"]["X-API-Key"] == "custom-key"
+
+    @patch("httpx.Client")
+    def test_translate_llm_gemma_cleans_preambles(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value.__enter__.return_value = mock_client
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "text": "<think>some thinking</think>\nHere is the English translation:\nDirect text."
+        }
+        mock_client.post.return_value = mock_response
+
+        from flask import Flask
+        from kalanjiyam.utils.translation_engine import LlmGemmaTranslateEngine
+
+        app = Flask("test_app")
+        app.config["OCR_SERVICE_URL"] = "http://ocr.test"
+
+        with app.app_context():
+            engine = LlmGemmaTranslateEngine()
+            response = engine.translate("Direct text.", "hi", "en")
+            assert response.translated_text == "Direct text."

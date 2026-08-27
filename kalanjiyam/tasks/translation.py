@@ -35,6 +35,9 @@ def _run_translation_for_page_inner(
 
     flask_app = create_config_only_app(app_env)
     with flask_app.app_context():
+        from kalanjiyam.utils.translation_engine import normalize_translation_engine
+
+        engine = normalize_translation_engine(engine)
         start_time = time.time()
         
         bot_user = q.user(consts.BOT_USERNAME)
@@ -347,6 +350,9 @@ def run_translation_for_project(
     """
     flask_app = create_config_only_app(app_env)
     with flask_app.app_context():
+        from kalanjiyam.utils.translation_engine import normalize_translation_engine
+
+        engine = normalize_translation_engine(engine)
         from kalanjiyam.models.batch import BatchJob, BatchItem, BatchOcrPage
         session = q.get_session()
         db_project = session.query(db.Project).get(project.id)
@@ -517,6 +523,9 @@ def run_docx_translation(
 
     flask_app = create_config_only_app(app_env)
     with flask_app.app_context():
+        from kalanjiyam.utils.translation_engine import normalize_translation_engine
+
+        engine = normalize_translation_engine(engine)
         storage = get_storage()
         upload_key = docx_upload_key(docx_id)
         trans_key = docx_translation_key(docx_id)

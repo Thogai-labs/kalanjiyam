@@ -184,6 +184,8 @@ def test_engine_aliases_map_service_ids():
     assert normalize_service_engine("glm-ocr") == "glm_ocr"
     assert normalize_service_engine("gemma-ocr") == "gemma_ocr"
     assert normalize_service_engine("gemma-4") == "gemma_ocr"
+    assert normalize_service_engine("llm-gemma") == "gemma_ocr"
+    assert normalize_service_engine("llm_gemma") == "gemma_ocr"
     assert engine_for_service("surya_table") == "surya-table"
     assert engine_for_service("glm_ocr") == "glm-ocr"
     assert engine_for_service("gemma_ocr") == "gemma-ocr"

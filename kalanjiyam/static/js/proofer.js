@@ -124,7 +124,7 @@ export default () => ({
   selectedLanguage: 'sa',
 
   // Translation settings
-  selectedTranslationEngine: 'indictrans2',
+  selectedTranslationEngine: '1',
   sourceLanguage: 'hi',
   targetLanguage: 'en',
   translationDropdownOpen: false,
@@ -632,13 +632,45 @@ export default () => ({
         "tesseract_manuscript": "11",
         "dots_ocr": "12",
         "gemma_ocr": "13",
-        "gemma_4": "13"
+        "gemma_4": "13",
+        "llm_gemma": "13",
+        "llm-gemma": "13"
       };
       const num = engineMap[engine] || engine;
       if (/^\d+$/.test(num)) {
         return 'OCR ' + num;
       }
       return num.charAt(0).toUpperCase() + num.slice(1) + ' OCR';
+    }
+    if (versionKey.startsWith('translation:') || versionKey.startsWith('TR:')) {
+      const parts = versionKey.split(':');
+      const engine = parts[1] || '';
+      const langStr = parts[2] || '';
+      let langDisplay = langStr.toUpperCase();
+      if (langStr.includes('->')) {
+        const [src, target] = langStr.split('->');
+        langDisplay = `${src.toUpperCase()} → ${target.toUpperCase()}`;
+      }
+      const engineMap = {
+        'indictrans2': '1',
+        'indictrans-2': '1',
+        'gemma': '2',
+        'gemma-4': '2',
+        'gemma4': '2',
+        'param_lc_translate_ep4': '3',
+        'param-lc-translate-ep4': '3',
+        'translation_1b_exp_40': '4',
+        'translation-1b-exp-40': '4',
+        'indictrans3': '5',
+        'indictrans-3': '5',
+        'google': '6',
+        'openai': '7',
+        'llm_gemma': '8',
+        'llm-gemma': '8',
+      };
+      const num = engineMap[engine] || engine;
+      const modelLabel = /^\d+$/.test(num) ? 'Translation ' + num : (num.charAt(0).toUpperCase() + num.slice(1));
+      return langDisplay ? `${modelLabel} (${langDisplay})` : modelLabel;
     }
     return versionKey;
   },
@@ -1345,6 +1377,43 @@ export default () => ({
     return engineMap[engineValue] || 'google';
   },
 
+  // Decode numeric translation engine values to actual engine names
+  decodeTranslationEngine(engineValue) {
+    const engineMap = {
+      '1': 'indictrans2',
+      '2': 'gemma',
+      '3': 'param_lc_translate_ep4',
+      '4': 'translation_1b_exp_40',
+      '5': 'indictrans3',
+      '6': 'google',
+      '7': 'openai',
+      '8': 'llm_gemma',
+    };
+    return engineMap[engineValue] || engineValue || 'indictrans2';
+  },
+
+  getTranslationDisplayName(engine) {
+    const revMap = {
+      'indictrans2': '1',
+      'indictrans-2': '1',
+      'gemma': '2',
+      'gemma-4': '2',
+      'gemma4': '2',
+      'param_lc_translate_ep4': '3',
+      'param-lc-translate-ep4': '3',
+      'translation_1b_exp_40': '4',
+      'translation-1b-exp-40': '4',
+      'indictrans3': '5',
+      'indictrans-3': '5',
+      'google': '6',
+      'openai': '7',
+      'llm_gemma': '8',
+      'llm-gemma': '8',
+    };
+    const num = revMap[engine] || engine;
+    return /^\d+$/.test(num) ? `Translation ${num}` : (num.charAt(0).toUpperCase() + num.slice(1));
+  },
+
   // Get combined language parameter for bilingual support
   getCombinedLanguage() {
     if (!this.showLanguageSelect) {
@@ -1602,7 +1671,7 @@ export default () => ({
   },
 
   // Translation controls
-  async runTranslation(engine = 'google', sourceLang = 'sa', targetLang = 'en', glossaries = []) {
+  async runTranslation(engine = '1', sourceLang = 'sa', targetLang = 'en', glossaries = []) {
     console.log('=== TRANSLATION DEBUG START ===');
     
     if (!this.pageDocument) {
@@ -1612,11 +1681,12 @@ export default () => ({
 
     this.isRunningTranslation = true;
 
-    console.log('Starting translation:', { engine, sourceLang, targetLang, glossaries });
+    const decodedEngine = this.decodeTranslationEngine(engine);
+    console.log('Starting translation:', { engine, decodedEngine, sourceLang, targetLang, glossaries });
     console.log('Current pathname:', window.location.pathname);
 
     const { pathname } = window.location;
-    let url = pathname.replace('/proofing/', '/api/translate/') + `?engine=${engine}&source_lang=${sourceLang}&target_lang=${targetLang}`;
+    let url = pathname.replace('/proofing/', '/api/translate/') + `?engine=${decodedEngine}&source_lang=${sourceLang}&target_lang=${targetLang}`;
     if (glossaries && glossaries.length > 0) {
       const glossaryVal = glossaries.includes('all') ? 'all' : glossaries.join(',');
       url += `&glossary=${encodeURIComponent(glossaryVal)}`;
@@ -1666,7 +1736,7 @@ export default () => ({
         this.currentTranslation = translation;
         
         // Trigger translation display in the image box
-        this.showTranslationInImageBox(translation, sourceLang, targetLang, engine);
+        this.showTranslationInImageBox(translation, sourceLang, targetLang, decodedEngine);
         
         // Show success feedback
         this.showNotification('Translation completed successfully!', 'success');
@@ -1808,7 +1878,7 @@ export default () => ({
     const translationHTML = `
       <h4 class="text-lg font-semibold text-peacock-primary mb-3">
         Translation (${sourceLang.toUpperCase()} → ${targetLang.toUpperCase()})
-        <span class="text-sm font-normal text-peacock-secondary">via ${engine}</span>
+        <span class="text-sm font-normal text-peacock-secondary">via ${this.getTranslationDisplayName(engine)}</span>
       </h4>
       <div class="text-sm leading-relaxed whitespace-pre-wrap">${translation}</div>
     `;
