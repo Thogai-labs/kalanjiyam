@@ -12,11 +12,17 @@
   class="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
   <div class="w-full max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
   <div class="flex justify-between items-center">
-    <a class="flex items-center gap-2 pl-2 font-black text-lg text-slate-900 hover:opacity-80 transition-opacity"
-      href="{{ url_for('site.index') }}">
-      <span
-        class="w-8 h-8 rounded-full bg-royalblue flex items-center justify-center text-white text-xs shadow-sm">K</span>
-      <span class="tracking-tighter">{{ _('Kalanjiyam') }}</span>
+    <a class="flex items-center gap-2.5 sm:gap-3 pl-2 font-black text-lg text-slate-900 hover:opacity-80 transition-opacity"
+      href="{{ url_for('site.index') }}" title="Kalanjiyam - Powered by BharatGen">
+      <img src="{{ url_for('static', filename='images/BharatGen-Logo-2-1536x390.webp') }}"
+           alt="BharatGen"
+           class="h-7 sm:h-8 w-auto object-contain shrink-0" />
+      <span class="text-slate-300 font-light text-xl select-none" aria-hidden="true">|</span>
+      <div class="flex items-center gap-2">
+        <span
+          class="w-8 h-8 rounded-full bg-royalblue flex items-center justify-center text-white text-xs shadow-sm">K</span>
+        <span class="tracking-tighter">{{ _('Kalanjiyam') }}</span>
+      </div>
     </a>
     <div class="block p-4 md:hidden">
       <button id="hamburger" type="button" class="text-inherit opacity-70 hover:opacity-100 transition-opacity">{{

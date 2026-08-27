@@ -9,7 +9,17 @@
 <body class="text-sky-900">
 
 <nav class="md:flex justify-between items-center a-hover-underline mb-4">
-  <a class="p-4 font-bold text-lg" href="{{ url_for('site.index') }}">{{ _('Kalanjiyam') }}</a>
+  <a class="p-4 flex items-center gap-3 font-bold text-lg text-slate-900 hover:opacity-80 transition-opacity"
+     href="{{ url_for('site.index') }}" title="Kalanjiyam - Powered by BharatGen">
+    <img src="{{ url_for('static', filename='images/BharatGen-Logo-2-1536x390.webp') }}"
+         alt="BharatGen"
+         class="h-7 sm:h-8 w-auto object-contain shrink-0" />
+    <span class="text-slate-300 font-light text-xl select-none" aria-hidden="true">|</span>
+    <div class="flex items-center gap-2">
+      <span class="w-8 h-8 rounded-full bg-royalblue flex items-center justify-center text-white text-xs shadow-sm">K</span>
+      <span class="tracking-tighter">{{ _('Kalanjiyam') }}</span>
+    </div>
+  </a>
 </nav>
 
 <header class="max-w-4xl mx-auto mt-16 mb-4 p-4 text-center">

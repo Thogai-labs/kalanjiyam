@@ -63,6 +63,7 @@
 
     <div class="mt-6 inline-flex flex-wrap items-center justify-center gap-2 text-xs text-slate-400 font-medium">
       <span class="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/80">{{ _('PDF Documents') }}</span>
+      <span class="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/80">{{ _('JPG / Image Scans') }}</span>
       <span class="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/80">{{ _('DOCX / Word Files') }}</span>
       <span class="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/80">{{ _('Max 500MB') }}</span>
     </div>
@@ -79,7 +80,11 @@
        progress: 0,
        status: '',
        isDocx: false,
+       isImage: false,
        fileName: '',
+       fileCount: 0,
+       imageFileNames: [],
+       totalFileSizeStr: '',
        docxWorkflow: 'direct',
        sourceLang: 'sa',
        targetLang: 'en',
@@ -131,15 +136,61 @@
          return name.charAt(0).toUpperCase() + name.slice(1);
        },
        handleFileChange(e) {
-         const files = e.target.files;
-         if (files && files.length > 0) {
+         const files = Array.from(e.target.files || []);
+         this.fileCount = files.length;
+         this.imageFileNames = [];
+         if (files.length === 0) {
+           this.isDocx = false;
+           this.isImage = false;
+           this.fileName = '';
+           this.totalFileSizeStr = '';
+           return;
+         }
+
+         let totalBytes = 0;
+         for (const f of files) {
+           totalBytes += f.size;
+         }
+         this.totalFileSizeStr = totalBytes < 1024 * 1024
+           ? (totalBytes / 1024).toFixed(1) + ' KB'
+           : (totalBytes / (1024 * 1024)).toFixed(1) + ' MB';
+
+         if (files.length === 1) {
            const name = files[0].name;
-           this.fileName = name;
+           this.fileName = `${name} (${this.totalFileSizeStr})`;
            const nameLower = name.toLowerCase();
            this.isDocx = nameLower.endsWith('.docx') || nameLower.endsWith('.doc');
+           this.isImage = /\.(jpe?g|png|webp)$/i.test(nameLower);
+
+           // Auto-suggest title if empty
+           const titleInput = document.getElementById('local_title');
+           if (titleInput && !titleInput.value.trim()) {
+             const baseTitle = name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim();
+             titleInput.value = baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1);
+           }
          } else {
            this.isDocx = false;
-           this.fileName = '';
+           const allImages = files.every(f => /\.(jpe?g|png|webp)$/i.test(f.name.toLowerCase()));
+           if (!allImages) {
+             alert('{{ _("When uploading multiple files, all files must be images (.jpg, .jpeg, .png, .webp).") }}');
+             e.target.value = '';
+             this.fileCount = 0;
+             this.fileName = '';
+             this.isImage = false;
+             return;
+           }
+           this.isImage = true;
+           this.fileName = `${files.length} {{ _("image scans selected") }} (${this.totalFileSizeStr})`;
+           this.imageFileNames = files.map(f => f.name).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+           // Auto-suggest title from common prefix or first filename
+           const titleInput = document.getElementById('local_title');
+           if (titleInput && !titleInput.value.trim() && this.imageFileNames.length > 0) {
+             let baseTitle = this.imageFileNames[0].replace(/\.[^/.]+$/, '').replace(/[_\-\d]+$/, '').replace(/[_-]+/g, ' ').trim();
+             if (baseTitle.length > 2) {
+               titleInput.value = baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1);
+             }
+           }
          }
        },
        submitForm() {
@@ -156,9 +207,12 @@
          if (this.source === 'local') {
            const fileInput = document.getElementById('local_file');
            if (fileInput && fileInput.files && fileInput.files.length > 0) {
-             const file = fileInput.files[0];
-             if (file.size > uploadLimitMB * 1024 * 1024) {
-               alert(`File size exceeds the allowed limit of ${uploadLimitMB}MB for guest users.`);
+             let totalSize = 0;
+             for (let i = 0; i < fileInput.files.length; i++) {
+               totalSize += fileInput.files[i].size;
+             }
+             if (totalSize > uploadLimitMB * 1024 * 1024) {
+               alert(`Total upload size (${(totalSize / (1024 * 1024)).toFixed(1)}MB) exceeds the allowed limit of ${uploadLimitMB}MB for guest users.`);
                return;
              }
            }
@@ -167,7 +221,9 @@
 
          const formData = new FormData(form);
          this.uploading = true;
-         const docLabel = this.fileName || (isDirect ? '{{ _("document") }}' : '{{ _("PDF") }}');
+         const docLabel = this.isImage
+           ? (this.fileCount > 1 ? `${this.fileCount} images` : 'image')
+           : (this.fileName || (isDirect ? '{{ _("document") }}' : '{{ _("PDF") }}'));
          this.status = `{{ _('Uploading') }} ${docLabel} ...`;
          
          const xhr = new XMLHttpRequest();
@@ -225,7 +281,7 @@
 
       <!-- Step 2: Upload File -->
       <section class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
-        {{ step(2, _('Upload Document'), _('Select a PDF or Word document (.pdf, .docx, .doc)')) }}
+        {{ step(2, _('Upload Document or Images'), _('Select a PDF, Word document (.docx), or JPG/PNG image scans (single or multiple)')) }}
 
         <fieldset x-ref="source" class="space-y-4">
           <div class="p-5 rounded-2xl border-2 transition-all"
@@ -236,12 +292,27 @@
               <span class="ml-3 text-base font-bold text-slate-800">{{ _('From my computer') }}</span>
             </label>
             <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
-              {{ form.local_file(accept=".pdf,.docx,.doc", class_="block w-full text-xs sm:text-sm text-slate-500 file:mr-4
+              {{ form.local_file(accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.webp", multiple="multiple", class_="block w-full text-xs sm:text-sm text-slate-500 file:mr-4
               file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold
               file:bg-royalblue file:text-white hover:file:bg-blue-700 cursor-pointer transition-all", **{"@change": "handleFileChange($event)"}) }}
               <div class="mt-2 text-[11px] text-slate-400 font-medium" x-show="fileName">
-                {{ _('Selected file:') }} <span class="font-semibold text-slate-700" x-text="fileName"></span>
+                <span x-text="fileCount > 1 ? '{{ _("Selected files:") }}' : '{{ _("Selected file:") }}'"></span>
+                <span class="font-semibold text-slate-700" x-text="fileName"></span>
               </div>
+              <template x-if="imageFileNames.length > 1">
+                <div class="mt-3 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3 max-h-36 overflow-y-auto space-y-1">
+                  <div class="font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                    <span>{{ _('Page sequence (sorted naturally by filename):') }}</span>
+                    <span class="text-[10px] text-slate-400 font-medium" x-text="`${imageFileNames.length} pages`"></span>
+                  </div>
+                  <template x-for="(name, idx) in imageFileNames" :key="name">
+                    <div class="flex items-center text-slate-600 font-mono py-0.5 border-b border-slate-100 last:border-0">
+                      <span class="w-8 text-slate-400 font-semibold" x-text="`${idx + 1}.`"></span>
+                      <span class="truncate" x-text="name"></span>
+                    </div>
+                  </template>
+                </div>
+              </template>
             </div>
           </div>
         </fieldset>

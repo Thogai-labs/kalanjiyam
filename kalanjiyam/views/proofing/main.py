@@ -6,6 +6,7 @@ from pathlib import Path
 import json
 import math
 import os
+import re
 import redis
 
 from flask import Blueprint, current_app, flash, make_response, render_template, request, redirect, url_for
@@ -14,7 +15,7 @@ from flask_login import current_user
 from flask_wtf import FlaskForm
 from slugify import slugify
 from sqlalchemy import orm
-from wtforms import FileField, RadioField, StringField
+from wtforms import FileField, MultipleFileField, RadioField, StringField
 from wtforms.validators import DataRequired, ValidationError
 from wtforms.widgets import TextArea
 
@@ -28,10 +29,18 @@ from kalanjiyam.views.proofing.decorators import moderator_required, p2_required
 
 bp = Blueprint("proofing", __name__)
 
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".jpg", ".jpeg", ".png", ".webp"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
 
 def _is_allowed_document_file(filename: str) -> bool:
-    """True iff we accept this type of document upload."""
-    return Path(filename).suffix in (".pdf", ".docx", ".doc")
+    """True iff we accept this type of document/image upload."""
+    return Path(filename).suffix.lower() in ALLOWED_EXTENSIONS
+
+
+def _natural_sort_key(s: str):
+    """Sort strings with embedded numbers naturally (e.g., page_2 before page_10)."""
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r"(\d+)", s)]
 
 
 def _required_if_archive(message: str):
@@ -46,8 +55,15 @@ def _required_if_archive(message: str):
 def _required_if_local(message: str):
     def fn(form, field):
         source = form.pdf_source.data
-        if source == "local" and not field.data:
-            raise ValidationError(message)
+        if source == "local":
+            data = field.data
+            if not data:
+                raise ValidationError(message)
+            if isinstance(data, list):
+                if not any(bool(getattr(f, "filename", None)) for f in data):
+                    raise ValidationError(message)
+            elif hasattr(data, "filename") and not data.filename:
+                raise ValidationError(message)
 
     return fn
 
@@ -67,14 +83,17 @@ class CreateProjectForm(FlaskForm):
             _required_if_archive(_l("Please provide a valid archive.org identifier."))
         ],
     )
-    local_file = FileField(
-        _l("PDF file"), validators=[_required_if_local(_l("Please provide a PDF file."))]
+    local_file = MultipleFileField(
+        _l("Document or images"),
+        validators=[
+            _required_if_local(_l("Please provide a document or image file(s) to upload."))
+        ],
     )
     local_title = StringField(
         _l("Title of the book (you can change this later)"),
         validators=[
             _required_if_local(
-                _l("Please provide a title for your PDF."),
+                _l("Please provide a title for your document or images."),
             )
         ],
     )
@@ -499,24 +518,49 @@ def create_project():
                     if group:
                         org_slug = group.slug
 
-        filename = form.local_file.raw_data[0].filename
-        if not _is_allowed_document_file(filename):
-            flash(_l("Please upload a PDF or DOCX."), "error")
+        raw_files = request.files.getlist("local_file")
+        if not raw_files or not any(getattr(f, "filename", None) for f in raw_files):
+            if isinstance(form.local_file.data, list):
+                raw_files = form.local_file.data
+            elif form.local_file.data:
+                raw_files = [form.local_file.data]
+
+        uploaded_files = [f for f in raw_files if f and getattr(f, "filename", None)]
+        if not uploaded_files:
+            flash(_l("Please upload a file or images."), "error")
             return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+
+        for f in uploaded_files:
+            if not _is_allowed_document_file(f.filename):
+                flash(_l("Unsupported file type: %(filename)s. Please upload a PDF, DOCX, or JPG/PNG image(s).", filename=f.filename), "error")
+                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+
+        is_multiple = len(uploaded_files) > 1
+        all_are_images = all(Path(f.filename).suffix.lower() in IMAGE_EXTENSIONS for f in uploaded_files)
+
+        if is_multiple and not all_are_images:
+            flash(_l("When uploading multiple files, all files must be images (.jpg, .jpeg, .png, .webp)."), "error")
+            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+
+        is_image_upload = all_are_images
+        first_filename = uploaded_files[0].filename
+        is_uploaded_docx = (not is_image_upload) and Path(first_filename).suffix.lower() in (".docx", ".doc")
+
         upload_size = 0
-        if form.local_file.data and hasattr(form.local_file.data, "stream"):
-            cur_pos = form.local_file.data.stream.tell()
-            form.local_file.data.stream.seek(0, 2)
-            upload_size = form.local_file.data.stream.tell()
-            form.local_file.data.stream.seek(cur_pos)
-        
+        for f in uploaded_files:
+            if hasattr(f, "stream"):
+                cur_pos = f.stream.tell()
+                f.stream.seek(0, 2)
+                upload_size += f.stream.tell()
+                f.stream.seek(cur_pos)
+
         if current_user.is_authenticated:
             ensure_storage_quota_for_user(current_user, upload_size)
         else:
             if upload_size > guest_upload_limit * 1024 * 1024:
                 flash(
                     _l(
-                        "PDF size exceeds the allowed limit of %(limit)sMB for guest users.",
+                        "Upload size exceeds the allowed limit of %(limit)sMB for guest users.",
                         limit=guest_upload_limit,
                     ),
                     "error",
@@ -526,20 +570,30 @@ def create_project():
         # Save the original file so that it can be processed/downloaded later.
         # The Celery worker fetches it from storage by key, so web and worker
         # don't need a shared filesystem.
-        from kalanjiyam.utils.storage import get_storage, pdf_key, project_docx_key
+        from kalanjiyam.utils.storage import get_storage, pdf_key, project_docx_key, project_raw_image_key
 
-        is_uploaded_docx = filename.lower().endswith((".docx", ".doc"))
         source_pdf_key = None
         source_docx_key = None
+        image_keys = None
 
         if is_uploaded_docx:
             source_docx_key = project_docx_key(slug, org_slug=org_slug)
-            form.local_file.data.stream.seek(0)
-            get_storage().save(source_docx_key, form.local_file.data.stream)
+            uploaded_files[0].stream.seek(0)
+            get_storage().save(source_docx_key, uploaded_files[0].stream)
+        elif is_image_upload:
+            sorted_images = sorted(uploaded_files, key=lambda f: _natural_sort_key(f.filename))
+            image_keys = []
+            for idx, img_file in enumerate(sorted_images, start=1):
+                ext = Path(img_file.filename).suffix.lower() or ".jpg"
+                staged_name = f"{idx}{ext}"
+                img_key = project_raw_image_key(slug, staged_name, org_slug=org_slug)
+                img_file.stream.seek(0)
+                get_storage().save(img_key, img_file.stream)
+                image_keys.append(img_key)
         else:
             source_pdf_key = pdf_key(slug, org_slug=org_slug)
-            form.local_file.data.stream.seek(0)
-            get_storage().save(source_pdf_key, form.local_file.data.stream)
+            uploaded_files[0].stream.seek(0)
+            get_storage().save(source_pdf_key, uploaded_files[0].stream)
 
         # Log usage action for guests
         if not current_user.is_authenticated:
@@ -558,6 +612,7 @@ def create_project():
                     "display_title": title,
                     "pdf_key": source_pdf_key,
                     "docx_key": source_docx_key,
+                    "image_keys": image_keys,
                     "app_environment": current_app.config["KALANJIYAM_ENVIRONMENT"],
                     "creator_id": None,
                     "fingerprint_id": request.cookies.get("device_fingerprint"),
@@ -570,6 +625,7 @@ def create_project():
                 display_title=title,
                 pdf_key=source_pdf_key,
                 docx_key=source_docx_key,
+                image_keys=image_keys,
                 app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
                 creator_id=current_user.id,
                 org_slug=org_slug,

@@ -41,7 +41,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 12px;
+        gap: 14px;
         margin-bottom: 24px;
         text-decoration: none;
         transition: opacity 0.2s ease;
@@ -49,6 +49,26 @@
 
       .brand-top-header:hover {
         opacity: 0.9;
+      }
+
+      .brand-bharatgen-logo {
+        height: 38px;
+        width: auto;
+        object-fit: contain;
+        flex-shrink: 0;
+      }
+
+      .brand-divider {
+        color: #cbd5e1;
+        font-size: 1.75rem;
+        font-weight: 300;
+        user-select: none;
+      }
+
+      .brand-kalanjiyam {
+        display: flex;
+        align-items: center;
+        gap: 12px;
       }
 
       .brand-icon {
@@ -199,8 +219,14 @@
 <body>
     <!-- Top Kalanjiyam Brand Header -->
     <a href="{{ url_for('site.index') }}" class="brand-top-header" title="{{ _('Return to Kalanjiyam Home') }}">
-      <div class="brand-icon">K</div>
-      <span class="brand-name">Kalanjiyam</span>
+      <img src="{{ url_for('static', filename='images/BharatGen-Logo-2-1536x390.webp') }}"
+           alt="BharatGen"
+           class="brand-bharatgen-logo" />
+      <span class="brand-divider" aria-hidden="true">|</span>
+      <div class="brand-kalanjiyam">
+        <div class="brand-icon">K</div>
+        <span class="brand-name">Kalanjiyam</span>
+      </div>
     </a>
 
     <div class="auth-wrapper">

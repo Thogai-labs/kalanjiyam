@@ -96,6 +96,14 @@ def editor_image_key(project_slug: str, filename: str, org_slug: str = None) -> 
     return f"projects/{org}/{project_slug}/images/{filename}"
 
 
+def project_raw_image_key(
+    project_slug: str, filename: str, org_slug: str = None
+) -> str:
+    """Key of a raw uploaded image before it is processed into a page image."""
+    org = resolve_org_slug(project_slug, org_slug)
+    return f"projects/{org}/{project_slug}/raw_images/{filename}"
+
+
 def project_docx_key(project_slug: str, org_slug: str = None) -> str:
     """Key of a project's source DOCX."""
     org = resolve_org_slug(project_slug, org_slug)

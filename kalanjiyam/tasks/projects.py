@@ -578,14 +578,17 @@ def create_project_inner(
     display_title: str,
     pdf_key: str | None = None,
     docx_key: str | None = None,
+    image_keys: list[str] | None = None,
     app_environment: str,
     creator_id: int | None,
     fingerprint_id: str | None = None,
     task_status: TaskStatus,
     org_slug: str = "open-tenant",
 ):
-    """Split the given PDF or DOCX into pages and register the project on the database."""
-    logging.info(f'Received upload task "{display_title}" for key {pdf_key or docx_key}.')
+    """Split the given PDF, DOCX, or images into pages and register the project on the database."""
+    logging.info(
+        f'Received upload task "{display_title}" for key {pdf_key or docx_key or (f"{len(image_keys)} images" if image_keys else "none")}.'
+    )
 
     app = create_config_only_app(app_environment)
     with app.app_context():
@@ -723,6 +726,86 @@ def create_project_inner(
             from kalanjiyam.tasks.search_index import enqueue_project
 
             enqueue_project(db_project.id)
+        elif image_keys:
+            from PIL import Image, ImageOps
+
+            num_pages = len(image_keys)
+            require_org = bool(app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True))
+            _add_project_to_database(
+                display_title=display_title,
+                slug=slug,
+                num_pages=num_pages,
+                creator_id=creator_id,
+                require_org=require_org,
+                fingerprint_id=fingerprint_id,
+                org_slug=org_slug,
+            )
+
+            total_images_size_bytes = 0
+            task_status.progress(0, num_pages)
+
+            for idx, img_key in enumerate(image_keys, start=1):
+                local_src = storage.local_copy(img_key)
+                if not local_src.exists():
+                    raise ValueError(f'Source image not found in storage: "{img_key}".')
+
+                total_images_size_bytes += local_src.stat().st_size
+                dest_key = page_image_key(slug, str(idx), org_slug=org_slug)
+
+                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_dest:
+                    tmp_dest_path = Path(tmp_dest.name)
+                    try:
+                        with Image.open(local_src) as im:
+                            im = ImageOps.exif_transpose(im)
+                            im.convert("RGB").save(tmp_dest_path, "JPEG", quality=90, optimize=True)
+                        storage.save(dest_key, tmp_dest_path)
+                    finally:
+                        if tmp_dest_path.exists():
+                            tmp_dest_path.unlink()
+
+                # Clean up staged raw image from storage
+                if storage.exists(img_key):
+                    storage.delete(img_key)
+
+                task_status.progress(idx, num_pages)
+
+            db_project = session.query(db.Project).filter_by(slug=slug).one()
+            meta = db_project.extracted_metadata or {}
+            if "source_file" not in meta or not isinstance(meta["source_file"], dict):
+                meta["source_file"] = {}
+            meta["source_file"]["size_bytes"] = total_images_size_bytes
+            meta["source_file"]["type"] = "images"
+            meta["source_file"]["num_images"] = num_pages
+            meta["source_file"]["deleted_after_extraction"] = True
+            db_project.extracted_metadata = meta
+            from sqlalchemy.orm.attributes import flag_modified
+
+            flag_modified(db_project, "extracted_metadata")
+            session.commit()
+
+            from kalanjiyam.utils.metrics import record_metric
+            from kalanjiyam.utils.org_access import user_organization_id
+
+            creator_user = (
+                session.query(db.User).filter_by(id=creator_id).first()
+                if creator_id
+                else None
+            )
+            org_id = user_organization_id(creator_user) if creator_user else None
+            record_metric(
+                category="project_upload",
+                name="images_extracted_and_deleted",
+                user_id=creator_id,
+                group_id=org_id,
+                status="SUCCESS",
+                details={
+                    "project_slug": slug,
+                    "source_file_size_bytes": total_images_size_bytes,
+                    "num_pages": num_pages,
+                },
+            )
+
+            add_storage_usage_for_project(slug)
         else:
             pdf_path = storage.local_copy(pdf_key)
             if not pdf_path.exists():
@@ -794,17 +877,19 @@ def create_project(
     display_title: str,
     pdf_key: str | None = None,
     docx_key: str | None = None,
+    image_keys: list[str] | None = None,
     app_environment: str,
     creator_id: int | None,
     fingerprint_id: str | None = None,
     org_slug: str = "open-tenant",
 ):
-    """Split the given PDF or DOCX into pages and register the project on the database."""
+    """Split the given PDF, DOCX, or images into pages and register the project on the database."""
     task_status = CeleryTaskStatus(self)
     create_project_inner(
         display_title=display_title,
         pdf_key=pdf_key,
         docx_key=docx_key,
+        image_keys=image_keys,
         app_environment=app_environment,
         creator_id=creator_id,
         fingerprint_id=fingerprint_id,

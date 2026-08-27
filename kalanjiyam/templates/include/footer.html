@@ -24,10 +24,16 @@
 <footer class="bg-white text-slate-800 text-sm p-12 md:p-24 border-t border-slate-100">
   <div class="max-w-6xl mx-auto">
     <div class="md:flex flex-wrap justify-between">
-      <div class="mb-12 md:mb-0 mr-12 basis-64">
-          <a href="{{ index }}" class="text-2xl font-black text-slate-900 flex items-center gap-2 mb-6">
-              <span class="w-8 h-8 rounded-xl bg-royalblue flex items-center justify-center text-white text-xs">K</span>
-              Kalanjiyam
+      <div class="mb-12 md:mb-0 mr-12 basis-80 max-w-sm">
+          <a href="{{ index }}" class="text-2xl font-black text-slate-900 flex items-center gap-3 mb-6 hover:opacity-80 transition-opacity" title="Kalanjiyam - Powered by BharatGen">
+              <img src="{{ url_for('static', filename='images/BharatGen-Logo-2-1536x390.webp') }}"
+                   alt="BharatGen"
+                   class="h-8 sm:h-9 w-auto object-contain shrink-0" />
+              <span class="text-slate-300 font-light text-2xl select-none" aria-hidden="true">|</span>
+              <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-royalblue flex items-center justify-center text-white text-xs">K</span>
+                <span>Kalanjiyam</span>
+              </div>
           </a>
           <p class="text-slate-400 font-medium leading-relaxed">
               {{ _('Preserving and sharing the ancient wisdom of the Siddhas for a global audience.') }}

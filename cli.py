@@ -113,10 +113,13 @@ def change_password(username):
 
 
 @cli.command()
-@click.option("--title", help="title of the new project")
+@click.option("--title", required=True, help="title of the new project")
 @click.option("--pdf-path", help="path to the source PDF")
-def create_project(title, pdf_path):
-    """Create a proofing project from a PDF."""
+@click.option("--images-dir", help="path to directory containing scan images (.jpg, .jpeg, .png)")
+def create_project(title, pdf_path, images_dir):
+    """Create a proofing project from a PDF or directory of images."""
+    if not pdf_path and not images_dir:
+        raise click.ClickException("Please provide either --pdf-path or --images-dir.")
     current_app = kalanjiyam.create_app("development")
     with current_app.app_context():
         session = q.get_session()
@@ -128,18 +131,50 @@ def create_project(title, pdf_path):
                 "Please create a user first with `create-user`."
             )
 
-        from kalanjiyam.utils.storage import get_storage, pdf_key
+        from kalanjiyam.utils.storage import get_storage, pdf_key, project_raw_image_key
 
         slug = slugify(title)
-        source_pdf_key = pdf_key(slug)
-        get_storage().save(source_pdf_key, pdf_path)
-        create_project_inner(
-            display_title=title,
-            pdf_key=source_pdf_key,
-            app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
-            creator_id=arbitrary_user.id,
-            task_status=LocalTaskStatus(),
-        )
+        storage = get_storage()
+
+        if images_dir:
+            import re
+            from pathlib import Path
+            img_dir = Path(images_dir)
+            if not img_dir.is_dir():
+                raise click.ClickException(f"Images directory not found: {images_dir}")
+            img_extensions = {".jpg", ".jpeg", ".png", ".webp"}
+            all_imgs = [p for p in img_dir.iterdir() if p.is_file() and p.suffix.lower() in img_extensions]
+            if not all_imgs:
+                raise click.ClickException(f"No supported images found in {images_dir}")
+
+            def natural_key(p):
+                return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", p.name)]
+
+            sorted_imgs = sorted(all_imgs, key=natural_key)
+            image_keys = []
+            for idx, img_path in enumerate(sorted_imgs, start=1):
+                ext = img_path.suffix.lower() or ".jpg"
+                img_key = project_raw_image_key(slug, f"{idx}{ext}")
+                storage.save(img_key, str(img_path))
+                image_keys.append(img_key)
+
+            create_project_inner(
+                display_title=title,
+                image_keys=image_keys,
+                app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
+                creator_id=arbitrary_user.id,
+                task_status=LocalTaskStatus(),
+            )
+        else:
+            source_pdf_key = pdf_key(slug)
+            storage.save(source_pdf_key, pdf_path)
+            create_project_inner(
+                display_title=title,
+                pdf_key=source_pdf_key,
+                app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
+                creator_id=arbitrary_user.id,
+                task_status=LocalTaskStatus(),
+            )
 
 
 def _get_role(session: Session, role_name: str):

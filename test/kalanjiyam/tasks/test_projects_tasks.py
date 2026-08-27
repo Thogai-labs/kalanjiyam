@@ -1,11 +1,17 @@
 import tempfile
 
 import fitz
+from PIL import Image
 
 import kalanjiyam.queries as q
 import kalanjiyam.tasks.projects as projects
 import kalanjiyam.tasks.utils
-from kalanjiyam.utils.storage import get_storage, page_image_key, pdf_key
+from kalanjiyam.utils.storage import (
+    get_storage,
+    page_image_key,
+    pdf_key,
+    project_raw_image_key,
+)
 
 
 def _create_sample_pdf(output_path: str, num_pages: int):
@@ -49,3 +55,43 @@ def test_create_project_inner(flask_app):
         assert project.extracted_metadata is not None
         assert project.extracted_metadata["source_file"]["size_bytes"] > 0
         assert project.extracted_metadata["source_file"]["deleted_after_extraction"] is True
+
+
+def test_create_project_inner_with_images(flask_app):
+    with flask_app.app_context():
+        project = q.project("images-project")
+        assert project is None
+
+        storage = get_storage()
+        image_keys = []
+        for i in range(1, 4):
+            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                im = Image.new("RGB", (100, 100), color="blue")
+                im.save(tmp.name, "JPEG")
+                raw_key = project_raw_image_key("images-project", f"{i}.jpg")
+                storage.save(raw_key, tmp.name)
+                image_keys.append(raw_key)
+
+        projects.create_project_inner(
+            display_title="Images project",
+            image_keys=image_keys,
+            app_environment=flask_app.config["KALANJIYAM_ENVIRONMENT"],
+            creator_id=1,
+            task_status=kalanjiyam.tasks.utils.LocalTaskStatus(),
+        )
+
+        project = q.project("images-project")
+        assert project
+        assert len(project.pages) == 3
+        # Page images exist
+        assert storage.exists(page_image_key("images-project", "1"))
+        assert storage.exists(page_image_key("images-project", "2"))
+        assert storage.exists(page_image_key("images-project", "3"))
+        # Raw staging images were deleted
+        for raw_key in image_keys:
+            assert not storage.exists(raw_key)
+        assert project.extracted_metadata is not None
+        assert project.extracted_metadata["source_file"]["type"] == "images"
+        assert project.extracted_metadata["source_file"]["num_images"] == 3
+        assert project.extracted_metadata["source_file"]["deleted_after_extraction"] is True
+
