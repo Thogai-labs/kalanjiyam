@@ -8,6 +8,7 @@ from pathlib import Path
 # package called `fitz` (https://pypi.org/project/fitz/) that is completely
 # unrelated to PDF parsing.
 import fitz
+from PIL import Image, ImageOps
 from slugify import slugify
 
 from kalanjiyam import database as db
@@ -43,6 +44,53 @@ def _split_pdf_into_pages(
             tmp_path.unlink()
             task_status.progress(n, doc.page_count)
     return doc.page_count
+
+
+def process_page_image_for_storage(im: Image.Image) -> Image.Image:
+    """Normalize a page scan image to 200 DPI RGB.
+
+    1. Transposes orientation according to EXIF metadata (camera/phone rotation).
+    2. Converts color space to RGB.
+    3. Resamples to 200 DPI if scanned at higher resolution (> 200 DPI)
+       or if uncalibrated image dimensions exceed standard 200 DPI document sizes.
+    """
+    im = ImageOps.exif_transpose(im)
+    if im.mode != "RGB":
+        im = im.convert("RGB")
+
+    dpi_info = im.info.get("dpi")
+    src_dpi = None
+    if isinstance(dpi_info, (tuple, list)) and len(dpi_info) >= 1:
+        try:
+            val = float(dpi_info[0])
+            if len(dpi_info) >= 2:
+                val_y = float(dpi_info[1])
+                if val_y > 0 and val > 0:
+                    val = max(val, val_y)
+            if val > 0:
+                src_dpi = val
+        except (ValueError, TypeError):
+            pass
+    elif isinstance(dpi_info, (int, float)) and dpi_info > 0:
+        src_dpi = float(dpi_info)
+
+    w, h = im.size
+    scale = 1.0
+
+    # If scanner embedded a calibrated DPI > 200 (e.g. 300, 400, 600 DPI)
+    if src_dpi and src_dpi > 200:
+        scale = 200.0 / src_dpi
+    elif (not src_dpi or src_dpi <= 100) and max(w, h) > 2400:
+        # Camera / phone scan or uncalibrated high-res scan:
+        # Scale longest edge to ~2400 px (standard document height at 200 DPI)
+        scale = 2400.0 / max(w, h)
+
+    if scale < 1.0:
+        new_w = max(1, int(round(w * scale)))
+        new_h = max(1, int(round(h * scale)))
+        im = im.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+    return im
 
 
 def _add_project_to_database(
@@ -727,8 +775,6 @@ def create_project_inner(
 
             enqueue_project(db_project.id)
         elif image_keys:
-            from PIL import Image, ImageOps
-
             num_pages = len(image_keys)
             require_org = bool(app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True))
             _add_project_to_database(
@@ -756,8 +802,8 @@ def create_project_inner(
                     tmp_dest_path = Path(tmp_dest.name)
                     try:
                         with Image.open(local_src) as im:
-                            im = ImageOps.exif_transpose(im)
-                            im.convert("RGB").save(tmp_dest_path, "JPEG", quality=90, optimize=True)
+                            im = process_page_image_for_storage(im)
+                            im.save(tmp_dest_path, "JPEG", quality=90, optimize=True, dpi=(200, 200))
                         storage.save(dest_key, tmp_dest_path)
                     finally:
                         if tmp_dest_path.exists():

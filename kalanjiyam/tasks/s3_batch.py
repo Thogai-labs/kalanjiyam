@@ -17,6 +17,7 @@ from PIL import Image
 from sqlalchemy import and_, or_, update
 
 from kalanjiyam.tasks import app
+from kalanjiyam.tasks.projects import process_page_image_for_storage
 from kalanjiyam.models.batch import BatchItem, BatchJob, BatchOcrChunk, BatchOcrPage
 from kalanjiyam.models.group import Group, ProjectGroups
 from kalanjiyam.utils.storage import get_storage, page_image_key
@@ -358,7 +359,8 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                             total_bytes += img_path.stat().st_size
                             tmp_jpg = tmp_dir_path / f"{n}.jpg"
                             with Image.open(img_path) as im:
-                                im.convert("RGB").save(tmp_jpg, "JPEG", quality=90, optimize=True)
+                                im = process_page_image_for_storage(im)
+                                im.save(tmp_jpg, "JPEG", quality=90, optimize=True, dpi=(200, 200))
                             
                             extracted_img_bytes += tmp_jpg.stat().st_size
                             storage.save(page_image_key(project.slug, str(n)), tmp_jpg)

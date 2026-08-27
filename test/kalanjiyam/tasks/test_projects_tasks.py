@@ -95,3 +95,39 @@ def test_create_project_inner_with_images(flask_app):
         assert project.extracted_metadata["source_file"]["num_images"] == 3
         assert project.extracted_metadata["source_file"]["deleted_after_extraction"] is True
 
+        # Verify output image has 200 DPI metadata
+        page1_path = storage.local_copy(page_image_key("images-project", "1"))
+        with Image.open(page1_path) as saved_im:
+            assert saved_im.info.get("dpi") == (200, 200)
+
+
+def test_process_page_image_for_storage_high_dpi():
+    """Verify 300 DPI scan is resampled down to 200 DPI."""
+    from kalanjiyam.tasks.projects import process_page_image_for_storage
+
+    im = Image.new("RGB", (3000, 3000), color="white")
+    im.info["dpi"] = (300, 300)
+    processed = process_page_image_for_storage(im)
+    assert processed.size == (2000, 2000)
+
+
+def test_process_page_image_for_storage_phone_camera():
+    """Verify high-res phone camera photo is resampled to 200 DPI standard document height (max edge 2400)."""
+    from kalanjiyam.tasks.projects import process_page_image_for_storage
+
+    im = Image.new("RGB", (3000, 4000), color="white")
+    im.info["dpi"] = (72, 72)
+    processed = process_page_image_for_storage(im)
+    assert processed.size == (1800, 2400)
+
+
+def test_process_page_image_for_storage_never_upscales():
+    """Verify lower resolution images are never upscaled."""
+    from kalanjiyam.tasks.projects import process_page_image_for_storage
+
+    im = Image.new("RGB", (800, 1200), color="white")
+    im.info["dpi"] = (150, 150)
+    processed = process_page_image_for_storage(im)
+    assert processed.size == (800, 1200)
+
+
