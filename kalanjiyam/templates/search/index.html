@@ -180,42 +180,7 @@
       </div>
 
       <!-- Google Search Bar Component with Auto-Suggest -->
-      <div class="w-full max-w-2xl relative" x-data="{
-        query: '',
-        suggestions: [],
-        isOpen: false,
-        isLoading: false,
-        fetchSuggestions() {
-          const q = this.query.trim();
-          if (q.length < 2) {
-            this.suggestions = [];
-            this.isOpen = false;
-            return;
-          }
-          this.isLoading = true;
-          fetch('{{ url_for('search.suggest') }}?q=' + encodeURIComponent(q))
-            .then(res => res.json())
-            .then(data => {
-              this.suggestions = Array.isArray(data) ? data : [];
-              this.isOpen = this.suggestions.length > 0;
-            })
-            .catch(() => { this.suggestions = []; })
-            .finally(() => { this.isLoading = false; });
-        },
-        selectSuggestion(item) {
-          if (item && item.title) {
-            this.query = item.title;
-            this.isOpen = false;
-            this.$nextTick(() => { this.$refs.searchForm.submit(); });
-          }
-        },
-        clear() {
-          this.query = '';
-          this.suggestions = [];
-          this.isOpen = false;
-          this.$refs.inputEl.focus();
-        }
-      }" @click.outside="isOpen = false">
+      <div class="w-full max-w-2xl relative" x-data="searchBar({{ (req.q or '')|tojson|forceescape }}, {{ url_for('search.suggest')|tojson|forceescape }})" @click.outside="close()">
 
         <form x-ref="searchForm" action="{{ url_for('search.index') }}" method="GET" class="relative">
           <input type="hidden" name="view" value="{{ req.view }}">
@@ -316,39 +281,7 @@
         <div class="flex flex-col md:flex-row md:items-center gap-3 justify-between">
           
           <!-- Compact Search Bar Component with Auto-Suggest -->
-          <div class="w-full md:max-w-2xl relative" x-data="{
-            query: {{ req.q|tojson }},
-            suggestions: [],
-            isOpen: false,
-            fetchSuggestions() {
-              const q = this.query.trim();
-              if (q.length < 2) {
-                this.suggestions = [];
-                this.isOpen = false;
-                return;
-              }
-              fetch('{{ url_for('search.suggest') }}?q=' + encodeURIComponent(q))
-                .then(res => res.json())
-                .then(data => {
-                  this.suggestions = Array.isArray(data) ? data : [];
-                  this.isOpen = this.suggestions.length > 0;
-                })
-                .catch(() => { this.suggestions = []; });
-            },
-            selectSuggestion(item) {
-              if (item && item.title) {
-                this.query = item.title;
-                this.isOpen = false;
-                this.$nextTick(() => { this.$refs.compactSearchForm.submit(); });
-              }
-            },
-            clear() {
-              this.query = '';
-              this.suggestions = [];
-              this.isOpen = false;
-              this.$refs.compactInputEl.focus();
-            }
-          }" @click.outside="isOpen = false">
+          <div class="w-full md:max-w-2xl relative" x-data="searchBar({{ (req.q or '')|tojson|forceescape }}, {{ url_for('search.suggest')|tojson|forceescape }})" @click.outside="close()">
 
             <form x-ref="compactSearchForm" action="{{ url_for('search.index') }}" method="GET">
               <input type="hidden" name="view" value="{{ req.view }}">

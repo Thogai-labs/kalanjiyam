@@ -48,8 +48,13 @@ export default (initialQuery = "", suggestUrl = "/search/suggest") => ({
       this.query = item.title;
       this.isOpen = false;
       this.selectedIndex = -1;
-      if (this.$refs && this.$refs.form) {
-        this.$refs.form.submit();
+      const form = this.$refs ? (this.$refs.form || this.$refs.searchForm || this.$refs.compactSearchForm) : null;
+      if (form) {
+        if (typeof this.$nextTick === "function") {
+          this.$nextTick(() => form.submit());
+        } else {
+          form.submit();
+        }
       }
     }
   },
@@ -90,8 +95,9 @@ export default (initialQuery = "", suggestUrl = "/search/suggest") => ({
     this.suggestions = [];
     this.isOpen = false;
     this.selectedIndex = -1;
-    if (this.$refs && this.$refs.input) {
-      this.$refs.input.focus();
+    const input = this.$refs ? (this.$refs.input || this.$refs.inputEl || this.$refs.compactInputEl) : null;
+    if (input) {
+      input.focus();
     }
   },
 
