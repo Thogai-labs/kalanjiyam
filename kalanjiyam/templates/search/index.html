@@ -42,295 +42,737 @@
 
 {% block extra_head %}
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
-
-  .font-serif-title { font-family: 'Cinzel', Georgia, serif; }
-
-  .search-hero {
-    background: #0b1120;
-    background-image:
-      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
-      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255,255,255,0.015) 23px, rgba(255,255,255,0.015) 24px),
-      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255,255,255,0.015) 23px, rgba(255,255,255,0.015) 24px);
-    background-size: 100% 100%, 24px 24px, 24px 24px;
+  /* Google Design Philosophy & Middle-Aged High-Readability Styles */
+  .google-search-bar {
+    background-color: #ffffff;
+    border: 1px solid #dfe1e5;
+    border-radius: 9999px;
+    box-shadow: 0 1px 6px rgba(32, 33, 36, 0.12);
+    transition: all 0.2s ease-in-out;
+  }
+  .google-search-bar:hover {
+    border-color: #c0c4cc;
+    box-shadow: 0 2px 8px rgba(32, 33, 36, 0.18);
+  }
+  .google-search-bar:focus-within {
+    border-color: #1a73e8;
+    box-shadow: 0 2px 10px rgba(26, 115, 232, 0.25);
   }
 
-  .result-card {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 14px;
-    transition: border-color .2s ease, box-shadow .2s ease;
-  }
-  .result-card:hover {
-    border-color: rgba(65, 105, 225, .4);
-    box-shadow: 0 10px 20px -12px rgba(15, 23, 42, .25);
-  }
-
-  /* Snippets come back from OpenSearch wrapped in <mark>. */
-  .snippet mark {
-    background: #fef3c7;
-    color: #78350f;
-    padding: 0 2px;
-    border-radius: 2px;
-    font-weight: 600;
+  /* Snippets highlighting: high contrast, clear readability */
+  .snippet mark, mark {
+    background-color: #fef08a !important;
+    color: #713f12 !important;
+    padding: 1px 4px !important;
+    border-radius: 3px !important;
+    font-weight: 700 !important;
   }
   .snippet {
-    font-size: .875rem;
-    line-height: 1.7;
-    color: #475569;
+    font-size: 0.975rem;
+    line-height: 1.68;
+    color: #334155;
+  }
+
+  /* Result Title Link: Google Classic Blue with clear hover underline */
+  .google-result-title {
+    color: #1a0dab;
+    text-decoration: none;
+  }
+  .google-result-title:hover {
+    color: #174ea6;
+    text-decoration: underline;
+  }
+
+  /* Breadcrumb hierarchy styling */
+  .google-breadcrumb-site {
+    color: #4b5563;
+    font-size: 0.8125rem;
+  }
+
+  /* Clean Google Cards */
+  .google-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .google-card:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  }
+
+  /* Auto-suggestion Dropdown */
+  .google-suggestions {
+    background: #ffffff;
+    border: 1px solid #dfe1e5;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(32, 33, 36, 0.16);
+  }
+
+  /* Google-Style Pagination */
+  .google-page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    height: 2.75rem;
+    padding: 0 0.875rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #1a0dab;
+    background-color: #ffffff;
+    border: 1px solid #dadce0;
+    border-radius: 9999px;
+    transition: all 0.15s ease;
+  }
+  .google-page-btn:hover {
+    background-color: #f1f3f4;
+    border-color: #dadce0;
+    color: #174ea6;
+    text-decoration: underline;
+  }
+  .google-page-btn.active {
+    background-color: #1a73e8;
+    border-color: #1a73e8;
+    color: #ffffff;
+    font-weight: 700;
+    cursor: default;
+    box-shadow: 0 1px 3px rgba(26, 115, 232, 0.3);
+    text-decoration: none;
+  }
+  .google-page-btn.disabled {
+    color: #9aa0a6;
+    border-color: #eaedf1;
+    background-color: #f8f9fa;
+    pointer-events: none;
+    cursor: not-allowed;
   }
 </style>
 {% endblock %}
 
-{% block main_class %}bg-slate-100 min-h-screen pb-16{% endblock %}
+{% block main_class %}bg-slate-50 min-h-screen text-slate-900 pb-16{% endblock %}
 
 {% block main %}
 
-<header class="search-hero text-slate-100 py-10 px-4 border-b border-slate-800">
-  <div class="max-w-5xl mx-auto">
-    <h1 class="text-2xl sm:text-3xl font-bold font-serif-title tracking-tight mb-5 text-center">
-      {{ _('Search the Archive') }}
-    </h1>
-
-    <form action="{{ url_for('search.index') }}" method="GET" class="relative">
-      <input type="hidden" name="view" value="{{ req.view }}">
-      {% if req.advanced %}<input type="hidden" name="advanced" value="1">{% endif %}
-      <div class="relative flex items-center">
-        <svg class="w-5 h-5 absolute left-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-        </svg>
-        <input type="text" name="q" value="{{ req.q }}" autofocus
-               placeholder="{{ _('Search manuscript text, titles, and authors…') }}"
-               class="w-full bg-slate-900/80 border border-white/20 rounded-xl py-3.5 pl-12 pr-32 text-white text-sm outline-none focus:border-royalblue focus:ring-2 focus:ring-royalblue/30 transition-all" />
-        <button type="submit" class="absolute right-2 px-5 py-2 bg-royalblue hover:bg-blue-600 text-white font-semibold rounded-lg text-sm transition-all">
-          {{ _('Search') }}
-        </button>
-      </div>
-    </form>
-
-    <div class="flex flex-wrap items-center justify-between gap-3 mt-3 text-xs text-slate-400">
-      <a href="{{ qs({'advanced': None if req.advanced else '1', 'page': None}) }}"
-         class="hover:text-blue-300 transition-colors">
-        {% if req.advanced %}
-          {{ _('Using advanced (Lucene) syntax — switch back to simple search') }}
-        {% else %}
-          {{ _('Use advanced (Lucene) syntax') }}
-        {% endif %}
-      </a>
-      {% if req.advanced %}
-        <span class="text-slate-500">{{ _('e.g.') }} <code class="text-slate-300">project_author:"Agastyar" AND content:நோய்</code></span>
-      {% endif %}
-    </div>
-  </div>
-</header>
-
-<div class="max-w-6xl mx-auto px-4 mt-8">
-
-  {% if degraded %}
-    <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-      <p class="font-semibold mb-1">{{ _('Full-text search is unavailable right now.') }}</p>
-      <p>{{ _('Showing matches on book titles and authors only. Page text is not being searched.') }}
-        {% if results and results.error %}<span class="block mt-1 text-amber-700">{{ results.error }}</span>{% endif %}
-      </p>
-    </div>
-  {% endif %}
-
   {% if not req.q %}
-    <div class="bg-white rounded-2xl p-12 text-center border border-slate-200 max-w-lg mx-auto">
-      <h2 class="text-lg font-bold text-slate-900 mb-2">{{ _('What are you looking for?') }}</h2>
-      <p class="text-sm text-slate-500 leading-relaxed">
-        {{ _('Search across every digitized page — remedies, ingredients, verses, authors, and titles.') }}
-      </p>
-    </div>
+    <!-- Google Homepage Style: Clean, Focused, Zero Clutter, High Accessibility -->
+    <div class="max-w-4xl mx-auto px-4 py-12 sm:py-20 flex flex-col items-center justify-center">
+      
+      <!-- Dignified Header / Logo -->
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-xs sm:text-sm font-semibold mb-4 shadow-2xs">
+          <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+          </svg>
+          <span>{{ _('Kalanjiyam Digital Heritage Archive') }}</span>
+        </div>
 
-  {% elif fallback_projects is not none %}
-    {# Degraded path: metadata matches only. #}
-    {% if fallback_projects %}
-      <p class="text-sm text-slate-500 mb-4">
-        {{ ngettext('%(n)s book matches', '%(n)s books match', fallback_projects|length, n=fallback_projects|length) }}
-        <kbd class="px-1.5 py-0.5 bg-slate-200 rounded text-xs">{{ req.q }}</kbd>.
-      </p>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {% for project in fallback_projects %}
-          <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" class="result-card block p-5">
-            <h3 class="font-bold text-slate-900">{{ project.display_title }}</h3>
-            {% if project.author %}<p class="text-xs text-slate-500 mt-1">{{ project.author }}</p>{% endif %}
-          </a>
-        {% endfor %}
+        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tight mb-3">
+          {{ _('Search the Archive') }}
+        </h1>
+        <h2 class="text-lg sm:text-xl font-semibold text-slate-700 mb-2">
+          {{ _('What are you looking for?') }}
+        </h2>
+        <p class="text-base text-slate-600 max-w-xl mx-auto leading-relaxed">
+          {{ _('Search across every digitized page — remedies, ingredients, verses, authors, and titles.') }}
+        </p>
       </div>
-    {% else %}
-      <p class="text-center text-slate-500 py-12">{{ _('No books matched that search.') }}</p>
-    {% endif %}
 
-  {% elif results %}
-    <!-- Result count + view toggle -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-      <p class="text-sm text-slate-600">
-        {% if results.total_pages %}
-          <span class="font-semibold text-slate-900">
-            {% if not results.total_is_exact %}{{ _('More than') }} {% endif %}{{ results.total_pages }}
-          </span>
-          {{ ngettext('page', 'pages', results.total_pages) }}
-          {% if results.total_books %}
-            {{ _('across') }} <span class="font-semibold text-slate-900">{{ results.total_books }}</span>
-            {{ ngettext('book', 'books', results.total_books) }}
-          {% endif %}
-          <span class="text-slate-400">({{ results.took_ms }} ms)</span>
-        {% endif %}
-      </p>
+      <!-- Google Search Bar Component with Auto-Suggest -->
+      <div class="w-full max-w-2xl relative" x-data="{
+        query: '',
+        suggestions: [],
+        isOpen: false,
+        isLoading: false,
+        fetchSuggestions() {
+          const q = this.query.trim();
+          if (q.length < 2) {
+            this.suggestions = [];
+            this.isOpen = false;
+            return;
+          }
+          this.isLoading = true;
+          fetch('{{ url_for('search.suggest') }}?q=' + encodeURIComponent(q))
+            .then(res => res.json())
+            .then(data => {
+              this.suggestions = Array.isArray(data) ? data : [];
+              this.isOpen = this.suggestions.length > 0;
+            })
+            .catch(() => { this.suggestions = []; })
+            .finally(() => { this.isLoading = false; });
+        },
+        selectSuggestion(item) {
+          if (item && item.title) {
+            this.query = item.title;
+            this.isOpen = false;
+            this.$nextTick(() => { this.$refs.searchForm.submit(); });
+          }
+        },
+        clear() {
+          this.query = '';
+          this.suggestions = [];
+          this.isOpen = false;
+          this.$refs.inputEl.focus();
+        }
+      }" @click.outside="isOpen = false">
 
-      <div class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs font-semibold self-start">
-        <a href="{{ qs({'view': 'grouped', 'page': None}) }}"
-           class="px-3 py-1.5 rounded-md transition-colors {% if req.view == 'grouped' %}bg-royalblue text-white{% else %}text-slate-600 hover:text-royalblue{% endif %}">
-          {{ _('By book') }}
-        </a>
-        <a href="{{ qs({'view': 'flat', 'page': None}) }}"
-           class="px-3 py-1.5 rounded-md transition-colors {% if req.view == 'flat' %}bg-royalblue text-white{% else %}text-slate-600 hover:text-royalblue{% endif %}">
-          {{ _('By page') }}
-        </a>
-      </div>
-    </div>
+        <form x-ref="searchForm" action="{{ url_for('search.index') }}" method="GET" class="relative">
+          <input type="hidden" name="view" value="{{ req.view }}">
+          {% if req.advanced %}<input type="hidden" name="advanced" value="1">{% endif %}
 
-    {% if req.has_filters %}
-      <div class="flex flex-wrap items-center gap-2 mb-5 text-xs">
-        <span class="text-slate-500">{{ _('Filtered by:') }}</span>
-        {% for label, key in [(req.author, 'author'), (req.lang, 'lang'), (req.genre, 'genre')] %}
-          {% if label %}
-            <a href="{{ qs({key: None, 'page': None}) }}"
-               class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-royalblue/10 text-royalblue border border-royalblue/20 hover:bg-royalblue/20 transition-colors">
-              {{ label }} <span class="text-royalblue/60">&times;</span>
-            </a>
-          {% endif %}
-        {% endfor %}
-        {% if req.project_id %}
-          <a href="{{ qs({'book': None, 'page': None}) }}"
-             class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-royalblue/10 text-royalblue border border-royalblue/20 hover:bg-royalblue/20 transition-colors">
-            {{ _('This book only') }} <span class="text-royalblue/60">&times;</span>
-          </a>
-        {% endif %}
-      </div>
-    {% endif %}
+          <div class="google-search-bar flex items-center px-4 py-2 sm:py-2.5">
+            <!-- Search Icon -->
+            <svg class="w-6 h-6 text-slate-400 shrink-0 ml-1 mr-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
 
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <!-- Large, readable input (17px for easy reading) -->
+            <input x-ref="inputEl"
+                   type="text"
+                   name="q"
+                   x-model="query"
+                   @input.debounce.250ms="fetchSuggestions()"
+                   placeholder="{{ _('Search manuscript text, titles, and authors…') }}"
+                   autofocus
+                   class="w-full bg-transparent text-slate-900 text-base sm:text-lg outline-none placeholder:text-slate-400 py-1.5" />
 
-      <!-- Results -->
-      <div class="lg:col-span-3 space-y-4">
+            <!-- Clear button (X) -->
+            <button type="button"
+                    x-show="query.length > 0"
+                    @click="clear()"
+                    class="p-1.5 text-slate-400 hover:text-slate-700 rounded-full transition-colors mr-2"
+                    title="{{ _('Clear search') }}"
+                    aria-label="{{ _('Clear') }}">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
 
-        {% if req.view == 'grouped' %}
-          {% for group in results.groups %}
-            <div class="result-card p-5">
-              <div class="flex items-start justify-between gap-4 mb-3">
-                <div class="min-w-0">
-                  <h2 class="font-bold text-slate-900 leading-snug">
-                    <a href="{{ book_url(group.is_public, group.project_slug) }}"
-                       class="hover:text-royalblue transition-colors">{{ group.project_title }}</a>
-                  </h2>
-                  {% if group.project_author %}
-                    <p class="text-xs text-slate-500 mt-0.5">{{ group.project_author }}</p>
-                  {% endif %}
+            <!-- Primary Google Search Button -->
+            <button type="submit"
+                    class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm sm:text-base font-semibold rounded-full shadow-sm hover:shadow transition-all flex items-center gap-1.5 shrink-0">
+              <span>{{ _('Search') }}</span>
+            </button>
+          </div>
+
+          <!-- Suggestions Dropdown -->
+          <div x-show="isOpen"
+               x-cloak
+               class="google-suggestions absolute left-0 right-0 top-full mt-2 py-2 z-50 overflow-hidden">
+            <template x-for="(item, idx) in suggestions" :key="idx">
+              <div @click="selectSuggestion(item)"
+                   class="px-5 py-3 hover:bg-slate-100 cursor-pointer flex items-center gap-3 transition-colors">
+                <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-semibold text-slate-900 truncate" x-text="item.title"></p>
+                  <p class="text-xs text-slate-500 truncate" x-show="item.author" x-text="item.author"></p>
                 </div>
-                <span class="shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                  {{ ngettext('%(n)s page', '%(n)s pages', group.page_count, n=group.page_count) }}
-                </span>
+              </div>
+            </template>
+          </div>
+        </form>
+
+        <!-- Google-style Quick Suggestion Chips (ideal for middle-aged users) -->
+        <div class="mt-8">
+          <p class="text-xs font-bold uppercase tracking-wider text-slate-500 text-center mb-3">
+            {{ _('Popular Searches & Topics') }}
+          </p>
+          <div class="flex flex-wrap items-center justify-center gap-2.5">
+            {% for term in ['Siddha', 'Agastyar', 'நோய்', 'மருத்துவம்', 'Medicine', 'Manuscript'] %}
+              <a href="{{ url_for('search.index', q=term) }}"
+                 class="px-4 py-2 rounded-full bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-slate-700 hover:text-blue-800 text-sm font-medium transition-all shadow-2xs">
+                {{ term }}
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Syntax Mode Toggle -->
+        <div class="flex flex-wrap items-center justify-center gap-3 mt-6 text-xs text-slate-600 text-center">
+          <a href="{{ qs({'advanced': None if req.advanced else '1', 'page': None}) }}"
+             class="text-blue-600 hover:text-blue-800 hover:underline transition-colors font-medium">
+            {% if req.advanced %}
+              {{ _('Using advanced (Lucene) syntax — switch back to simple search') }}
+            {% else %}
+              {{ _('Use advanced (Lucene) syntax') }}
+            {% endif %}
+          </a>
+          {% if req.advanced %}
+            <span class="text-slate-600">{{ _('e.g.') }} <code class="bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded font-mono">project_author:"Agastyar" AND content:நோய்</code></span>
+          {% endif %}
+        </div>
+
+      </div>
+
+    </div>
+
+  {% else %}
+    <!-- Google SERP Header: Compact, Zero Wasted Vertical Space -->
+    <div class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+      <div class="max-w-6xl mx-auto px-4 py-3 sm:py-4">
+        <div class="flex flex-col md:flex-row md:items-center gap-3 justify-between">
+          
+          <!-- Compact Search Bar Component with Auto-Suggest -->
+          <div class="w-full md:max-w-2xl relative" x-data="{
+            query: {{ req.q|tojson }},
+            suggestions: [],
+            isOpen: false,
+            fetchSuggestions() {
+              const q = this.query.trim();
+              if (q.length < 2) {
+                this.suggestions = [];
+                this.isOpen = false;
+                return;
+              }
+              fetch('{{ url_for('search.suggest') }}?q=' + encodeURIComponent(q))
+                .then(res => res.json())
+                .then(data => {
+                  this.suggestions = Array.isArray(data) ? data : [];
+                  this.isOpen = this.suggestions.length > 0;
+                })
+                .catch(() => { this.suggestions = []; });
+            },
+            selectSuggestion(item) {
+              if (item && item.title) {
+                this.query = item.title;
+                this.isOpen = false;
+                this.$nextTick(() => { this.$refs.compactSearchForm.submit(); });
+              }
+            },
+            clear() {
+              this.query = '';
+              this.suggestions = [];
+              this.isOpen = false;
+              this.$refs.compactInputEl.focus();
+            }
+          }" @click.outside="isOpen = false">
+
+            <form x-ref="compactSearchForm" action="{{ url_for('search.index') }}" method="GET">
+              <input type="hidden" name="view" value="{{ req.view }}">
+              {% if req.advanced %}<input type="hidden" name="advanced" value="1">{% endif %}
+
+              <div class="google-search-bar flex items-center px-3.5 py-1.5 sm:py-2">
+                <svg class="w-5 h-5 text-slate-400 shrink-0 ml-1 mr-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+
+                <input x-ref="compactInputEl"
+                       type="text"
+                       name="q"
+                       x-model="query"
+                       @input.debounce.250ms="fetchSuggestions()"
+                       value="{{ req.q }}"
+                       placeholder="{{ _('Search manuscript text, titles, and authors…') }}"
+                       class="w-full bg-transparent text-slate-900 text-base outline-none placeholder:text-slate-400 py-1" />
+
+                <!-- Clear button (X) -->
+                <button type="button"
+                        x-show="query.length > 0"
+                        @click="clear()"
+                        class="p-1 text-slate-400 hover:text-slate-700 rounded-full transition-colors mr-2"
+                        title="{{ _('Clear search') }}"
+                        aria-label="{{ _('Clear') }}">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+
+                <button type="submit"
+                        class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-semibold rounded-full shadow-2xs transition-all shrink-0">
+                  {{ _('Search') }}
+                </button>
               </div>
 
-              <div class="space-y-3">
-                {% for hit in group.pages %}
-                  <a href="{{ page_url(hit.is_public, group.project_slug, hit.page_slug) }}"
-                     class="block pl-3 border-l-2 border-slate-200 hover:border-royalblue transition-colors">
-                    <div class="text-[11px] font-semibold text-royalblue mb-1">
-                      {{ _('Page %(slug)s', slug=hit.page_slug) }}
+              <!-- Auto-suggest in compact bar -->
+              <div x-show="isOpen"
+                   x-cloak
+                   class="google-suggestions absolute left-0 right-0 top-full mt-1.5 py-2 z-50 overflow-hidden">
+                <template x-for="(item, idx) in suggestions" :key="idx">
+                  <div @click="selectSuggestion(item)"
+                       class="px-4 py-2.5 hover:bg-slate-100 cursor-pointer flex items-center gap-3 transition-colors">
+                    <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-semibold text-slate-900 truncate" x-text="item.title"></p>
+                      <p class="text-xs text-slate-500 truncate" x-show="item.author" x-text="item.author"></p>
                     </div>
-                    {% for snippet in hit.snippets %}
-                      <p class="snippet">…{{ snippet|safe }}…</p>
-                    {% endfor %}
-                  </a>
-                {% endfor %}
+                  </div>
+                </template>
               </div>
+            </form>
+          </div>
 
-              {% if group.page_count > group.pages|length %}
-                <a href="{{ qs({'view': 'flat', 'book': group.project_id, 'page': None}) }}"
-                   class="inline-block mt-3 text-xs font-semibold text-royalblue hover:underline">
-                  {{ _('See all %(n)s matching pages →', n=group.page_count) }}
+          <!-- View Toggle & Syntax Switch -->
+          <div class="flex items-center gap-3 self-start md:self-center shrink-0">
+            <!-- Google-style View Selector (By book / By page) -->
+            <div class="inline-flex rounded-full border border-slate-300 bg-slate-100 p-0.5 text-xs font-semibold">
+              <a href="{{ qs({'view': 'grouped', 'page': None}) }}"
+                 class="px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1.5 {% if req.view == 'grouped' %}bg-white text-blue-700 shadow-2xs font-bold{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                </svg>
+                <span>{{ _('By book') }}</span>
+              </a>
+              <a href="{{ qs({'view': 'flat', 'page': None}) }}"
+                 class="px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1.5 {% if req.view == 'flat' %}bg-white text-blue-700 shadow-2xs font-bold{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                <span>{{ _('By page') }}</span>
+              </a>
+            </div>
+
+            <!-- Lucene Syntax Link -->
+            <a href="{{ qs({'advanced': None if req.advanced else '1', 'page': None}) }}"
+               class="text-xs text-slate-500 hover:text-blue-700 transition-colors hidden sm:inline-block font-medium">
+              {% if req.advanced %}
+                {{ _('Simple search') }}
+              {% else %}
+                {{ _('Advanced syntax') }}
+              {% endif %}
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Results Content Area: Direct view with minimal scrolling needed -->
+    <div class="max-w-6xl mx-auto px-4 py-5 sm:py-6">
+
+      <!-- Degraded Search Mode Alert -->
+      {% if degraded %}
+        <div class="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 shadow-2xs flex items-start gap-3">
+          <svg class="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+          </svg>
+          <div class="flex-1">
+            <p class="font-bold text-amber-950 mb-0.5">{{ _('Full-text search is unavailable right now.') }}</p>
+            <p class="text-amber-800">{{ _('Showing matches on book titles and authors only. Page text is not being searched.') }}
+              {% if results and results.error %}<span class="block mt-1 text-xs text-amber-700 font-mono">{{ results.error }}</span>{% endif %}
+            </p>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if fallback_projects is not none %}
+        <!-- Degraded fallback view: matched projects list -->
+        {% if fallback_projects %}
+          <div class="mb-4 text-sm text-slate-600">
+            {{ ngettext('%(n)s book matches', '%(n)s books match', fallback_projects|length, n=fallback_projects|length) }}
+            <kbd class="px-2 py-0.5 bg-slate-200 text-slate-800 rounded font-semibold text-xs">{{ req.q }}</kbd>.
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for project in fallback_projects %}
+              <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" class="google-card block p-5">
+                <div class="google-breadcrumb-site mb-1">
+                  {{ _('Digital Library') }} › {{ _('Book') }}
+                </div>
+                <h3 class="google-result-title text-lg font-semibold mb-1">{{ project.display_title }}</h3>
+                {% if project.author %}
+                  <p class="text-sm text-slate-600 flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    </svg>
+                    <span>{{ project.author }}</span>
+                  </p>
+                {% endif %}
+              </a>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="bg-white rounded-xl border border-slate-200 p-12 text-center max-w-lg mx-auto shadow-2xs">
+            <svg class="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p class="text-base text-slate-600 font-medium">{{ _('No books matched that search.') }}</p>
+            <p class="text-sm text-slate-400 mt-1">{{ _('Try checking your spelling or using more general terms.') }}</p>
+          </div>
+        {% endif %}
+
+      {% elif results %}
+        <!-- Results Stats Bar -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 text-sm text-slate-600 border-b border-slate-200 pb-3">
+          <div>
+            {% if results.total_pages %}
+              <span class="text-slate-800 font-semibold">
+                {% if not results.total_is_exact %}{{ _('More than') }} {% endif %}{{ results.total_pages }}
+              </span>
+              {{ ngettext('page', 'pages', results.total_pages) }}
+              {% if results.total_books %}
+                {{ _('across') }} <span class="text-slate-800 font-semibold">{{ results.total_books }}</span>
+                {{ ngettext('book', 'books', results.total_books) }}
+              {% endif %}
+              <span class="text-slate-400 text-xs ml-1">({{ results.took_ms }} ms)</span>
+            {% endif %}
+          </div>
+
+          {% if req.advanced %}
+            <div class="text-xs text-slate-500">
+              <span class="font-semibold text-slate-700">{{ _('Advanced Lucene mode') }}</span> — {{ _('e.g.') }} <code class="bg-slate-100 text-slate-800 px-1 py-0.5 rounded">field:term</code>
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- Active Filter Chips -->
+        {% if req.has_filters %}
+          <div class="flex flex-wrap items-center gap-2 mb-5 text-xs sm:text-sm">
+            <span class="text-slate-500 font-medium">{{ _('Filtered by:') }}</span>
+            {% for label, key in [(req.author, 'author'), (req.lang, 'lang'), (req.genre, 'genre')] %}
+              {% if label %}
+                <a href="{{ qs({key: None, 'page': None}) }}"
+                   class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 transition-colors font-medium"
+                   title="{{ _('Remove filter') }}">
+                  <span>{{ label }}</span>
+                  <span class="text-blue-600 font-bold ml-0.5 text-base leading-none">&times;</span>
                 </a>
               {% endif %}
-            </div>
-          {% else %}
-            <p class="text-center text-slate-500 py-12">{{ _('No pages matched that search.') }}</p>
-          {% endfor %}
+            {% endfor %}
+            {% if req.project_id %}
+              <a href="{{ qs({'book': None, 'page': None}) }}"
+                 class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 transition-colors font-medium"
+                 title="{{ _('Remove filter') }}">
+                <span>{{ _('This book only') }}</span>
+                <span class="text-blue-600 font-bold ml-0.5 text-base leading-none">&times;</span>
+              </a>
+            {% endif %}
+          </div>
+        {% endif %}
 
-        {% else %}
-          {% for hit in results.hits %}
-            <a href="{{ page_url(hit.is_public, hit.project_slug, hit.page_slug) }}"
-               class="result-card block p-5">
-              <div class="flex items-baseline justify-between gap-3 mb-2">
-                <h2 class="font-bold text-slate-900 text-sm leading-snug min-w-0 truncate">{{ hit.project_title }}</h2>
-                <span class="shrink-0 text-[11px] font-semibold text-royalblue">{{ _('Page %(slug)s', slug=hit.page_slug) }}</span>
-              </div>
-              {% if hit.project_author %}
-                <p class="text-xs text-slate-500 mb-2">{{ hit.project_author }}</p>
-              {% endif %}
-              {% for snippet in hit.snippets %}
-                <p class="snippet">…{{ snippet|safe }}…</p>
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+          <!-- Results Column -->
+          <div class="lg:col-span-3 space-y-4">
+
+            {% if req.view == 'grouped' %}
+              {% for group in results.groups %}
+                <div class="google-card p-5 sm:p-6">
+                  <!-- Book Header / Breadcrumb -->
+                  <div class="flex items-start justify-between gap-4 mb-3 pb-3 border-b border-slate-100">
+                    <div class="min-w-0">
+                      <div class="google-breadcrumb-site flex items-center gap-1 mb-1">
+                        <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                        </svg>
+                        <span>{{ _('Manuscript Book') }}</span>
+                      </div>
+                      <h2 class="text-lg sm:text-xl font-semibold leading-snug">
+                        <a href="{{ book_url(group.is_public, group.project_slug) }}"
+                           class="google-result-title">{{ group.project_title }}</a>
+                      </h2>
+                      {% if group.project_author %}
+                        <p class="text-xs sm:text-sm text-slate-600 mt-1 font-medium flex items-center gap-1.5">
+                          <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                          </svg>
+                          <span>{{ group.project_author }}</span>
+                        </p>
+                      {% endif %}
+                    </div>
+                    <span class="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                      {{ ngettext('%(n)s page', '%(n)s pages', group.page_count, n=group.page_count) }}
+                    </span>
+                  </div>
+
+                  <!-- Page Matches list -->
+                  <div class="space-y-3.5">
+                    {% for hit in group.pages %}
+                      <a href="{{ page_url(hit.is_public, group.project_slug, hit.page_slug) }}"
+                         class="block p-3 rounded-lg hover:bg-slate-50 border-l-4 border-slate-200 hover:border-blue-600 transition-all">
+                        <div class="flex items-center gap-2 mb-1.5">
+                          <span class="text-xs sm:text-sm font-bold text-blue-700">
+                            {{ _('Page %(slug)s', slug=hit.page_slug) }}
+                          </span>
+                          <span class="text-slate-300">•</span>
+                          <span class="text-xs text-slate-500 hover:underline">
+                            {{ _('View full page →') }}
+                          </span>
+                        </div>
+                        {% for snippet in hit.snippets %}
+                          <p class="snippet">…{{ snippet|safe }}…</p>
+                        {% endfor %}
+                      </a>
+                    {% endfor %}
+                  </div>
+
+                  {% if group.page_count > group.pages|length %}
+                    <div class="mt-4 pt-3 border-t border-slate-100">
+                      <a href="{{ qs({'view': 'flat', 'book': group.project_id, 'page': None}) }}"
+                         class="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline">
+                        <span>{{ _('See all %(n)s matching pages →', n=group.page_count) }}</span>
+                      </a>
+                    </div>
+                  {% endif %}
+                </div>
+              {% else %}
+                <div class="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-2xs">
+                  <svg class="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <p class="text-base text-slate-600 font-medium">{{ _('No pages matched that search.') }}</p>
+                  <p class="text-sm text-slate-400 mt-1">{{ _('Try checking for spelling mistakes or broadening your terms.') }}</p>
+                </div>
               {% endfor %}
-            </a>
-          {% else %}
-            <p class="text-center text-slate-500 py-12">{{ _('No pages matched that search.') }}</p>
-          {% endfor %}
-        {% endif %}
 
-        <!-- Pagination -->
-        {% set shown = results.groups|length if req.view == 'grouped' else results.hits|length %}
-        {% if req.page > 1 or shown == req.per_page %}
-          <nav class="flex items-center justify-between pt-4">
-            {% if req.page > 1 %}
-              <a href="{{ qs({'page': req.page - 1}) }}"
-                 class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:border-royalblue hover:text-royalblue transition-colors">
-                ← {{ _('Previous') }}
-              </a>
-            {% else %}<span></span>{% endif %}
+            {% else %}
+              <!-- Flat View: One card per page hit -->
+              {% for hit in results.hits %}
+                <div class="google-card p-5 sm:p-6">
+                  <div class="google-breadcrumb-site flex items-center gap-1.5 mb-1.5">
+                    <span>{{ _('Digital Archive') }}</span>
+                    <span>›</span>
+                    <span class="font-medium text-slate-700 truncate max-w-xs">{{ hit.project_title }}</span>
+                  </div>
 
-            <span class="text-xs text-slate-500">{{ _('Page %(n)s', n=req.page) }}</span>
-
-            {% if shown == req.per_page %}
-              <a href="{{ qs({'page': req.page + 1}) }}"
-                 class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:border-royalblue hover:text-royalblue transition-colors">
-                {{ _('Next') }} →
-              </a>
-            {% else %}<span></span>{% endif %}
-          </nav>
-        {% endif %}
-      </div>
-
-      <!-- Facets -->
-      <aside class="space-y-5">
-        {% macro facet(title, key, buckets, current) %}
-          {% if buckets %}
-            <div class="bg-white rounded-xl border border-slate-200 p-4">
-              <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5">{{ title }}</h3>
-              <ul class="space-y-1.5 text-sm">
-                {% for bucket in buckets[:8] %}
-                  <li>
-                    <a href="{{ qs({key: None if current == bucket.key|string else bucket.key, 'page': None}) }}"
-                       class="flex items-center justify-between gap-2 group {% if current == bucket.key|string %}text-royalblue font-semibold{% else %}text-slate-600 hover:text-royalblue{% endif %} transition-colors">
-                      <span class="truncate">{{ bucket.label }}</span>
-                      <span class="shrink-0 text-[11px] text-slate-400 group-hover:text-royalblue">{{ bucket.count }}</span>
+                  <div class="flex items-baseline justify-between gap-3 mb-2">
+                    <h2 class="text-lg sm:text-xl font-semibold leading-snug min-w-0">
+                      <a href="{{ page_url(hit.is_public, hit.project_slug, hit.page_slug) }}"
+                         class="google-result-title">{{ hit.project_title }}</a>
+                    </h2>
+                    <a href="{{ page_url(hit.is_public, hit.project_slug, hit.page_slug) }}"
+                       class="shrink-0 text-xs sm:text-sm font-bold text-blue-700 hover:underline">
+                      {{ _('Page %(slug)s', slug=hit.page_slug) }}
                     </a>
-                  </li>
-                {% endfor %}
-              </ul>
-            </div>
-          {% endif %}
-        {% endmacro %}
+                  </div>
 
-        {{ facet(_('Book'), 'book', results.facets.books, req.project_id|string if req.project_id else None) }}
-        {{ facet(_('Author'), 'author', results.facets.authors, req.author) }}
-        {{ facet(_('Language'), 'lang', results.facets.languages, req.lang) }}
-        {{ facet(_('Genre'), 'genre', results.facets.genres, req.genre) }}
-      </aside>
+                  {% if hit.project_author %}
+                    <p class="text-xs sm:text-sm text-slate-600 mb-2 font-medium flex items-center gap-1.5">
+                      <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                      </svg>
+                      <span>{{ hit.project_author }}</span>
+                    </p>
+                  {% endif %}
+
+                  {% for snippet in hit.snippets %}
+                    <p class="snippet">…{{ snippet|safe }}…</p>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <div class="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-2xs">
+                  <svg class="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <p class="text-base text-slate-600 font-medium">{{ _('No pages matched that search.') }}</p>
+                  <p class="text-sm text-slate-400 mt-1">{{ _('Try checking for spelling mistakes or broadening your terms.') }}</p>
+                </div>
+              {% endfor %}
+            {% endif %}
+
+            <!-- Pagination (Google Style: Large, clear buttons for middle-aged users) -->
+            {% set shown = results.groups|length if req.view == 'grouped' else results.hits|length %}
+            {% if req.page > 1 or shown == req.per_page %}
+              {% set total_items = results.total_books if req.view == 'grouped' else results.total_pages %}
+              {% set estimated_pages = (((total_items - 1) // req.per_page) + 1) if total_items > 0 else 1 %}
+              {% set total_pages = (estimated_pages if estimated_pages > req.page else (req.page + 1)) if shown == req.per_page else req.page %}
+
+              <nav aria-label="{{ _('Search results pagination') }}" class="pt-8 pb-4 border-t border-slate-200">
+                <!-- Google "Goooo...gle" Style Brand Numbers for Middle-Aged Readability -->
+                <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+                  <!-- Previous Button -->
+                  {% if req.page > 1 %}
+                    <a href="{{ qs({'page': req.page - 1}) }}"
+                       aria-label="{{ _('Previous page') }}"
+                       class="google-page-btn !px-4 !rounded-full text-slate-700 hover:text-blue-700 mr-1 sm:mr-2">
+                      <span class="mr-1">‹</span>
+                      <span>{{ _('Previous') }}</span>
+                    </a>
+                  {% endif %}
+
+                  <!-- Numbered Page Pills -->
+                  {% set start_page = 1 if req.page <= 3 else (req.page - 2) %}
+                  {% set end_page = total_pages if (start_page + 4 >= total_pages) else (start_page + 4) %}
+                  {% if end_page - start_page < 4 and total_pages >= 5 %}
+                    {% set start_page = (total_pages - 4) if (total_pages - 4) >= 1 else 1 %}
+                  {% endif %}
+
+                  {% if start_page > 1 %}
+                    <a href="{{ qs({'page': 1}) }}" class="google-page-btn" aria-label="{{ _('Page 1') }}">1</a>
+                    {% if start_page > 2 %}
+                      <span class="px-1 text-slate-400 font-semibold select-none">…</span>
+                    {% endif %}
+                  {% endif %}
+
+                  {% for p in range(start_page, end_page + 1) %}
+                    {% if p == req.page %}
+                      <span class="google-page-btn active" aria-current="page">{{ p }}</span>
+                    {% else %}
+                      <a href="{{ qs({'page': p}) }}" class="google-page-btn" aria-label="{{ _('Page %(p)s', p=p) }}">{{ p }}</a>
+                    {% endif %}
+                  {% endfor %}
+
+                  {% if end_page < total_pages %}
+                    {% if end_page < total_pages - 1 %}
+                      <span class="px-1 text-slate-400 font-semibold select-none">…</span>
+                    {% endif %}
+                    <a href="{{ qs({'page': total_pages}) }}" class="google-page-btn" aria-label="{{ _('Page %(p)s', p=total_pages) }}">{{ total_pages }}</a>
+                  {% endif %}
+
+                  <!-- Next Button -->
+                  {% if req.page < total_pages or shown == req.per_page %}
+                    <a href="{{ qs({'page': req.page + 1}) }}"
+                       aria-label="{{ _('Next page') }}"
+                       class="google-page-btn !px-4 !rounded-full text-slate-700 hover:text-blue-700 ml-1 sm:ml-2">
+                      <span>{{ _('Next') }}</span>
+                      <span class="ml-1">›</span>
+                    </a>
+                  {% endif %}
+                </div>
+
+                <!-- Subtle page info summary -->
+                <div class="text-center mt-3 text-xs sm:text-sm text-slate-500 font-medium">
+                  {{ _('Page %(current)s of %(total)s', current=req.page, total=total_pages) }}
+                </div>
+              </nav>
+            {% endif %}
+
+          </div>
+
+          <!-- Facets Sidebar (Google Style Refinements) -->
+          <aside class="space-y-4">
+            {% macro facet(title, key, buckets, current) %}
+              {% if buckets %}
+                <div class="google-card p-4">
+                  <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 pb-2 border-b border-slate-100 flex items-center justify-between">
+                    <span>{{ title }}</span>
+                    {% if current %}
+                      <a href="{{ qs({key: None, 'page': None}) }}" class="text-[11px] text-blue-600 hover:underline font-normal normal-case">
+                        {{ _('Clear') }}
+                      </a>
+                    {% endif %}
+                  </h3>
+                  <ul class="space-y-1">
+                    {% for bucket in buckets[:8] %}
+                      <li>
+                        <a href="{{ qs({key: None if current == bucket.key|string else bucket.key, 'page': None}) }}"
+                           class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-sm transition-colors group {% if current == bucket.key|string %}bg-blue-50 text-blue-800 font-semibold{% else %}text-slate-600 hover:bg-slate-50 hover:text-blue-700{% endif %}">
+                          <span class="truncate">{{ bucket.label }}</span>
+                          <span class="shrink-0 text-xs px-2 py-0.5 rounded-full {% if current == bucket.key|string %}bg-blue-200 text-blue-800{% else %}bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-700{% endif %}">
+                            {{ bucket.count }}
+                          </span>
+                        </a>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              {% endif %}
+            {% endmacro %}
+
+            {{ facet(_('Book'), 'book', results.facets.books, req.project_id|string if req.project_id else None) }}
+            {{ facet(_('Author'), 'author', results.facets.authors, req.author) }}
+            {{ facet(_('Language'), 'lang', results.facets.languages, req.lang) }}
+            {{ facet(_('Genre'), 'genre', results.facets.genres, req.genre) }}
+          </aside>
+
+        </div>
+      {% endif %}
 
     </div>
   {% endif %}
 
-</div>
 {% endblock %}

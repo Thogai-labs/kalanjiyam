@@ -54,3 +54,22 @@ def test_home_page_search_box_points_at_search(client):
     resp = client.get("/")
     assert resp.status_code == 200
     assert b'action="/search/"' in resp.data
+
+
+def test_search_page_includes_alpine_and_debounce_directives(client):
+    """Ensure Alpine.js reactivity and debounced input are present on empty and query states."""
+    # Landing page (empty query)
+    resp_empty = client.get("/search/")
+    assert resp_empty.status_code == 200
+    assert b"x-data" in resp_empty.data
+    assert b"@input.debounce" in resp_empty.data
+    assert b"fetchSuggestions()" in resp_empty.data
+    assert b"suggestions" in resp_empty.data
+
+    # Query SERP page (with query)
+    resp_serp = client.get("/search/?q=siddha")
+    assert resp_serp.status_code == 200
+    assert b"x-data" in resp_serp.data
+    assert b"@input.debounce" in resp_serp.data
+    assert b"fetchSuggestions()" in resp_serp.data
+    assert b"suggestions" in resp_serp.data
