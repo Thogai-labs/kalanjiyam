@@ -2,245 +2,593 @@
 
 {% block title %}{{ _('Digital Books Catalog | Kalanjiyam') }}{% endblock %}
 
-{% block meta_description %}{{ _('Browse our formal archive of OCR’d and translated traditional texts, manuscripts, and literature. Powered by BharatGen.') }}{% endblock %}
+{% block meta_description %}{{ _('Browse our digital repository of OCR’d and translated heritage texts, manuscripts, and literature. Powered by BharatGen.') }}{% endblock %}
 
 {% block extra_head %}
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
-
-  .font-serif-title {
-    font-family: 'Cinzel', Georgia, serif;
+  /* Google Material & Clean Accessible UI for Books Catalog */
+  .google-books-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
   }
 
-  .catalog-hero {
-    background: #0b1120;
-    background-image: 
-      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
-      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
-      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
-    background-size: 100% 100%, 24px 24px, 24px 24px;
+  .google-search-bar {
+    background-color: #ffffff;
+    border: 1px solid #dfe1e5;
+    border-radius: 9999px;
+    box-shadow: 0 1px 6px rgba(32, 33, 36, 0.12);
+    transition: all 0.2s ease-in-out;
+  }
+  .google-search-bar:hover {
+    border-color: #c0c4cc;
+    box-shadow: 0 2px 8px rgba(32, 33, 36, 0.18);
+  }
+  .google-search-bar:focus-within {
+    border-color: #1a73e8;
+    box-shadow: 0 2px 10px rgba(26, 115, 232, 0.25);
   }
 
-  .book-card {
+  /* Filter Chips (Google M3 Style) */
+  .google-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 1rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25rem;
+    color: #3c4043;
+    background-color: #ffffff;
+    border: 1px solid #dadce0;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+  }
+  .google-chip:hover {
+    background-color: #f8fafd;
+    border-color: #1a73e8;
+    color: #1a73e8;
+  }
+  .google-chip.active {
+    background-color: #e8f0fe;
+    border-color: #1a73e8;
+    color: #1967d2;
+    font-weight: 600;
+  }
+
+  /* Clean Google Card */
+  .google-card {
     background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 16px;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+    border: 1px solid #dadce0;
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(60, 64, 67, 0.08);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+  }
+  .google-card:hover {
+    border-color: #bdc1c6;
+    box-shadow: 0 4px 12px rgba(60, 64, 67, 0.15);
   }
 
-  .book-card:hover {
-    transform: translateY(-4px);
-    border-color: rgba(65, 105, 225, 0.4);
-    box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.08), 0 10px 10px -5px rgba(65, 105, 225, 0.04);
+  /* Result Title Link: Google Classic Blue with clear hover underline */
+  .google-book-title {
+    color: #1a0dab;
+    text-decoration: none;
+    font-size: 1.125rem;
+    line-height: 1.4;
+    font-weight: 600;
+  }
+  .google-book-title:hover {
+    color: #174ea6;
+    text-decoration: underline;
   }
 
+  /* Progress track & bars */
   .progress-track {
-    background: #f1f5f9;
+    background: #f1f3f4;
     border-radius: 9999px;
     overflow: hidden;
-    height: 6px;
+    height: 7px;
   }
-
-  .progress-fill-royalblue {
-    background: linear-gradient(90deg, royalblue, #6366f1);
+  .progress-fill-blue {
+    background: #1a73e8;
+    border-radius: 9999px;
+  }
+  .progress-fill-green {
+    background: #1e8e3e;
     border-radius: 9999px;
   }
 
-  .progress-fill-emerald {
-    background: linear-gradient(90deg, #10b981, #059669);
+  /* Google-Style Pagination */
+  .google-page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.5rem;
+    height: 2.5rem;
+    padding: 0 0.875rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #1a0dab;
+    background-color: #ffffff;
+    border: 1px solid #dadce0;
     border-radius: 9999px;
+    transition: all 0.15s ease;
+  }
+  .google-page-btn:hover {
+    background-color: #f1f3f4;
+    border-color: #dadce0;
+    color: #174ea6;
+    text-decoration: underline;
+  }
+  .google-page-btn.active {
+    background-color: #1a73e8;
+    border-color: #1a73e8;
+    color: #ffffff;
+    font-weight: 700;
+    cursor: default;
+    box-shadow: 0 1px 3px rgba(26, 115, 232, 0.3);
+    text-decoration: none;
+  }
+  .google-page-btn.disabled {
+    color: #9aa0a6;
+    border-color: #eaedf1;
+    background-color: #f8f9fa;
+    pointer-events: none;
+    cursor: not-allowed;
+  }
+
+  [x-cloak] {
+    display: none !important;
   }
 </style>
 {% endblock %}
 
-{% block main_class %}bg-slate-100 min-h-screen pb-16{% endblock %}
+{% block main_class %}bg-slate-50 min-h-screen pb-16{% endblock %}
 
 {% block main %}
-<div x-data='{ searchQuery: {{ (query or "")|tojson }}, sortBy: "title" }' class="w-full">
-<!-- Catalog Header Section -->
-<header class="catalog-hero text-slate-100 py-16 px-4 mb-10 border-b border-slate-800">
-  <div class="max-w-6xl mx-auto text-center">
-    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-4">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-      </svg>
-      <span>{{ _('Digital Repository — Powered by BharatGen') }}</span>
-    </div>
-
-    <h1 class="text-4xl sm:text-5xl font-bold font-serif-title tracking-tight mb-4 text-white">
-      {{ _('Manuscripts & Books Catalog') }}
-    </h1>
-    <p class="text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
-      {{ _('Explore digitized palm-leaf manuscripts and traditional heritage texts with full-text search capability and progress tracking. Powered by BharatGen.') }}
-    </p>
-
-    <!-- Total Count Badge -->
-    {% if projects %}
-      <div class="mt-6 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 text-sm font-medium">
-        <span>{{ _('Available Texts:') }}</span>
-        <span class="font-bold text-white bg-royalblue px-2.5 py-0.5 rounded-full text-xs">{{ projects|length }}</span>
-      </div>
-    {% endif %}
-  </div>
-</header>
-
-<!-- Main Catalog Listing -->
-<div class="max-w-6xl mx-auto px-4">
-
-  {% if projects %}
-    <!-- Filter & Search Control Bar -->
-    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
-      <!-- Live Search Box -->
-      <div class="relative w-full md:w-96">
-        <svg class="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+<div 
+  x-data="booksCatalog({{ (serialized_projects or [])|tojson }}, {{ (query or '')|tojson }})" 
+  class="w-full"
+>
+  <!-- Google-Style Clean Header (Above the fold, minimal vertical space, high contrast) -->
+  <header class="google-books-header py-6 sm:py-8 px-4">
+    <div class="max-w-6xl mx-auto flex flex-col items-center justify-center text-center">
+      
+      <!-- BharatGen Official Badge -->
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-xs font-semibold uppercase tracking-wider mb-2.5">
+        <svg class="w-3.5 h-3.5 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
         </svg>
-        <input 
-          type="text" 
-          x-model="searchQuery"
-          placeholder="{{ _('Filter books by title or author...') }}"
-          class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all"
-        />
+        <span>{{ _('Digital Repository — Powered by BharatGen') }}</span>
       </div>
 
-      <div class="flex items-center gap-2 text-sm text-slate-500 w-full md:w-auto justify-end">
-        <span>{{ _('Showing digitized public books') }}</span>
+      <!-- Main Title -->
+      <h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-900 mb-1.5">
+        {{ _('Digital Books Library') }}
+      </h1>
+      
+      <!-- Subtitle -->
+      <p class="text-slate-600 text-sm sm:text-base max-w-2xl leading-relaxed">
+        {{ _('Browse digitized heritage manuscripts, classical texts, and translations with searchable OCR.') }}
+      </p>
+
+      <!-- Centered Google-Style Search Bar -->
+      <div class="w-full max-w-2xl mt-5">
+        <div class="google-search-bar flex items-center px-4 py-2 sm:py-2.5">
+          <!-- Search Icon -->
+          <svg class="w-5 h-5 text-slate-400 shrink-0 ml-0.5 mr-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+
+          <!-- Search Input: 16px to prevent iOS auto-zoom and ensure high readability -->
+          <input 
+            x-ref="searchInput"
+            type="text" 
+            x-model="query"
+            @input="onSearchInput()"
+            placeholder="{{ _('Search by book title, author, or keyword…') }}" 
+            class="w-full bg-transparent text-slate-800 placeholder-slate-400 text-base sm:text-[17px] focus:outline-none"
+            aria-label="{{ _('Search books catalog') }}"
+          />
+
+          <!-- Clear Button -->
+          <button 
+            type="button" 
+            x-show="query.length > 0" 
+            @click="clearSearch()"
+            class="p-1 text-slate-400 hover:text-slate-600 rounded-full transition-colors ml-1"
+            title="{{ _('Clear search') }}"
+            aria-label="{{ _('Clear search') }}"
+            style="display: none;"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
       </div>
+
     </div>
+  </header>
 
-    <!-- Book Grid Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {% for project_data in projects %}
-        {% set project = project_data.project %}
-        {% set stats = project_data.stats %}
+  <!-- Main Catalog Content Container -->
+  <main id="catalog-content" class="max-w-6xl mx-auto px-4 pt-6">
+
+    {% if projects %}
+      <!-- Controls Toolbar: Filter Chips + Sort + View Mode -->
+      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-5 mb-6 border-b border-slate-200">
         
-        <div 
-          class="book-card flex flex-col justify-between overflow-hidden"
-          x-show='!searchQuery || {{ (project.display_title or "")|tojson }}.toLowerCase().includes(searchQuery.toLowerCase()) || {{ (project.author or "")|tojson }}.toLowerCase().includes(searchQuery.toLowerCase())'
-        >
-          <!-- Card Header & Metadata -->
-          <div class="p-6">
-            <!-- Book Icon & Title Header -->
-            <div class="flex items-start gap-3 mb-3">
-              <div class="w-10 h-10 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0 mt-0.5">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-                </svg>
-              </div>
-              <div class="min-w-0">
-                <h2 class="text-lg font-bold text-slate-900 leading-snug group">
-                  <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" 
-                     class="hover:text-royalblue transition-colors line-clamp-2">
-                    {{ project.display_title }}
-                  </a>
-                </h2>
-                {% if project.author %}
-                  <p class="text-xs font-semibold text-slate-500 mt-1 flex items-center gap-1">
-                    <span>{{ _('By') }}</span>
-                    <span class="text-slate-700">{{ project.author }}</span>
-                  </p>
-                {% endif %}
-              </div>
-            </div>
+        <!-- Category Filter Chips -->
+        <div class="flex flex-wrap items-center gap-2" role="group" aria-label="{{ _('Filter by status') }}">
+          <button 
+            type="button"
+            class="google-chip"
+            :class="{ 'active': activeFilter === 'all' }"
+            @click="setFilter('all')"
+          >
+            <span>{{ _('All Books') }}</span>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 font-semibold text-slate-700" :class="{ '!bg-blue-100 !text-blue-800': activeFilter === 'all' }" x-text="filterCounts().all"></span>
+          </button>
 
-            <!-- Description -->
-            {% if project.description %}
-              <p class="text-slate-600 text-xs leading-relaxed mb-5 line-clamp-3 bg-slate-50/80 p-3 rounded-lg border border-slate-100">
-                {{ project.description[:180] }}{% if project.description|length > 180 %}...{% endif %}
-              </p>
-            {% else %}
-              <p class="text-slate-400 text-xs italic mb-5 p-3 bg-slate-50/50 rounded-lg border border-slate-100/60">
-                {{ _('No description available for this text.') }}
-              </p>
-            {% endif %}
+          <button 
+            type="button"
+            class="google-chip"
+            :class="{ 'active': activeFilter === 'completed' }"
+            @click="setFilter('completed')"
+          >
+            <span>{{ _('OCR Completed') }}</span>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 font-semibold text-slate-700" :class="{ '!bg-blue-100 !text-blue-800': activeFilter === 'completed' }" x-text="filterCounts().completed"></span>
+          </button>
 
-            <!-- Statistics & Progress Bars -->
-            <div class="space-y-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs">
-              
-              <!-- Total Pages -->
-              <div class="flex items-center justify-between text-slate-600 font-medium">
-                <span class="flex items-center gap-1.5">
-                  <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-                  </svg>
-                  {{ _('Total Pages') }}
-                </span>
-                <span class="font-bold text-slate-900">{{ stats.total_pages }}</span>
-              </div>
+          <button 
+            type="button"
+            class="google-chip"
+            :class="{ 'active': activeFilter === 'in_progress' }"
+            @click="setFilter('in_progress')"
+          >
+            <span>{{ _('In Progress') }}</span>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 font-semibold text-slate-700" :class="{ '!bg-blue-100 !text-blue-800': activeFilter === 'in_progress' }" x-text="filterCounts().inProgress"></span>
+          </button>
 
-              <!-- OCR Progress Bar -->
-              <div>
-                <div class="flex justify-between mb-1 text-slate-600">
-                  <span class="font-medium text-slate-600">{{ _('OCR Completed') }}</span>
-                  <span class="font-bold text-slate-800">{{ stats.ocr_pages }} / {{ stats.total_pages }} ({{ "%.1f"|format(stats.ocr_percentage) }}%)</span>
-                </div>
-                <div class="progress-track">
-                  <div class="progress-fill-royalblue h-full" style="width: {{ stats.ocr_percentage }}%"></div>
-                </div>
-              </div>
+          <button 
+            type="button"
+            class="google-chip"
+            :class="{ 'active': activeFilter === 'translated' }"
+            @click="setFilter('translated')"
+          >
+            <span>{{ _('Translated') }}</span>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 font-semibold text-slate-700" :class="{ '!bg-blue-100 !text-blue-800': activeFilter === 'translated' }" x-text="filterCounts().translated"></span>
+          </button>
+        </div>
 
-              <!-- Translation Progress Bar (If available) -->
-              {% if stats.translated_pages > 0 %}
-                <div>
-                  <div class="flex justify-between mb-1 text-slate-600">
-                    <span class="font-medium text-slate-600">{{ _('Translated') }}</span>
-                    <span class="font-bold text-emerald-700">{{ stats.translated_pages }} / {{ stats.total_pages }} ({{ "%.1f"|format(stats.translation_percentage) }}%)</span>
-                  </div>
-                  <div class="progress-track mb-2">
-                    <div class="progress-fill-emerald h-full" style="width: {{ stats.translation_percentage }}%"></div>
-                  </div>
-
-                  <!-- Language Pair Badges -->
-                  {% if stats.lang_pairs %}
-                    <div class="flex flex-wrap gap-1.5 pt-1">
-                      {% for lang_pair, pstats in stats.lang_pairs.items() %}
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">
-                          <span>{{ lang_pair }}</span>
-                          <span class="text-emerald-600 font-semibold">({{ "%.0f"|format(pstats.percentage) }}%)</span>
-                        </span>
-                      {% endfor %}
-                    </div>
-                  {% endif %}
-                </div>
-              {% endif %}
-            </div>
+        <!-- Right Side: Sort dropdown & Grid/List View Toggle -->
+        <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+          
+          <!-- Sort Dropdown -->
+          <div class="flex items-center gap-2 text-sm text-slate-600">
+            <label for="catalog-sort" class="font-medium text-slate-700 whitespace-nowrap">{{ _('Sort:') }}</label>
+            <select 
+              id="catalog-sort"
+              x-model="sortBy"
+              @change="setSort($event.target.value)"
+              class="bg-white border border-slate-300 text-slate-800 text-sm rounded-lg px-3 py-1.5 focus:border-blue-600 focus:outline-none shadow-sm cursor-pointer"
+            >
+              <option value="title">{{ _('Title (A–Z)') }}</option>
+              <option value="pages_desc">{{ _('Most Pages') }}</option>
+              <option value="progress_desc">{{ _('Highest OCR Progress') }}</option>
+            </select>
           </div>
 
-          <!-- Card Footer Action -->
-          <div class="px-6 py-4 bg-slate-50/60 border-t border-slate-100 flex items-center justify-between">
-            <span class="text-xs font-semibold text-slate-400">
-              {{ _('Public Digital Text') }}
-            </span>
-            <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" 
-               class="inline-flex items-center gap-1.5 px-4 py-2 bg-royalblue hover:bg-blue-600 text-white text-xs font-semibold rounded-lg transition-all shadow-sm hover:shadow">
-              <span>{{ _('Read Book') }}</span>
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+          <!-- Grid / List Mode Buttons -->
+          <div class="flex items-center bg-white border border-slate-300 rounded-lg p-0.5 shadow-sm" role="group" aria-label="{{ _('View Mode') }}">
+            <!-- Grid Mode Button -->
+            <button 
+              type="button"
+              @click="setViewMode('grid')"
+              class="p-1.5 rounded text-slate-600 hover:text-slate-900 transition-colors"
+              :class="{ 'bg-blue-50 text-blue-600 font-semibold': viewMode === 'grid' }"
+              title="{{ _('Grid view') }}"
+              aria-label="{{ _('Grid view') }}"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
               </svg>
-            </a>
+            </button>
+
+            <!-- List Mode Button -->
+            <button 
+              type="button"
+              @click="setViewMode('list')"
+              class="p-1.5 rounded text-slate-600 hover:text-slate-900 transition-colors"
+              :class="{ 'bg-blue-50 text-blue-600 font-semibold': viewMode === 'list' }"
+              title="{{ _('Compact list view') }}"
+              aria-label="{{ _('Compact list view') }}"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+              </svg>
+            </button>
           </div>
 
         </div>
-      {% endfor %}
-    </div>
 
-  {% else %}
-    <!-- Empty State -->
-    <div class="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm max-w-lg mx-auto">
-      <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400 mb-4">
-        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-        </svg>
       </div>
-      <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('No Books Cataloged Yet') }}</h3>
-      <p class="text-sm text-slate-500 leading-relaxed mb-6">{{ _('There are currently no digitized books with public OCR content available in the library.') }}</p>
-      <a href="{{ url_for('site.index') }}" class="inline-flex items-center px-4 py-2 bg-royalblue text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition-colors">
-        {{ _('Return to Home') }}
-      </a>
-    </div>
-  {% endif %}
 
-</div>
+      <!-- Search & Filter Summary -->
+      <div class="flex items-center justify-between text-sm text-slate-600 mb-4 px-1">
+        <div>
+          <span class="font-medium" x-text="`${sortedBooks().length} {{ _('books found') }}`"></span>
+          <span x-show="searchQuery" class="text-slate-500" x-cloak>
+            &mdash; {{ _('matching') }} "<strong class="text-slate-800" x-text="searchQuery"></strong>"
+          </span>
+        </div>
+
+        <!-- Current page range -->
+        <div class="text-xs sm:text-sm text-slate-500 font-medium" x-show="sortedBooks().length > 0" x-cloak>
+          <span x-text="`{{ _('Page') }} ${page} {{ _('of') }} ${totalPages()}`"></span>
+        </div>
+      </div>
+
+      <!-- No Filter Results State -->
+      <div 
+        x-show="sortedBooks().length === 0" 
+        x-cloak 
+        class="bg-white rounded-2xl p-10 text-center border border-slate-200 shadow-sm max-w-md mx-auto my-8"
+      >
+        <div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400 mb-3">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+        </div>
+        <h3 class="text-base font-bold text-slate-900 mb-1">{{ _('No matching books') }}</h3>
+        <p class="text-xs sm:text-sm text-slate-500 mb-4">{{ _('Try adjusting your search query or reset the category filters.') }}</p>
+        <button 
+          type="button" 
+          @click="clearSearch(); setFilter('all');" 
+          class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
+        >
+          {{ _('Reset Filters') }}
+        </button>
+      </div>
+
+      <!-- 1. GRID VIEW MODE -->
+      <div 
+        x-show="viewMode === 'grid' && paginatedBooks().length > 0" 
+        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+      >
+        <template x-for="book in paginatedBooks()" :key="book.id">
+          <article class="google-card flex flex-col justify-between overflow-hidden">
+            <!-- Card Body -->
+            <div class="p-5 sm:p-6">
+              
+              <!-- Book Icon + Title + Author Header -->
+              <div class="flex items-start gap-3 mb-3">
+                <div class="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                  </svg>
+                </div>
+                
+                <div class="min-w-0 flex-1">
+                  <h2 class="leading-snug">
+                    <a :href="book.url" class="google-book-title line-clamp-2" x-text="book.title"></a>
+                  </h2>
+                  <p x-show="book.author" class="text-xs font-semibold text-slate-600 mt-1 flex items-center gap-1">
+                    <span>{{ _('By') }}</span>
+                    <span class="text-slate-800 font-bold" x-text="book.author"></span>
+                  </p>
+                </div>
+              </div>
+
+              <!-- Description -->
+              <p 
+                x-show="book.description" 
+                class="text-slate-600 text-xs leading-relaxed mb-4 line-clamp-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100" 
+                x-text="book.description"
+              ></p>
+              <p 
+                x-show="!book.description" 
+                class="text-slate-400 text-xs italic mb-4 p-2.5 bg-slate-50/50 rounded-lg border border-slate-100/60"
+              >
+                {{ _('No description available for this text.') }}
+              </p>
+
+              <!-- Progress & Statistics Box -->
+              <div class="space-y-3 bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/70 text-xs">
+                
+                <!-- Total Pages Counter -->
+                <div class="flex items-center justify-between text-slate-600 font-medium">
+                  <span class="flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                    </svg>
+                    {{ _('Total Pages') }}
+                  </span>
+                  <span class="font-bold text-slate-900 text-sm" x-text="book.stats.total_pages"></span>
+                </div>
+
+                <!-- OCR Progress -->
+                <div>
+                  <div class="flex justify-between mb-1 text-slate-600">
+                    <span class="font-medium text-slate-700">{{ _('OCR Completed') }}</span>
+                    <span class="font-bold text-slate-800" x-text="`${book.stats.ocr_pages} / ${book.stats.total_pages} (${book.stats.ocr_percentage}%)`"></span>
+                  </div>
+                  <div class="progress-track">
+                    <div class="progress-fill-blue h-full transition-all duration-300" :style="`width: ${book.stats.ocr_percentage}%`"></div>
+                  </div>
+                </div>
+
+                <!-- Translation Progress (If any) -->
+                <div x-show="book.stats.translated_pages > 0">
+                  <div class="flex justify-between mb-1 text-slate-600">
+                    <span class="font-medium text-slate-700">{{ _('Translated') }}</span>
+                    <span class="font-bold text-emerald-700" x-text="`${book.stats.translated_pages} / ${book.stats.total_pages} (${book.stats.translation_percentage}%)`"></span>
+                  </div>
+                  <div class="progress-track mb-2">
+                    <div class="progress-fill-green h-full transition-all duration-300" :style="`width: ${book.stats.translation_percentage}%`"></div>
+                  </div>
+
+                  <!-- Language Pair Badges -->
+                  <div x-show="book.stats.lang_pairs && book.stats.lang_pairs.length" class="flex flex-wrap gap-1.5 pt-1">
+                    <template x-for="lp in book.stats.lang_pairs" :key="lp.pair">
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">
+                        <span x-text="lp.pair"></span>
+                        <span class="text-emerald-600 font-semibold" x-text="`(${Math.round(lp.percentage)}%)`"></span>
+                      </span>
+                    </template>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+            <!-- Card Footer Action -->
+            <div class="px-5 sm:px-6 py-3.5 bg-slate-50/60 border-t border-slate-100 flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-500">
+                {{ _('Public Digital Text') }}
+              </span>
+              <a 
+                :href="book.url" 
+                class="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm hover:shadow transition-all"
+              >
+                <span>{{ _('Read Book') }}</span>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+                </svg>
+              </a>
+            </div>
+          </article>
+        </template>
+      </div>
+
+      <!-- 2. COMPACT LIST VIEW MODE (Zero-waste vertical scrolling for quick scanning) -->
+      <div 
+        x-show="viewMode === 'list' && paginatedBooks().length > 0" 
+        x-cloak 
+        class="space-y-3"
+      >
+        <template x-for="book in paginatedBooks()" :key="book.id">
+          <article class="google-card p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <!-- Left: Title, Author, Description -->
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <a :href="book.url" class="google-book-title" x-text="book.title"></a>
+                <span 
+                  x-show="book.stats.ocr_percentage >= 100" 
+                  class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-bold"
+                >
+                  {{ _('100%% OCR') }}
+                </span>
+                <span 
+                  x-show="book.stats.translated_pages > 0" 
+                  class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold"
+                >
+                  {{ _('Translated') }}
+                </span>
+              </div>
+              <p x-show="book.author" class="text-xs text-slate-600 font-medium">
+                {{ _('Author:') }} <strong class="text-slate-800" x-text="book.author"></strong>
+              </p>
+              <p x-show="book.description" class="text-xs text-slate-500 line-clamp-1 mt-1" x-text="book.description"></p>
+            </div>
+
+            <!-- Center/Right: Progress & Stats -->
+            <div class="flex items-center gap-6 w-full md:w-auto shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 justify-between md:justify-end">
+              <div class="text-right">
+                <div class="text-xs text-slate-500 font-medium">
+                  <span class="font-bold text-slate-800" x-text="book.stats.total_pages"></span> {{ _('pages') }}
+                </div>
+                <div class="text-xs font-semibold text-blue-700" x-text="`${book.stats.ocr_percentage}% OCR`"></div>
+              </div>
+
+              <!-- Action Link -->
+              <a 
+                :href="book.url" 
+                class="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
+              >
+                <span>{{ _('Read Book') }}</span>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+                </svg>
+              </a>
+            </div>
+          </article>
+        </template>
+      </div>
+
+      <!-- Google-Style Accessible Pagination -->
+      <nav 
+        x-show="totalPages() > 1" 
+        x-cloak 
+        aria-label="{{ _('Books pagination') }}" 
+        class="pt-8 pb-4 border-t border-slate-200 mt-8"
+      >
+        <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+          
+          <!-- Previous Button -->
+          <button 
+            type="button"
+            @click="setPage(page - 1)"
+            :disabled="page <= 1"
+            :class="{ 'disabled': page <= 1 }"
+            aria-label="{{ _('Previous page') }}"
+            class="google-page-btn !px-4 !rounded-full text-slate-700 hover:text-blue-700 mr-1 sm:mr-2"
+          >
+            <span class="mr-1">‹</span>
+            <span>{{ _('Previous') }}</span>
+          </button>
+
+          <!-- Numbered Buttons -->
+          <template x-for="p in pageNumbers()" :key="p">
+            <button 
+              type="button"
+              @click="setPage(p)"
+              class="google-page-btn"
+              :class="{ 'active': p === page }"
+              :aria-current="p === page ? 'page' : false"
+              x-text="p"
+            ></button>
+          </template>
+
+          <!-- Next Button -->
+          <button 
+            type="button"
+            @click="setPage(page + 1)"
+            :disabled="page >= totalPages()"
+            :class="{ 'disabled': page >= totalPages() }"
+            aria-label="{{ _('Next page') }}"
+            class="google-page-btn !px-4 !rounded-full text-slate-700 hover:text-blue-700 ml-1 sm:ml-2"
+          >
+            <span>{{ _('Next') }}</span>
+            <span class="ml-1">›</span>
+          </button>
+
+        </div>
+
+        <!-- Page counter text -->
+        <div class="text-center mt-3 text-xs sm:text-sm text-slate-500 font-medium">
+          <span x-text="`{{ _('Page') }} ${page} {{ _('of') }} ${totalPages()}`"></span>
+        </div>
+      </nav>
+
+    {% else %}
+      <!-- Empty Library State -->
+      <div class="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm max-w-lg mx-auto my-8">
+        <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+          </svg>
+        </div>
+        <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('No Books Cataloged Yet') }}</h3>
+        <p class="text-sm text-slate-500 leading-relaxed mb-6">{{ _('There are currently no digitized books with public OCR content available in the library.') }}</p>
+        <a href="{{ url_for('site.index') }}" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+          {{ _('Return to Home') }}
+        </a>
+      </div>
+    {% endif %}
+
+  </main>
 </div>
 {% endblock %}

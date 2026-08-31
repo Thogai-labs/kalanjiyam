@@ -1,6 +1,6 @@
 """Public views for viewing books (project-based)."""
 
-from flask import Blueprint, abort, current_app, render_template, request
+from flask import Blueprint, abort, current_app, render_template, request, url_for
 from flask_login import current_user
 from sqlalchemy import and_, or_
 
@@ -102,10 +102,38 @@ def index():
     projects_with_stats.sort(key=lambda x: x['project'].display_title)
     
     query = request.args.get("q", "").strip()
+
+    serialized_projects = [
+        {
+            "id": p["project"].id,
+            "slug": p["project"].slug,
+            "title": p["project"].display_title,
+            "author": p["project"].author or "",
+            "description": p["project"].description or "",
+            "url": url_for("public.books.book", project_slug=p["project"].slug),
+            "stats": {
+                "total_pages": p["stats"]["total_pages"],
+                "ocr_pages": p["stats"]["ocr_pages"],
+                "ocr_percentage": round(p["stats"]["ocr_percentage"], 1),
+                "translated_pages": p["stats"]["translated_pages"],
+                "translation_percentage": round(p["stats"]["translation_percentage"], 1),
+                "lang_pairs": [
+                    {
+                        "pair": pair,
+                        "count": info["count"],
+                        "percentage": round(info["percentage"], 1),
+                    }
+                    for pair, info in p["stats"].get("lang_pairs", {}).items()
+                ],
+            },
+        }
+        for p in projects_with_stats
+    ]
     
     return render_template(
         "public/books/index.html",
         projects=projects_with_stats,
+        serialized_projects=serialized_projects,
         query=query
     )
 

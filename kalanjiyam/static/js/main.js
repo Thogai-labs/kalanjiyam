@@ -9,6 +9,7 @@ import Proofer from './proofer';
 import SortableList from './sortable-list';
 import SearchBar from './search-bar';
 import topKTracker, { DEFAULT_TOPICS } from './topk-search';
+import booksCatalog from './books-catalog';
 
 window.addEventListener('alpine:init', () => {
   Alpine.data('dictionary', Dictionary);
@@ -17,6 +18,7 @@ window.addEventListener('alpine:init', () => {
   Alpine.data('proofer', Proofer);
   Alpine.data('sortableList', SortableList);
   Alpine.data('searchBar', SearchBar);
+  Alpine.data('booksCatalog', booksCatalog);
   Alpine.data('topKTopics', (k = 6, defaultTopics = DEFAULT_TOPICS, searchUrl = '/search/') => ({
     topics: [],
     init() {
