@@ -126,13 +126,23 @@ def index():
     sort_field = (request.args.get("sort", "created")).strip().lower()
     sort_order = (request.args.get("order", "desc")).strip().lower()
 
+    # Parse single or multiple condition issue filters
+    raw_issues = request.args.getlist("issue")
+    if not raw_issues:
+        raw_issue_str = request.args.get("issue", "")
+        if raw_issue_str:
+            raw_issues = [s.strip() for s in raw_issue_str.split(",") if s.strip()]
+    selected_issues = [i.strip() for i in raw_issues if i and i.strip() and i.strip() != "all"]
+
     # 1. Parse pagination parameters safely
     try:
         page = max(1, int(request.args.get("page", 1)))
     except (ValueError, TypeError):
         page = 1
     try:
-        per_page = max(1, min(100, int(request.args.get("per_page", 20))))
+        per_page = int(request.args.get("per_page", 20))
+        if per_page not in (10, 20, 50, 100):
+            per_page = 20
     except (ValueError, TypeError):
         per_page = 20
 
@@ -167,18 +177,39 @@ def index():
 
     projects = accessible_projects
 
-    # 5. Filter by organization if specified
+    # Collect all available condition tags across accessible projects for the filter UI
+    available_condition_tags = set()
+    for p in accessible_projects:
+        if p.condition_tags and isinstance(p.condition_tags, list):
+            for t in p.condition_tags:
+                t_name = t.get("name") if isinstance(t, dict) else (str(t) if isinstance(t, str) else "")
+                if t_name and t_name.strip():
+                    available_condition_tags.add(t_name.strip())
+    available_condition_tags = sorted(available_condition_tags, key=lambda s: s.lower())
+
+    # 5. Filter by condition tags / issues if specified
+    if selected_issues:
+        selected_issues_lower = {i.lower() for i in selected_issues}
+        projects = [
+            p for p in projects
+            if any(
+                (tag.get("name", "").lower() in selected_issues_lower)
+                for tag in (p.condition_tag_list or [])
+            )
+        ]
+
+    # 6. Filter by organization if specified
     if selected_org and selected_org != "all":
         projects = [
             p for p in projects
             if any(g.slug == selected_org for g in p.groups)
         ]
 
-    # 6. Filter by creator mode if specified
+    # 7. Filter by creator mode if specified
     if selected_mode and selected_mode != "all":
         projects = [p for p in projects if getattr(p, "creator_mode", None) == selected_mode]
 
-    # 5. Full tenant search filtering (matching display_title, print_title, author, or slug)
+    # 8. Full tenant search filtering (matching display_title, print_title, author, or slug)
     if search_query:
         q_lower = search_query.lower()
         projects = [
@@ -296,6 +327,8 @@ def index():
         "search_query": search_query,
         "selected_mode": selected_mode,
         "selected_org": selected_org,
+        "selected_issues": selected_issues,
+        "available_condition_tags": available_condition_tags,
         "user_organizations": user_organizations,
         "sort_field": sort_field,
         "sort_order": sort_order,

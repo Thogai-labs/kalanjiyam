@@ -1,15 +1,167 @@
 {% if projects %}
-<!-- Project Entries Cards -->
-<div class="space-y-4">
+<!-- Table View (Default & Responsive) -->
+<div x-show="viewMode === 'table'" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+  <div class="overflow-x-auto">
+    <table class="w-full text-left border-collapse">
+      <thead>
+        <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+          <th scope="col" class="py-3 px-4 sm:px-6">{{ _('Document Title') }}</th>
+          <th scope="col" class="py-3 px-3 sm:px-4 text-center whitespace-nowrap">{{ _('Pages') }}</th>
+          <th scope="col" class="py-3 px-3 sm:px-4 whitespace-nowrap">{{ _('Date') }}</th>
+          <th scope="col" class="py-3 px-4 sm:px-5 whitespace-nowrap">{{ _('Status') }}</th>
+          {% if current_user.is_super_admin or current_user.is_master_user %}
+          <th scope="col" class="py-3 px-3 sm:px-4 whitespace-nowrap">{{ _('Org') }}</th>
+          {% endif %}
+          {% if current_user.is_super_admin %}
+          <th scope="col" class="py-3 px-3 sm:px-4 whitespace-nowrap">{{ _('Type') }}</th>
+          {% endif %}
+          <th scope="col" class="py-3 px-4 sm:px-6 text-right whitespace-nowrap">{{ _('Actions') }}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100 text-xs sm:text-sm">
+        {% for p in projects %}
+        {% set count = pages_per_project.get(p.id, 0) %}
+        {% set progress = progress_per_project.get(p.id, 0) %}
+        <tr class="hover:bg-slate-50/70 transition-colors">
+          <!-- Document Title -->
+          <td class="py-3.5 px-4 sm:px-6">
+            <div class="flex flex-col">
+              <a href="{{ url_for('proofing.project.summary', slug=p.slug) }}" class="font-bold text-slate-900 hover:text-royalblue transition-colors line-clamp-2">
+                {{ p.display_title }}
+              </a>
+              {% if p.condition_tag_list %}
+              <div class="flex flex-wrap items-center gap-1 mt-1.5">
+                {% for tag in p.condition_tag_list %}
+                <button
+                  type="button"
+                  @click="toggleIssue('{{ tag.name }}')"
+                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                  :class="issues.includes('{{ tag.name }}') ? 'bg-amber-500 text-white shadow-xs' : 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'"
+                  title="{{ _('Filter by condition: %(tag)s', tag=tag.name) }}{% if tag.pages %} ({{ _('Pages:') }} {{ tag.pages }}){% endif %}"
+                >
+                  <span class="w-1.5 h-1.5 rounded-full" :class="issues.includes('{{ tag.name }}') ? 'bg-white' : 'bg-amber-500'"></span>
+                  <span>{{ tag.name }}</span>
+                  {% if tag.pages %}
+                  <span class="text-[9px] opacity-80 font-normal">({{ tag.pages }})</span>
+                  {% endif %}
+                </button>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </div>
+          </td>
+
+          <!-- Pages -->
+          <td class="py-3.5 px-3 sm:px-4 text-center whitespace-nowrap">
+            <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-semibold text-xs">
+              {{ count }}
+            </span>
+          </td>
+
+          <!-- Date -->
+          <td class="py-3.5 px-3 sm:px-4 text-slate-500 whitespace-nowrap text-xs font-medium">
+            {{ p.created_at.strftime('%b %d, %Y') }}
+          </td>
+
+          <!-- Status & Progress -->
+          <td class="py-3.5 px-4 sm:px-5 whitespace-nowrap">
+            <div class="flex flex-col gap-1.5 min-w-[130px]">
+              <div class="flex items-center justify-between text-xs">
+                {% if progress >= 1.0 %}
+                <span class="inline-flex items-center gap-1.5 font-bold text-emerald-700">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span>{{ _('Proofed twice') }}</span>
+                </span>
+                {% elif progress > 0 %}
+                <span class="inline-flex items-center gap-1.5 font-bold text-amber-700">
+                  <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                  <span>{{ _('Proofed once') }}</span>
+                </span>
+                {% else %}
+                <span class="inline-flex items-center gap-1.5 font-bold text-red-600">
+                  <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                  <span>{{ _('Needs work') }}</span>
+                </span>
+                {% endif %}
+                <span class="font-bold text-slate-600 text-[11px]">{{ "%.0f"|format(progress * 100) }}%</span>
+              </div>
+              <!-- Mini progress bar -->
+              <div class="w-full bg-slate-200/80 rounded-full h-1.5 flex overflow-hidden">
+                {% for cls, fraction in statuses_per_project.get(p.id, {}).items() %}
+                <div class="h-full {{ cls }}" style="width: {{ fraction * 100 }}%"></div>
+                {% endfor %}
+              </div>
+            </div>
+          </td>
+
+          <!-- Org (superadmin & master user only) -->
+          {% if current_user.is_super_admin or current_user.is_master_user %}
+          <td class="py-3.5 px-3 sm:px-4 whitespace-nowrap">
+            {% if p.groups %}
+              <div class="flex flex-wrap gap-1">
+                {% for g in p.groups %}
+                <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 bg-sky-50 text-sky-700 border border-sky-200/80 rounded-lg">
+                  {{ g.name }}
+                </span>
+                {% endfor %}
+              </div>
+            {% else %}
+              <span class="text-slate-400 text-xs">—</span>
+            {% endif %}
+          </td>
+          {% endif %}
+
+          <!-- Type (superadmin only) -->
+          {% if current_user.is_super_admin %}
+          <td class="py-3.5 px-3 sm:px-4 whitespace-nowrap">
+            {% if p.creator_mode == 'unregistered' %}
+              <span class="text-[11px] font-bold px-2 py-0.5 bg-rose-100 text-rose-700 rounded-lg uppercase tracking-wide">
+                {{ _('Unregistered') }}
+              </span>
+            {% elif p.creator_mode == 'registered' %}
+              <span class="text-[11px] font-bold px-2 py-0.5 bg-amber-100 text-amber-700 rounded-lg uppercase tracking-wide">
+                {{ _('Registered') }}
+              </span>
+            {% elif p.creator_mode == 'enterprise' %}
+              <span class="text-[11px] font-bold px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-lg uppercase tracking-wide">
+                {{ _('Enterprise') }}
+              </span>
+            {% else %}
+              <span class="text-slate-400 text-xs">—</span>
+            {% endif %}
+          </td>
+          {% endif %}
+
+          <!-- Actions -->
+          <td class="py-3.5 px-4 sm:px-6 text-right whitespace-nowrap">
+            <div class="inline-flex items-center justify-end gap-1.5">
+              <a href="{{ url_for('proofing.project.summary', slug=p.slug) }}"
+                 class="inline-flex items-center gap-1 px-3 py-1.5 bg-royalblue hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-all shadow-xs shadow-royalblue/20"
+                 title="{{ _('Open project') }}">
+                <span>{{ _('Open') }}</span>
+              </a>
+              <a href="{{ url_for('proofing.project.download', slug=p.slug) }}"
+                 class="inline-flex items-center justify-center p-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 rounded-lg transition-colors shadow-xs"
+                 title="{{ _('Download') }}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Project Entries Cards (Card View) -->
+<div x-show="viewMode === 'cards'" class="space-y-4">
   {% for p in projects %}
   <div class="project-entry-card flex flex-col justify-between overflow-hidden">
     <div class="p-5 sm:p-6">
       <div class="flex items-start gap-3.5 mb-3">
-        <div class="w-10 h-10 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0 mt-0.5">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-          </svg>
-        </div>
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">
             <h2 class="text-base sm:text-lg font-bold text-slate-900 leading-snug">
@@ -20,13 +172,19 @@
             {% if p.condition_tag_list %}
               <div class="flex flex-wrap items-center gap-1.5">
                 {% for tag in p.condition_tag_list %}
-                  <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-sm" title="{{ _('Condition issue: %(tag)s', tag=tag.name) }}{% if tag.pages %} ({{ _('Pages:') }} {{ tag.pages }}){% endif %}">
-                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  <button
+                    type="button"
+                    @click="toggleIssue('{{ tag.name }}')"
+                    class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs"
+                    :class="issues.includes('{{ tag.name }}') ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'"
+                    title="{{ _('Filter by condition: %(tag)s', tag=tag.name) }}{% if tag.pages %} ({{ _('Pages:') }} {{ tag.pages }}){% endif %}"
+                  >
+                    <span class="w-1.5 h-1.5 rounded-full" :class="issues.includes('{{ tag.name }}') ? 'bg-white' : 'bg-amber-500'"></span>
                     <span>{{ tag.name }}</span>
                     {% if tag.pages %}
-                      <span class="text-[10px] text-amber-700/80 font-normal">({{ tag.pages }})</span>
+                      <span class="text-[10px] opacity-80 font-normal">({{ tag.pages }})</span>
                     {% endif %}
-                  </span>
+                  </button>
                 {% endfor %}
               </div>
             {% endif %}
@@ -115,31 +273,60 @@
   <div class="text-slate-500 font-medium text-xs">
     {{ _('Showing %(start)d - %(end)d of %(total)d projects', start=((page - 1) * per_page) + 1, end=[page * per_page, total_projects]|min, total=total_projects) }}
   </div>
-  <div class="flex items-center gap-2">
-    {% if page > 1 %}
-    <a href="{{ url_for('proofing.index', page=page - 1, per_page=per_page, q=search_query, mode=selected_mode, org=selected_org, sort=sort_field, order=sort_order) }}"
-       @click.prevent="goToPage({{ page - 1 }})"
-       class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors">
-      {{ _('Previous') }}
-    </a>
-    {% endif %}
-    <span class="px-3 py-1.5 text-xs font-bold text-slate-700">
-      {{ page }} / {{ total_pages }}
-    </span>
-    {% if page < total_pages %}
-    <a href="{{ url_for('proofing.index', page=page + 1, per_page=per_page, q=search_query, mode=selected_mode, org=selected_org, sort=sort_field, order=sort_order) }}"
-       @click.prevent="goToPage({{ page + 1 }})"
-       class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors">
-      {{ _('Next') }}
-    </a>
-    {% endif %}
-  </div>
+
+  <!-- Google-Style Numbered Pagination with Ellipses -->
+  <nav aria-label="{{ _('Proofing projects pagination') }}">
+    <div class="flex flex-wrap items-center justify-center gap-1 sm:gap-1.5">
+      <!-- Previous Button -->
+      <button
+        type="button"
+        @click="goToPage({{ page - 1 }})"
+        {% if page <= 1 %}disabled{% endif %}
+        class="google-page-btn !px-3.5 {% if page <= 1 %}disabled{% endif %}"
+        aria-label="{{ _('Previous page') }}"
+      >
+        <span class="mr-1">‹</span>
+        <span>{{ _('Previous') }}</span>
+      </button>
+
+      <!-- Numbered Buttons and Ellipses -->
+      <template x-for="(item, idx) in pageItems({{ total_pages }})" :key="idx">
+        <div>
+          <template x-if="item === '…'">
+            <span class="px-1.5 text-slate-400 font-bold select-none text-sm leading-8">…</span>
+          </template>
+          <template x-if="item !== '…'">
+            <button
+              type="button"
+              @click="goToPage(item)"
+              class="google-page-btn"
+              :class="{ 'active': item === {{ page }} }"
+              :aria-current="item === {{ page }} ? 'page' : false"
+              x-text="item"
+            ></button>
+          </template>
+        </div>
+      </template>
+
+      <!-- Next Button -->
+      <button
+        type="button"
+        @click="goToPage({{ page + 1 }})"
+        {% if page >= total_pages %}disabled{% endif %}
+        class="google-page-btn !px-3.5 {% if page >= total_pages %}disabled{% endif %}"
+        aria-label="{{ _('Next page') }}"
+      >
+        <span>{{ _('Next') }}</span>
+        <span class="ml-1">›</span>
+      </button>
+    </div>
+  </nav>
 </div>
 {% endif %}
 
 {% else %}
 {# No projects found in this search/filter #}
-{% if search_query or (selected_mode and selected_mode != 'all') or (selected_org and selected_org != 'all') %}
+{% if search_query or (selected_mode and selected_mode != 'all') or (selected_org and selected_org != 'all') or selected_issues %}
 <div class="bg-white rounded-2xl p-10 text-center border border-slate-200 shadow-sm">
   <div class="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto text-slate-400 mb-3.5">
     <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">

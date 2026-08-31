@@ -66,7 +66,22 @@ def test_index_ajax_search(client):
 
 
 def test_index_ajax_param(client):
-    resp = client.get("/proofing/?ajax=1&page=1&per_page=5")
+    resp = client.get("/proofing/?ajax=1&page=1&per_page=10")
+    assert resp.status_code == 200
+    assert "X-Total-Projects" in resp.headers
+
+
+def test_index_issue_filter(client):
+    resp = client.get("/proofing/?issue=Blurry&issue=Torn")
+    assert resp.status_code == 200
+    assert ">Proofing<" in resp.text
+
+
+def test_index_issue_filter_ajax(client):
+    resp = client.get(
+        "/proofing/?issue=Shmushing",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
     assert resp.status_code == 200
     assert "X-Total-Projects" in resp.headers
 
