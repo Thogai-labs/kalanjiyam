@@ -37,9 +37,11 @@
   </div>
   {% endif %}
 
+  {% if self.sidebar and self.sidebar()|trim %}
   <div class="mt-4 mb-6">
     {% block sidebar %}{% endblock %}
   </div>
+  {% endif %}
   <div class="w-full">
     {% block content %}{% endblock %}
   </div>

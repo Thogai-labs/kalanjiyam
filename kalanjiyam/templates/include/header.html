@@ -63,12 +63,84 @@
     {% set is_help_active = request.endpoint in ['proofing.help_index', 'proofing.beginners_guide', 'proofing.complete_guide', 'proofing.editor_guide'] %}
     {% set is_proofing_active = request.blueprint and request.blueprint.startswith('proofing') and request.endpoint !=
     'proofing.user.summary' and not is_help_active %}
+    {% if request.endpoint == 'proofing.index' %}
+    <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+      x-data="{ open: false }"
+      @click.outside="open = false"
+      @mouseenter="moveCursor($el)">
+      <button
+        @click="open = !open"
+        type="button"
+        class="inline-flex items-center gap-1 px-4 py-2 rounded-full text-white focus:outline-none transition-all select-none shadow-sm"
+        style="background: linear-gradient(135deg, #0ea5e9, #6366f1);">
+        <span>{{ _('Proofing') }}</span>
+        <svg class="w-3.5 h-3.5 text-white/90 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+      <div
+        x-show="open"
+        x-transition:enter="transition ease-out duration-150"
+        x-transition:enter-start="transform opacity-0 scale-95 -translate-y-1"
+        x-transition:enter-end="transform opacity-100 scale-100 translate-y-0"
+        x-transition:leave="transition ease-in duration-100"
+        x-transition:leave-start="transform opacity-100 scale-100 translate-y-0"
+        x-transition:leave-end="transform opacity-0 scale-95 -translate-y-1"
+        class="absolute left-0 mt-2 w-56 rounded-2xl bg-white border border-slate-200/90 shadow-xl py-2 z-50 text-slate-700 normal-case font-medium text-sm overflow-hidden"
+        x-cloak>
+        <div class="px-4 py-2 border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          {{ _('Proofing Navigation') }}
+        </div>
+        {% if current_user.is_moderator %}
+        <a href="{{ url_for('proofing.dashboard') }}"
+          class="flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-royalblue transition-colors">
+          <svg class="w-4 h-4 text-slate-400 group-hover:text-royalblue" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="10" rx="1"/><rect width="7" height="5" x="3" y="14" rx="1"/>
+          </svg>
+          <span>{{ _('Dashboard') }}</span>
+        </a>
+        {% endif %}
+        <a href="{{ url_for('proofing.index') }}"
+          class="flex items-center justify-between px-4 py-2.5 text-xs font-bold text-royalblue bg-blue-50/70 hover:bg-blue-50 transition-colors">
+          <span class="flex items-center gap-2.5">
+            <svg class="w-4 h-4 text-royalblue" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
+            <span>{{ _('Ongoing projects') }}</span>
+          </span>
+          <span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>
+        </a>
+        <a href="{{ url_for('proofing.create_project') }}"
+          class="flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-royalblue transition-colors">
+          <svg class="w-4 h-4 text-slate-400 group-hover:text-royalblue" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>
+          </svg>
+          <span>{{ _('Create project') }}</span>
+        </a>
+        <a href="{{ url_for('proofing.recent_changes') }}"
+          class="flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-royalblue transition-colors">
+          <svg class="w-4 h-4 text-slate-400 group-hover:text-royalblue" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span>{{ _('Recent changes') }}</span>
+        </a>
+        <a href="{{ url_for('proofing.tagging.index') }}"
+          class="flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-royalblue transition-colors">
+          <svg class="w-4 h-4 text-slate-400 group-hover:text-royalblue" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l4.58-4.58c.94-.94.94-2.48 0-3.42z"/><path d="M6 6h.01"/>
+          </svg>
+          <span>{{ _('Tagging') }}</span>
+        </a>
+      </div>
+    </li>
+    {% else %}
     <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
       @mouseenter="moveCursor($el)">
       <a class="block px-4 py-2 rounded-full {% if is_proofing_active %}text-white{% else %}text-slate-900{% endif %}"
         {% if is_proofing_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
         href="{{ url_for('proofing.index') }}">{{ _('Proofing') }}</a>
     </li>
+    {% endif %}
 
     <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
       @mouseenter="moveCursor($el)">
