@@ -23,19 +23,9 @@
 
 {% block extra_css %}
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
-
-  .font-serif-title {
-    font-family: 'Cinzel', Georgia, serif;
-  }
-
-  .catalog-hero {
-    background: #0b1120;
-    background-image: 
-      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
-      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
-      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
-    background-size: 100% 100%, 24px 24px, 24px 24px;
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
   }
 </style>
 {% endblock %}
@@ -45,27 +35,27 @@
 {% block sidebar %}{{ m.main_nav('create', current_user=current_user) }}{% endblock %}
 
 {% block hero %}
-<header class="catalog-hero text-slate-100 py-14 px-4 mb-8 border-b border-slate-800">
-  <div class="max-w-6xl mx-auto text-center">
-    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-4 shadow-sm">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<header class="google-proofing-header py-6 sm:py-8 px-4 bg-white border-b border-slate-200">
+  <div class="max-w-6xl mx-auto flex flex-col items-center justify-center text-center">
+    <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-royalblue text-xs font-semibold uppercase tracking-wider mb-2.5">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
       </svg>
       <span>{{ _('Project Uploader') }}</span>
     </div>
 
-    <h1 class="text-4xl sm:text-5xl font-bold font-serif-title tracking-tight mb-4 text-white">
+    <h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-900 mb-2">
       {{ _('Create a Proofing Project') }}
     </h1>
-    <p class="text-base sm:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
+    <p class="text-slate-600 text-sm sm:text-base max-w-2xl mx-auto leading-relaxed">
       {{ _('Upload manuscripts, historical texts, or Word documents for OCR extraction, collaborative proofreading, or direct document translation.') }}
     </p>
 
-    <div class="mt-6 inline-flex flex-wrap items-center justify-center gap-2 text-xs text-slate-400 font-medium">
-      <span class="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/80">{{ _('PDF Documents') }}</span>
-      <span class="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/80">{{ _('JPG / Image Scans') }}</span>
-      <span class="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/80">{{ _('DOCX / Word Files') }}</span>
-      <span class="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/80">{{ _('Max 500MB') }}</span>
+    <div class="mt-4 inline-flex flex-wrap items-center justify-center gap-2 text-xs text-slate-600 font-semibold">
+      <span class="px-3 py-1 rounded-full bg-slate-100 border border-slate-200">{{ _('PDF Documents') }}</span>
+      <span class="px-3 py-1 rounded-full bg-slate-100 border border-slate-200">{{ _('JPG / Image Scans') }}</span>
+      <span class="px-3 py-1 rounded-full bg-slate-100 border border-slate-200">{{ _('DOCX / Word Files') }}</span>
+      <span class="px-3 py-1 rounded-full bg-slate-100 border border-slate-200">{{ _('Max 500MB') }}</span>
     </div>
   </div>
 </header>
