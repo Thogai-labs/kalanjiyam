@@ -247,7 +247,7 @@
       <!-- Google Search Bar Component with Auto-Suggest -->
       <div class="w-full max-w-2xl relative" x-data="searchBar({{ (req.q or '')|tojson|forceescape }}, {{ url_for('search.suggest')|tojson|forceescape }})" @click.outside="close()">
 
-        <form x-ref="searchForm" action="{{ url_for('search.index') }}" method="GET" class="relative">
+        <form x-ref="searchForm" @submit="onSubmit()" action="{{ url_for('search.index') }}" method="GET" class="relative">
           <input type="hidden" name="view" value="{{ req.view }}">
           {% if req.advanced %}<input type="hidden" name="advanced" value="1">{% endif %}
 
@@ -306,18 +306,50 @@
         </form>
 
         <!-- Google-style Quick Suggestion Chips (ideal for middle-aged users) -->
-        <div class="mt-8">
-          <p class="text-xs font-bold uppercase tracking-wider text-slate-500 text-center mb-3">
-            {{ _('Popular Searches & Topics') }}
-          </p>
-          <div class="flex flex-wrap items-center justify-center gap-2.5">
-            {% for term in ['Siddha', 'Agastyar', 'நோய்', 'மருத்துவம்', 'Medicine', 'Manuscript'] %}
-              <a href="{{ url_for('search.index', q=term) }}"
-                 class="px-4 py-2 rounded-full bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-slate-700 hover:text-blue-800 text-sm font-medium transition-all shadow-2xs">
-                {{ term }}
-              </a>
-            {% endfor %}
+        <!-- Enhanced with Space-Saving Top-K streaming algorithm in localStorage -->
+        <div class="mt-8"
+             x-data="topKTopics(6, ['Siddha', 'Agastyar', 'நோய்', 'மருத்துவம்', 'Medicine', 'Manuscript'], '{{ url_for('search.index') }}')">
+          <div class="flex items-center justify-center gap-2 mb-3">
+            <p class="text-xs font-bold uppercase tracking-wider text-slate-500">
+              <span x-show="hasPersonalSearches()">{{ _('Top Searches & Heritage Topics') }}</span>
+              <span x-show="!hasPersonalSearches()">{{ _('Popular Searches & Topics') }}</span>
+            </p>
+            <button type="button"
+                    x-show="hasPersonalSearches()"
+                    @click="clearHistory()"
+                    class="text-[11px] text-slate-400 hover:text-red-500 transition-colors cursor-pointer px-1.5 py-0.5 rounded"
+                    title="{{ _('Clear personal search history') }}">
+              {{ _('Clear history') }}
+            </button>
           </div>
+
+          <!-- Dynamic Top-K Chips -->
+          <div class="flex flex-wrap items-center justify-center gap-2.5" x-show="topics.length > 0">
+            <template x-for="(item, idx) in topics" :key="item.term">
+              <a :href="'{{ url_for('search.index') }}?q=' + encodeURIComponent(item.term)"
+                 @click.prevent="selectTopic(item.term)"
+                 class="px-4 py-2 rounded-full bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-slate-700 hover:text-blue-800 text-sm font-medium transition-all shadow-2xs inline-flex items-center gap-1.5">
+                <span x-show="item.isPersonal" class="text-blue-500" title="{{ _('From your top searches') }}">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </span>
+                <span x-text="item.term"></span>
+              </a>
+            </template>
+          </div>
+
+          <!-- Server-side fallback for zero-JS clients -->
+          <noscript>
+            <div class="flex flex-wrap items-center justify-center gap-2.5">
+              {% for term in ['Siddha', 'Agastyar', 'நோய்', 'மருத்துவம்', 'Medicine', 'Manuscript'] %}
+                <a href="{{ url_for('search.index', q=term) }}"
+                   class="px-4 py-2 rounded-full bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-slate-700 hover:text-blue-800 text-sm font-medium transition-all shadow-2xs">
+                  {{ term }}
+                </a>
+              {% endfor %}
+            </div>
+          </noscript>
         </div>
 
         <!-- Syntax Mode Toggle (Google Material UI Switch) -->
@@ -358,7 +390,7 @@
           <!-- Compact Search Bar Component with Auto-Suggest -->
           <div class="w-full md:max-w-2xl relative" x-data="searchBar({{ (req.q or '')|tojson|forceescape }}, {{ url_for('search.suggest')|tojson|forceescape }})" @click.outside="close()">
 
-            <form x-ref="compactSearchForm" action="{{ url_for('search.index') }}" method="GET">
+            <form x-ref="compactSearchForm" @submit="onSubmit()" action="{{ url_for('search.index') }}" method="GET">
               <input type="hidden" name="view" value="{{ req.view }}">
               {% if req.advanced %}<input type="hidden" name="advanced" value="1">{% endif %}
 
@@ -441,7 +473,7 @@
                class="m3-switch"
                title="{% if req.advanced %}{{ _('Disable advanced syntax') }}{% else %}{{ _('Enable advanced syntax') }}{% endif %}">
               <span class="text-xs font-semibold {% if req.advanced %}text-blue-700{% else %}text-slate-600{% endif %}">
-                {{ _('Advanced') }}
+                {{ _('Advanced Search') }}
               </span>
               <span class="m3-switch-track {% if req.advanced %}on{% else %}off{% endif %}" aria-hidden="true">
                 <span class="m3-switch-thumb {% if req.advanced %}on{% else %}off{% endif %}">

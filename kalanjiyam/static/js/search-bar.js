@@ -1,3 +1,5 @@
+import topKTracker, { DEFAULT_TOPICS } from './topk-search';
+
 /**
  * Kalanjiyam Search Alpine.js component.
  * Provides debounce handling, auto-suggest querying, selection, and keyboard navigation.
@@ -11,6 +13,10 @@ export default (initialQuery = "", suggestUrl = "/search/suggest") => ({
 
   init() {
     this.query = initialQuery;
+    // If the page loaded with a query (e.g. user just performed a search), record it
+    if (initialQuery && typeof initialQuery === 'string' && initialQuery.trim().length >= 2) {
+      topKTracker.record(initialQuery.trim());
+    }
   },
 
   async fetchSuggestions() {
@@ -46,6 +52,7 @@ export default (initialQuery = "", suggestUrl = "/search/suggest") => ({
   selectSuggestion(item) {
     if (item && item.title) {
       this.query = item.title;
+      topKTracker.record(item.title);
       this.isOpen = false;
       this.selectedIndex = -1;
       const form = this.$refs ? (this.$refs.form || this.$refs.searchForm || this.$refs.compactSearchForm) : null;
@@ -98,6 +105,13 @@ export default (initialQuery = "", suggestUrl = "/search/suggest") => ({
     const input = this.$refs ? (this.$refs.input || this.$refs.inputEl || this.$refs.compactInputEl) : null;
     if (input) {
       input.focus();
+    }
+  },
+
+  onSubmit() {
+    const q = (this.query || "").trim();
+    if (q.length >= 2) {
+      topKTracker.record(q);
     }
   },
 
