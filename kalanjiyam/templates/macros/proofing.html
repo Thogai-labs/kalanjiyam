@@ -51,49 +51,30 @@
 {% endmacro %}
 
 
-{# Sidebar link #}
+{# Horizontal sub-nav link #}
 {% macro _link(label, route, text, active, icon_name=None) -%}
-<li class="sidebar-nav-item">
-  <a href="{{ url_for(route) }}"
-    class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200 text-xs
-   {{ 'text-white font-bold bg-royalblue shadow-md shadow-royalblue/20' if active == label else 'text-slate-600 font-semibold hover:bg-royalblue/5 hover:text-royalblue' }}">
-    {% if icon_name %}
-      {{ icon(icon_name, class='w-4 h-4 shrink-0 ' + ('text-white' if active == label else 'text-slate-400 group-hover:text-royalblue')) }}
-    {% endif %}
-    <span>{{ text }}</span>
-  </a>
-</li>
+<a href="{{ url_for(route) }}"
+  class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all duration-200 text-xs font-semibold whitespace-nowrap
+  {{ 'text-white font-bold bg-royalblue shadow-sm shadow-royalblue/20' if active == label else 'text-slate-600 hover:bg-slate-100 hover:text-royalblue' }}">
+  {% if icon_name %}
+    {{ icon(icon_name, class='w-4 h-4 shrink-0 ' + ('text-white' if active == label else 'text-slate-400 group-hover:text-royalblue')) }}
+  {% endif %}
+  <span>{{ text }}</span>
+</a>
 {%- endmacro %}
 
 
-{# Sidebar shown on most proofing pages. #}
+{# Sub-horizontal nav bar shown across proofing pages. #}
 {% macro main_nav(active, current_user) %}
-
-{% if current_user.is_moderator %}
-<nav class="mb-5">
-  <h1 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-2 flex items-center gap-1.5">
-    <span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>
-    {{ _('Moderation') }}
-  </h1>
-  <ul class="space-y-1">
+<nav class="bg-white p-2 rounded-2xl shadow-sm border border-slate-200/80 flex flex-wrap items-center gap-1.5 overflow-x-auto">
+  {% if current_user.is_moderator %}
     {{ _link('stats', "proofing.dashboard", _("Dashboard"), active, icon_name='layout-dashboard') }}
-  </ul>
-</nav>
-{% endif %}
-
-<nav>
-  <h1 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-2 flex items-center gap-1.5">
-    <span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-    {{ _('Contribute') }}
-  </h1>
-  <ul class="space-y-1">
-    {{ _link('projects', "proofing.index", _("Ongoing projects"), active, icon_name='list') }}
-    {{ _link('create', "proofing.create_project", _("Create project"), active, icon_name='plus-circle') }}
-    {{ _link('docx_translate', "proofing.docx_translate", _("DOCX Translator"), active, icon_name='file-text') }}
-    {{ _link('changes', "proofing.recent_changes", _("Recent changes"), active, icon_name='clock') }}
-    {{ _link('tagging', "proofing.tagging.index", _("Tagging"), active, icon_name='tag') }}
-    {# {{ _link('talk', "proofing.talk", _("Talk"), active, icon_name='message-circle') }} #}
-  </ul>
+    <span class="w-px h-5 bg-slate-200 mx-1 hidden sm:inline-block"></span>
+  {% endif %}
+  {{ _link('projects', "proofing.index", _("Ongoing projects"), active, icon_name='list') }}
+  {{ _link('create', "proofing.create_project", _("Create project"), active, icon_name='plus-circle') }}
+  {{ _link('changes', "proofing.recent_changes", _("Recent changes"), active, icon_name='clock') }}
+  {{ _link('tagging', "proofing.tagging.index", _("Tagging"), active, icon_name='tag') }}
 </nav>
 {% endmacro %}
 

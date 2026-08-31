@@ -63,34 +63,26 @@
             {{ p.created_at.strftime('%b %d, %Y') }}
           </td>
 
-          <!-- Status & Progress -->
+          <!-- Status -->
           <td class="py-3.5 px-4 sm:px-5 whitespace-nowrap">
-            <div class="flex flex-col gap-1.5 min-w-[130px]">
-              <div class="flex items-center justify-between text-xs">
-                {% if progress >= 1.0 %}
-                <span class="inline-flex items-center gap-1.5 font-bold text-emerald-700">
-                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span>{{ _('Proofed twice') }}</span>
-                </span>
-                {% elif progress > 0 %}
-                <span class="inline-flex items-center gap-1.5 font-bold text-amber-700">
-                  <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-                  <span>{{ _('Proofed once') }}</span>
-                </span>
-                {% else %}
-                <span class="inline-flex items-center gap-1.5 font-bold text-red-600">
-                  <span class="w-2 h-2 rounded-full bg-red-500"></span>
-                  <span>{{ _('Needs work') }}</span>
-                </span>
-                {% endif %}
-                <span class="font-bold text-slate-600 text-[11px]">{{ "%.0f"|format(progress * 100) }}%</span>
-              </div>
-              <!-- Mini progress bar -->
-              <div class="w-full bg-slate-200/80 rounded-full h-1.5 flex overflow-hidden">
-                {% for cls, fraction in statuses_per_project.get(p.id, {}).items() %}
-                <div class="h-full {{ cls }}" style="width: {{ fraction * 100 }}%"></div>
-                {% endfor %}
-              </div>
+            <div class="flex items-center gap-2">
+              {% if progress >= 1.0 %}
+              <span class="inline-flex items-center gap-1.5 font-bold text-emerald-700 text-xs">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span>{{ _('Proofed twice') }}</span>
+              </span>
+              {% elif progress > 0 %}
+              <span class="inline-flex items-center gap-1.5 font-bold text-amber-700 text-xs">
+                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                <span>{{ _('Proofed once') }}</span>
+              </span>
+              {% else %}
+              <span class="inline-flex items-center gap-1.5 font-bold text-red-600 text-xs">
+                <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                <span>{{ _('Needs work') }}</span>
+              </span>
+              {% endif %}
+              <span class="font-medium text-slate-500 text-xs">({{ "%.0f"|format(progress * 100) }}%)</span>
             </div>
           </td>
 

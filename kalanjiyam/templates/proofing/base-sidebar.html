@@ -37,15 +37,11 @@
   </div>
   {% endif %}
 
-  <div class="md:flex md:mt-8 items-start">
-    <div class="md:mr-8 md:min-w-[16rem]">
-      <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80">
-        {% block sidebar %}{% endblock %}
-      </div>
-    </div>
-    <div class="grow mt-8 md:mt-0">
-      {% block content %}{% endblock %}
-    </div>
+  <div class="mt-4 mb-6">
+    {% block sidebar %}{% endblock %}
+  </div>
+  <div class="w-full">
+    {% block content %}{% endblock %}
   </div>
 
 </article>
