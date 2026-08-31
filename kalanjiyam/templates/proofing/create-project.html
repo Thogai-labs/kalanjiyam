@@ -240,8 +240,9 @@
          
          xhr.onload = () => {
            if (xhr.status === 200) {
-             document.documentElement.innerHTML = xhr.responseText;
-             window.scrollTo(0, 0);
+             document.open();
+             document.write(xhr.responseText);
+             document.close();
            } else {
              this.uploading = false;
              this.status = '{{ _('Upload failed. Please try again.') }}';

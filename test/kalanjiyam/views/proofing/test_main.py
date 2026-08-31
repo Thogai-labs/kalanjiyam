@@ -186,3 +186,41 @@ def test_help_index(client):
     resp = client.get("/proofing/help")
     assert resp.status_code == 200
     assert "How can we help you?" in resp.text
+
+
+def test_create_project_status_images_and_pdf(client):
+    """Test create_project_status renders doc_type specific text for images and pdf."""
+    from unittest.mock import Mock, patch
+
+    # 1. Status PENDING for doc_type="images"
+    mock_async_images = Mock()
+    mock_async_images.status = "PENDING"
+    mock_async_images.info = {"current": 0, "total": 2, "doc_type": "images"}
+
+    with patch("kalanjiyam.tasks.projects.create_project.AsyncResult", return_value=mock_async_images):
+        resp = client.get("/proofing/status/dummy-images-task-id")
+        assert resp.status_code == 200
+        assert "Starting image processing..." in resp.text
+        assert "Waiting for the server to start processing your images." in resp.text
+        assert "Starting PDF extraction..." not in resp.text
+
+    # 2. Status PROGRESS for doc_type="images"
+    mock_async_images.status = "PROGRESS"
+    with patch("kalanjiyam.tasks.projects.create_project.AsyncResult", return_value=mock_async_images):
+        resp = client.get("/proofing/status/dummy-images-task-id")
+        assert resp.status_code == 200
+        assert "Processing Images..." in resp.text
+        assert "We are optimizing and preparing your images for proofing." in resp.text
+        assert "Splitting PDF..." not in resp.text
+
+    # 3. Status PENDING for doc_type="pdf" (default)
+    mock_async_pdf = Mock()
+    mock_async_pdf.status = "PENDING"
+    mock_async_pdf.info = {"current": 0, "total": 10, "doc_type": "pdf"}
+
+    with patch("kalanjiyam.tasks.projects.create_project.AsyncResult", return_value=mock_async_pdf):
+        resp = client.get("/proofing/status/dummy-pdf-task-id")
+        assert resp.status_code == 200
+        assert "Starting PDF extraction..." in resp.text
+        assert "Waiting for the server to start processing your file." in resp.text
+        assert "Starting image processing..." not in resp.text

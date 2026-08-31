@@ -661,6 +661,7 @@ def create_project():
                 project_title=title,
             )
 
+        doc_type = "images" if is_image_upload else ("docx" if is_uploaded_docx else "pdf")
         return render_template(
             "proofing/create-project-post.html",
             status=task.status,
@@ -668,6 +669,7 @@ def create_project():
             total=0,
             percent=0,
             task_id=task.id,
+            doc_type=doc_type,
         )
 
     return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
@@ -680,6 +682,10 @@ def create_project_status(task_id):
 
     info = r.info or {}
     error = None
+    doc_type = "pdf"
+    if isinstance(info, dict):
+        doc_type = info.get("doc_type", "pdf")
+
     if isinstance(info, Exception):
         current = total = percent = 0
         slug = None
@@ -702,6 +708,7 @@ def create_project_status(task_id):
         percent=percent,
         slug=slug,
         error=error,
+        doc_type=doc_type,
     )
 
 

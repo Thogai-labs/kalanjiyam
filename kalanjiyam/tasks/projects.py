@@ -33,7 +33,7 @@ def _split_pdf_into_pages(
     :return: the page count, which we use downstream.
     """
     doc = fitz.open(pdf_path)
-    task_status.progress(0, doc.page_count)
+    task_status.progress(0, doc.page_count, doc_type="pdf")
     with tempfile.TemporaryDirectory() as tmp_dir:
         for page in doc:
             n = page.number + 1
@@ -42,7 +42,7 @@ def _split_pdf_into_pages(
             pix.pil_save(tmp_path, optimize=True)
             storage.save(page_image_key(slug, str(n), org_slug=org_slug), tmp_path)
             tmp_path.unlink()
-            task_status.progress(n, doc.page_count)
+            task_status.progress(n, doc.page_count, doc_type="pdf")
     return doc.page_count
 
 
@@ -774,7 +774,9 @@ def create_project_inner(
             from kalanjiyam.tasks.search_index import enqueue_project
 
             enqueue_project(db_project.id)
+            doc_type = "docx"
         elif image_keys:
+            doc_type = "images"
             num_pages = len(image_keys)
             require_org = bool(app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True))
             _add_project_to_database(
@@ -788,7 +790,7 @@ def create_project_inner(
             )
 
             total_images_size_bytes = 0
-            task_status.progress(0, num_pages)
+            task_status.progress(0, num_pages, doc_type="images")
 
             for idx, img_key in enumerate(image_keys, start=1):
                 local_src = storage.local_copy(img_key)
@@ -813,7 +815,7 @@ def create_project_inner(
                 if storage.exists(img_key):
                     storage.delete(img_key)
 
-                task_status.progress(idx, num_pages)
+                task_status.progress(idx, num_pages, doc_type="images")
 
             db_project = session.query(db.Project).filter_by(slug=slug).one()
             meta = db_project.extracted_metadata or {}
@@ -853,6 +855,7 @@ def create_project_inner(
 
             add_storage_usage_for_project(slug)
         else:
+            doc_type = "pdf"
             pdf_path = storage.local_copy(pdf_key)
             if not pdf_path.exists():
                 raise ValueError(f'Source PDF not found in storage: "{pdf_key}".')
@@ -913,7 +916,14 @@ def create_project_inner(
 
             add_storage_usage_for_project(slug)
 
-    task_status.success(num_pages, slug)
+    task_status.success(num_pages, slug, doc_type=doc_type)
+    return {
+        "current": num_pages,
+        "total": num_pages,
+        "slug": slug,
+        "num_pages": num_pages,
+        "doc_type": doc_type,
+    }
 
 
 @app.task(bind=True)
@@ -931,7 +941,7 @@ def create_project(
 ):
     """Split the given PDF, DOCX, or images into pages and register the project on the database."""
     task_status = CeleryTaskStatus(self)
-    create_project_inner(
+    return create_project_inner(
         display_title=display_title,
         pdf_key=pdf_key,
         docx_key=docx_key,
