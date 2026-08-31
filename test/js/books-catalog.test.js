@@ -56,6 +56,21 @@ describe('booksCatalog Alpine.js component', () => {
     expect(catalog.page).toBe(1);
   });
 
+  test('initializes correctly from DOM JSON script element', () => {
+    const scriptEl = document.createElement('script');
+    scriptEl.type = 'application/json';
+    scriptEl.id = 'test-books-payload';
+    scriptEl.textContent = JSON.stringify(sampleBooks);
+    document.body.appendChild(scriptEl);
+
+    const catalog = booksCatalog('test-books-payload', 'gita');
+    catalog.init();
+    expect(catalog.allBooks.length).toBe(3);
+    expect(catalog.query).toBe('gita');
+
+    document.body.removeChild(scriptEl);
+  });
+
   test('filters books by title, author, or description', () => {
     const catalog = booksCatalog(sampleBooks);
     catalog.init();

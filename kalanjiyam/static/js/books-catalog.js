@@ -8,9 +8,28 @@
  * - Grid and compact List view modes
  * - Client-side pagination to eliminate excessive scrolling
  */
-export default function booksCatalog(initialBooks = [], initialQuery = '') {
+export default function booksCatalog(dataSource = [], initialQuery = '') {
+  let books = [];
+  if (Array.isArray(dataSource)) {
+    books = dataSource;
+  } else if (typeof dataSource === 'string' && dataSource.length > 0) {
+    const el = document.getElementById(dataSource);
+    if (el && el.textContent) {
+      try {
+        const parsed = JSON.parse(el.textContent);
+        if (Array.isArray(parsed)) {
+          books = parsed;
+        }
+      } catch (e) {
+        console.error('Failed to parse books JSON data element:', e);
+      }
+    }
+  } else if (typeof window !== 'undefined' && Array.isArray(window.__KALANJIYAM_BOOKS__)) {
+    books = window.__KALANJIYAM_BOOKS__;
+  }
+
   return {
-    allBooks: Array.isArray(initialBooks) ? initialBooks : [],
+    allBooks: books,
     query: initialQuery || '',
     searchQuery: initialQuery || '',
     activeFilter: 'all', // 'all' | 'completed' | 'in_progress' | 'translated'
@@ -21,6 +40,24 @@ export default function booksCatalog(initialBooks = [], initialQuery = '') {
     debounceTimer: null,
 
     init() {
+      // Re-check dataSource if books was empty initially (in case DOM element was rendered after component factory)
+      if (this.allBooks.length === 0) {
+        if (typeof dataSource === 'string' && dataSource.length > 0) {
+          const el = document.getElementById(dataSource);
+          if (el && el.textContent) {
+            try {
+              const parsed = JSON.parse(el.textContent);
+              if (Array.isArray(parsed)) {
+                this.allBooks = parsed;
+              }
+            } catch (e) {
+              // Ignore parse error
+            }
+          }
+        } else if (typeof window !== 'undefined' && Array.isArray(window.__KALANJIYAM_BOOKS__)) {
+          this.allBooks = window.__KALANJIYAM_BOOKS__;
+        }
+      }
       this.query = initialQuery || '';
       this.searchQuery = (initialQuery || '').trim();
       this.page = 1;

@@ -147,27 +147,24 @@
 {% block main_class %}bg-slate-50 min-h-screen pb-16{% endblock %}
 
 {% block main %}
-<div 
-  x-data="booksCatalog({{ (serialized_projects or [])|tojson }}, {{ (query or '')|tojson }})" 
+<!-- Catalog Data Payload -->
+<script type="application/json" id="books-catalog-data">
+  {{ (serialized_projects or [])|tojson|safe }}
+</script>
+
+<div
+  x-data="booksCatalog('books-catalog-data', {{ (query or '')|tojson|forceescape }})"
   class="w-full"
 >
   <!-- Google-Style Clean Header (Above the fold, minimal vertical space, high contrast) -->
   <header class="google-books-header py-6 sm:py-8 px-4">
     <div class="max-w-6xl mx-auto flex flex-col items-center justify-center text-center">
-      
-      <!-- BharatGen Official Badge -->
-      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 text-xs font-semibold uppercase tracking-wider mb-2.5">
-        <svg class="w-3.5 h-3.5 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-        </svg>
-        <span>{{ _('Digital Repository — Powered by BharatGen') }}</span>
-      </div>
 
       <!-- Main Title -->
       <h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-900 mb-1.5">
         {{ _('Digital Books Library') }}
       </h1>
-      
+
       <!-- Subtitle -->
       <p class="text-slate-600 text-sm sm:text-base max-w-2xl leading-relaxed">
         {{ _('Browse digitized heritage manuscripts, classical texts, and translations with searchable OCR.') }}
@@ -182,20 +179,20 @@
           </svg>
 
           <!-- Search Input: 16px to prevent iOS auto-zoom and ensure high readability -->
-          <input 
+          <input
             x-ref="searchInput"
-            type="text" 
+            type="text"
             x-model="query"
             @input="onSearchInput()"
-            placeholder="{{ _('Search by book title, author, or keyword…') }}" 
+            placeholder="{{ _('Search by book title, author, or keyword…') }}"
             class="w-full bg-transparent text-slate-800 placeholder-slate-400 text-base sm:text-[17px] focus:outline-none"
             aria-label="{{ _('Search books catalog') }}"
           />
 
           <!-- Clear Button -->
-          <button 
-            type="button" 
-            x-show="query.length > 0" 
+          <button
+            type="button"
+            x-show="query.length > 0"
             @click="clearSearch()"
             class="p-1 text-slate-400 hover:text-slate-600 rounded-full transition-colors ml-1"
             title="{{ _('Clear search') }}"
@@ -218,10 +215,10 @@
     {% if projects %}
       <!-- Controls Toolbar: Filter Chips + Sort + View Mode -->
       <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-5 mb-6 border-b border-slate-200">
-        
+
         <!-- Category Filter Chips -->
         <div class="flex flex-wrap items-center gap-2" role="group" aria-label="{{ _('Filter by status') }}">
-          <button 
+          <button
             type="button"
             class="google-chip"
             :class="{ 'active': activeFilter === 'all' }"
@@ -231,7 +228,7 @@
             <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 font-semibold text-slate-700" :class="{ '!bg-blue-100 !text-blue-800': activeFilter === 'all' }" x-text="filterCounts().all"></span>
           </button>
 
-          <button 
+          <button
             type="button"
             class="google-chip"
             :class="{ 'active': activeFilter === 'completed' }"
@@ -241,7 +238,7 @@
             <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 font-semibold text-slate-700" :class="{ '!bg-blue-100 !text-blue-800': activeFilter === 'completed' }" x-text="filterCounts().completed"></span>
           </button>
 
-          <button 
+          <button
             type="button"
             class="google-chip"
             :class="{ 'active': activeFilter === 'in_progress' }"
@@ -251,7 +248,7 @@
             <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 font-semibold text-slate-700" :class="{ '!bg-blue-100 !text-blue-800': activeFilter === 'in_progress' }" x-text="filterCounts().inProgress"></span>
           </button>
 
-          <button 
+          <button
             type="button"
             class="google-chip"
             :class="{ 'active': activeFilter === 'translated' }"
@@ -264,11 +261,11 @@
 
         <!-- Right Side: Sort dropdown & Grid/List View Toggle -->
         <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-          
+
           <!-- Sort Dropdown -->
           <div class="flex items-center gap-2 text-sm text-slate-600">
             <label for="catalog-sort" class="font-medium text-slate-700 whitespace-nowrap">{{ _('Sort:') }}</label>
-            <select 
+            <select
               id="catalog-sort"
               x-model="sortBy"
               @change="setSort($event.target.value)"
@@ -283,7 +280,7 @@
           <!-- Grid / List Mode Buttons -->
           <div class="flex items-center bg-white border border-slate-300 rounded-lg p-0.5 shadow-sm" role="group" aria-label="{{ _('View Mode') }}">
             <!-- Grid Mode Button -->
-            <button 
+            <button
               type="button"
               @click="setViewMode('grid')"
               class="p-1.5 rounded text-slate-600 hover:text-slate-900 transition-colors"
@@ -297,7 +294,7 @@
             </button>
 
             <!-- List Mode Button -->
-            <button 
+            <button
               type="button"
               @click="setViewMode('list')"
               class="p-1.5 rounded text-slate-600 hover:text-slate-900 transition-colors"
@@ -331,9 +328,9 @@
       </div>
 
       <!-- No Filter Results State -->
-      <div 
-        x-show="sortedBooks().length === 0" 
-        x-cloak 
+      <div
+        x-show="sortedBooks().length === 0"
+        x-cloak
         class="bg-white rounded-2xl p-10 text-center border border-slate-200 shadow-sm max-w-md mx-auto my-8"
       >
         <div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400 mb-3">
@@ -343,9 +340,9 @@
         </div>
         <h3 class="text-base font-bold text-slate-900 mb-1">{{ _('No matching books') }}</h3>
         <p class="text-xs sm:text-sm text-slate-500 mb-4">{{ _('Try adjusting your search query or reset the category filters.') }}</p>
-        <button 
-          type="button" 
-          @click="clearSearch(); setFilter('all');" 
+        <button
+          type="button"
+          @click="clearSearch(); setFilter('all');"
           class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
         >
           {{ _('Reset Filters') }}
@@ -353,15 +350,15 @@
       </div>
 
       <!-- 1. GRID VIEW MODE -->
-      <div 
-        x-show="viewMode === 'grid' && paginatedBooks().length > 0" 
+      <div
+        x-show="viewMode === 'grid' && paginatedBooks().length > 0"
         class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
       >
         <template x-for="book in paginatedBooks()" :key="book.id">
           <article class="google-card flex flex-col justify-between overflow-hidden">
             <!-- Card Body -->
             <div class="p-5 sm:p-6">
-              
+
               <!-- Book Icon + Title + Author Header -->
               <div class="flex items-start gap-3 mb-3">
                 <div class="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
@@ -369,7 +366,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
                   </svg>
                 </div>
-                
+
                 <div class="min-w-0 flex-1">
                   <h2 class="leading-snug">
                     <a :href="book.url" class="google-book-title line-clamp-2" x-text="book.title"></a>
@@ -382,13 +379,13 @@
               </div>
 
               <!-- Description -->
-              <p 
-                x-show="book.description" 
-                class="text-slate-600 text-xs leading-relaxed mb-4 line-clamp-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100" 
+              <p
+                x-show="book.description"
+                class="text-slate-600 text-xs leading-relaxed mb-4 line-clamp-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100"
                 x-text="book.description"
               ></p>
-              <p 
-                x-show="!book.description" 
+              <p
+                x-show="!book.description"
                 class="text-slate-400 text-xs italic mb-4 p-2.5 bg-slate-50/50 rounded-lg border border-slate-100/60"
               >
                 {{ _('No description available for this text.') }}
@@ -396,7 +393,7 @@
 
               <!-- Progress & Statistics Box -->
               <div class="space-y-3 bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/70 text-xs">
-                
+
                 <!-- Total Pages Counter -->
                 <div class="flex items-center justify-between text-slate-600 font-medium">
                   <span class="flex items-center gap-1.5">
@@ -449,8 +446,8 @@
               <span class="text-xs font-semibold text-slate-500">
                 {{ _('Public Digital Text') }}
               </span>
-              <a 
-                :href="book.url" 
+              <a
+                :href="book.url"
                 class="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm hover:shadow transition-all"
               >
                 <span>{{ _('Read Book') }}</span>
@@ -464,9 +461,9 @@
       </div>
 
       <!-- 2. COMPACT LIST VIEW MODE (Zero-waste vertical scrolling for quick scanning) -->
-      <div 
-        x-show="viewMode === 'list' && paginatedBooks().length > 0" 
-        x-cloak 
+      <div
+        x-show="viewMode === 'list' && paginatedBooks().length > 0"
+        x-cloak
         class="space-y-3"
       >
         <template x-for="book in paginatedBooks()" :key="book.id">
@@ -475,14 +472,14 @@
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2 mb-1">
                 <a :href="book.url" class="google-book-title" x-text="book.title"></a>
-                <span 
-                  x-show="book.stats.ocr_percentage >= 100" 
+                <span
+                  x-show="book.stats.ocr_percentage >= 100"
                   class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-bold"
                 >
                   {{ _('100%% OCR') }}
                 </span>
-                <span 
-                  x-show="book.stats.translated_pages > 0" 
+                <span
+                  x-show="book.stats.translated_pages > 0"
                   class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold"
                 >
                   {{ _('Translated') }}
@@ -504,8 +501,8 @@
               </div>
 
               <!-- Action Link -->
-              <a 
-                :href="book.url" 
+              <a
+                :href="book.url"
                 class="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
               >
                 <span>{{ _('Read Book') }}</span>
@@ -519,16 +516,16 @@
       </div>
 
       <!-- Google-Style Accessible Pagination -->
-      <nav 
-        x-show="totalPages() > 1" 
-        x-cloak 
-        aria-label="{{ _('Books pagination') }}" 
+      <nav
+        x-show="totalPages() > 1"
+        x-cloak
+        aria-label="{{ _('Books pagination') }}"
         class="pt-8 pb-4 border-t border-slate-200 mt-8"
       >
         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
-          
+
           <!-- Previous Button -->
-          <button 
+          <button
             type="button"
             @click="setPage(page - 1)"
             :disabled="page <= 1"
@@ -542,7 +539,7 @@
 
           <!-- Numbered Buttons -->
           <template x-for="p in pageNumbers()" :key="p">
-            <button 
+            <button
               type="button"
               @click="setPage(p)"
               class="google-page-btn"
@@ -553,7 +550,7 @@
           </template>
 
           <!-- Next Button -->
-          <button 
+          <button
             type="button"
             @click="setPage(page + 1)"
             :disabled="page >= totalPages()"
