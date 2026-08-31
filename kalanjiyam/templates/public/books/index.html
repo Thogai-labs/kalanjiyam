@@ -153,7 +153,7 @@
 </script>
 
 <div
-  x-data="booksCatalog('books-catalog-data', {{ (query or '')|tojson|forceescape }})"
+  x-data="booksCatalog('books-catalog-data', {{ (query or '')|tojson|forceescape }}, {{ (page or 1)|tojson|forceescape }}, {{ (per_page or 9)|tojson|forceescape }})"
   class="w-full"
 >
   <!-- Google-Style Clean Header (Above the fold, minimal vertical space, high contrast) -->
@@ -274,6 +274,24 @@
               <option value="title">{{ _('Title (A–Z)') }}</option>
               <option value="pages_desc">{{ _('Most Pages') }}</option>
               <option value="progress_desc">{{ _('Highest OCR Progress') }}</option>
+            </select>
+          </div>
+
+          <!-- Per Page Dropdown -->
+          <div class="flex items-center gap-2 text-sm text-slate-600">
+            <label for="catalog-per-page" class="font-medium text-slate-700 whitespace-nowrap hidden sm:inline">{{ _('Show:') }}</label>
+            <select
+              id="catalog-per-page"
+              :value="perPage"
+              @change="setPerPage($event.target.value)"
+              class="bg-white border border-slate-300 text-slate-800 text-sm rounded-lg px-2.5 py-1.5 focus:border-blue-600 focus:outline-none shadow-sm cursor-pointer"
+              aria-label="{{ _('Books per page') }}"
+            >
+              <option value="9">9 {{ _('/ page') }}</option>
+              <option value="12">12 {{ _('/ page') }}</option>
+              <option value="18">18 {{ _('/ page') }}</option>
+              <option value="27">27 {{ _('/ page') }}</option>
+              <option value="36">36 {{ _('/ page') }}</option>
             </select>
           </div>
 
@@ -517,7 +535,7 @@
 
       <!-- Google-Style Accessible Pagination -->
       <nav
-        x-show="totalPages() > 1"
+        x-show="sortedBooks().length > 0"
         x-cloak
         aria-label="{{ _('Books pagination') }}"
         class="pt-8 pb-4 border-t border-slate-200 mt-8"
@@ -529,7 +547,7 @@
             type="button"
             @click="setPage(page - 1)"
             :disabled="page <= 1"
-            :class="{ 'disabled': page <= 1 }"
+            :class="{ 'disabled opacity-50 cursor-not-allowed': page <= 1 }"
             aria-label="{{ _('Previous page') }}"
             class="google-page-btn !px-4 !rounded-full text-slate-700 hover:text-blue-700 mr-1 sm:mr-2"
           >
@@ -537,16 +555,23 @@
             <span>{{ _('Previous') }}</span>
           </button>
 
-          <!-- Numbered Buttons -->
-          <template x-for="p in pageNumbers()" :key="p">
-            <button
-              type="button"
-              @click="setPage(p)"
-              class="google-page-btn"
-              :class="{ 'active': p === page }"
-              :aria-current="p === page ? 'page' : false"
-              x-text="p"
-            ></button>
+          <!-- Numbered Buttons and Ellipses -->
+          <template x-for="(item, idx) in pageItems()" :key="idx">
+            <div>
+              <template x-if="item === '…'">
+                <span class="px-1.5 text-slate-400 font-bold select-none text-base leading-10">…</span>
+              </template>
+              <template x-if="item !== '…'">
+                <button
+                  type="button"
+                  @click="setPage(item)"
+                  class="google-page-btn"
+                  :class="{ 'active': item === page }"
+                  :aria-current="item === page ? 'page' : false"
+                  x-text="item"
+                ></button>
+              </template>
+            </div>
           </template>
 
           <!-- Next Button -->
@@ -554,9 +579,9 @@
             type="button"
             @click="setPage(page + 1)"
             :disabled="page >= totalPages()"
-            :class="{ 'disabled': page >= totalPages() }"
+            :class="{ 'disabled opacity-50 cursor-not-allowed': page >= totalPages() }"
             aria-label="{{ _('Next page') }}"
-            class="google-page-btn !px-4 !rounded-full text-slate-700 hover:text-blue-700 ml-1 sm:ml-2"
+            class="google-page-btn !px-4 !rounded-full text-slate-700 hover:text-blue-700 ml-1 sm:mr-2"
           >
             <span>{{ _('Next') }}</span>
             <span class="ml-1">›</span>

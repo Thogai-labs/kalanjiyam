@@ -8,7 +8,7 @@
  * - Grid and compact List view modes
  * - Client-side pagination to eliminate excessive scrolling
  */
-export default function booksCatalog(dataSource = [], initialQuery = '') {
+export default function booksCatalog(dataSource = [], initialQuery = '', initialPage = 1, initialPerPage = 9) {
   let books = [];
   if (Array.isArray(dataSource)) {
     books = dataSource;
@@ -28,15 +28,43 @@ export default function booksCatalog(dataSource = [], initialQuery = '') {
     books = window.__KALANJIYAM_BOOKS__;
   }
 
+  // Parse query parameters from window.location if available and not explicitly provided
+  let urlQuery = initialQuery || '';
+  let urlPage = Number(initialPage) || 1;
+  let urlPerPage = Number(initialPerPage) || 9;
+
+  if (typeof window !== 'undefined' && window.location && window.location.search) {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (!urlQuery && params.has('q')) {
+        urlQuery = params.get('q') || '';
+      }
+      if (urlPage === 1 && params.has('page')) {
+        const p = parseInt(params.get('page'), 10);
+        if (!Number.isNaN(p) && p >= 1) {
+          urlPage = p;
+        }
+      }
+      if (urlPerPage === 9 && params.has('per_page')) {
+        const pp = parseInt(params.get('per_page'), 10);
+        if ([9, 12, 18, 27, 36].includes(pp)) {
+          urlPerPage = pp;
+        }
+      }
+    } catch (e) {
+      // Ignore URL parsing errors
+    }
+  }
+
   return {
     allBooks: books,
-    query: initialQuery || '',
-    searchQuery: initialQuery || '',
+    query: urlQuery,
+    searchQuery: urlQuery,
     activeFilter: 'all', // 'all' | 'completed' | 'in_progress' | 'translated'
     sortBy: 'title', // 'title' | 'pages_desc' | 'progress_desc'
     viewMode: 'grid', // 'grid' | 'list'
-    page: 1,
-    perPage: 9,
+    page: urlPage,
+    perPage: urlPerPage,
     debounceTimer: null,
 
     init() {
@@ -58,9 +86,54 @@ export default function booksCatalog(dataSource = [], initialQuery = '') {
           this.allBooks = window.__KALANJIYAM_BOOKS__;
         }
       }
-      this.query = initialQuery || '';
-      this.searchQuery = (initialQuery || '').trim();
-      this.page = 1;
+
+      // Sync with URL parameters on back/forward browser navigation
+      if (typeof window !== 'undefined' && window.addEventListener) {
+        window.addEventListener('popstate', () => {
+          try {
+            const params = new URLSearchParams(window.location.search);
+            const p = parseInt(params.get('page') || '1', 10);
+            this.page = Number.isNaN(p) ? 1 : Math.max(1, p);
+            if (params.has('q')) {
+              this.query = params.get('q') || '';
+              this.searchQuery = this.query.trim();
+            }
+          } catch (e) {
+            // Ignore
+          }
+        });
+      }
+    },
+
+    // Synchronize current page and query parameters to the browser URL
+    updateUrl() {
+      if (typeof window === 'undefined' || !window.history || !window.location) {
+        return;
+      }
+      try {
+        const url = new URL(window.location.href);
+        if (this.page > 1) {
+          url.searchParams.set('page', String(this.page));
+        } else {
+          url.searchParams.delete('page');
+        }
+
+        if (this.searchQuery) {
+          url.searchParams.set('q', this.searchQuery);
+        } else {
+          url.searchParams.delete('q');
+        }
+
+        if (this.perPage !== 9) {
+          url.searchParams.set('per_page', String(this.perPage));
+        } else {
+          url.searchParams.delete('per_page');
+        }
+
+        window.history.pushState(null, '', url.toString());
+      } catch (e) {
+        // Ignore errors in environments where URL manipulation is restricted
+      }
     },
 
     // Debounced search input handler
@@ -71,6 +144,7 @@ export default function booksCatalog(dataSource = [], initialQuery = '') {
       this.debounceTimer = setTimeout(() => {
         this.searchQuery = (this.query || '').trim();
         this.page = 1;
+        this.updateUrl();
       }, 200);
     },
 
@@ -78,6 +152,7 @@ export default function booksCatalog(dataSource = [], initialQuery = '') {
       this.query = '';
       this.searchQuery = '';
       this.page = 1;
+      this.updateUrl();
       if (this.$refs && this.$refs.searchInput) {
         this.$refs.searchInput.focus();
       }
@@ -95,9 +170,23 @@ export default function booksCatalog(dataSource = [], initialQuery = '') {
 
     setViewMode(mode) {
       this.viewMode = mode;
-      // In list view, allow 12 items per page since rows are compact
-      this.perPage = mode === 'list' ? 12 : 9;
+      // In list view, default to 12 items per page if standard
+      if (mode === 'list' && this.perPage === 9) {
+        this.perPage = 12;
+      } else if (mode === 'grid' && this.perPage === 12) {
+        this.perPage = 9;
+      }
       this.page = 1;
+      this.updateUrl();
+    },
+
+    setPerPage(count) {
+      const num = parseInt(count, 10);
+      if ([9, 12, 18, 27, 36].includes(num)) {
+        this.perPage = num;
+        this.page = 1;
+        this.updateUrl();
+      }
     },
 
     // Filtered books based on search query and active filter chip
@@ -174,6 +263,7 @@ export default function booksCatalog(dataSource = [], initialQuery = '') {
       const max = this.totalPages();
       if (p >= 1 && p <= max) {
         this.page = p;
+        this.updateUrl();
         const el = document.getElementById('catalog-content');
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -203,7 +293,7 @@ export default function booksCatalog(dataSource = [], initialQuery = '') {
       };
     },
 
-    // Page window array for Google-style pagination
+    // Windowed page numbers
     pageNumbers() {
       const total = this.totalPages();
       const current = this.page;
@@ -219,6 +309,47 @@ export default function booksCatalog(dataSource = [], initialQuery = '') {
         pages.push(i);
       }
       return pages;
+    },
+
+    // Full Google-style page items including first, last, and ellipsis ('…')
+    pageItems() {
+      const total = this.totalPages();
+      const current = this.page;
+      if (total <= 7) {
+        return Array.from({ length: total }, (_, i) => i + 1);
+      }
+
+      const items = [];
+      let start = Math.max(1, current - 2);
+      let end = Math.min(total, current + 2);
+
+      if (current <= 4) {
+        start = 1;
+        end = 5;
+      } else if (current >= total - 3) {
+        start = total - 4;
+        end = total;
+      }
+
+      if (start > 1) {
+        items.push(1);
+        if (start > 2) {
+          items.push('…');
+        }
+      }
+
+      for (let i = start; i <= end; i += 1) {
+        items.push(i);
+      }
+
+      if (end < total) {
+        if (end < total - 1) {
+          items.push('…');
+        }
+        items.push(total);
+      }
+
+      return items;
     },
   };
 }

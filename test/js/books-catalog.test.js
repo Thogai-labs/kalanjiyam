@@ -167,6 +167,29 @@ describe('booksCatalog Alpine.js component', () => {
     // Clamps invalid page numbers
     catalog.setPage(99);
     expect(catalog.page).toBe(3);
+
+    // Tests pageItems() with ellipsis
+    const lotsOfBooks = Array.from({ length: 90 }, (_, i) => ({
+      id: i + 1,
+      title: `Volume ${i + 1}`,
+      author: 'Author',
+      stats: { total_pages: 5, ocr_pages: 5, ocr_percentage: 100 },
+    }));
+    window.history.pushState(null, '', '/');
+    const bigCatalog = booksCatalog(lotsOfBooks, '', 5, 9);
+    bigCatalog.init();
+    expect(bigCatalog.totalPages()).toBe(10);
+    expect(bigCatalog.page).toBe(5);
+    const items = bigCatalog.pageItems();
+    expect(items).toContain(1);
+    expect(items).toContain('…');
+    expect(items).toContain(10);
+
+    // Tests setPerPage
+    bigCatalog.setPerPage(18);
+    expect(bigCatalog.perPage).toBe(18);
+    expect(bigCatalog.totalPages()).toBe(5);
+    expect(bigCatalog.page).toBe(1);
   });
 
   test('clears search properly', () => {

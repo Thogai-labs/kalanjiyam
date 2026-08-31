@@ -102,6 +102,12 @@ def index():
     projects_with_stats.sort(key=lambda x: x['project'].display_title)
     
     query = request.args.get("q", "").strip()
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 9, type=int)
+    if page < 1:
+        page = 1
+    if per_page not in (9, 12, 18, 27, 36):
+        per_page = 9
 
     serialized_projects = [
         {
@@ -134,7 +140,9 @@ def index():
         "public/books/index.html",
         projects=projects_with_stats,
         serialized_projects=serialized_projects,
-        query=query
+        query=query,
+        page=page,
+        per_page=per_page
     )
 
 
