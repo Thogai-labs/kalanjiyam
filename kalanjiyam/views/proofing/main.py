@@ -747,7 +747,10 @@ def create_project_status(task_id):
 
 @bp.route("/recent-changes")
 def recent_changes():
-    """Show recent changes across all projects with pagination and eager-loaded queries."""
+    """Show recent changes across all projects with pagination, date filtering, and activity heatmap."""
+    from datetime import date as dt_date, timedelta
+    from kalanjiyam.utils import heatmap
+
     try:
         page = max(1, int(request.args.get("page", 1)))
     except (ValueError, TypeError):
@@ -756,6 +759,15 @@ def recent_changes():
         per_page = max(1, min(100, int(request.args.get("per_page", 25))))
     except (ValueError, TypeError):
         per_page = 25
+
+    date_str = request.args.get("date")
+    filter_date = None
+    if date_str:
+        try:
+            filter_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            filter_date = None
+            date_str = None
 
     session = q.get_session()
 
@@ -769,6 +781,7 @@ def recent_changes():
     accessible_project_ids = [p.id for p in accessible_projects]
 
     if not accessible_project_ids:
+        hm = heatmap.create(iter([]))
         return render_template(
             "proofing/recent-changes.html",
             recent_activity=[],
@@ -776,6 +789,9 @@ def recent_changes():
             per_page=per_page,
             total_pages=1,
             total_items=0,
+            heatmap=hm,
+            selected_date=None,
+            total_heatmap_contributions=0,
         )
 
     # 2. Exclude bot edits
@@ -783,13 +799,38 @@ def recent_changes():
     bot_id = bot_user.id if bot_user else None
 
     # Base filter for revisions scoped to accessible projects
-    rev_filters = [db.Revision.project_id.in_(accessible_project_ids)]
+    base_rev_filters = [db.Revision.project_id.in_(accessible_project_ids)]
     if bot_id:
-        rev_filters.append(db.Revision.author_id != bot_id)
+        base_rev_filters.append(db.Revision.author_id != bot_id)
+
+    # 1-Year Heatmap Activity Data
+    one_year_ago = datetime.utcnow() - timedelta(days=365)
+    hm_rev_dates = (
+        session.query(db.Revision.created)
+        .filter(*base_rev_filters, db.Revision.created >= one_year_ago)
+        .all()
+    )
+    hm_proj_dates = (
+        session.query(db.Project.created_at)
+        .filter(db.Project.id.in_(accessible_project_ids), db.Project.created_at >= one_year_ago)
+        .all()
+    )
+    all_hm_dates = [r[0].date() for r in hm_rev_dates if r[0]] + [p[0].date() for p in hm_proj_dates if p[0]]
+    hm = heatmap.create(iter(all_hm_dates))
+    total_heatmap_contributions = len(all_hm_dates)
+
+    # Apply date filter if selected
+    rev_filters = list(base_rev_filters)
+    proj_filters = [db.Project.id.in_(accessible_project_ids)]
+    if filter_date:
+        start_dt = datetime.combine(filter_date, datetime.min.time())
+        end_dt = datetime.combine(filter_date, datetime.max.time())
+        rev_filters.extend([db.Revision.created >= start_dt, db.Revision.created <= end_dt])
+        proj_filters.extend([db.Project.created_at >= start_dt, db.Project.created_at <= end_dt])
 
     # Counts
     total_revisions = session.query(db.Revision.id).filter(*rev_filters).count()
-    total_projects = len(accessible_project_ids)
+    total_projects = session.query(db.Project.id).filter(*proj_filters).count()
     total_items = total_revisions + total_projects
     total_pages = max(1, math.ceil(total_items / per_page)) if total_items else 1
     if page > total_pages:
@@ -816,7 +857,7 @@ def recent_changes():
         .options(
             orm.joinedload(db.Project.creator),
         )
-        .filter(db.Project.id.in_(accessible_project_ids))
+        .filter(*proj_filters)
         .order_by(db.Project.created_at.desc())
         .limit(fetch_limit)
         .all()
@@ -868,6 +909,9 @@ def recent_changes():
         per_page=per_page,
         total_pages=total_pages,
         total_items=total_items,
+        heatmap=hm,
+        selected_date=date_str,
+        total_heatmap_contributions=total_heatmap_contributions,
     )
 
 

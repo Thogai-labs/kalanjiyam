@@ -109,7 +109,14 @@ def test_recent_changes(client):
 def test_recent_changes_pagination(client):
     resp = client.get("/proofing/recent-changes?page=1&per_page=10")
     assert resp.status_code == 200
-    assert "Recent changes" in resp.text
+    assert "Recent Changes" in resp.text
+
+
+def test_recent_changes_date_filter(client):
+    resp = client.get("/proofing/recent-changes?date=2026-08-15")
+    assert resp.status_code == 200
+    assert "Filtered by date" in resp.text
+    assert "2026-08-15" in resp.text
 
 
 def test_create_project__unauth(client):

@@ -260,10 +260,11 @@
 
   /* heatmap */
   .heatmap text { @apply text-xs; }
-  .heatmap rect.l1 { fill: #f0fdfa; }
-  .heatmap rect.l2 { fill: #ccfbf1; }
-  .heatmap rect.l3 { fill: #99f6e4; }
-  .heatmap rect.l4 { fill: #5eead4; }
+  .heatmap rect.l0 { fill: #ebedf0; }
+  .heatmap rect.l1 { fill: #c7d7f9; }
+  .heatmap rect.l2 { fill: #85a7f2; }
+  .heatmap rect.l3 { fill: #4169e1; }
+  .heatmap rect.l4 { fill: #1e3a8a; }
 
   /* Peacock feather decorative elements */
   .peacock-border {
