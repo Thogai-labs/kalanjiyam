@@ -929,8 +929,7 @@ def recent_changes():
                 else:
                     r.diff = None
 
-    return render_template(
-        "proofing/recent-changes.html",
+    context = dict(
         recent_activity=page_activity,
         page=page,
         per_page=per_page,
@@ -941,6 +940,14 @@ def recent_changes():
         end_date=end_date_str,
         quick_range=quick_range,
     )
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        resp = make_response(render_template("proofing/_recent_changes_list.html", **context))
+        resp.headers["X-Total-Items"] = str(total_items)
+        resp.headers["X-Total-Pages"] = str(total_pages)
+        return resp
+
+    return render_template("proofing/recent-changes.html", **context)
 
 
 @bp.route("/talk")
