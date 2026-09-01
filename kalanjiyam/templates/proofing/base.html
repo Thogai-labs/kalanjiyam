@@ -9,11 +9,22 @@
 
 {% block extra_css %}
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
   :root {
     --primary-color: royalblue;
     --primary-hover: #3f51b5;
     --premium-shadow: 0 10px 30px rgba(65, 105, 225, 0.08);
     --premium-shadow-hover: 0 15px 40px rgba(65, 105, 225, 0.15);
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .project-hero h1, .project-hero h2, .google-proofing-header h1, .google-proofing-header h2 {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+    letter-spacing: -0.025em;
   }
 
   .premium-card {

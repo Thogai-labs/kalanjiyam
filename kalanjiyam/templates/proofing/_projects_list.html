@@ -35,14 +35,13 @@
                 <button
                   type="button"
                   @click="toggleIssue('{{ tag.name }}')"
-                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                  :class="issues.includes('{{ tag.name }}') ? 'bg-amber-500 text-white shadow-xs' : 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'"
+                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-900 border border-amber-200 hover:bg-amber-200 transition-all cursor-pointer"
                   title="{{ _('Filter by condition: %(tag)s', tag=tag.name) }}{% if tag.pages %} ({{ _('Pages:') }} {{ tag.pages }}){% endif %}"
                 >
-                  <span class="w-1.5 h-1.5 rounded-full" :class="issues.includes('{{ tag.name }}') ? 'bg-white' : 'bg-amber-500'"></span>
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                   <span>{{ tag.name }}</span>
                   {% if tag.pages %}
-                  <span class="text-[9px] opacity-80 font-normal">({{ tag.pages }})</span>
+                  <span class="text-[9px] text-amber-700 font-normal">({{ tag.pages }})</span>
                   {% endif %}
                 </button>
                 {% endfor %}
@@ -167,14 +166,13 @@
                   <button
                     type="button"
                     @click="toggleIssue('{{ tag.name }}')"
-                    class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs"
-                    :class="issues.includes('{{ tag.name }}') ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'"
+                    class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-900 border border-amber-200 hover:bg-amber-200 transition-all cursor-pointer shadow-xs"
                     title="{{ _('Filter by condition: %(tag)s', tag=tag.name) }}{% if tag.pages %} ({{ _('Pages:') }} {{ tag.pages }}){% endif %}"
                   >
-                    <span class="w-1.5 h-1.5 rounded-full" :class="issues.includes('{{ tag.name }}') ? 'bg-white' : 'bg-amber-500'"></span>
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                     <span>{{ tag.name }}</span>
                     {% if tag.pages %}
-                      <span class="text-[10px] opacity-80 font-normal">({{ tag.pages }})</span>
+                      <span class="text-[10px] text-amber-700 font-normal">({{ tag.pages }})</span>
                     {% endif %}
                   </button>
                 {% endfor %}

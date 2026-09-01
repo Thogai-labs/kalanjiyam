@@ -4,15 +4,11 @@
 
 {% block extra_css %}
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
-
-  .font-serif-title {
-    font-family: 'Cinzel', Georgia, serif;
-  }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
   .project-hero {
     background: #0b1120;
-    background-image: 
+    background-image:
       radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
       repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
       repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
@@ -34,19 +30,21 @@
   }
 
   .google-search-bar {
-    background-color: #ffffff;
-    border: 1px solid #dfe1e5;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 9999px;
-    box-shadow: 0 1px 6px rgba(32, 33, 36, 0.10);
-    transition: all 0.2s ease-in-out;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(12px);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .google-search-bar:hover {
-    border-color: #c0c4cc;
-    box-shadow: 0 2px 8px rgba(32, 33, 36, 0.16);
+    border-color: rgba(65, 105, 225, 0.5);
+    background: rgba(15, 23, 42, 0.95);
   }
   .google-search-bar:focus-within {
-    border-color: #1a73e8;
-    box-shadow: 0 2px 10px rgba(26, 115, 232, 0.22);
+    border-color: #4169e1;
+    background: #0f172a;
+    box-shadow: 0 0 0 3px rgba(65, 105, 225, 0.25), 0 8px 25px rgba(0, 0, 0, 0.5);
   }
 
   /* Google-Style Pagination */
@@ -97,21 +95,13 @@
 {% block main %}
 <div class="w-full" x-data="proofingDashboard()">
   <!-- Integrated Project-Hero Header (Dark Blue + Grid Pattern with Search & Filters) -->
-  <header class="project-hero text-slate-100 py-10 px-4 mb-8 border-b border-slate-800">
-    <div class="max-w-6xl mx-auto space-y-4">
-
-      <!-- Category Badge -->
-      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider shadow-sm">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-        </svg>
-        <span>{{ _('Proofing Workspace') }}</span>
-      </div>
+  <header class="project-hero text-slate-100 py-6 sm:py-7 px-4 mb-6 border-b border-slate-800">
+    <div class="max-w-6xl mx-auto space-y-3">
 
       <!-- Top Row: Title, Active Projects Count, and Action Buttons -->
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex flex-wrap items-center gap-3">
-          <h1 class="text-3xl sm:text-4xl font-bold font-serif-title tracking-tight text-white flex items-center gap-3">
+          <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white flex items-center gap-3">
             <span>{{ _('Proofing Workspace') }}</span>
           </h1>
           {% if has_any_projects %}
@@ -155,7 +145,7 @@
             x-model="query"
             value="{{ search_query }}"
             placeholder="{{ _('Search by manuscript title, author, or slug…') }}"
-            class="w-full bg-transparent text-slate-800 placeholder-slate-400 text-sm sm:text-base focus:outline-none font-medium"
+            class="w-full bg-transparent text-white placeholder-slate-400 text-sm sm:text-base focus:outline-none font-medium"
             @input.debounce.300ms="fetchResults(1)"
             aria-label="{{ _('Search proofing manuscripts') }}"
           />
@@ -170,7 +160,7 @@
               type="button"
               x-show="query && !isLoading"
               @click="query = ''; fetchResults(1)"
-              class="text-slate-400 hover:text-slate-600 transition-colors p-1"
+              class="text-slate-400 hover:text-white transition-colors p-1"
               title="{{ _('Clear search') }}"
               aria-label="{{ _('Clear search') }}"
             >
@@ -249,8 +239,8 @@
                   <button
                     type="button"
                     x-show="issues.length > 0"
-                    @click="issues = []; fetchResults(1)"
-                    class="text-royalblue hover:underline text-xs font-bold"
+                    @click="clearIssues()"
+                    class="text-royalblue hover:underline text-xs font-bold cursor-pointer"
                   >
                     {{ _('Clear') }}
                   </button>
@@ -261,9 +251,9 @@
                     <input
                       type="checkbox"
                       value="{{ tag_name }}"
-                      :checked="issues.includes('{{ tag_name }}')"
-                      @change="toggleIssue('{{ tag_name }}')"
-                      class="rounded border-slate-300 text-amber-500 focus:ring-amber-400 w-3.5 h-3.5"
+                      x-model="issues"
+                      @change="fetchResults(1)"
+                      class="rounded border-slate-300 text-royalblue focus:ring-royalblue w-3.5 h-3.5 cursor-pointer"
                     />
                     <span class="font-medium text-slate-800">{{ tag_name }}</span>
                   </label>
@@ -352,10 +342,10 @@
             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-950/80 text-amber-200 border border-amber-600/60">
               <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
               <span x-text="iss"></span>
-              <button type="button" @click="toggleIssue(iss)" class="ml-1 text-amber-300 hover:text-white font-bold" title="{{ _('Remove filter') }}">×</button>
+              <button type="button" @click="toggleIssue(iss)" class="ml-1 text-amber-300 hover:text-white font-bold cursor-pointer" title="{{ _('Remove filter') }}">×</button>
             </span>
           </template>
-          <button type="button" @click="issues = []; fetchResults(1)" class="text-xs text-blue-400 hover:underline ml-1 font-semibold">
+          <button type="button" @click="clearIssues()" class="text-xs text-blue-400 hover:underline ml-1 font-semibold cursor-pointer">
             {{ _('Clear all issues') }}
           </button>
         </div>
@@ -439,6 +429,11 @@ function proofingDashboard() {
         this.perPage = parsed;
         this.fetchResults(1);
       }
+    },
+
+    clearIssues() {
+      this.issues = [];
+      this.fetchResults(1);
     },
 
     toggleIssue(issueName) {

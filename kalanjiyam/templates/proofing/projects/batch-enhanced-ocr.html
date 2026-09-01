@@ -5,10 +5,10 @@
 
 {% block extra_css %}
 <style>
-  @import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap");
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-  .font-serif-title {
-    font-family: "Cinzel", Georgia, serif;
+  .{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   }
 
   .project-hero {
@@ -25,7 +25,7 @@
 {% block title %}{{ _("Enhanced Batch OCR:") }} {{ project.display_title }} | Kalanjiyam{% endblock %}
 
 {% block hero %}
-<header class="project-hero text-slate-100 py-10 px-4 mb-8 border-b border-slate-800">
+<header class="project-hero text-slate-100 py-6 sm:py-7 px-4 mb-6 border-b border-slate-800">
   <div class="max-w-6xl mx-auto">
     <!-- Category Badge -->
     <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/30 text-violet-300 text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
@@ -36,7 +36,7 @@
     </div>
 
     <!-- Title -->
-    <h1 class="text-3xl sm:text-4xl font-bold font-serif-title tracking-tight mb-2 text-white">
+    <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight mb-2 text-white">
       {{ project.display_title }}
     </h1>
 

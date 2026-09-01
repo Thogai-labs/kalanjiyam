@@ -6,11 +6,7 @@
 
 {% block extra_css %}
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
-
-  .font-serif-title {
-    font-family: 'Cinzel', Georgia, serif;
-  }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
   .project-hero {
     background: #0b1120;
@@ -36,10 +32,10 @@
 {% block title %}{{ _('Activity: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
 
 {% block hero %}
-<header class="project-hero text-slate-100 py-10 px-4 mb-8 border-b border-slate-800">
+<header class="project-hero text-slate-100 py-6 sm:py-7 px-4 mb-6 border-b border-slate-800">
   <div class="max-w-6xl mx-auto">
     <!-- Category Badge -->
-    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-2 shadow-sm">
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
       </svg>
@@ -47,7 +43,7 @@
     </div>
 
     <!-- Title -->
-    <h1 class="text-3xl sm:text-4xl font-bold font-serif-title tracking-tight mb-2 text-white">
+    <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight mb-2 text-white">
       {{ project.display_title }}
     </h1>
 
