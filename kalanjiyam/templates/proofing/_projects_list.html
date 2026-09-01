@@ -182,6 +182,7 @@
             {% endif %}
           </div>
           {% set count = pages_per_project.get(p.id, 0) %}
+          {% set progress = progress_per_project.get(p.id, 0) %}
           <div class="flex flex-wrap items-center gap-2 mt-2">
             <span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-lg">
               <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -189,6 +190,23 @@
               </svg>
               {{ ngettext('%(num)d page', '%(num)d pages', count) }}
             </span>
+            <!-- Status Badge -->
+            {% if progress >= 1.0 %}
+            <span class="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-lg">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>{{ _('Proofed twice') }}</span>
+            </span>
+            {% elif progress > 0 %}
+            <span class="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200/80 rounded-lg">
+              <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+              <span>{{ _('Proofed once') }}</span>
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 bg-red-50 text-red-600 border border-red-200/80 rounded-lg">
+              <span class="w-2 h-2 rounded-full bg-red-500"></span>
+              <span>{{ _('Needs work') }}</span>
+            </span>
+            {% endif %}
             {% if current_user.is_super_admin %}
               {% if p.creator_mode == 'unregistered' %}
                 <span class="text-xs font-bold px-2 py-0.5 bg-rose-100 text-rose-700 rounded-lg uppercase tracking-wide text-[10px]">

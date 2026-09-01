@@ -103,16 +103,16 @@
           {% if is_dash %}<span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>{% endif %}
         </a>
         {% endif %}
-        {% set is_ongoing = request.endpoint == 'proofing.index' %}
+        {% set is_workspace = request.endpoint == 'proofing.index' %}
         <a href="{{ url_for('proofing.index') }}"
-          class="flex items-center justify-between px-4 py-2.5 text-xs font-semibold {% if is_ongoing %}text-royalblue bg-blue-50/70 font-bold{% else %}text-slate-700 hover:bg-slate-50 hover:text-royalblue{% endif %} transition-colors">
+          class="flex items-center justify-between px-4 py-2.5 text-xs font-semibold {% if is_workspace %}text-royalblue bg-blue-50/70 font-bold{% else %}text-slate-700 hover:bg-slate-50 hover:text-royalblue{% endif %} transition-colors">
           <span class="flex items-center gap-2.5">
-            <svg class="w-4 h-4 {% if is_ongoing %}text-royalblue{% else %}text-slate-400 group-hover:text-royalblue{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 {% if is_workspace %}text-royalblue{% else %}text-slate-400 group-hover:text-royalblue{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
             </svg>
-            <span>{{ _('Ongoing projects') }}</span>
+            <span>{{ _('Proofing Workspace') }}</span>
           </span>
-          {% if is_ongoing %}<span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>{% endif %}
+          {% if is_workspace %}<span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>{% endif %}
         </a>
         {% set is_create = request.endpoint == 'proofing.create_project' %}
         <a href="{{ url_for('proofing.create_project') }}"

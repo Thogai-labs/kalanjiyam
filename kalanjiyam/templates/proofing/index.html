@@ -104,31 +104,7 @@
           {% endif %}
         </div>
 
-        <div class="flex flex-wrap items-center gap-3">
-          <!-- Compact Status Legend -->
-          <div class="flex items-center gap-1.5 sm:gap-2 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-full">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">{{ _('Status:') }}</span>
-            <span class="inline-flex items-center gap-1 text-red-700 font-semibold">
-              <span class="w-2 h-2 rounded-full bg-red-500"></span>
-              <span>{{ _('Needs work') }}</span>
-            </span>
-            <span class="text-slate-300">•</span>
-            <span class="inline-flex items-center gap-1 text-amber-800 font-semibold">
-              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
-              <span>{{ _('Proofed 1x') }}</span>
-            </span>
-            <span class="text-slate-300">•</span>
-            <span class="inline-flex items-center gap-1 text-emerald-800 font-semibold">
-              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span>{{ _('Proofed 2x') }}</span>
-            </span>
-            <span class="text-slate-300">•</span>
-            <span class="inline-flex items-center gap-1 text-slate-600 font-semibold">
-              <span class="w-2 h-2 rounded-full bg-slate-400"></span>
-              <span>{{ _('Not relevant') }}</span>
-            </span>
-          </div>
-
+        <div class="flex items-center gap-3">
           <!-- New Project Action Button -->
           <a href="{{ url_for('proofing.create_project') }}" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-royalblue hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm shadow-sm transition-all shrink-0">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
