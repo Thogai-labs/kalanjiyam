@@ -42,14 +42,7 @@
     </div>
 
     <div class="flex items-center gap-2">
-      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-royalblue text-xs font-semibold">
-        <span class="w-2 h-2 rounded-full bg-royalblue animate-pulse"></span>
-        <span>{{ _('Live Stream') }}</span>
-      </div>
       <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue text-xs font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
-        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-        </svg>
         <span>{{ _('Workspace') }}</span>
       </a>
     </div>
@@ -61,14 +54,14 @@
 <div class="w-full space-y-6">
 
   <!-- GitHub-Style Contribution Heatmap Card -->
-  <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3.5">
+  <div class="bg-white mt-6 rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3.5">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div class="flex items-center gap-2">
         <svg class="w-4 h-4 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
         </svg>
         <h3 class="text-xs sm:text-sm font-bold text-slate-800">
-          {{ _('%(count)s activities in the last year', count=total_heatmap_contributions) }}
+          {{ _('%(count)s activities in the past 12 months', count=total_heatmap_contributions) }}
         </h3>
       </div>
 
