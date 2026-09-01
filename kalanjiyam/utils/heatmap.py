@@ -113,13 +113,8 @@ def _group_by_week(dates: list[date]) -> list[list[date]]:
     return weeks
 
 
-def create(date_iter: Iterator[date]) -> HeatmapData:
-    """Create the data needed to render a calendar heatmap.
-
-    :param date_iter: an iterator of date events. The more date appear, the
-        more intense its heatmap color will be.
-    """
-    counts = _count_per_date(date_iter)
+def create_from_counts(counts: dict[date, int]) -> HeatmapData:
+    """Create the data needed to render a calendar heatmap from pre-aggregated counts dict."""
     dates = _create_calendar_dates()
     weeks = _group_by_week(dates)
     month_labels = _create_month_labels(dates)
@@ -129,3 +124,13 @@ def create(date_iter: Iterator[date]) -> HeatmapData:
         month_labels=month_labels,
         counts=counts,
     )
+
+
+def create(date_iter: Iterator[date]) -> HeatmapData:
+    """Create the data needed to render a calendar heatmap.
+
+    :param date_iter: an iterator of date events. The more date appear, the
+        more intense its heatmap color will be.
+    """
+    counts = _count_per_date(date_iter)
+    return create_from_counts(counts)

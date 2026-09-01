@@ -803,21 +803,68 @@ def recent_changes():
     if bot_id:
         base_rev_filters.append(db.Revision.author_id != bot_id)
 
-    # 1-Year Heatmap Activity Data
-    one_year_ago = datetime.utcnow() - timedelta(days=365)
-    hm_rev_dates = (
-        session.query(db.Revision.created)
-        .filter(*base_rev_filters, db.Revision.created >= one_year_ago)
-        .all()
-    )
-    hm_proj_dates = (
-        session.query(db.Project.created_at)
-        .filter(db.Project.id.in_(accessible_project_ids), db.Project.created_at >= one_year_ago)
-        .all()
-    )
-    all_hm_dates = [r[0].date() for r in hm_rev_dates if r[0]] + [p[0].date() for p in hm_proj_dates if p[0]]
-    hm = heatmap.create(iter(all_hm_dates))
-    total_heatmap_contributions = len(all_hm_dates)
+    # 1-Year Heatmap Activity Data (with Redis cache + SQL GROUP BY aggregation)
+    from sqlalchemy import func
+    import json
+    import redis
+
+    cache_key = f"heatmap_proofing:{hash(tuple(sorted(accessible_project_ids)))}"
+    counts_map = None
+    r_client = None
+    try:
+        r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+        cached = r_client.get(cache_key)
+        if cached:
+            raw_counts = json.loads(cached)
+            counts_map = {
+                datetime.strptime(k, "%Y-%m-%d").date(): int(v)
+                for k, v in raw_counts.items()
+            }
+    except Exception:
+        counts_map = None
+
+    if counts_map is None:
+        one_year_ago = datetime.utcnow() - timedelta(days=365)
+        # Database-level GROUP BY aggregation (returns at most 365 rows)
+        hm_rev_rows = (
+            session.query(
+                func.date(db.Revision.created).label("d"),
+                func.count(db.Revision.id).label("c"),
+            )
+            .filter(*base_rev_filters, db.Revision.created >= one_year_ago)
+            .group_by(func.date(db.Revision.created))
+            .all()
+        )
+        hm_proj_rows = (
+            session.query(
+                func.date(db.Project.created_at).label("d"),
+                func.count(db.Project.id).label("c"),
+            )
+            .filter(db.Project.id.in_(accessible_project_ids), db.Project.created_at >= one_year_ago)
+            .group_by(func.date(db.Project.created_at))
+            .all()
+        )
+
+        counts_map = {}
+        for row in hm_rev_rows:
+            if row[0]:
+                d = row[0] if isinstance(row[0], dt_date) else datetime.strptime(str(row[0])[:10], "%Y-%m-%d").date()
+                counts_map[d] = counts_map.get(d, 0) + int(row[1])
+        for row in hm_proj_rows:
+            if row[0]:
+                d = row[0] if isinstance(row[0], dt_date) else datetime.strptime(str(row[0])[:10], "%Y-%m-%d").date()
+                counts_map[d] = counts_map.get(d, 0) + int(row[1])
+
+        # Cache in Redis for 5 minutes (300 seconds)
+        if r_client:
+            try:
+                cache_payload = {d.strftime("%Y-%m-%d"): c for d, c in counts_map.items()}
+                r_client.set(cache_key, json.dumps(cache_payload), ex=300)
+            except Exception:
+                pass
+
+    hm = heatmap.create_from_counts(counts_map)
+    total_heatmap_contributions = sum(counts_map.values())
 
     # Apply date filter if selected
     rev_filters = list(base_rev_filters)
