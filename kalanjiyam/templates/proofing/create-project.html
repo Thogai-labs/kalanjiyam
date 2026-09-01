@@ -5,22 +5,6 @@
 {% import "macros/talk.html" as m_talk %}
 {% import "macros/forms.html" as mf %}
 
-
-{% macro step(n, text, subtitle=None) %}
-<div class="flex items-center gap-3.5 mb-6">
-  <span class="flex items-center justify-center w-9 h-9 rounded-xl bg-royalblue text-white font-black text-sm shadow-sm shadow-royalblue/20 shrink-0">
-    {{ n }}
-  </span>
-  <div>
-    <h2 class="text-lg font-bold text-slate-900 leading-snug">{{ text }}</h2>
-    {% if subtitle %}
-      <p class="text-xs text-slate-500 font-medium">{{ subtitle }}</p>
-    {% endif %}
-  </div>
-</div>
-{% endmacro %}
-
-
 {% block extra_css %}
 <style>
   .google-proofing-header {
@@ -33,31 +17,31 @@
 {% block title %}{{ _('Create Project') }} | Kalanjiyam{% endblock %}
 
 {% block hero %}
-<header class="google-proofing-header py-4 sm:py-5 px-4 bg-white border-b border-slate-200 shadow-xs">
-  <div class="max-w-4xl mx-auto flex flex-col items-center justify-center text-center">
-    <div class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-royalblue text-[11px] font-bold uppercase tracking-wider mb-2">
-      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-      </svg>
-      <span>{{ _('Project Uploader') }}</span>
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs">
+  <div class="max-w-2xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+          {{ _('Create Project') }}
+        </h1>
+        <p class="text-slate-500 text-[11px] sm:text-xs font-medium">
+          {{ _('Upload scans or docs for OCR extraction & proofreading.') }}
+        </p>
+      </div>
     </div>
 
-    <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 mb-1.5">
-      {{ _('Create a Proofing Project') }}
-    </h1>
-    <p class="text-slate-600 text-xs sm:text-sm max-w-xl mx-auto leading-relaxed">
-      {{ _('Upload manuscripts, historical texts, or Word documents for OCR extraction, collaborative proofreading, or direct document translation.') }}
-    </p>
-
-    <div class="mt-2.5 flex flex-wrap items-center justify-center gap-2 text-xs">
-      <a href="{{ url_for('proofing.help_index') }}" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 hover:text-royalblue font-semibold transition-colors">
+    <div class="flex items-center gap-2 text-xs">
+      <a href="{{ url_for('proofing.help_index') }}" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Guidelines & Preparation') }}">
         <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
         </svg>
         <span>{{ _('Guidelines & Preparation') }}</span>
       </a>
-      <span class="text-slate-300 hidden sm:inline">•</span>
-      <span class="text-slate-500 font-medium">{{ _('Supported: PDF, JPG, PNG, DOCX (Max 500MB)') }}</span>
     </div>
   </div>
 </header>
@@ -65,7 +49,7 @@
 
 
 {% block content %}
-<div class="w-full max-w-3xl mx-auto" x-data="{ 
+<div class="w-full max-w-2xl mx-auto" x-data="{ 
        source: '{{ form.pdf_source.data or 'local' }}',
        license: 'public',
        uploading: false,
@@ -252,7 +236,7 @@
      }">
 
   {% if form.errors %}
-  <div class="mb-6 bg-red-50 border border-red-200 rounded-2xl p-4 text-sm text-red-700">
+  <div class="mb-5 bg-red-50 border border-red-200 rounded-2xl p-4 text-sm text-red-700">
     {{ mf.show_errors_if_any(form.errors) }}
   </div>
   {% endif %}
@@ -263,10 +247,10 @@
     <input type="hidden" name="license" value="public">
 
     <div x-show="!uploading" x-transition:enter="transition ease-out duration-300"
-      x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="space-y-6">
+      x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0">
 
-      <!-- Combined Upload & Describe Single-Page Card -->
-      <section class="bg-white rounded-2xl p-5 sm:p-7 shadow-sm border border-slate-200 space-y-6">
+      <!-- Single-Page Unified Form Card -->
+      <div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-200 space-y-5">
 
         <!-- 1. Document Upload -->
         <div>
@@ -277,27 +261,27 @@
               </svg>
               <span>{{ _('Upload Document or Images') }}</span>
             </label>
-            <span class="text-[11px] text-slate-400 font-medium hidden sm:inline">{{ _('PDF, Word (.docx), or JPG/PNG') }}</span>
+            <span class="text-[11px] text-slate-400 font-medium">{{ _('PDF, DOCX, JPG, PNG') }}</span>
           </div>
 
           <div class="p-4 sm:p-5 rounded-2xl border-2 border-dashed border-slate-200 hover:border-royalblue/50 bg-slate-50/60 hover:bg-blue-50/20 transition-all">
-            {{ form.local_file(accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.webp", multiple="multiple", id="local_file", class_="block w-full text-xs sm:text-sm text-slate-500 file:mr-3 sm:file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-royalblue file:text-white hover:file:bg-blue-700 cursor-pointer transition-all", **{"@change": "handleFileChange($event)"}) }}
+            {{ form.local_file(accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.webp", multiple="multiple", id="local_file", class_="block w-full text-xs sm:text-sm text-slate-500 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-royalblue file:text-white hover:file:bg-blue-700 cursor-pointer transition-all", **{"@change": "handleFileChange($event)"}) }}
             
-            <div class="mt-2.5 text-xs text-slate-600 font-medium" x-show="fileName">
+            <div class="mt-2 text-xs text-slate-600 font-medium" x-show="fileName" x-cloak>
               <span class="text-slate-400" x-text="fileCount > 1 ? '{{ _("Selected files:") }}' : '{{ _("Selected file:") }}'"></span>
-              <span class="font-bold text-slate-800" x-text="fileName"></span>
+              <span class="font-bold text-slate-800 ml-1" x-text="fileName"></span>
             </div>
 
             <!-- Page Sequence for Multi-Images -->
             <template x-if="imageFileNames.length > 1">
-              <div class="mt-3 text-xs text-slate-600 bg-white border border-slate-200 rounded-xl p-3 max-h-40 overflow-y-auto space-y-1">
-                <div class="font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-                  <span>{{ _('Page sequence (sorted naturally by filename):') }}</span>
+              <div class="mt-3 text-xs text-slate-600 bg-white border border-slate-200 rounded-xl p-3 max-h-36 overflow-y-auto space-y-1">
+                <div class="font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>{{ _('Page sequence (sorted by filename):') }}</span>
                   <span class="text-[11px] text-slate-400 font-medium" x-text="`${imageFileNames.length} pages`"></span>
                 </div>
                 <template x-for="(name, idx) in imageFileNames" :key="name">
                   <div class="flex items-center text-slate-600 font-mono py-0.5 border-b border-slate-50 last:border-0 text-[11px]">
-                    <span class="w-8 text-slate-400 font-semibold" x-text="`${idx + 1}.`"></span>
+                    <span class="w-7 text-slate-400 font-semibold" x-text="`${idx + 1}.`"></span>
                     <span class="truncate" x-text="name"></span>
                   </div>
                 </template>
@@ -307,35 +291,35 @@
         </div>
 
         <!-- Dynamic Settings for Word Documents -->
-        <div class="p-4 sm:p-5 bg-slate-50 rounded-2xl border border-slate-200" x-show="isDocx" x-cloak x-transition>
-          <h4 class="text-xs font-bold text-slate-600 uppercase tracking-wider mb-3">{{ _('Choose DOCX Workflow') }}</h4>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200" x-show="isDocx" x-cloak x-transition>
+          <h4 class="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2.5">{{ _('Choose DOCX Workflow') }}</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3.5">
             <!-- Option A: Direct Translation -->
-            <div class="p-3.5 rounded-xl border-2 transition-all cursor-pointer text-left"
+            <div class="p-3 rounded-xl border-2 transition-all cursor-pointer text-left"
               :class="docxWorkflow === 'direct' ? 'border-royalblue bg-royalblue/5' : 'border-slate-200 bg-white hover:border-slate-300'"
               @click="if (isDocx) { docxWorkflow = 'direct' }">
               <label class="flex items-center cursor-pointer">
                 <input type="radio" name="docx_workflow" value="direct" x-model="docxWorkflow" :disabled="!isDocx"
                   class="w-4 h-4 text-royalblue border-slate-300 focus:ring-royalblue">
-                <span class="ml-2.5 font-bold text-slate-800 text-xs sm:text-sm">{{ _('Direct Translation') }}</span>
+                <span class="ml-2 font-bold text-slate-800 text-xs sm:text-sm">{{ _('Direct Translation') }}</span>
               </label>
               <p class="text-[11px] text-slate-500 mt-1 ml-6 leading-relaxed">{{ _('Translates in-place, keeping layout and formatting intact.') }}</p>
             </div>
             <!-- Option B: Interactive Project -->
-            <div class="p-3.5 rounded-xl border-2 transition-all cursor-pointer text-left"
+            <div class="p-3 rounded-xl border-2 transition-all cursor-pointer text-left"
               :class="docxWorkflow === 'project' ? 'border-royalblue bg-royalblue/5' : 'border-slate-200 bg-white hover:border-slate-300'"
               @click="if (isDocx) { docxWorkflow = 'project' }">
               <label class="flex items-center cursor-pointer">
                 <input type="radio" name="docx_workflow" value="project" x-model="docxWorkflow" :disabled="!isDocx"
                   class="w-4 h-4 text-royalblue border-slate-300 focus:ring-royalblue">
-                <span class="ml-2.5 font-bold text-slate-800 text-xs sm:text-sm">{{ _('Interactive Proofing Project') }}</span>
+                <span class="ml-2 font-bold text-slate-800 text-xs sm:text-sm">{{ _('Interactive Project') }}</span>
               </label>
               <p class="text-[11px] text-slate-500 mt-1 ml-6 leading-relaxed">{{ _('Imports into multi-page proofing editor.') }}</p>
             </div>
           </div>
 
           <!-- Dynamic Translation Settings -->
-          <div class="p-4 bg-white rounded-xl border border-slate-200 space-y-3.5" x-show="docxWorkflow === 'direct'" x-transition>
+          <div class="p-3.5 bg-white rounded-xl border border-slate-200 space-y-3" x-show="docxWorkflow === 'direct'" x-transition>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
               <div>
                 <label for="source_lang" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">{{ _('Source Language') }}</label>
@@ -431,23 +415,23 @@
 
         <!-- 2. Describe: Book / Manuscript Title -->
         <div x-show="!isDocx || docxWorkflow === 'project'" x-transition>
-          <label for="local_title" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <label for="local_title" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
             <svg class="w-4 h-4 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
             </svg>
             <span>{{ _('Book / Manuscript Title') }}</span>
           </label>
           <fieldset>
-            {{ form.local_title(id="local_title", class_="w-full px-4 py-2.5 sm:py-3 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all bg-slate-50 font-semibold text-slate-900 placeholder:text-slate-400", placeholder=_("e.g. Raghuvamsha with Mallinatha's commentary")) }}
+            {{ form.local_title(id="local_title", class_="w-full px-3.5 py-2.5 sm:py-3 text-sm sm:text-base border border-slate-200 rounded-xl focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all bg-slate-50 font-semibold text-slate-900 placeholder:text-slate-400", placeholder=_("e.g. Raghuvamsha with Mallinatha's commentary")) }}
           </fieldset>
-          <p class="text-[11px] text-slate-400 mt-1 font-medium">{{ _('Auto-suggested from file name. You can customize this anytime.') }}</p>
+          <p class="text-[11px] text-slate-400 mt-1 font-medium">{{ _('Auto-suggested from file name. You can edit this anytime.') }}</p>
         </div>
 
         {% if user_organizations and user_organizations|length > 1 %}
         <!-- Organization Assignment for Master Users / Multi-Org Users -->
         <div x-show="!isDocx || docxWorkflow === 'project'" x-transition>
-          <label for="selected_org_slug" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">{{ _('Organization') }}</label>
-          <select id="selected_org_slug" name="selected_org_slug" class="w-full px-4 py-2.5 sm:py-3 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all bg-slate-50 font-semibold text-slate-900">
+          <label for="selected_org_slug" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{{ _('Organization') }}</label>
+          <select id="selected_org_slug" name="selected_org_slug" class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all bg-slate-50 font-semibold text-slate-900">
             {% for org in user_organizations %}
             <option value="{{ org.slug }}" {% if loop.first %}selected{% endif %}>{{ org.name }} ({{ org.slug }})</option>
             {% endfor %}
@@ -456,11 +440,11 @@
         {% endif %}
 
         <!-- Submit Button & Action Bar -->
-        <div class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
           <a href="{{ url_for('proofing.index') }}" class="text-xs font-semibold text-slate-500 hover:text-slate-700 order-2 sm:order-1 transition-colors">
             ← {{ _('Cancel and return to Workspace') }}
           </a>
-          <button type="submit" class="w-full sm:w-auto px-8 py-3 bg-royalblue hover:bg-blue-700 text-white font-bold rounded-xl text-xs sm:text-sm transition-all shadow-md shadow-royalblue/20 hover:shadow-lg hover:shadow-royalblue/30 active:scale-95 flex items-center justify-center gap-2 order-1 sm:order-2 cursor-pointer">
+          <button type="submit" class="w-full sm:w-auto px-7 py-2.5 sm:py-3 bg-royalblue hover:bg-blue-700 text-white font-bold rounded-xl text-xs sm:text-sm transition-all shadow-md shadow-royalblue/20 hover:shadow-lg hover:shadow-royalblue/30 active:scale-95 flex items-center justify-center gap-2 order-1 sm:order-2 cursor-pointer">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
             </svg>
@@ -468,35 +452,35 @@
           </button>
         </div>
 
-      </section>
+      </div>
     </div>
 
     <!-- Uploading Progress State -->
-    <div x-show="uploading" x-transition:enter="transition ease-out duration-500"
+    <div x-show="uploading" x-cloak x-transition:enter="transition ease-out duration-500"
       x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
-      class="bg-white rounded-2xl p-8 sm:p-12 text-center border border-slate-200 shadow-sm max-w-xl mx-auto">
-      <div class="mb-6">
-        <div class="inline-flex p-5 rounded-2xl bg-royalblue/10 text-royalblue mb-4 animate-pulse">
-          <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      class="bg-white rounded-2xl p-6 sm:p-10 text-center border border-slate-200 shadow-sm max-w-xl mx-auto">
+      <div class="mb-5">
+        <div class="inline-flex p-4 rounded-2xl bg-royalblue/10 text-royalblue mb-3 animate-pulse">
+          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
           </svg>
         </div>
-        <h2 class="text-xl sm:text-2xl font-bold text-slate-900 mb-2" x-text="status"></h2>
+        <h2 class="text-lg sm:text-xl font-bold text-slate-900 mb-1.5" x-text="status"></h2>
         <p class="text-xs text-slate-500 font-medium max-w-sm mx-auto leading-relaxed">
-          {{ _('We are safely transmitting your document to our servers. Please keep this page open.') }}
+          {{ _('We are transmitting your document to our servers. Please keep this page open.') }}
         </p>
       </div>
 
-      <div class="max-w-md mx-auto h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+      <div class="max-w-md mx-auto h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
         <div class="h-full bg-royalblue rounded-full transition-all duration-300 ease-out shadow-sm"
           :style="`width: ${progress}%`" :class="progress === 0 ? 'animate-pulse' : ''">
         </div>
       </div>
 
-      <div class="mt-3 text-lg font-bold text-royalblue" x-text="`${progress}%`" x-show="progress > 0"></div>
+      <div class="mt-2.5 text-base font-bold text-royalblue" x-text="`${progress}%`" x-show="progress > 0"></div>
 
-      <div class="mt-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wider animate-pulse">
+      <div class="mt-4 text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider animate-pulse">
         {{ _('Processing large files may take several minutes...') }}
       </div>
     </div>
