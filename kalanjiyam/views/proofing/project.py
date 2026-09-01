@@ -368,15 +368,69 @@ def summary(slug):
 
 @bp.route("/<slug>/activity")
 def activity(slug):
-    """Show recent activity on this project."""
+    """Show recent activity on this project with interactive heatmap and date filter."""
+    from datetime import date as dt_date, datetime, timedelta
+    from sqlalchemy import func
+    from kalanjiyam.utils import heatmap
+
     project_ = q.project(slug)
     if project_ is None:
         abort(404)
 
+    date_str = request.args.get("date")
+    filter_date = None
+    if date_str:
+        try:
+            filter_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            filter_date = None
+            date_str = None
+
     session = q.get_session()
+
+    # 1. Compute 1-Year Heatmap Activity Data for this project
+    one_year_ago = datetime.utcnow() - timedelta(days=365)
+    hm_rev_rows = (
+        session.query(
+            func.date(db.Revision.created).label("d"),
+            func.count(db.Revision.id).label("c"),
+        )
+        .filter(db.Revision.project_id == project_.id, db.Revision.created >= one_year_ago)
+        .group_by(func.date(db.Revision.created))
+        .all()
+    )
+    hm_proj_row = (
+        session.query(
+            func.date(db.Project.created_at).label("d"),
+            func.count(db.Project.id).label("c"),
+        )
+        .filter(db.Project.id == project_.id, db.Project.created_at >= one_year_ago)
+        .group_by(func.date(db.Project.created_at))
+        .all()
+    )
+    counts_map = {}
+    for row in hm_rev_rows:
+        if row[0]:
+            d = row[0] if isinstance(row[0], dt_date) else datetime.strptime(str(row[0])[:10], "%Y-%m-%d").date()
+            counts_map[d] = counts_map.get(d, 0) + int(row[1])
+    for row in hm_proj_row:
+        if row[0]:
+            d = row[0] if isinstance(row[0], dt_date) else datetime.strptime(str(row[0])[:10], "%Y-%m-%d").date()
+            counts_map[d] = counts_map.get(d, 0) + int(row[1])
+
+    hm = heatmap.create_from_counts(counts_map)
+    total_heatmap_contributions = sum(counts_map.values())
+
+    # 2. Query revisions
+    rev_filters = [db.Revision.project_id == project_.id]
+    if filter_date:
+        start_dt = datetime.combine(filter_date, datetime.min.time())
+        end_dt = datetime.combine(filter_date, datetime.max.time())
+        rev_filters.extend([db.Revision.created >= start_dt, db.Revision.created <= end_dt])
+
     recent_revisions = (
         session.query(db.Revision)
-        .filter_by(project_id=project_.id)
+        .filter(*rev_filters)
         .order_by(db.Revision.created.desc())
         .limit(100)
         .all()
@@ -421,12 +475,16 @@ def activity(slug):
                 r.diff = None
 
     recent_activity = [("revision", r.created, r) for r in recent_revisions]
-    recent_activity.append(("project", project_.created_at, project_))
+    if not filter_date or (project_.created_at and project_.created_at.date() == filter_date):
+        recent_activity.append(("project", project_.created_at, project_))
 
     return render_template(
         "proofing/projects/activity.html",
         project=project_,
         recent_activity=recent_activity,
+        heatmap=hm,
+        selected_date=date_str,
+        total_heatmap_contributions=total_heatmap_contributions,
     )
 
 

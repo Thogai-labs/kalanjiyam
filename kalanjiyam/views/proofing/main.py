@@ -747,9 +747,9 @@ def create_project_status(task_id):
 
 @bp.route("/recent-changes")
 def recent_changes():
-    """Show recent changes across all projects with pagination, date filtering, and activity heatmap."""
-    from datetime import date as dt_date, timedelta
-    from kalanjiyam.utils import heatmap
+    """Show recent changes across all projects with search and date range filtering."""
+    from datetime import datetime, timedelta, date as dt_date
+    from sqlalchemy import or_
 
     try:
         page = max(1, int(request.args.get("page", 1)))
@@ -760,14 +760,37 @@ def recent_changes():
     except (ValueError, TypeError):
         per_page = 25
 
-    date_str = request.args.get("date")
-    filter_date = None
-    if date_str:
+    search_query = request.args.get("q", "").strip()
+    start_date_str = request.args.get("start_date", "").strip()
+    end_date_str = request.args.get("end_date", "").strip()
+    quick_range = request.args.get("range", "").strip()
+
+    # Quick date range presets
+    today = datetime.utcnow().date()
+    if quick_range == "today":
+        start_date_str = today.strftime("%Y-%m-%d")
+        end_date_str = today.strftime("%Y-%m-%d")
+    elif quick_range == "7d":
+        start_date_str = (today - timedelta(days=7)).strftime("%Y-%m-%d")
+        end_date_str = today.strftime("%Y-%m-%d")
+    elif quick_range == "30d":
+        start_date_str = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+        end_date_str = today.strftime("%Y-%m-%d")
+
+    start_date = None
+    end_date = None
+    if start_date_str:
         try:
-            filter_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
         except (ValueError, TypeError):
-            filter_date = None
-            date_str = None
+            start_date = None
+            start_date_str = ""
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            end_date = None
+            end_date_str = ""
 
     session = q.get_session()
 
@@ -781,7 +804,6 @@ def recent_changes():
     accessible_project_ids = [p.id for p in accessible_projects]
 
     if not accessible_project_ids:
-        hm = heatmap.create(iter([]))
         return render_template(
             "proofing/recent-changes.html",
             recent_activity=[],
@@ -789,9 +811,10 @@ def recent_changes():
             per_page=per_page,
             total_pages=1,
             total_items=0,
-            heatmap=hm,
-            selected_date=None,
-            total_heatmap_contributions=0,
+            search_query=search_query,
+            start_date=start_date_str,
+            end_date=end_date_str,
+            quick_range=quick_range,
         )
 
     # 2. Exclude bot edits
@@ -799,81 +822,38 @@ def recent_changes():
     bot_id = bot_user.id if bot_user else None
 
     # Base filter for revisions scoped to accessible projects
-    base_rev_filters = [db.Revision.project_id.in_(accessible_project_ids)]
+    rev_filters = [db.Revision.project_id.in_(accessible_project_ids)]
     if bot_id:
-        base_rev_filters.append(db.Revision.author_id != bot_id)
-
-    # 1-Year Heatmap Activity Data (with Redis cache + SQL GROUP BY aggregation)
-    from sqlalchemy import func
-    import json
-    import redis
-
-    cache_key = f"heatmap_proofing:{hash(tuple(sorted(accessible_project_ids)))}"
-    counts_map = None
-    r_client = None
-    try:
-        r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
-        cached = r_client.get(cache_key)
-        if cached:
-            raw_counts = json.loads(cached)
-            counts_map = {
-                datetime.strptime(k, "%Y-%m-%d").date(): int(v)
-                for k, v in raw_counts.items()
-            }
-    except Exception:
-        counts_map = None
-
-    if counts_map is None:
-        one_year_ago = datetime.utcnow() - timedelta(days=365)
-        # Database-level GROUP BY aggregation (returns at most 365 rows)
-        hm_rev_rows = (
-            session.query(
-                func.date(db.Revision.created).label("d"),
-                func.count(db.Revision.id).label("c"),
-            )
-            .filter(*base_rev_filters, db.Revision.created >= one_year_ago)
-            .group_by(func.date(db.Revision.created))
-            .all()
-        )
-        hm_proj_rows = (
-            session.query(
-                func.date(db.Project.created_at).label("d"),
-                func.count(db.Project.id).label("c"),
-            )
-            .filter(db.Project.id.in_(accessible_project_ids), db.Project.created_at >= one_year_ago)
-            .group_by(func.date(db.Project.created_at))
-            .all()
-        )
-
-        counts_map = {}
-        for row in hm_rev_rows:
-            if row[0]:
-                d = row[0] if isinstance(row[0], dt_date) else datetime.strptime(str(row[0])[:10], "%Y-%m-%d").date()
-                counts_map[d] = counts_map.get(d, 0) + int(row[1])
-        for row in hm_proj_rows:
-            if row[0]:
-                d = row[0] if isinstance(row[0], dt_date) else datetime.strptime(str(row[0])[:10], "%Y-%m-%d").date()
-                counts_map[d] = counts_map.get(d, 0) + int(row[1])
-
-        # Cache in Redis for 5 minutes (300 seconds)
-        if r_client:
-            try:
-                cache_payload = {d.strftime("%Y-%m-%d"): c for d, c in counts_map.items()}
-                r_client.set(cache_key, json.dumps(cache_payload), ex=300)
-            except Exception:
-                pass
-
-    hm = heatmap.create_from_counts(counts_map)
-    total_heatmap_contributions = sum(counts_map.values())
-
-    # Apply date filter if selected
-    rev_filters = list(base_rev_filters)
+        rev_filters.append(db.Revision.author_id != bot_id)
     proj_filters = [db.Project.id.in_(accessible_project_ids)]
-    if filter_date:
-        start_dt = datetime.combine(filter_date, datetime.min.time())
-        end_dt = datetime.combine(filter_date, datetime.max.time())
-        rev_filters.extend([db.Revision.created >= start_dt, db.Revision.created <= end_dt])
-        proj_filters.extend([db.Project.created_at >= start_dt, db.Project.created_at <= end_dt])
+
+    # Date range filters
+    if start_date:
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        rev_filters.append(db.Revision.created >= start_dt)
+        proj_filters.append(db.Project.created_at >= start_dt)
+    if end_date:
+        end_dt = datetime.combine(end_date, datetime.max.time())
+        rev_filters.append(db.Revision.created <= end_dt)
+        proj_filters.append(db.Project.created_at <= end_dt)
+
+    # Search filter
+    if search_query:
+        search_pattern = f"%{search_query}%"
+        rev_filters.append(
+            or_(
+                db.Revision.summary.ilike(search_pattern),
+                db.Revision.project.has(db.Project.display_title.ilike(search_pattern)),
+                db.Revision.author.has(db.User.username.ilike(search_pattern)),
+            )
+        )
+        proj_filters.append(
+            or_(
+                db.Project.display_title.ilike(search_pattern),
+                db.Project.author.ilike(search_pattern),
+                db.Project.slug.ilike(search_pattern),
+            )
+        )
 
     # Counts
     total_revisions = session.query(db.Revision.id).filter(*rev_filters).count()
@@ -956,9 +936,10 @@ def recent_changes():
         per_page=per_page,
         total_pages=total_pages,
         total_items=total_items,
-        heatmap=hm,
-        selected_date=date_str,
-        total_heatmap_contributions=total_heatmap_contributions,
+        search_query=search_query,
+        start_date=start_date_str,
+        end_date=end_date_str,
+        quick_range=quick_range,
     )
 
 

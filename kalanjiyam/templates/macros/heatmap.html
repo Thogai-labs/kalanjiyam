@@ -9,7 +9,8 @@
 
 
 {# Display a GitHub-style calendar heatmap as an SVG. #}
-{% macro show_heatmap(heatmap, selected_date=None, endpoint=None) %}
+{% macro show_heatmap(heatmap, selected_date=None, endpoint=None, endpoint_kwargs=None) %}
+{% set ep_kwargs = endpoint_kwargs or {} %}
 {% set box_width = 11 %}
 {% set box_gap = 3 %}
 {% set box_total = box_width + box_gap %}
@@ -47,7 +48,12 @@
       {% set is_selected = (selected_date == date_str) %}
       
       {% if endpoint %}
-        {% set link_target = url_for(endpoint) if is_selected else url_for(endpoint, date=date_str) %}
+        {% if is_selected %}
+          {% set link_target = url_for(endpoint, **ep_kwargs) %}
+        {% else %}
+          {% set custom_kwargs = dict(ep_kwargs, date=date_str) %}
+          {% set link_target = url_for(endpoint, **custom_kwargs) %}
+        {% endif %}
         <a href="{{ link_target }}" class="cursor-pointer">
           <title>{{ count }} contribution{% if count != 1 %}s{% endif %} on {{ date.strftime('%b %d, %Y') }}{% if is_selected %} (Selected - click to clear){% else %} (Click to filter){% endif %}</title>
           <rect class="{{ color(count) }}"

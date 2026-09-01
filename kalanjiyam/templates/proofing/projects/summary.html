@@ -13,7 +13,7 @@
 
   .project-hero {
     background: #0b1120;
-    background-image: 
+    background-image:
       radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
       repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
       repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
@@ -109,8 +109,8 @@
                       {% set url = url_for('proofing.page.edit', project_slug=project.slug, page_slug=p.slug) %}
                       {% set issues = page_issues_map.get(loop.index, []) if page_issues_map else [] %}
                       {% set has_issues = issues|length > 0 %}
-                      <a href="{{ url }}" 
-                         class="relative flex items-center justify-center h-10 rounded-xl font-bold text-xs transition-all hover:scale-105 shadow-sm border border-black/5 hover:shadow-md {{ colors }}" 
+                      <a href="{{ url }}"
+                         class="relative flex items-center justify-center h-10 rounded-xl font-bold text-xs transition-all hover:scale-105 shadow-sm border border-black/5 hover:shadow-md {{ colors }}"
                          title="{{ page_title }} ({{ p.status.name }}){% if has_issues %} - {{ _('Issues:') }} {{ issues|join(', ') }}{% endif %}">
                          <span>{{ page_title }}</span>
                          {% if has_issues %}
@@ -146,10 +146,6 @@
             <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div class="bg-slate-50/80 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
                     <h3 class="text-xs font-bold text-slate-600 uppercase tracking-wider">{{ _('Project Details') }}</h3>
-                    <a href="{{ url_for('proofing.project.edit', slug=project.slug) }}" class="inline-flex items-center gap-1 text-xs font-bold text-royalblue hover:underline">
-                      <span>{{ _('Workspace') }}</span>
-                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                    </a>
                 </div>
                 <div class="p-6 space-y-3.5 text-xs">
                     <div class="flex justify-between items-center py-1.5 border-b border-slate-100">
@@ -197,10 +193,6 @@
                     <a href="{{ url_for('proofing.project.download', slug=project.slug) }}" class="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all shadow-sm">
                       <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                       <span>{{ _('Download') }}</span>
-                    </a>
-                    <a href="{{ url_for('proofing.project.edit', slug=project.slug) }}" class="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-royalblue hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shadow-royalblue/20">
-                      <span>{{ _('Workspace') }}</span>
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
                     </a>
                 </div>
             </section>

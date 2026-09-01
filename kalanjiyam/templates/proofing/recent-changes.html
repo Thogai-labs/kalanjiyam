@@ -1,21 +1,11 @@
 {% extends 'proofing/base-sidebar.html' %}
 {% import "macros/proofing.html" as m %}
-{% import "macros/heatmap.html" as hm %}
 
 {% block extra_css %}
 <style>
   .google-proofing-header {
     background-color: #ffffff;
     border-bottom: 1px solid #e8eaed;
-  }
-  .heatmap rect.l0 { fill: #ebedf0; }
-  .heatmap rect.l1 { fill: #c7d7f9; }
-  .heatmap rect.l2 { fill: #85a7f2; }
-  .heatmap rect.l3 { fill: #4169e1; }
-  .heatmap rect.l4 { fill: #1e3a8a; }
-  .heatmap a:hover rect {
-    stroke: #0f172a !important;
-    stroke-width: 1.5px !important;
   }
 </style>
 {% endblock %}
@@ -36,13 +26,20 @@
           {{ _('Recent Changes') }}
         </h1>
         <p class="text-slate-500 text-[11px] sm:text-xs font-medium">
-          {{ _('Track real-time proofreading revisions and project updates.') }}
+          {{ _('Track real-time proofreading revisions and library updates across the organization.') }}
         </p>
       </div>
     </div>
 
     <div class="flex items-center gap-2">
+      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-royalblue text-xs font-semibold">
+        <span class="w-2 h-2 rounded-full bg-royalblue animate-pulse"></span>
+        <span>{{ _('Live Stream') }}</span>
+      </div>
       <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue text-xs font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
         <span>{{ _('Workspace') }}</span>
       </a>
     </div>
@@ -53,54 +50,90 @@
 {% block content %}
 <div class="w-full space-y-6">
 
-  <!-- GitHub-Style Contribution Heatmap Card -->
-  <div class="bg-white mt-6 rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3.5">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center gap-2">
-        <svg class="w-4 h-4 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+  <!-- Search & Date Range Filter Card -->
+  <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-4">
+    <form method="GET" action="{{ url_for('proofing.recent_changes') }}" class="space-y-3.5">
+      
+      <!-- Top Row: Search Input -->
+      <div class="relative flex items-center">
+        <svg class="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
         </svg>
-        <h3 class="text-xs sm:text-sm font-bold text-slate-800">
-          {{ _('%(count)s activities in the past 12 months', count=total_heatmap_contributions) }}
-        </h3>
+        <input
+          type="text"
+          name="q"
+          value="{{ search_query }}"
+          placeholder="{{ _('Search by project title, contributor username, or edit summary...') }}"
+          class="w-full pl-10 pr-4 py-2 sm:py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all placeholder:text-slate-400 font-normal"
+        />
+        {% if search_query %}
+        <a href="{{ url_for('proofing.recent_changes', start_date=start_date, end_date=end_date) }}" class="absolute right-3 text-slate-400 hover:text-slate-600 p-1" title="{{ _('Clear search') }}">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </a>
+        {% endif %}
       </div>
 
-      <!-- Legend -->
-      <div class="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium select-none">
-        <span>{{ _('Less') }}</span>
-        <span class="w-2.5 h-2.5 rounded-xs bg-[#ebedf0] border border-black/5"></span>
-        <span class="w-2.5 h-2.5 rounded-xs bg-[#c7d7f9]"></span>
-        <span class="w-2.5 h-2.5 rounded-xs bg-[#85a7f2]"></span>
-        <span class="w-2.5 h-2.5 rounded-xs bg-[#4169e1]"></span>
-        <span class="w-2.5 h-2.5 rounded-xs bg-[#1e3a8a]"></span>
-        <span>{{ _('More') }}</span>
-      </div>
-    </div>
+      <!-- Bottom Row: Date Range & Quick Presets -->
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <!-- Date Pickers (From / To) -->
+        <div class="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+          <div class="flex items-center gap-1.5">
+            <label for="start_date" class="font-bold text-slate-600 whitespace-nowrap">{{ _('From:') }}</label>
+            <input
+              type="date"
+              id="start_date"
+              name="start_date"
+              value="{{ start_date }}"
+              class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all"
+            />
+          </div>
 
-    <!-- Heatmap SVG (Scrollable horizontally on smaller screens) -->
-    <div class="overflow-x-auto pb-1 pt-0.5">
-      <div class="min-w-fit flex justify-center sm:justify-start">
-        {{ hm.show_heatmap(heatmap, selected_date=selected_date, endpoint='proofing.recent_changes') }}
-      </div>
-    </div>
+          <div class="flex items-center gap-1.5">
+            <label for="end_date" class="font-bold text-slate-600 whitespace-nowrap">{{ _('To:') }}</label>
+            <input
+              type="date"
+              id="end_date"
+              name="end_date"
+              value="{{ end_date }}"
+              class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all"
+            />
+          </div>
 
-    <!-- Active Date Filter Pill (if selected) -->
-    {% if selected_date %}
-    <div class="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
-      <div class="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-xl">
-        <svg class="w-3.5 h-3.5 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
-        </svg>
-        <span>{{ _('Filtered by date:') }} <strong class="text-royalblue">{{ selected_date }}</strong></span>
+          <button type="submit" class="px-3.5 py-1.5 bg-royalblue hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs shrink-0 cursor-pointer">
+            {{ _('Filter') }}
+          </button>
+        </div>
+
+        <!-- Quick Range Shortcut Buttons -->
+        <div class="flex flex-wrap items-center gap-1.5">
+          <a href="{{ url_for('proofing.recent_changes', q=search_query, range='today') }}"
+             class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all {% if quick_range == 'today' %}bg-royalblue text-white shadow-xs{% else %}bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200{% endif %}">
+            {{ _('Today') }}
+          </a>
+          <a href="{{ url_for('proofing.recent_changes', q=search_query, range='7d') }}"
+             class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all {% if quick_range == '7d' %}bg-royalblue text-white shadow-xs{% else %}bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200{% endif %}">
+            {{ _('Last 7 Days') }}
+          </a>
+          <a href="{{ url_for('proofing.recent_changes', q=search_query, range='30d') }}"
+             class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all {% if quick_range == '30d' %}bg-royalblue text-white shadow-xs{% else %}bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200{% endif %}">
+            {{ _('Last 30 Days') }}
+          </a>
+
+          {% if search_query or start_date or end_date or quick_range %}
+          <a href="{{ url_for('proofing.recent_changes') }}"
+             class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all ml-1"
+             title="{{ _('Clear all filters') }}">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+            <span>{{ _('Reset') }}</span>
+          </a>
+          {% endif %}
+        </div>
       </div>
-      <a href="{{ url_for('proofing.recent_changes') }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 px-3 py-1 rounded-xl shadow-xs transition-all">
-        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-        </svg>
-        <span>{{ _('Clear date filter') }}</span>
-      </a>
-    </div>
-    {% endif %}
+    </form>
   </div>
 
   <!-- Activity Stream Header -->
@@ -110,8 +143,8 @@
       <h2 class="text-sm sm:text-base font-bold text-slate-900">{{ _('Activity Stream') }}</h2>
     </div>
     <div class="text-xs text-slate-500 font-semibold">
-      {% if selected_date %}
-        {{ _('Showing %(count)d activities on %(date)s', count=total_items, date=selected_date) }}
+      {% if search_query or start_date or end_date %}
+        {{ _('Found %(count)d matching activities', count=total_items) }}
       {% else %}
         {{ _('Showing latest revisions & projects') }}
       {% endif %}
@@ -128,7 +161,7 @@
     </div>
     <div class="flex items-center gap-2">
       {% if page > 1 %}
-      <a href="{{ url_for('proofing.recent_changes', page=page - 1, per_page=per_page, date=selected_date) if selected_date else url_for('proofing.recent_changes', page=page - 1, per_page=per_page) }}"
+      <a href="{{ url_for('proofing.recent_changes', page=page - 1, per_page=per_page, q=search_query, start_date=start_date, end_date=end_date, range=quick_range) }}"
          class="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-xs font-semibold text-slate-700 transition-all shadow-xs">
         {{ _('Previous') }}
       </a>
@@ -137,7 +170,7 @@
         {{ page }} / {{ total_pages }}
       </span>
       {% if page < total_pages %}
-      <a href="{{ url_for('proofing.recent_changes', page=page + 1, per_page=per_page, date=selected_date) if selected_date else url_for('proofing.recent_changes', page=page + 1, per_page=per_page) }}"
+      <a href="{{ url_for('proofing.recent_changes', page=page + 1, per_page=per_page, q=search_query, start_date=start_date, end_date=end_date, range=quick_range) }}"
          class="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-xs font-semibold text-slate-700 transition-all shadow-xs">
         {{ _('Next') }}
       </a>
@@ -150,23 +183,24 @@
   <div class="bg-white rounded-2xl p-10 text-center border border-slate-200 shadow-sm text-slate-500 space-y-3">
     <div class="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto text-slate-400">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
       </svg>
     </div>
-    <p class="text-sm font-semibold text-slate-800">
-      {% if selected_date %}
-        {{ _('No changes recorded on %(date)s.', date=selected_date) }}
+    <h3 class="text-sm font-bold text-slate-800">{{ _('No matching activities found') }}</h3>
+    <p class="text-xs text-slate-500 max-w-sm mx-auto">
+      {% if search_query or start_date or end_date %}
+        {{ _('No edits or project updates matched your search filters. Try adjusting your date range or search keyword.') }}
       {% else %}
-        {{ _('No recent changes found.') }}
+        {{ _('No recent changes found in the library.') }}
       {% endif %}
     </p>
-    {% if selected_date %}
+    {% if search_query or start_date or end_date or quick_range %}
     <div>
       <a href="{{ url_for('proofing.recent_changes') }}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-all shadow-xs">
         <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
         </svg>
-        <span>{{ _('View all recent activity') }}</span>
+        <span>{{ _('Reset all filters') }}</span>
       </a>
     </div>
     {% endif %}

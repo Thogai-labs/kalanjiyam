@@ -2,6 +2,7 @@
 {% import "macros/components.html" as components %}
 {% import "macros/forms.html" as mf %}
 {% import "macros/proofing.html" as m %}
+{% import "macros/heatmap.html" as hm %}
 
 {% block extra_css %}
 <style>
@@ -18,6 +19,16 @@
       repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
       repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
     background-size: 100% 100%, 24px 24px, 24px 24px;
+  }
+
+  .heatmap rect.l0 { fill: #ebedf0; }
+  .heatmap rect.l1 { fill: #c7d7f9; }
+  .heatmap rect.l2 { fill: #85a7f2; }
+  .heatmap rect.l3 { fill: #4169e1; }
+  .heatmap rect.l4 { fill: #1e3a8a; }
+  .heatmap a:hover rect {
+    stroke: #0f172a !important;
+    stroke-width: 1.5px !important;
   }
 </style>
 {% endblock %}
@@ -61,26 +72,101 @@
 {% endblock %}
 
 {% block content %}
-<div class="w-full">
-  <div class="mb-6">
+<div class="w-full space-y-6">
+  <div>
     {{ m.project_tabs(project=project, active='activity', is_mod=current_user.is_moderator) }}
   </div>
 
-  <div class="flex items-center justify-between gap-4 mb-6">
+  <!-- GitHub-Style Contribution Heatmap Card for this Project -->
+  <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-3.5">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <svg class="w-4 h-4 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+        </svg>
+        <h3 class="text-xs sm:text-sm font-bold text-slate-800">
+          {{ _('%(count)s activities in the past 12 months', count=total_heatmap_contributions) }}
+        </h3>
+      </div>
+
+      <!-- Legend -->
+      <div class="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium select-none">
+        <span>{{ _('Less') }}</span>
+        <span class="w-2.5 h-2.5 rounded-xs bg-[#ebedf0] border border-black/5"></span>
+        <span class="w-2.5 h-2.5 rounded-xs bg-[#c7d7f9]"></span>
+        <span class="w-2.5 h-2.5 rounded-xs bg-[#85a7f2]"></span>
+        <span class="w-2.5 h-2.5 rounded-xs bg-[#4169e1]"></span>
+        <span class="w-2.5 h-2.5 rounded-xs bg-[#1e3a8a]"></span>
+        <span>{{ _('More') }}</span>
+      </div>
+    </div>
+
+    <!-- Heatmap SVG (Scrollable horizontally on smaller screens) -->
+    <div class="overflow-x-auto pb-1 pt-0.5">
+      <div class="min-w-fit flex justify-center sm:justify-start">
+        {{ hm.show_heatmap(heatmap, selected_date=selected_date, endpoint='proofing.project.activity', endpoint_kwargs={'slug': project.slug}) }}
+      </div>
+    </div>
+
+    <!-- Active Date Filter Pill (if selected) -->
+    {% if selected_date %}
+    <div class="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
+      <div class="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-xl">
+        <svg class="w-3.5 h-3.5 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+        </svg>
+        <span>{{ _('Filtered by date:') }} <strong class="text-royalblue">{{ selected_date }}</strong></span>
+      </div>
+      <a href="{{ url_for('proofing.project.activity', slug=project.slug) }}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 px-3 py-1 rounded-xl shadow-xs transition-all">
+        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+        <span>{{ _('Clear date filter') }}</span>
+      </a>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="flex items-center justify-between gap-4 pt-1">
     <div class="flex items-center gap-2">
       <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-      <h2 class="text-base sm:text-lg font-bold text-slate-900">{{ _('Recent Edits & Revisions') }}</h2>
+      <h2 class="text-sm sm:text-base font-bold text-slate-900">{{ _('Recent Edits & Revisions') }}</h2>
     </div>
     <div class="text-xs text-slate-500 font-semibold">
-      {{ _('Showing audit trail for this project') }}
+      {% if selected_date %}
+        {{ _('Showing %(count)d activities on %(date)s', count=recent_activity|length, date=selected_date) }}
+      {% else %}
+        {{ _('Showing audit trail for this project') }}
+      {% endif %}
     </div>
   </div>
 
   {% if recent_activity -%}
   {{ m.activity_log(recent_activity) }}
   {% else %}
-  <div class="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm text-slate-500">
-    <p class="text-sm font-semibold">{{ _('No recent activity found for this project.') }}</p>
+  <div class="bg-white rounded-2xl p-10 text-center border border-slate-200 shadow-sm text-slate-500 space-y-3">
+    <div class="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto text-slate-400">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+    </div>
+    <p class="text-sm font-semibold text-slate-800">
+      {% if selected_date %}
+        {{ _('No edits recorded for this project on %(date)s.', date=selected_date) }}
+      {% else %}
+        {{ _('No recent activity found for this project.') }}
+      {% endif %}
+    </p>
+    {% if selected_date %}
+    <div>
+      <a href="{{ url_for('proofing.project.activity', slug=project.slug) }}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-semibold transition-all shadow-xs">
+        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+        <span>{{ _('View all project activity') }}</span>
+      </a>
+    </div>
+    {% endif %}
   </div>
   {% endif %}
 </div>

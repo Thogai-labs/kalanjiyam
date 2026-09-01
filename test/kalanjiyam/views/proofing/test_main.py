@@ -112,11 +112,11 @@ def test_recent_changes_pagination(client):
     assert "Recent Changes" in resp.text
 
 
-def test_recent_changes_date_filter(client):
-    resp = client.get("/proofing/recent-changes?date=2026-08-15")
+def test_recent_changes_filters(client):
+    resp = client.get("/proofing/recent-changes?q=test&start_date=2026-08-01&end_date=2026-08-31&range=30d")
     assert resp.status_code == 200
-    assert "Filtered by date" in resp.text
-    assert "2026-08-15" in resp.text
+    assert "Recent Changes" in resp.text
+    assert "Activity Stream" in resp.text
 
 
 def test_create_project__unauth(client):

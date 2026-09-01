@@ -17,6 +17,14 @@ def test_summary__bad_project(client):
 def test_activity(client):
     resp = client.get("/proofing/test-project/activity")
     assert resp.status_code == 200
+    assert "activities in the past 12 months" in resp.text
+
+
+def test_activity_with_date_filter(client):
+    resp = client.get("/proofing/test-project/activity?date=2026-08-15")
+    assert resp.status_code == 200
+    assert "Filtered by date" in resp.text
+    assert "2026-08-15" in resp.text
 
 
 def test_activity__bad_project(client):
