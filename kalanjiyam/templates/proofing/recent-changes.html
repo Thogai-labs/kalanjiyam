@@ -1,4 +1,5 @@
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
+{% import "macros/components.html" as components %}
 {% import "macros/proofing.html" as m %}
 
 {% block extra_css %}
@@ -23,12 +24,13 @@
 
 {% block title %}{{ _('Recent Changes') }} | Kalanjiyam{% endblock %}
 
-{% block hero %}
-<div x-data="recentChangesExplorer()" x-init="init()">
-  <header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs">
+{% block main %}
+<div x-data="recentChangesExplorer()">
+  <!-- Embedded Header with Live Dynamic Search & Filter Controls -->
+  <header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
     <div class="max-w-6xl mx-auto space-y-3">
       
-      <!-- Top Row: Title, Subtitle, Status, and Action Link -->
+      <!-- Top Row: Title, Subtitle, Live Indicator, and Actions -->
       <div class="flex flex-wrap items-center justify-between gap-2.5">
         <div class="flex items-center gap-2.5">
           <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0">
@@ -68,7 +70,7 @@
         </div>
       </div>
 
-      <!-- Integrated Search & Filter Controls inside Header -->
+      <!-- Integrated Search & Filter Form inside Header -->
       <form method="GET" action="{{ url_for('proofing.recent_changes') }}" @submit.prevent="fetchResults(1)" class="w-full space-y-2.5">
         
         <!-- Google-Style Omni Dynamic Search Bar -->
@@ -80,7 +82,6 @@
             type="text"
             name="q"
             x-model="query"
-            value="{{ search_query }}"
             placeholder="{{ _('Search dynamically by project title, author, editor, or revision summary…') }}"
             class="w-full bg-transparent text-slate-800 placeholder-slate-400 text-xs sm:text-sm focus:outline-none"
             @input.debounce.300ms="fetchResults(1)"
@@ -118,8 +119,7 @@
                 id="start_date"
                 name="start_date"
                 x-model="startDate"
-                value="{{ start_date }}"
-                @change="quickRange = ''; fetchResults(1)"
+                @change="setCustomDate()"
                 class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
               />
             </div>
@@ -131,8 +131,7 @@
                 id="end_date"
                 name="end_date"
                 x-model="endDate"
-                value="{{ end_date }}"
-                @change="quickRange = ''; fetchResults(1)"
+                @change="setCustomDate()"
                 class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
               />
             </div>
@@ -192,37 +191,50 @@
     </div>
   </header>
 
-  <!-- Content Container -->
-  <div class="max-w-6xl mx-auto px-4 py-6">
+  <!-- Content Container with Activity List -->
+  <article class="p-4 xl:p-0 max-w-6xl mx-auto mb-24">
+    {{ components.flash_messages() }}
     <div id="recent-changes-results-container">
       {% include 'proofing/_recent_changes_list.html' %}
     </div>
-  </div>
+  </article>
 </div>
-{% endblock %}
 
-{% block content %}
-<!-- Content is rendered directly in the hero block above with full Alpine reactivity -->
-{% endblock %}
-
-{% block extra_js %}
 <script>
 function recentChangesExplorer() {
   return {
-    query: {{ search_query|tojson }},
-    startDate: {{ start_date|tojson }},
-    endDate: {{ end_date|tojson }},
-    quickRange: {{ quick_range|tojson }},
-    page: {{ page }},
-    perPage: {{ per_page }},
-    totalItems: {{ total_items }},
+    query: {{ (search_query or '')|tojson }},
+    startDate: {{ (start_date or '')|tojson }},
+    endDate: {{ (end_date or '')|tojson }},
+    quickRange: {{ (quick_range or '')|tojson }},
+    page: {{ page|default(1) }},
+    perPage: {{ per_page|default(25) }},
+    totalItems: {{ total_items|default(0) }},
     isLoading: false,
     abortController: null,
+
+    init() {
+      window.addEventListener('popstate', () => {
+        const params = new URLSearchParams(window.location.search);
+        this.query = params.get('q') || '';
+        this.startDate = params.get('start_date') || '';
+        this.endDate = params.get('end_date') || '';
+        this.quickRange = params.get('range') || '';
+        this.page = parseInt(params.get('page') || '1', 10);
+        this.perPage = parseInt(params.get('per_page') || '25', 10);
+        this.fetchResults(this.page, false);
+      });
+    },
 
     setQuickRange(val) {
       this.quickRange = val;
       this.startDate = '';
       this.endDate = '';
+      this.fetchResults(1);
+    },
+
+    setCustomDate() {
+      this.quickRange = '';
       this.fetchResults(1);
     },
 
@@ -236,19 +248,6 @@ function recentChangesExplorer() {
 
     goToPage(pageNum) {
       this.fetchResults(pageNum);
-    },
-
-    init() {
-      window.addEventListener('popstate', () => {
-        const params = new URLSearchParams(window.location.search);
-        this.query = params.get('q') || '';
-        this.startDate = params.get('start_date') || '';
-        this.endDate = params.get('end_date') || '';
-        this.quickRange = params.get('range') || '';
-        this.page = parseInt(params.get('page') || '1', 10);
-        this.perPage = parseInt(params.get('per_page') || '25', 10);
-        this.fetchResults(this.page, false);
-      });
     },
 
     async fetchResults(targetPage = 1, updateUrl = true) {
