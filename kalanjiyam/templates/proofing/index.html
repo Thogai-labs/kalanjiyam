@@ -89,21 +89,28 @@
 {% block main %}
 <div class="w-full" x-data="proofingDashboard()">
   <!-- Integrated Google-Style Header (Clean White Background with Search & Filters) -->
-  <header class="google-proofing-header py-4 sm:py-4.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+  <header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
     <div class="max-w-6xl mx-auto space-y-3">
 
       <!-- Top Row: Title, Active Projects Count, and Action Buttons -->
-      <div class="flex flex-wrap items-center justify-between gap-4">
-        <div class="flex flex-wrap items-center gap-3">
-          <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 flex items-center gap-3">
-            <span>{{ _('Proofing Workspace') }}</span>
-          </h1>
-          {% if has_any_projects %}
-          <div id="active-projects-badge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold">
-            <span>{{ _('Projects:') }}</span>
-            <span id="active-projects-badge-count" class="font-bold text-white bg-royalblue px-2 py-0.5 rounded-full text-[11px] shadow-xs">{{ total_projects }}</span>
+      <div class="flex flex-wrap items-center justify-between gap-2.5 sm:gap-4">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+            </svg>
           </div>
-          {% endif %}
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+              {{ _('Proofing Workspace') }}
+            </h1>
+            {% if has_any_projects %}
+            <div id="active-projects-badge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold">
+              <span>{{ _('Projects:') }}</span>
+              <span id="active-projects-badge-count" class="font-bold text-white bg-royalblue px-1.5 py-0.2 rounded-full text-[11px] shadow-xs">{{ total_projects }}</span>
+            </div>
+            {% endif %}
+          </div>
         </div>
 
         <div class="flex flex-wrap items-center gap-2.5 sm:gap-3">

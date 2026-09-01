@@ -1,30 +1,63 @@
-{% extends 'proofing/base-sidebar.html' %}
-
+{% extends 'proofing/base.html' %}
+{% import "macros/components.html" as components %}
 {% import "macros/proofing.html" as m %}
 
+{% block title %}{{ _('Tagging') }} | Kalanjiyam{% endblock %}
 
-{% block content %}
-<div class="mb-10">
-    <h1 class="text-4xl font-black text-slate-900 flex items-center mb-4">
-        <span class="pulse-indicator"></span>
-        {{ _('Tagging') }}
-    </h1>
-    <p class="text-lg text-slate-500 font-medium">{{ _('Advanced tools for tagging and parsing Sanskrit texts.') }}</p>
-</div>
+{% block extra_css %}
+<style>
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
+  }
+</style>
+{% endblock %}
 
-<div class="space-y-8">
-    <div class="bg-amber-50 rounded-2xl p-6 border border-amber-100 flex items-center gap-4">
-        <div class="w-10 h-10 rounded-full bg-amber-400 flex items-center justify-center text-white font-bold">!</div>
-        <p class="m-0! text-amber-800 font-bold tracking-tight">{{ _('These features are currently a work in progress.') }}</p>
+{% block hero %}
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+  <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+          {{ _('Tagging & Text Analysis') }}
+        </h1>
+        <p class="text-slate-500 text-[11px] sm:text-xs font-medium">
+          {{ _('Advanced tools for grammatical tagging and parsing Sanskrit texts.') }}
+        </p>
+      </div>
     </div>
 
-    <div class="premium-card p-8">
-        <p class="text-slate-600 font-medium leading-relaxed mb-8">{{ _('We aim to provide a comprehensive word-by-word analysis for every text in our library. Explore the available projects below to start tagging.') }}</p>
+    <div class="flex items-center gap-2 text-xs">
+      <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Proofing Workspace') }}">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+        <span>{{ _('Workspace') }}</span>
+      </a>
+    </div>
+  </div>
+</header>
+{% endblock %}
+
+{% block main %}
+<div class="max-w-6xl mx-auto p-4 xl:p-0 mb-16 space-y-6">
+    <div class="bg-amber-50 rounded-2xl p-4 border border-amber-200 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center text-white font-bold shrink-0 text-sm">!</div>
+        <p class="m-0 text-amber-900 font-semibold text-xs sm:text-sm">{{ _('These features are currently a work in progress.') }}</p>
+    </div>
+
+    <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
+        <p class="text-slate-600 font-medium text-sm leading-relaxed mb-6">{{ _('We aim to provide a comprehensive word-by-word analysis for every text in our library. Explore the available projects below to start tagging.') }}</p>
 
         <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {% for text in texts %}
             <a href="{{ url_for('proofing.tagging.text', slug=text.slug) }}" 
-               class="p-5 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-xl text-slate-800 hover:border-royalblue hover:text-royalblue transition-all text-center">
+               class="p-5 bg-slate-50 rounded-xl border border-slate-200 font-bold text-base text-slate-800 hover:border-royalblue hover:text-royalblue hover:bg-blue-50/50 transition-all text-center shadow-xs">
                 {{ text.title|devanagari }}
             </a>
         {% endfor %}
