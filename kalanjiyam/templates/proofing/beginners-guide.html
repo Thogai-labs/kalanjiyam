@@ -30,56 +30,55 @@
 {% endmacro %}
 
 
-{% block title %}{{ _("Beginner's guide to proofing") }} | Kalanjiyam{% endblock %}
+{% block title %}{{ _("Beginner's Guide | Kalanjiyam") }}{% endblock %}
 
-{% block meta_description %}{{ _("A five minute guide to proofing Sanskrit texts on Kalanjiyam.") }}{% endblock %}
+{% block meta_description %}{{ _("A five minute guide to proofing Sanskrit texts.") }}{% endblock %}
 
-{% block extra_head %}
+{% block extra_css %}
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-  .{
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  }
-
-  .catalog-hero {
-    background: #0b1120;
-    background-image: 
-      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
-      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
-      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
-    background-size: 100% 100%, 24px 24px, 24px 24px;
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
   }
 </style>
 {% endblock %}
 
-{% block main_class %}bg-slate-50 min-h-screen pb-16{% endblock %}
-
-{% block main %}
+{% block hero %}
 <!-- Hero Header Section -->
-<header class="catalog-hero text-slate-100 py-8 sm:py-10 px-4 mb-6 border-b border-slate-800">
-  <div class="max-w-4xl mx-auto">
-    <nav class="mb-6">
-      <a href="{{ url_for('proofing.help_index') }}" class="inline-flex items-center gap-2 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-wider bg-slate-800/80 px-3.5 py-1.5 rounded-full border border-slate-700">
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+  <div class="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+          {{ _("Beginner's Guide") }}
+        </h1>
+        <p class="text-slate-500 text-[11px] sm:text-xs font-medium">
+          {{ _("A five minute guide to proofing Sanskrit texts.") }}
+        </p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2 text-xs">
+      <a href="{{ url_for('proofing.help_index') }}" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Back to Help Center') }}">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
         </svg>
-        <span>{{ _('Back to Help Center') }}</span>
+        <span>{{ _('Help Center') }}</span>
       </a>
-    </nav>
-
-    <h1 class="text-xl sm:text-2xl font-bold tracking-tight mb-4 text-white">
-      {{ _("Beginner's Guide") }}
-    </h1>
-    <p class="text-lg text-slate-300 max-w-2xl leading-relaxed">
-      {{ _("A five minute guide to proofing Sanskrit texts.") }}
-    </p>
+    </div>
   </div>
 </header>
+{% endblock %}
 
+{% block content %}
 <!-- Main Article Content Card -->
-<div class="max-w-4xl mx-auto px-4">
-  <div class="bg-white p-8 md:p-12 rounded-2xl shadow-sm border border-slate-200 prose prose-slate max-w-none text-slate-800 leading-relaxed">
+<div class="max-w-4xl mx-auto mb-16">
+  <div class="bg-white p-6 sm:p-10 rounded-2xl shadow-sm border border-slate-200 prose prose-slate max-w-none text-slate-800 leading-relaxed">
 
     <p class="text-lg font-medium text-slate-700 leading-relaxed">
       {{ _('Proofing, short for "proofreading," is when people like you create high-quality Sanskrit text that everyone can use and enjoy. All of our proofing projects are based on scans of physical books.') }}

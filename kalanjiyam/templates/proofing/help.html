@@ -1,24 +1,14 @@
-{% extends 'base.html' %}
+{% extends 'proofing/base.html' %}
 
 {% block title %}{{ _('Help & Proofing Guidelines | Kalanjiyam') }}{% endblock %}
 
 {% block meta_description %}{{ _('Everything you need to know to get started and master proofreading Sanskrit texts.') }}{% endblock %}
 
-{% block extra_head %}
+{% block extra_css %}
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-  .{
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  }
-
-  .catalog-hero {
-    background: #0b1120;
-    background-image: 
-      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
-      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
-      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
-    background-size: 100% 100%, 24px 24px, 24px 24px;
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
   }
 
   .guide-card {
@@ -30,37 +20,47 @@
   }
 
   .guide-card:hover {
-    transform: translateY(-4px);
+    transform: translateY(-3px);
     border-color: rgba(65, 105, 225, 0.4);
     box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.08), 0 10px 10px -5px rgba(65, 105, 225, 0.04);
   }
 </style>
 {% endblock %}
 
-{% block main_class %}bg-slate-50 min-h-screen pb-16{% endblock %}
-
-{% block main %}
+{% block hero %}
 <!-- Hero Header Section -->
-<header class="catalog-hero text-slate-100 py-8 sm:py-10 px-4 mb-6 border-b border-slate-800">
-  <div class="max-w-4xl mx-auto text-center">
-    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-4">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-      </svg>
-      <span>{{ _('Proofing Guides & Manuals') }}</span>
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+  <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+          {{ _('How can we help you?') }}
+        </h1>
+        <p class="text-slate-500 text-[11px] sm:text-xs font-medium">
+          {{ _('Everything you need to know to get started and master proofreading Sanskrit texts.') }}
+        </p>
+      </div>
     </div>
 
-    <h1 class="text-xl sm:text-2xl font-bold tracking-tight mb-4 text-white">
-      {{ _('How can we help you?') }}
-    </h1>
-    <p class="text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
-      {{ _('Everything you need to know to get started and master proofreading Sanskrit texts.') }}
-    </p>
+    <div class="flex items-center gap-2 text-xs">
+      <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Proofing Workspace') }}">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        <span>{{ _('Workspace') }}</span>
+      </a>
+    </div>
   </div>
 </header>
+{% endblock %}
 
-<!-- Main Guide Grid -->
-<div class="max-w-6xl mx-auto px-4">
+{% block content %}
+<div class="w-full mb-16">
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
     
     <!-- Beginner's Guide Card -->

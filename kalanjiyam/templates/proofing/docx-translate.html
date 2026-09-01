@@ -19,19 +19,9 @@
 
 {% block extra_css %}
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-  .{
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  }
-
-  .catalog-hero {
-    background: #0b1120;
-    background-image: 
-      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
-      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
-      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
-    background-size: 100% 100%, 24px 24px, 24px 24px;
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
   }
 </style>
 {% endblock %}
@@ -39,33 +29,38 @@
 {% block title %}{{ _('DOCX Translator') }} | Kalanjiyam{% endblock %}
 
 {% block hero %}
-<header class="catalog-hero text-slate-100 py-8 sm:py-10 px-4 mb-6 border-b border-slate-800">
-  <div class="max-w-6xl mx-auto text-center">
-    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-4 shadow-sm">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-      </svg>
-      <span>{{ _('Direct In-Place Translation') }}</span>
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+  <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+          {{ _('DOCX Document Translator') }}
+        </h1>
+        <p class="text-slate-500 text-[11px] sm:text-xs font-medium">
+          {{ _('Translate Microsoft Word documents (.docx) losslessly in-place, preserving layout and tables.') }}
+        </p>
+      </div>
     </div>
 
-    <h1 class="text-xl sm:text-2xl font-bold tracking-tight mb-4 text-white">
-      {{ _('DOCX Document Translator') }}
-    </h1>
-    <p class="text-base sm:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
-      {{ _('Translate Microsoft Word documents (.docx) losslessly in-place, perfectly preserving layout, headers, tables, and embedded images.') }}
-    </p>
-
-    <div class="mt-6 inline-flex flex-wrap items-center justify-center gap-2 text-xs text-slate-400 font-medium">
-      <span class="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/80">{{ _('Preserves Layout & Styles') }}</span>
-      <span class="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/80">{{ _('Retains Tables & Figures') }}</span>
-      <span class="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/80">{{ _('Multi-Glossary Support') }}</span>
+    <div class="flex items-center gap-2 text-xs">
+      <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Proofing Workspace') }}">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+        <span>{{ _('Workspace') }}</span>
+      </a>
     </div>
   </div>
 </header>
 {% endblock %}
 
 {% block content %}
-<div class="w-full"
+<div class="w-full mb-16"
       x-data="{
         isDragging: false,
         fileName: '',
