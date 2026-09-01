@@ -1,38 +1,6 @@
 {% extends 'proofing/base-sidebar.html' %}
-{% import "macros/components.html" as mc %}
+{% import "macros/components.html" as components %}
 {% import "macros/proofing.html" as m %}
-
-
-{% macro _badge(bg, border) %}
-<span class="inline-block rounded-full border-2 w-4 h-4 mr-2 {{ bg }} {{ border }}"></span>
-{% endmacro %}
-
-
-{% macro status_legend() %}
-<div class="bg-white rounded-2xl p-4 sm:p-5 my-6 shadow-sm border border-slate-200">
-  <div class="flex items-center gap-2 mb-3">
-    <span class="w-2 h-2 rounded-full bg-slate-400"></span>
-    <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">
-      {{ _('Project Status Legend') }}
-    </h3>
-  </div>
-  <ul class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs sm:text-sm font-semibold">
-    <li class="flex items-center p-2.5 rounded-xl bg-red-50 text-red-800 border border-red-200">
-      {{ _badge("bg-red-500", "border-red-600") }} <span>{{ _('Needs more work') }}</span>
-    </li>
-    <li class="flex items-center p-2.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200">
-      {{ _badge("bg-amber-400", "border-amber-500") }} <span>{{ _('Proofed once') }}</span>
-    </li>
-    <li class="flex items-center p-2.5 rounded-xl bg-emerald-50 text-emerald-900 border border-emerald-200">
-      {{ _badge("bg-emerald-500", "border-emerald-600") }} <span>{{ _('Proofed twice') }}</span>
-    </li>
-    <li class="flex items-center p-2.5 rounded-xl bg-slate-50 text-slate-700 border border-slate-200">
-      {{ _badge("bg-slate-400", "border-slate-500") }} <span>{{ _('Not relevant') }}</span>
-    </li>
-  </ul>
-</div>
-{% endmacro %}
-
 
 {% block extra_css %}
 <style>
@@ -59,16 +27,16 @@
     background-color: #ffffff;
     border: 1px solid #dfe1e5;
     border-radius: 9999px;
-    box-shadow: 0 1px 6px rgba(32, 33, 36, 0.12);
+    box-shadow: 0 1px 6px rgba(32, 33, 36, 0.10);
     transition: all 0.2s ease-in-out;
   }
   .google-search-bar:hover {
     border-color: #c0c4cc;
-    box-shadow: 0 2px 8px rgba(32, 33, 36, 0.18);
+    box-shadow: 0 2px 8px rgba(32, 33, 36, 0.16);
   }
   .google-search-bar:focus-within {
     border-color: #1a73e8;
-    box-shadow: 0 2px 10px rgba(26, 115, 232, 0.25);
+    box-shadow: 0 2px 10px rgba(26, 115, 232, 0.22);
   }
 
   /* Google-Style Pagination */
@@ -114,109 +82,118 @@
 </style>
 {% endblock %}
 
-{% block title %}{{ mc.title(_('Proofing Dashboard')) }}{% endblock %}
+{% block title %}{{ _('Proofing Workspace') }} | Kalanjiyam{% endblock %}
 
-{% block hero %}
-<header class="google-proofing-header py-6 sm:py-8 px-4 bg-white border-b border-slate-200">
-  <div class="max-w-6xl mx-auto flex flex-col items-center justify-center text-center">
-
-    <!-- Main Title: High contrast, sans-serif, legible for middle-aged users -->
-    <h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-900 mb-2">
-      {{ _('Proofing & Transcription Workspace') }}
-    </h1>
-
-    <!-- Subtitle: High legibility text -->
-    <p class="text-slate-600 text-sm sm:text-base max-w-2xl leading-relaxed">
-      {{ _('Collaborative platform for proofreading, OCR correction, and metadata curation of historical manuscripts and texts.') }}
-    </p>
-
-    <!-- Google-Style Action Buttons & Stats -->
-    <div class="mt-5 flex flex-wrap items-center justify-center gap-3">
-      {% if has_any_projects %}
-        <div id="active-projects-badge" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs sm:text-sm font-semibold">
-          <span>{{ _('Active Projects:') }}</span>
-          <span id="active-projects-badge-count" class="font-bold text-white bg-royalblue px-2.5 py-0.5 rounded-full text-xs shadow-sm">{{ total_projects }}</span>
-        </div>
-      {% endif %}
-      <a href="{{ url_for('proofing.create_project') }}" class="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-royalblue hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm shadow-sm transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-        </svg>
-        <span>{{ _('New Project') }}</span>
-      </a>
-    </div>
-  </div>
-</header>
-{% endblock %}
-
-
-{% block content %}
+{% block main %}
 <div class="w-full" x-data="proofingDashboard()">
+  <!-- Integrated Google-Style Header (Title + Stats + Status Legend + Search + Filters) -->
+  <header class="google-proofing-header py-4 sm:py-5 px-4 sm:px-6 bg-white border-b border-slate-200 shadow-xs">
+    <div class="max-w-6xl mx-auto space-y-3.5">
 
-  {% if has_any_projects %}
-  {{ status_legend() }}
+      <!-- Top Row: Title, Active Projects Count, Status Legend, and New Project CTA -->
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <span>{{ _('Proofing Workspace') }}</span>
+          </h1>
+          {% if has_any_projects %}
+          <div id="active-projects-badge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold">
+            <span>{{ _('Projects:') }}</span>
+            <span id="active-projects-badge-count" class="font-bold text-white bg-royalblue px-2 py-0.5 rounded-full text-[11px] shadow-xs">{{ total_projects }}</span>
+          </div>
+          {% endif %}
+        </div>
 
-  <div class="space-y-6">
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- Compact Status Legend -->
+          <div class="flex items-center gap-1.5 sm:gap-2 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-full">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">{{ _('Status:') }}</span>
+            <span class="inline-flex items-center gap-1 text-red-700 font-semibold">
+              <span class="w-2 h-2 rounded-full bg-red-500"></span>
+              <span>{{ _('Needs work') }}</span>
+            </span>
+            <span class="text-slate-300">•</span>
+            <span class="inline-flex items-center gap-1 text-amber-800 font-semibold">
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+              <span>{{ _('Proofed 1x') }}</span>
+            </span>
+            <span class="text-slate-300">•</span>
+            <span class="inline-flex items-center gap-1 text-emerald-800 font-semibold">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>{{ _('Proofed 2x') }}</span>
+            </span>
+            <span class="text-slate-300">•</span>
+            <span class="inline-flex items-center gap-1 text-slate-600 font-semibold">
+              <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+              <span>{{ _('Not relevant') }}</span>
+            </span>
+          </div>
 
-    <!-- Search and Filters Bar -->
-    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-6">
-      <form method="GET" action="{{ url_for('proofing.index') }}" @submit.prevent="fetchResults(1)" class="flex flex-col gap-4">
-        <!-- Top row: Google-Style Search Bar -->
-        <div class="flex flex-col md:flex-row items-center gap-3">
-          <div class="flex-1 w-full">
-            <div class="google-search-bar flex items-center px-4 py-2 sm:py-2.5">
-              <svg class="w-5 h-5 text-slate-400 shrink-0 mr-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          <!-- New Project Action Button -->
+          <a href="{{ url_for('proofing.create_project') }}" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-royalblue hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm shadow-sm transition-all shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            <span>{{ _('New Project') }}</span>
+          </a>
+        </div>
+      </div>
+
+      {% if has_any_projects %}
+      <!-- Search & Filters Form -->
+      <form method="GET" action="{{ url_for('proofing.index') }}" @submit.prevent="fetchResults(1)" class="w-full space-y-2.5">
+        <!-- Google-Style Omni Search Bar -->
+        <div class="google-search-bar flex items-center px-4 py-2 sm:py-2.5">
+          <svg class="w-5 h-5 text-slate-400 shrink-0 mr-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+          <input
+            type="text"
+            name="q"
+            x-model="query"
+            value="{{ search_query }}"
+            placeholder="{{ _('Search by manuscript title, author, or slug…') }}"
+            class="w-full bg-transparent text-slate-800 placeholder-slate-400 text-sm sm:text-base focus:outline-none"
+            @input.debounce.300ms="fetchResults(1)"
+            aria-label="{{ _('Search proofing manuscripts') }}"
+          />
+          <div class="flex items-center gap-1.5 shrink-0 ml-2">
+            <template x-if="isLoading">
+              <svg class="animate-spin w-4 h-4 text-royalblue" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <input
-                type="text"
-                name="q"
-                x-model="query"
-                value="{{ search_query }}"
-                placeholder="{{ _('Search by manuscript title, author, or slug…') }}"
-                class="w-full bg-transparent text-slate-800 placeholder-slate-400 text-base sm:text-[17px] focus:outline-none"
-                @input.debounce.300ms="fetchResults(1)"
-                aria-label="{{ _('Search proofing manuscripts') }}"
-              />
-              <div class="flex items-center gap-1.5 shrink-0 ml-2">
-                <template x-if="isLoading">
-                  <svg class="animate-spin w-4 h-4 text-royalblue" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                </template>
-                <button
-                  type="button"
-                  x-show="query && !isLoading"
-                  @click="query = ''; fetchResults(1)"
-                  class="text-slate-400 hover:text-slate-600 transition-colors p-1"
-                  title="{{ _('Clear search') }}"
-                  aria-label="{{ _('Clear search') }}"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                  </svg>
-                </button>
-              </div>
-            </div>
+            </template>
+            <button
+              type="button"
+              x-show="query && !isLoading"
+              @click="query = ''; fetchResults(1)"
+              class="text-slate-400 hover:text-slate-600 transition-colors p-1"
+              title="{{ _('Clear search') }}"
+              aria-label="{{ _('Clear search') }}"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
           </div>
         </div>
 
-        <!-- Middle / Bottom row: Filter Controls & View Toggle -->
-        <div class="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-100">
-          <div class="flex flex-wrap items-center gap-3">
+        <!-- Filter Controls Row -->
+        <div class="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+          <div class="flex flex-wrap items-center gap-2.5">
             <!-- Organization Filter (superadmin & master user) -->
             {% if (current_user.is_master_user or current_user.is_super_admin) and user_organizations %}
-            <div class="flex items-center gap-2 text-xs sm:text-sm">
-              <label for="org-select" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Organization:') }}</label>
+            <div class="flex items-center gap-1.5 text-xs sm:text-sm">
+              <label for="org-select" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Org:') }}</label>
               <select
                 id="org-select"
                 name="org"
                 x-model="org"
-                class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
+                class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
                 @change="fetchResults(1)"
               >
-                <option value="all" {% if selected_org == 'all' %}selected{% endif %}>{{ _('All Organizations') }}</option>
+                <option value="all" {% if selected_org == 'all' %}selected{% endif %}>{{ _('All Orgs') }}</option>
                 {% for org in user_organizations %}
                 <option value="{{ org.slug }}" {% if selected_org == org.slug %}selected{% endif %}>{{ org.name }}</option>
                 {% endfor %}
@@ -226,13 +203,13 @@
 
             <!-- Mode Filter (superadmin) -->
             {% if current_user.is_super_admin %}
-            <div class="flex items-center gap-2 text-xs sm:text-sm">
+            <div class="flex items-center gap-1.5 text-xs sm:text-sm">
               <label for="mode-select" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Mode:') }}</label>
               <select
                 id="mode-select"
                 name="mode"
                 x-model="mode"
-                class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
+                class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
                 @change="fetchResults(1)"
               >
                 <option value="all" {% if selected_mode == 'all' %}selected{% endif %}>{{ _('All Modes') }}</option>
@@ -249,11 +226,11 @@
               <button
                 type="button"
                 @click="issuesOpen = !issuesOpen"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all cursor-pointer"
+                class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs sm:text-sm font-semibold transition-all cursor-pointer"
                 :class="issues.length > 0 ? 'bg-amber-50 text-amber-900 border-amber-300 font-bold' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'"
               >
                 <span class="w-2 h-2 rounded-full" :class="issues.length > 0 ? 'bg-amber-500' : 'bg-slate-400'"></span>
-                <span>{{ _('Condition Issues') }}</span>
+                <span>{{ _('Issues') }}</span>
                 <span x-show="issues.length > 0" class="px-1.5 py-0.2 bg-amber-200 text-amber-900 rounded-full text-[11px] font-bold" x-text="issues.length"></span>
                 <svg class="w-3.5 h-3.5 text-slate-400 transition-transform" :class="{ 'rotate-180': issuesOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
@@ -295,13 +272,13 @@
             {% endif %}
 
             <!-- Sort By & Order -->
-            <div class="flex items-center gap-2 text-xs sm:text-sm">
+            <div class="flex items-center gap-1.5 text-xs sm:text-sm">
               <label for="sort-select" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Sort:') }}</label>
               <select
                 id="sort-select"
                 name="sort"
                 x-model="sort"
-                class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
+                class="bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
                 @change="fetchResults(1)"
               >
                 <option value="created" {% if sort_field == 'created' %}selected{% endif %}>{{ _('Date') }}</option>
@@ -311,7 +288,7 @@
                 id="order-select"
                 name="order"
                 x-model="order"
-                class="bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
+                class="bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
                 @change="fetchResults(1)"
               >
                 <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>{{ _('Desc') }}</option>
@@ -320,19 +297,19 @@
             </div>
 
             <!-- Per Page Dropdown -->
-            <div class="flex items-center gap-2 text-xs sm:text-sm text-slate-600">
+            <div class="flex items-center gap-1.5 text-xs sm:text-sm text-slate-600">
               <label for="proofing-per-page" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Show:') }}</label>
               <select
                 id="proofing-per-page"
                 :value="perPage"
                 @change="setPerPage($event.target.value)"
-                class="bg-slate-50 border border-slate-200 text-slate-700 text-xs sm:text-sm rounded-xl px-2.5 py-1.5 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer font-semibold"
+                class="bg-slate-50 border border-slate-200 text-slate-700 text-xs sm:text-sm rounded-xl px-2 py-1 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer font-semibold"
                 aria-label="{{ _('Projects per page') }}"
               >
-                <option value="10">10 {{ _('/ page') }}</option>
-                <option value="20">20 {{ _('/ page') }}</option>
-                <option value="50">50 {{ _('/ page') }}</option>
-                <option value="100">100 {{ _('/ page') }}</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
               </select>
             </div>
           </div>
@@ -343,7 +320,7 @@
               type="button"
               @click="setViewMode('table')"
               :class="{ 'bg-white text-royalblue font-bold shadow-xs': viewMode === 'table', 'text-slate-500 hover:text-slate-700': viewMode !== 'table' }"
-              class="px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all"
+              class="px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all"
               title="{{ _('Table View') }}"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -355,7 +332,7 @@
               type="button"
               @click="setViewMode('cards')"
               :class="{ 'bg-white text-royalblue font-bold shadow-xs': viewMode === 'cards', 'text-slate-500 hover:text-slate-700': viewMode !== 'cards' }"
-              class="px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all"
+              class="px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all"
               title="{{ _('Cards View') }}"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -367,7 +344,7 @@
         </div>
 
         <!-- Active Issue Chips Row (Quick Removal) -->
-        <div x-show="issues.length > 0" class="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
+        <div x-show="issues.length > 0" class="flex flex-wrap items-center gap-1.5 pt-1">
           <span class="text-[11px] font-semibold text-slate-500">{{ _('Filtered by issues:') }}</span>
           <template x-for="iss in issues" :key="iss">
             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
@@ -381,30 +358,55 @@
           </button>
         </div>
       </form>
-    </div>
+      {% endif %}
 
+    </div>
+  </header>
+
+  <!-- Main Content Container: Results render immediately with minimum gap -->
+  <article class="p-4 xl:p-0 max-w-6xl mx-auto mb-24 mt-4 sm:mt-6">
+
+    {{ components.flash_messages() }}
+
+    {% if not current_user.is_authenticated %}
+    <div class="bg-slate-50 p-6 sm:p-8 rounded-3xl mb-6 border border-slate-100 shadow-sm text-center">
+      <p class="mb-4 sm:mb-6 text-base sm:text-lg text-slate-600 font-medium">
+        {{ _('Register now to save your work and get faster results.') }}
+      </p>
+
+      <nav class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        {% if config.ENABLE_REGISTERED_ACCESS %}
+        <a class="btn-premium" href="{{ url_for('auth.register') }}">{{ _('Register') }}</a>
+        {% endif %}
+        <a class="text-sm font-semibold text-slate-600 hover:text-royalblue transition-colors"
+          href="{{ url_for('auth.sign_in') }}">{{ _('Already have an account? Sign in') }}</a>
+      </nav>
+    </div>
+    {% endif %}
+
+    {% if has_any_projects %}
     <!-- Project Results Container (dynamically updated) -->
     <div id="projects-results-container" :class="{ 'opacity-60 transition-opacity duration-200 pointer-events-none': isLoading }">
       {% include 'proofing/_projects_list.html' %}
     </div>
-
-  </div>
-  {% else %}
-  <div class="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm max-w-lg mx-auto">
-    <div class="w-16 h-16 bg-royalblue/10 rounded-2xl flex items-center justify-center mx-auto text-royalblue mb-4">
-      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
-        </path>
-      </svg>
+    {% else %}
+    <div class="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm max-w-lg mx-auto">
+      <div class="w-16 h-16 bg-royalblue/10 rounded-2xl flex items-center justify-center mx-auto text-royalblue mb-4">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+          </path>
+        </svg>
+      </div>
+      <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('No projects found') }}</h3>
+      <p class="text-xs text-slate-500 mb-6 max-w-sm mx-auto leading-relaxed">{{ _('Ready to digitize some manuscripts? Create your first project to get started.') }}</p>
+      <a href="{{ url_for('proofing.create_project') }}" class="btn-premium">
+        {{ _('Create project') }}
+      </a>
     </div>
-    <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('No projects found') }}</h3>
-    <p class="text-xs text-slate-500 mb-6 max-w-sm mx-auto leading-relaxed">{{ _('Ready to digitize some manuscripts? Create your first project to get started.') }}</p>
-    <a href="{{ url_for('proofing.create_project') }}" class="btn-premium">
-      {{ _('Create project') }}
-    </a>
-  </div>
-  {% endif %}
+    {% endif %}
+
+  </article>
 </div>
 
 <script>
