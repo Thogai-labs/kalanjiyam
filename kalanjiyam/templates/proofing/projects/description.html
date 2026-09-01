@@ -81,10 +81,7 @@
 
     <!-- Right: Action Button back to Workspace -->
     <div class="flex items-center gap-2 text-xs shrink-0">
-      <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
-        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-        </svg>
+      <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
         <span>{{ _('Workspace') }}</span>
       </a>
     </div>
@@ -135,8 +132,7 @@
 
 {% macro entity_chip(item, spans, taxonomy) %}
   {% set enriched = item.source == taxonomy.SOURCE_ENRICHMENT %}
-  <span class="inline-flex items-baseline gap-1.5 px-2.5 py-1 rounded-xl text-xs
-    {% if enriched %}bg-amber-50/80 border border-dashed border-amber-300 text-amber-900{% else %}bg-royalblue/5 border border-royalblue/20 text-slate-800{% endif %}"
+  <span class="inline-flex items-baseline gap-1.5 px-2.5 py-1 rounded-xl text-xs {% if enriched %}bg-amber-50/80 border border-dashed border-amber-300 text-amber-900{% else %}bg-royalblue/5 border border-royalblue/20 text-slate-800{% endif %}"
     title="{% if item.variants %}{{ _('also') }}: {{ item.variants|join('; ') }}{% endif %}{% if item.note %} &mdash; {{ item.note }}{% endif %}">
     <span class="font-semibold text-slate-900">{{ item.label }}</span>
     {% if item.dates %}<span class="text-slate-500">({{ item.dates }})</span>{% endif %}

@@ -54,8 +54,7 @@
 {# Horizontal sub-nav link #}
 {% macro _link(label, route, text, active, icon_name=None) -%}
 <a href="{{ url_for(route) }}"
-  class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all duration-200 text-xs font-semibold whitespace-nowrap
-  {{ 'text-white font-bold bg-royalblue shadow-sm shadow-royalblue/20' if active == label else 'text-slate-600 hover:bg-slate-100 hover:text-royalblue' }}">
+  class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all duration-200 text-xs font-semibold whitespace-nowrap {{ 'text-white font-bold bg-royalblue shadow-sm shadow-royalblue/20' if active == label else 'text-slate-600 hover:bg-slate-100 hover:text-royalblue' }}">
   {% if icon_name %}
     {{ icon(icon_name, class='w-4 h-4 shrink-0 ' + ('text-white' if active == label else 'text-slate-400 group-hover:text-royalblue')) }}
   {% endif %}

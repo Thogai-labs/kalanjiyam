@@ -316,12 +316,7 @@
                         <div class="flex justify-between items-start gap-2 mb-1">
                             <span class="font-semibold text-slate-900 text-xs truncate max-w-[180px]" x-text="task.project_title"></span>
                             <span class="text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider"
-                                  :class="{
-                                      'bg-blue-50 text-blue-600': task.status === 'running',
-                                      'bg-slate-100 text-slate-500': task.status === 'pending',
-                                      'bg-emerald-50 text-emerald-600': task.status === 'completed',
-                                      'bg-rose-50 text-rose-600': task.status === 'failed' || task.status === 'cancelled'
-                                  }"
+                                  :class="{ 'bg-blue-50 text-blue-600': task.status === 'running', 'bg-slate-100 text-slate-500': task.status === 'pending', 'bg-emerald-50 text-emerald-600': task.status === 'completed', 'bg-rose-50 text-rose-600': task.status === 'failed' || task.status === 'cancelled' }"
                                   x-text="task.status">
                             </span>
                         </div>

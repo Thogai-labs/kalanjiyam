@@ -40,8 +40,7 @@
 {% macro _nav_link(route, label, text, active, icon_name=None) %}
 <li>
   <a href="{{ url_for(route) }}"
-     class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 font-semibold text-sm
-     {{ 'text-white shadow-md shadow-royalblue/20' if active else 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' }}"
+     class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 font-semibold text-sm {{ 'text-white shadow-md shadow-royalblue/20' if active else 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' }}"
      {% if active %}style="background: linear-gradient(135deg, royalblue, #3f51b5);"{% endif %}>
     {% if icon_name %}
       {{ icon(icon_name, class='w-4 h-4 shrink-0') }}

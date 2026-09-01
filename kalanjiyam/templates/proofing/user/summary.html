@@ -72,12 +72,10 @@
     <div class="flex items-center gap-2 text-xs">
       {% if current_user.username == user.username %}
       <a href="{{ url_for('proofing.user.edit', username=user.username) }}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-royalblue hover:bg-blue-600 text-white font-semibold transition-all shadow-xs">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
         <span>{{ _('Edit Bio') }}</span>
       </a>
       {% endif %}
-      <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
-        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+      <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center px-3 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
         <span>{{ _('Workspace') }}</span>
       </a>
     </div>
@@ -169,9 +167,8 @@
           {% if current_user.id == user.id %}
           <p class="text-xs text-slate-600 font-medium">{{ _('Tell others who you are by writing a short bio!') }}</p>
           <a href="{{ url_for('proofing.user.edit', username=user.username) }}" class="inline-flex items-center gap-1.5 px-4 py-2 bg-royalblue hover:bg-blue-600 text-white font-semibold rounded-full text-xs transition-all shadow-xs">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-            <span>{{ _('Write Bio') }}</span>
-          </a>
+        <span>{{ _('Write Bio') }}</span>
+      </a>
           {% else %}
           <p class="text-xs text-slate-500 font-medium">{{ _("This user hasn't written anything about themselves.") }}</p>
           {% endif %}
