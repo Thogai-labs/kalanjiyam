@@ -1,28 +1,73 @@
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% import "macros/components.html" as components %}
 {% import "macros/proofing.html" as m %}
 
+{% block title %}{{ _('Admin') }}: {{ user.username }} | Kalanjiyam{% endblock %}
 
-{% block title %}User: {{ user.username }} | Kalanjiyam{% endblock %}
-
-
-{% block content %}
-{% set url = url_for('proofing.user.summary', username=user.username) %}
-{{ m.nested_header('Admin', user.username, url) }}
-{{ m.user_tabs(user=user, active='admin', is_mod=current_user.is_moderator) }}
-
-<p class="my-4">Set user permissions:</p>
-
-<form method="POST" class="p-4 bg-slate-100">
-  {{ form.csrf_token }}
-  {% for field in form if field.name.startswith("id_") %}
-  <div class="mb-4">
-    {{ field }}
-    {{ field.label }}
-  </div>
-  {% endfor %}
-  <input type="submit" class="btn btn-submit" value="Save changes">
-</form>
-
+{% block extra_css %}
+<style>
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
+  }
+</style>
 {% endblock %}
 
+{% block hero %}
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+  <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full bg-royalblue text-white font-bold flex items-center justify-center text-sm shadow-xs uppercase">
+        {{ user.username[:1] }}
+      </div>
+      <div>
+        <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+          {{ _('User Administration') }}: {{ user.username }}
+        </h1>
+        <p class="text-slate-500 text-xs font-medium">
+          {{ _('Configure permissions, roles, and privileges.') }}
+        </p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2 text-xs">
+      <a href="{{ url_for('proofing.user.summary', username=user.username) }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        <span>{{ _('Back to Profile') }}</span>
+      </a>
+    </div>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="w-full space-y-6 max-w-4xl mx-auto">
+  <div>
+    {{ m.user_tabs(user=user, active='admin', is_mod=current_user.is_moderator) }}
+  </div>
+
+  <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
+    <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">{{ _('Set User Roles & Permissions') }}</h2>
+
+    <form method="POST" class="space-y-4">
+      {{ form.csrf_token }}
+      <div class="space-y-3">
+        {% for field in form if field.name.startswith("id_") %}
+        <label class="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 hover:bg-slate-50/80 cursor-pointer transition-colors">
+          {{ field(class_="mt-0.5 rounded text-royalblue border-slate-300 focus:ring-royalblue w-4 h-4") }}
+          <div>
+            <span class="font-bold text-slate-900 text-xs sm:text-sm block">{{ field.label.text }}</span>
+          </div>
+        </label>
+        {% endfor %}
+      </div>
+
+      <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+        <button type="submit" class="px-7 py-2.5 bg-royalblue hover:bg-blue-600 text-white font-bold rounded-full text-xs sm:text-sm transition-all shadow-sm">
+          {{ _('Save changes') }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,4 +1,5 @@
 {% import "macros/components.html" as components %}
+{% import "macros/forms.html" as mf %}
 <!DOCTYPE html>
 <html lang="{{ get_locale() }}">
 <head>
@@ -10,18 +11,14 @@
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
       :root {
-        --primary-color: royalblue;
-        --primary-hover: #3f51b5;
-        --bg-slate: #f8fafc;
+        --brand-royalblue: royalblue;
+        --brand-royalblue-hover: #3553ce;
       }
 
       body {
-        background-color: var(--bg-slate);
-        background-image: 
-          radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.06) 0%, transparent 60%),
-          linear-gradient(to right, rgba(0, 0, 0, 0.02) 1px, transparent 1px),
-          linear-gradient(to bottom, rgba(0, 0, 0, 0.02) 1px, transparent 1px);
-        background-size: 100% 100%, 24px 24px, 24px 24px;
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        background-color: #f8fafc;
+        background-image: radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.05) 0%, transparent 70%);
         min-height: 100vh;
         display: flex;
         flex-direction: column;
@@ -29,218 +26,128 @@
         justify-content: center;
         margin: 0;
         padding: 24px 16px;
-        font-family: 'Inter', system-ui, -apple-system, sans-serif;
         color: #0f172a;
       }
 
-      .{
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      }
-
-      .brand-top-header {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 14px;
-        margin-bottom: 24px;
-        text-decoration: none;
-        transition: opacity 0.2s ease;
-      }
-
-      .brand-top-header:hover {
-        opacity: 0.9;
-      }
-
-      .brand-bharatgen-logo {
-        height: 38px;
-        width: auto;
-        object-fit: contain;
-        flex-shrink: 0;
-      }
-
-      .brand-divider {
-        color: #cbd5e1;
-        font-size: 1.75rem;
-        font-weight: 300;
-        user-select: none;
-      }
-
-      .brand-kalanjiyam {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .brand-icon {
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
-        background-color: royalblue;
-        color: #ffffff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.25rem;
-        font-weight: 800;
-        box-shadow: 0 4px 12px rgba(65, 105, 225, 0.3);
-      }
-
-      .brand-name {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        font-size: 2rem;
-        font-weight: 700;
-        color: #0f172a;
-        letter-spacing: -0.02em;
-      }
-
-      .auth-wrapper {
-        width: 100%;
-        max-width: 420px;
-      }
-
-      .form-card {
-        background-color: #ffffff;
-        border: 1px solid #e2e8f0;
-        padding: 36px 32px;
-        border-radius: 20px;
-        box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.01);
-      }
-
-      .form {
-        display: flex;
-        flex-direction: column;
-        gap: 18px;
-      }
-
-      .title {
-        font-size: 1.65rem;
-        color: #0f172a;
-        font-weight: 700;
-        margin: 0 0 4px 0;
-        letter-spacing: -0.02em;
-      }
-
-      .message {
-        color: #64748b;
-        font-size: 0.925rem;
-        margin: 0 0 12px 0;
-        line-height: 1.5;
-      }
-
-      .form label {
-        position: relative;
-        display: block;
-      }
-
-      .form label .input {
-        width: 100%;
-        padding: 14px 14px 22px 14px;
-        outline: 0;
-        border: 1px solid #cbd5e1;
+      .google-auth-card {
         background: #ffffff;
-        border-radius: 12px;
-        font-size: 0.95rem;
-        color: #0f172a;
-        transition: all 0.2s ease;
+        border: 1px solid #dadce0;
+        border-radius: 24px;
+        box-shadow: 0 1px 3px rgba(60, 64, 67, 0.08), 0 4px 12px rgba(60, 64, 67, 0.04);
+        padding: 36px 32px;
+        width: 100%;
+        max-width: 440px;
         box-sizing: border-box;
       }
 
-      .form label .input:focus {
+      .google-input-group {
+        position: relative;
+        margin-bottom: 16px;
+      }
+
+      .google-input-group label {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #475569;
+        margin-bottom: 6px;
+      }
+
+      .google-auth-input {
+        width: 100%;
+        padding: 12px 14px;
+        border: 1px solid #dadce0;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #0f172a;
+        background: #ffffff;
+        outline: none;
+        box-sizing: border-box;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      .google-auth-input:focus {
         border-color: royalblue;
         box-shadow: 0 0 0 3px rgba(65, 105, 225, 0.15);
       }
 
-      .form label .input + span {
-        position: absolute;
-        left: 14px;
-        top: 14px;
-        color: #94a3b8;
-        font-size: 0.9em;
-        cursor: text;
-        transition: 0.2s ease;
-        pointer-events: none;
-      }
-
-      .form label .input:focus + span,
-      .form label .input:not(:placeholder-shown) + span {
-        top: 32px;
-        font-size: 0.72em;
-        font-weight: 700;
-        color: royalblue;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-
-      .submit {
-        border: none;
-        outline: none;
+      .google-auth-btn {
         background-color: royalblue;
-        padding: 14px;
-        border-radius: 12px;
         color: #ffffff;
-        font-size: 0.975rem;
+        border-radius: 9999px;
+        padding: 10px 24px;
         font-weight: 600;
+        font-size: 14px;
+        border: none;
         cursor: pointer;
         transition: all 0.2s ease;
-        margin-top: 8px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .google-auth-btn:hover {
+        background-color: var(--brand-royalblue-hover);
         box-shadow: 0 4px 12px rgba(65, 105, 225, 0.3);
-      }
-
-      .submit:hover {
-        background-color: #3553ce;
-        box-shadow: 0 6px 16px rgba(65, 105, 225, 0.4);
-        transform: translateY(-1px);
-      }
-
-      .signin, .options {
-        text-align: center;
-        font-size: 0.875rem;
-        color: #64748b;
-        margin-top: 12px;
-      }
-
-      .signin a, .options a {
-        color: royalblue;
-        text-decoration: none;
-        font-weight: 600;
-      }
-
-      .signin a:hover, .options a:hover {
-        text-decoration: underline;
-      }
-
-      .error-box {
-        margin-bottom: 16px;
       }
     </style>
     {% block extra_css %}{% endblock %}
-    <script src="https://unpkg.com/alpinejs@3.10.3/dist/cdn.min.js" defer></script>
 </head>
 <body>
-    <!-- Top Kalanjiyam Brand Header -->
-    <a href="{{ url_for('site.index') }}" class="brand-top-header" title="{{ _('Return to Kalanjiyam Home') }}">
+    <!-- Top Brand Logo -->
+    <a href="{{ url_for('site.index') }}" class="inline-flex items-center gap-3 mb-6 hover:opacity-85 transition-opacity" title="{{ _('Return to Kalanjiyam Home') }}">
       <img src="{{ url_for('static', filename='images/BharatGen-Logo-2-1536x390.webp') }}"
            alt="BharatGen"
-           class="brand-bharatgen-logo" />
-      <span class="brand-divider" aria-hidden="true">|</span>
-      <div class="brand-kalanjiyam">
-        <div class="brand-icon">K</div>
-        <span class="brand-name">Kalanjiyam</span>
+           class="h-8 sm:h-9 w-auto object-contain shrink-0" />
+      <span class="text-slate-300 font-light text-2xl select-none" aria-hidden="true">|</span>
+      <div class="flex items-center gap-2">
+        <span class="w-8 h-8 rounded-xl bg-royalblue flex items-center justify-center text-white text-xs font-black shadow-xs">K</span>
+        <span class="text-xl font-bold text-slate-900 tracking-tight">Kalanjiyam</span>
       </div>
     </a>
 
-    <div class="auth-wrapper">
-        <div class="error-box">
-            {% block auth_errors %}
-                {{ mf.show_errors_if_any(form.errors if form else {}) }}
-                {{ components.flash_messages() }}
-            {% endblock %}
+    <!-- Auth Form Card Container -->
+    <div class="google-auth-card">
+      <!-- Flash Messages & Form Errors -->
+      {% block auth_errors %}
+        {% if form and form.errors %}
+        <div class="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl mb-4 text-xs font-medium">
+          <ul class="list-disc pl-4 space-y-1">
+            {% for k, v in form.errors.items() %}
+              <li>{{ v[0] }}</li>
+            {% endfor %}
+          </ul>
         </div>
-        <div class="form-card">
-          {% block body %}{% endblock %}
-          {% block content %}{% endblock %}
+        {% endif %}
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="space-y-2 mb-4">
+          {% for category, message in messages %}
+          <div class="p-3.5 rounded-xl border text-xs font-medium flex items-center gap-2 {{ 'bg-emerald-50 border-emerald-200 text-emerald-800' if category in ['success', 'message'] else 'bg-rose-50 border-rose-200 text-rose-800' }}">
+            <span>{{ message|forceescape }}</span>
+          </div>
+          {% endfor %}
         </div>
+        {% endif %}
+        {% endwith %}
+      {% endblock %}
+
+      {% block body %}{% endblock %}
+      {% block content %}{% endblock %}
+    </div>
+
+    <!-- Bottom Footer Links -->
+    <div class="flex flex-wrap items-center justify-center gap-4 mt-6 text-xs text-slate-400 font-medium">
+      <a href="{{ url_for('about.privacy') }}" class="hover:text-slate-600 transition-colors">{{ _('Privacy') }}</a>
+      <span>&bull;</span>
+      <a href="{{ url_for('about.terms') }}" class="hover:text-slate-600 transition-colors">{{ _('Terms') }}</a>
+      <span>&bull;</span>
+      <a href="{{ url_for('about.contact') }}" class="hover:text-slate-600 transition-colors">{{ _('Help') }}</a>
     </div>
 </body>
 </html>
-

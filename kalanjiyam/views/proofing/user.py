@@ -1,4 +1,6 @@
-from flask import Blueprint, abort, flash, redirect, render_template, url_for
+import math
+from datetime import datetime
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_babel import lazy_gettext as _l
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
@@ -37,10 +39,26 @@ def summary(username):
 
 @bp.route("/<username>/activity")
 def activity(username):
-    """Summarize the user's public activity on Kalanjiyam."""
+    """Summarize the user's public activity on Kalanjiyam with pagination and date filter."""
     user_ = q.user(username)
     if not user_:
         abort(404)
+
+    page = request.args.get("page", 1, type=int)
+    if page < 1:
+        page = 1
+    per_page = request.args.get("per_page", 20, type=int)
+    if per_page not in [10, 20, 50]:
+        per_page = 20
+
+    date_str = request.args.get("date", "").strip()
+    filter_date = None
+    if date_str:
+        try:
+            filter_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            filter_date = None
+            date_str = ""
 
     session = q.get_session()
     recent_revisions = (
@@ -51,7 +69,6 @@ def activity(username):
         )
         .filter_by(author_id=user_.id)
         .order_by(db.Revision.created.desc())
-        .limit(100)
         .all()
     )
     recent_projects = (
@@ -61,15 +78,37 @@ def activity(username):
         .all()
     )
 
-    recent_activity = [("revision", r.created, r) for r in recent_revisions]
-    recent_activity += [("project", p.created_at, p) for p in recent_projects]
-    hm = heatmap.create(x[1].date() for x in recent_activity)
+    all_activity = [("revision", r.created, r) for r in recent_revisions]
+    all_activity += [("project", p.created_at, p) for p in recent_projects]
+    all_activity.sort(key=lambda x: x[1], reverse=True)
+
+    hm = heatmap.create(x[1].date() for x in all_activity)
+
+    if filter_date:
+        filtered_activity = [x for x in all_activity if x[1].date() == filter_date]
+    else:
+        filtered_activity = all_activity
+
+    total_items = len(filtered_activity)
+    total_pages = max(1, math.ceil(total_items / per_page)) if total_items > 0 else 1
+
+    if page > total_pages:
+        page = total_pages
+
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    page_activity = filtered_activity[start_idx:end_idx]
 
     return render_template(
         "proofing/user/activity.html",
         user=user_,
-        recent_activity=recent_activity,
+        recent_activity=page_activity,
         heatmap=hm,
+        page=page,
+        per_page=per_page,
+        total_items=total_items,
+        total_pages=total_pages,
+        selected_date=date_str,
     )
 
 
