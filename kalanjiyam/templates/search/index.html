@@ -19,19 +19,11 @@
    proofing view instead -- which is where a proofer can actually read them,
    and which search has already confirmed this viewer may see. #}
 {% macro book_url(is_public, project_slug) %}
-{%- if is_public -%}
-  {{ url_for('public.books.book', project_slug=project_slug) }}
-{%- else -%}
   {{ url_for('proofing.project.summary', slug=project_slug) }}
-{%- endif -%}
 {% endmacro %}
 
 {% macro page_url(is_public, project_slug, page_slug) %}
-{%- if is_public -%}
-  {{ url_for('public.books.page', project_slug=project_slug, page_slug=page_slug, q=req.q) }}
-{%- else -%}
   {{ url_for('proofing.page.edit', project_slug=project_slug, page_slug=page_slug, q=req.q) }}
-{%- endif -%}
 {% endmacro %}
 
 {% block title %}{% if req.q %}{{ _('%(q)s — Search', q=req.q) }}{% else %}{{ _('Search') }}{% endif %} | Kalanjiyam{% endblock %}
@@ -521,9 +513,9 @@
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% for project in fallback_projects %}
-              <a href="{{ url_for('public.books.book', project_slug=project.slug) }}" class="google-card block p-5">
+              <a href="{{ url_for('proofing.project.summary', slug=project.slug) }}" class="google-card block p-5">
                 <div class="google-breadcrumb-site mb-1">
-                  {{ _('Digital Library') }} › {{ _('Book') }}
+                  {{ _('Proofing Workspace') }} › {{ _('Project') }}
                 </div>
                 <h3 class="google-result-title text-lg font-semibold mb-1">{{ project.display_title }}</h3>
                 {% if project.author %}

@@ -1,12 +1,22 @@
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% import "macros/components.html" as components %}
 {% import "macros/proofing.html" as m %}
 
 {% block extra_css %}
 <style>
-  .google-proofing-header {
-    background-color: #ffffff;
-    border-bottom: 1px solid #e8eaed;
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  .font-serif-title {
+    font-family: 'Cinzel', Georgia, serif;
+  }
+
+  .project-hero {
+    background: #0b1120;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
+      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
+      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
+    background-size: 100% 100%, 24px 24px, 24px 24px;
   }
 
   .project-entry-card {
@@ -86,18 +96,26 @@
 
 {% block main %}
 <div class="w-full" x-data="proofingDashboard()">
-  <!-- Integrated Google-Style Header (Title + Stats + Status Legend + Search + Filters) -->
-  <header class="google-proofing-header py-4 sm:py-5 px-4 sm:px-6 bg-white border-b border-slate-200 shadow-xs">
-    <div class="max-w-6xl mx-auto space-y-3.5">
+  <!-- Integrated Project-Hero Header (Dark Blue + Grid Pattern with Search & Filters) -->
+  <header class="project-hero text-slate-100 py-10 px-4 mb-8 border-b border-slate-800">
+    <div class="max-w-6xl mx-auto space-y-4">
 
-      <!-- Top Row: Title, Active Projects Count, Status Legend, and New Project CTA -->
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-center gap-3">
-          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+      <!-- Category Badge -->
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider shadow-sm">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        <span>{{ _('Proofing Workspace') }}</span>
+      </div>
+
+      <!-- Top Row: Title, Active Projects Count, and Action Buttons -->
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-3">
+          <h1 class="text-3xl sm:text-4xl font-bold font-serif-title tracking-tight text-white flex items-center gap-3">
             <span>{{ _('Proofing Workspace') }}</span>
           </h1>
           {% if has_any_projects %}
-          <div id="active-projects-badge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold">
+          <div id="active-projects-badge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-slate-300 text-xs font-semibold">
             <span>{{ _('Projects:') }}</span>
             <span id="active-projects-badge-count" class="font-bold text-white bg-royalblue px-2 py-0.5 rounded-full text-[11px] shadow-xs">{{ total_projects }}</span>
           </div>
@@ -106,15 +124,15 @@
 
         <div class="flex flex-wrap items-center gap-2.5 sm:gap-3">
           <!-- Guidelines & Preparation Action Button -->
-          <a href="{{ url_for('proofing.help_index') }}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold text-xs sm:text-sm transition-all shadow-xs" title="{{ _('Help & Guidelines') }}">
-            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <a href="{{ url_for('proofing.help_index') }}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 hover:border-slate-600 text-slate-200 hover:text-white font-semibold text-xs sm:text-sm transition-all shadow-xs" title="{{ _('Help & Guidelines') }}">
+            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
             </svg>
             <span>{{ _('Guidelines & Preparation') }}</span>
           </a>
 
           <!-- New Project Action Button -->
-          <a href="{{ url_for('proofing.create_project') }}" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-royalblue hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm shadow-sm transition-all shrink-0">
+          <a href="{{ url_for('proofing.create_project') }}" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-royalblue hover:bg-blue-600 text-white font-semibold text-xs sm:text-sm shadow-md transition-all shrink-0">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
             </svg>
@@ -125,7 +143,7 @@
 
       {% if has_any_projects %}
       <!-- Search & Filters Form -->
-      <form method="GET" action="{{ url_for('proofing.index') }}" @submit.prevent="fetchResults(1)" class="w-full space-y-2.5">
+      <form method="GET" action="{{ url_for('proofing.index') }}" @submit.prevent="fetchResults(1)" class="w-full space-y-3 pt-2">
         <!-- Google-Style Omni Search Bar -->
         <div class="google-search-bar flex items-center px-4 py-2 sm:py-2.5">
           <svg class="w-5 h-5 text-slate-400 shrink-0 mr-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -137,7 +155,7 @@
             x-model="query"
             value="{{ search_query }}"
             placeholder="{{ _('Search by manuscript title, author, or slug…') }}"
-            class="w-full bg-transparent text-slate-800 placeholder-slate-400 text-sm sm:text-base focus:outline-none"
+            class="w-full bg-transparent text-slate-800 placeholder-slate-400 text-sm sm:text-base focus:outline-none font-medium"
             @input.debounce.300ms="fetchResults(1)"
             aria-label="{{ _('Search proofing manuscripts') }}"
           />
@@ -169,12 +187,12 @@
             <!-- Organization Filter (superadmin & master user) -->
             {% if (current_user.is_master_user or current_user.is_super_admin) and user_organizations %}
             <div class="flex items-center gap-1.5 text-xs sm:text-sm">
-              <label for="org-select" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Org:') }}</label>
+              <label for="org-select" class="font-bold text-slate-300 whitespace-nowrap">{{ _('Org:') }}</label>
               <select
                 id="org-select"
                 name="org"
                 x-model="org"
-                class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
+                class="bg-slate-900/90 border border-slate-700 rounded-xl px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-200 focus:border-royalblue focus:bg-slate-900 outline-none transition-all cursor-pointer"
                 @change="fetchResults(1)"
               >
                 <option value="all" {% if selected_org == 'all' %}selected{% endif %}>{{ _('All Orgs') }}</option>
@@ -188,12 +206,12 @@
             <!-- Mode Filter (superadmin) -->
             {% if current_user.is_super_admin %}
             <div class="flex items-center gap-1.5 text-xs sm:text-sm">
-              <label for="mode-select" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Mode:') }}</label>
+              <label for="mode-select" class="font-bold text-slate-300 whitespace-nowrap">{{ _('Mode:') }}</label>
               <select
                 id="mode-select"
                 name="mode"
                 x-model="mode"
-                class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
+                class="bg-slate-900/90 border border-slate-700 rounded-xl px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-200 focus:border-royalblue focus:bg-slate-900 outline-none transition-all cursor-pointer"
                 @change="fetchResults(1)"
               >
                 <option value="all" {% if selected_mode == 'all' %}selected{% endif %}>{{ _('All Modes') }}</option>
@@ -211,11 +229,11 @@
                 type="button"
                 @click="issuesOpen = !issuesOpen"
                 class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs sm:text-sm font-semibold transition-all cursor-pointer"
-                :class="issues.length > 0 ? 'bg-amber-50 text-amber-900 border-amber-300 font-bold' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'"
+                :class="issues.length > 0 ? 'bg-amber-950/70 text-amber-300 border-amber-500/50 font-bold' : 'bg-slate-900/90 text-slate-200 border-slate-700 hover:bg-slate-800'"
               >
-                <span class="w-2 h-2 rounded-full" :class="issues.length > 0 ? 'bg-amber-500' : 'bg-slate-400'"></span>
+                <span class="w-2 h-2 rounded-full" :class="issues.length > 0 ? 'bg-amber-400' : 'bg-slate-400'"></span>
                 <span>{{ _('Issues') }}</span>
-                <span x-show="issues.length > 0" class="px-1.5 py-0.2 bg-amber-200 text-amber-900 rounded-full text-[11px] font-bold" x-text="issues.length"></span>
+                <span x-show="issues.length > 0" class="px-1.5 py-0.2 bg-amber-500/30 text-amber-200 rounded-full text-[11px] font-bold" x-text="issues.length"></span>
                 <svg class="w-3.5 h-3.5 text-slate-400 transition-transform" :class="{ 'rotate-180': issuesOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
@@ -257,12 +275,12 @@
 
             <!-- Sort By & Order -->
             <div class="flex items-center gap-1.5 text-xs sm:text-sm">
-              <label for="sort-select" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Sort:') }}</label>
+              <label for="sort-select" class="font-bold text-slate-300 whitespace-nowrap">{{ _('Sort:') }}</label>
               <select
                 id="sort-select"
                 name="sort"
                 x-model="sort"
-                class="bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
+                class="bg-slate-900/90 border border-slate-700 rounded-xl px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-200 focus:border-royalblue focus:bg-slate-900 outline-none transition-all cursor-pointer"
                 @change="fetchResults(1)"
               >
                 <option value="created" {% if sort_field == 'created' %}selected{% endif %}>{{ _('Date') }}</option>
@@ -272,7 +290,7 @@
                 id="order-select"
                 name="order"
                 x-model="order"
-                class="bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
+                class="bg-slate-900/90 border border-slate-700 rounded-xl px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-200 focus:border-royalblue focus:bg-slate-900 outline-none transition-all cursor-pointer"
                 @change="fetchResults(1)"
               >
                 <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>{{ _('Desc') }}</option>
@@ -281,13 +299,13 @@
             </div>
 
             <!-- Per Page Dropdown -->
-            <div class="flex items-center gap-1.5 text-xs sm:text-sm text-slate-600">
-              <label for="proofing-per-page" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Show:') }}</label>
+            <div class="flex items-center gap-1.5 text-xs sm:text-sm text-slate-300">
+              <label for="proofing-per-page" class="font-bold text-slate-300 whitespace-nowrap">{{ _('Show:') }}</label>
               <select
                 id="proofing-per-page"
                 :value="perPage"
                 @change="setPerPage($event.target.value)"
-                class="bg-slate-50 border border-slate-200 text-slate-700 text-xs sm:text-sm rounded-xl px-2 py-1 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer font-semibold"
+                class="bg-slate-900/90 border border-slate-700 text-slate-200 text-xs sm:text-sm rounded-xl px-2 py-1 focus:border-royalblue focus:bg-slate-900 outline-none transition-all cursor-pointer font-semibold"
                 aria-label="{{ _('Projects per page') }}"
               >
                 <option value="10">10</option>
@@ -299,12 +317,12 @@
           </div>
 
           <!-- Table / Cards View Mode Toggle -->
-          <div class="flex items-center bg-slate-100 border border-slate-200 rounded-xl p-0.5 shadow-xs shrink-0" role="group" aria-label="{{ _('View Mode') }}">
+          <div class="flex items-center bg-slate-900/90 border border-slate-700 rounded-xl p-0.5 shadow-xs shrink-0" role="group" aria-label="{{ _('View Mode') }}">
             <button
               type="button"
               @click="setViewMode('table')"
-              :class="{ 'bg-white text-royalblue font-bold shadow-xs border border-slate-200': viewMode === 'table', 'text-slate-500 hover:text-slate-700 border border-transparent': viewMode !== 'table' }"
-              class="px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all"
+              :class="{ 'bg-royalblue text-white font-bold shadow-xs border border-royalblue/40': viewMode === 'table', 'text-slate-400 hover:text-slate-200 border border-transparent': viewMode !== 'table' }"
+              class="px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all cursor-pointer"
               title="{{ _('Table View') }}"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -315,8 +333,8 @@
             <button
               type="button"
               @click="setViewMode('cards')"
-              :class="{ 'bg-white text-royalblue font-bold shadow-xs border border-slate-200': viewMode === 'cards', 'text-slate-500 hover:text-slate-700 border border-transparent': viewMode !== 'cards' }"
-              class="px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all"
+              :class="{ 'bg-royalblue text-white font-bold shadow-xs border border-royalblue/40': viewMode === 'cards', 'text-slate-400 hover:text-slate-200 border border-transparent': viewMode !== 'cards' }"
+              class="px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all cursor-pointer"
               title="{{ _('Cards View') }}"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -329,15 +347,15 @@
 
         <!-- Active Issue Chips Row (Quick Removal) -->
         <div x-show="issues.length > 0" class="flex flex-wrap items-center gap-1.5 pt-1">
-          <span class="text-[11px] font-semibold text-slate-500">{{ _('Filtered by issues:') }}</span>
+          <span class="text-[11px] font-semibold text-slate-300">{{ _('Filtered by issues:') }}</span>
           <template x-for="iss in issues" :key="iss">
-            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-              <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-950/80 text-amber-200 border border-amber-600/60">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
               <span x-text="iss"></span>
-              <button type="button" @click="toggleIssue(iss)" class="ml-1 text-amber-700 hover:text-amber-950 font-bold" title="{{ _('Remove filter') }}">×</button>
+              <button type="button" @click="toggleIssue(iss)" class="ml-1 text-amber-300 hover:text-white font-bold" title="{{ _('Remove filter') }}">×</button>
             </span>
           </template>
-          <button type="button" @click="issues = []; fetchResults(1)" class="text-xs text-royalblue hover:underline ml-1 font-semibold">
+          <button type="button" @click="issues = []; fetchResults(1)" class="text-xs text-blue-400 hover:underline ml-1 font-semibold">
             {{ _('Clear all issues') }}
           </button>
         </div>
@@ -348,7 +366,7 @@
   </header>
 
   <!-- Main Content Container: Results render immediately with minimum gap -->
-  <article class="p-4 xl:p-0 max-w-6xl mx-auto mb-24 mt-4 sm:mt-6">
+  <article class="p-4 xl:p-0 max-w-6xl mx-auto mb-24">
 
     {{ components.flash_messages() }}
 

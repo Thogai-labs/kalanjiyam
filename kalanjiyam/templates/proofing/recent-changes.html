@@ -29,7 +29,7 @@
   <!-- Embedded Header with Live Dynamic Search & Filter Controls -->
   <header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
     <div class="max-w-6xl mx-auto space-y-3">
-      
+
       <!-- Top Row: Title, Subtitle, Live Indicator, and Actions -->
       <div class="flex flex-wrap items-center justify-between gap-2.5">
         <div class="flex items-center gap-2.5">
@@ -43,10 +43,6 @@
               <h1 class="text-base sm:text-lg font-bold tracking-tight text-slate-900 leading-tight">
                 {{ _('Recent Changes') }}
               </h1>
-              <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-royalblue text-[11px] font-semibold">
-                <span class="w-1.5 h-1.5 rounded-full bg-royalblue animate-pulse"></span>
-                <span>{{ _('Live Stream') }}</span>
-              </div>
             </div>
             <p class="text-slate-500 text-[11px] sm:text-xs font-medium">
               {{ _('Track real-time proofreading revisions and library updates across the organization.') }}
@@ -62,9 +58,6 @@
           </div>
 
           <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue text-xs font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
-            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-            </svg>
             <span>{{ _('Workspace') }}</span>
           </a>
         </div>
@@ -72,7 +65,7 @@
 
       <!-- Integrated Search & Filter Form inside Header -->
       <form method="GET" action="{{ url_for('proofing.recent_changes') }}" @submit.prevent="fetchResults(1)" class="w-full space-y-2.5">
-        
+
         <!-- Google-Style Omni Dynamic Search Bar -->
         <div class="google-search-bar flex items-center px-3.5 py-1.5 sm:py-2">
           <svg class="w-4 h-4 text-slate-400 shrink-0 mr-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
