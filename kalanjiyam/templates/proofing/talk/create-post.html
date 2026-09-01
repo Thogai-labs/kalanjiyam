@@ -7,9 +7,6 @@
 {% block title %}Create post on {{ project.display_title }} | Kalanjiyam{% endblock %}
 
 
-{% block sidebar %}{{ m.main_nav('talk', current_user=current_user) }}{% endblock %}
-
-
 {% block content %}
 {% set url = url_for('proofing.talk.thread', project_slug=project.slug, thread_id=thread.id) %}
 {{ m.nested_header('Create post', thread.title, url) }}

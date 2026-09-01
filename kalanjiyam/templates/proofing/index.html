@@ -9,7 +9,7 @@
 
 
 {% macro status_legend() %}
-<div class="bg-white rounded-2xl p-4 sm:p-5 mb-6 shadow-sm border border-slate-200">
+<div class="bg-white rounded-2xl p-4 sm:p-5 my-6 shadow-sm border border-slate-200">
   <div class="flex items-center gap-2 mb-3">
     <span class="w-2 h-2 rounded-full bg-slate-400"></span>
     <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -115,8 +115,6 @@
 {% endblock %}
 
 {% block title %}{{ mc.title(_('Proofing Dashboard')) }}{% endblock %}
-
-{% block sidebar %}{% endblock %}
 
 {% block hero %}
 <header class="google-proofing-header py-6 sm:py-8 px-4 bg-white border-b border-slate-200">

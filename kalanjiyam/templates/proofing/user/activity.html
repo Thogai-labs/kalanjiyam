@@ -7,9 +7,6 @@
 {% block title %}User: {{ user.username }} | Kalanjiyam{% endblock %}
 
 
-{% block sidebar %}{{ m.main_nav('talk', current_user=current_user) }}{% endblock %}
-
-
 {% block content %}
 {{ m.nested_header('Activity', user.username, url) }}
 
