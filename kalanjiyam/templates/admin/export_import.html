@@ -1,116 +1,219 @@
 {% extends 'admin/master.html' %}
 {% import 'macros/admin.html' as admin %}
 
-{% block title %}{{ _('Export / Import') }} | {{ _('Admin') }}{% endblock %}
+{% block title %}{{ _('Export & Import') }} | {{ _('Admin Console') }}{% endblock %}
 
 {% block admin_sidebar %}
 {{ admin.nav('export', current_user) }}
 {% endblock %}
 
 {% block content %}
-{{ admin.page_header(_('Export / import books'), _('Move projects between Kalanjiyam instances.')) }}
-
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
-    <h2 class="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
-      <span class="w-1 h-6 rounded-full bg-royalblue"></span>
-      {{ _('Export') }}
-    </h2>
-
-    <div class="mt-6 space-y-6">
+<!-- Google Admin Header -->
+<div class="mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3.5">
+      <div class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+        {{ admin.icon('download', class='w-5 h-5') }}
+      </div>
       <div>
-        <h3 class="font-semibold text-slate-800 mb-1">{{ _('Single project') }}</h3>
-        <p class="text-sm text-slate-500 mb-3">{{ _('Download one book with revisions, translations, and assets.') }}</p>
-        <div class="flex flex-col sm:flex-row gap-2">
-          <select id="project-select" class="{{ admin.select_class() }} flex-1">
-            <option value="">{{ _('Select a project…') }}</option>
-            {% for project in projects %}
-            <option value="{{ project.slug }}">{{ project.display_title }}</option>
-            {% endfor %}
-          </select>
-          <button type="button" onclick="exportProject()" class="btn-premium shrink-0">{{ _('Export') }}</button>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ _('Export & Import') }}
+          </h1>
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+            {{ _('Data Portability') }}
+          </span>
         </div>
-      </div>
-
-      <div class="border-t border-slate-100 pt-6">
-        <h3 class="font-semibold text-slate-800 mb-1">{{ _('All projects') }}</h3>
-        <p class="text-sm text-slate-500 mb-3">{{ _('One ZIP with every book. May take a while on large sites.') }}</p>
-        {{ admin.btn_primary(_('Export all projects'), href=url_for('admin.export_all_projects')) }}
+        <p class="text-xs text-slate-500 font-medium mt-0.5">
+          {{ _('Move projects, pages, revisions, and OCR data between Kalanjiyam instances.') }}
+        </p>
       </div>
     </div>
-
-    {% call admin.callout_info() %}
-    <p class="font-bold text-slate-800">{{ _('Export includes') }}</p>
-    <ul class="list-disc list-inside space-y-0.5 text-slate-600">
-      <li>{{ _('Project metadata and pages') }}</li>
-      <li>{{ _('Revision history and translations') }}</li>
-      <li>{{ _('Discussions, PDF source, and page images') }}</li>
-    </ul>
-    {% endcall %}
-  </div>
-
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
-    <h2 class="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
-      <span class="w-1 h-6 rounded-full bg-emerald-500"></span>
-      {{ _('Import') }}
-    </h2>
-
-    <div class="mt-6 space-y-6">
-      <div>
-        <h3 class="font-semibold text-slate-800 mb-1">{{ _('Single project') }}</h3>
-        <form method="POST" action="{{ url_for('admin.import_project') }}" enctype="multipart/form-data" class="space-y-3">
-          {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
-          <input type="file" name="project_file" accept=".zip" class="{{ admin.input_class() }} file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-royalblue/10 file:text-royalblue file:font-semibold" required>
-          {{ admin.btn_primary(_('Import project'), type='submit') }}
-        </form>
-      </div>
-
-      <div class="border-t border-slate-100 pt-6">
-        <h3 class="font-semibold text-slate-800 mb-1">{{ _('Bulk import') }}</h3>
-        <form method="POST" action="{{ url_for('admin.import_all_projects') }}" enctype="multipart/form-data" class="space-y-3">
-          {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
-          <input type="file" name="projects_file" accept=".zip" class="{{ admin.input_class() }} file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-royalblue/10 file:text-royalblue file:font-semibold" required>
-          {{ admin.btn_primary(_('Import all projects'), type='submit') }}
-        </form>
-      </div>
-    </div>
-
-    {% call admin.callout_warning() %}
-    <p class="font-bold">{{ _('Before you import') }}</p>
-    <ul class="list-disc list-inside space-y-0.5">
-      <li>{{ _('Back up your database first — import is irreversible.') }}</li>
-      <li>{{ _('Duplicate slugs are rejected; new authors get placeholder passwords.') }}</li>
-      <li>{{ _('Large imports may take several minutes.') }}</li>
-    </ul>
-    {% endcall %}
   </div>
 </div>
 
-<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
-  <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('All projects') }}</h2>
+<!-- 2-Column Console: Export on Left, Import on Right -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+  <!-- Export Operations Panel -->
+  <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 flex flex-col justify-between">
+    <div>
+      <div class="flex items-center gap-2 pb-4 mb-5 border-b border-slate-100">
+        <div class="w-8 h-8 rounded-xl bg-blue-50 text-royalblue flex items-center justify-center font-bold text-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+          </svg>
+        </div>
+        <div>
+          <h2 class="text-sm font-bold text-slate-900">{{ _('Export Operations') }}</h2>
+          <p class="text-[11px] text-slate-500 font-medium">{{ _('Generate standalone archives containing all project assets.') }}</p>
+        </div>
+      </div>
+
+      <div class="space-y-5">
+        <!-- Single Project Export -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">{{ _('Export Single Project') }}</label>
+          <p class="text-xs text-slate-500 mb-2.5">{{ _('Download one book with revisions, translations, and raw assets.') }}</p>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <select id="project-select"
+                    class="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-xs flex-1">
+              <option value="">{{ _('Select a project…') }}</option>
+              {% for project in projects %}
+              <option value="{{ project.slug }}">{{ project.display_title }}</option>
+              {% endfor %}
+            </select>
+            <button type="button" onclick="exportProject()"
+                    class="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-royalblue hover:bg-blue-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+              </svg>
+              <span>{{ _('Export ZIP') }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Bulk Export -->
+        <div class="border-t border-slate-100 pt-5">
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">{{ _('Export All Projects Archive') }}</label>
+          <p class="text-xs text-slate-500 mb-2.5">{{ _('One ZIP with every book in your catalog. May take a while on large sites.') }}</p>
+          <a href="{{ url_for('admin.export_all_projects') }}"
+             class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors shadow-xs">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path>
+            </svg>
+            <span>{{ _('Export All Projects') }}</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export Callout Info -->
+    <div class="mt-6 p-4 rounded-xl bg-blue-50/70 border border-blue-100 text-xs text-slate-700">
+      <div class="flex items-center gap-2 mb-1.5 font-bold text-royalblue">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <span>{{ _('Export archive includes') }}</span>
+      </div>
+      <ul class="list-disc list-inside space-y-0.5 text-[11px] text-slate-600 font-medium">
+        <li>{{ _('Project metadata, schema versions, and proofing pages') }}</li>
+        <li>{{ _('Complete revision history, diffs, and translation records') }}</li>
+        <li>{{ _('Discussions, PDF source document, and high-resolution page images') }}</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Import Operations Panel -->
+  <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 flex flex-col justify-between">
+    <div>
+      <div class="flex items-center gap-2 pb-4 mb-5 border-b border-slate-100">
+        <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12"></path>
+          </svg>
+        </div>
+        <div>
+          <h2 class="text-sm font-bold text-slate-900">{{ _('Import Operations') }}</h2>
+          <p class="text-[11px] text-slate-500 font-medium">{{ _('Ingest exported archives into this Kalanjiyam instance.') }}</p>
+        </div>
+      </div>
+
+      <div class="space-y-5">
+        <!-- Single Project Import -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">{{ _('Import Single Project ZIP') }}</label>
+          <form method="POST" action="{{ url_for('admin.import_project') }}" enctype="multipart/form-data" class="flex flex-col sm:flex-row gap-2">
+            {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+            <input type="file" name="project_file" accept=".zip"
+                   class="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-xl file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-royalblue/10 file:text-royalblue file:font-semibold focus:outline-none flex-1 shadow-xs" required>
+            <button type="submit"
+                    class="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12"></path>
+              </svg>
+              <span>{{ _('Import Project') }}</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Bulk Archive Import -->
+        <div class="border-t border-slate-100 pt-5">
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">{{ _('Bulk Import Projects ZIP') }}</label>
+          <form method="POST" action="{{ url_for('admin.import_all_projects') }}" enctype="multipart/form-data" class="flex flex-col sm:flex-row gap-2">
+            {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+            <input type="file" name="projects_file" accept=".zip"
+                   class="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-xl file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-royalblue/10 file:text-royalblue file:font-semibold focus:outline-none flex-1 shadow-xs" required>
+            <button type="submit"
+                    class="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors shadow-xs shrink-0">
+              <span>{{ _('Import All Projects') }}</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pre-flight Warning Notice -->
+    <div class="mt-6 p-4 rounded-xl bg-amber-50/70 border border-amber-200 text-xs text-slate-700">
+      <div class="flex items-center gap-2 mb-1.5 font-bold text-amber-800">
+        <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+        <span>{{ _('Before you import') }}</span>
+      </div>
+      <ul class="list-disc list-inside space-y-0.5 text-[11px] text-slate-600 font-medium">
+        <li>{{ _('Back up your database first — project import is irreversible.') }}</li>
+        <li>{{ _('Duplicate slugs are rejected; new authors get placeholder passwords.') }}</li>
+        <li>{{ _('Large multi-project imports may take several minutes.') }}</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- All Projects Table -->
+<div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 mb-8">
+  <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+    <div>
+      <h2 class="text-sm font-bold text-slate-900">{{ _('Catalog Directory') }}</h2>
+      <p class="text-xs text-slate-500 font-medium mt-0.5">{{ projects|length }} {{ _('books available for export and backup') }}</p>
+    </div>
+  </div>
+
   {% if projects %}
   <div class="overflow-x-auto rounded-xl border border-slate-100">
-    <table class="min-w-full text-sm">
-      <thead class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+    <table class="min-w-full text-xs sm:text-sm text-left">
+      <thead class="bg-slate-50/80 text-slate-500 uppercase tracking-wider font-bold text-[10px] border-b border-slate-100">
         <tr>
-          <th class="px-4 py-3">{{ _('Title') }}</th>
-          <th class="px-4 py-3">{{ _('Slug') }}</th>
-          <th class="px-4 py-3">{{ _('Author') }}</th>
-          <th class="px-4 py-3">{{ _('Pages') }}</th>
-          <th class="px-4 py-3">{{ _('Created') }}</th>
-          <th class="px-4 py-3"></th>
+          <th class="px-4 py-3.5">{{ _('Title & Slug') }}</th>
+          <th class="px-4 py-3.5">{{ _('Author') }}</th>
+          <th class="px-4 py-3.5 text-right">{{ _('Pages') }}</th>
+          <th class="px-4 py-3.5 text-right">{{ _('Created') }}</th>
+          <th class="px-4 py-3.5 text-right">{{ _('Action') }}</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-slate-100">
+      <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
         {% for project in projects %}
-        <tr class="hover:bg-slate-50/80 transition-colors">
-          <td class="px-4 py-3 font-medium text-slate-900">{{ project.display_title }}</td>
-          <td class="px-4 py-3 font-mono text-xs text-slate-500">{{ project.slug }}</td>
-          <td class="px-4 py-3 text-slate-600">{{ project.author or '—' }}</td>
-          <td class="px-4 py-3 text-slate-600">{{ project.pages|length }}</td>
-          <td class="px-4 py-3 text-slate-500">{{ project.created_at.strftime('%Y-%m-%d') }}</td>
-          <td class="px-4 py-3 text-right">
-            {{ admin.link_action(_('Export'), url_for('admin.export_project', project_slug=project.slug)) }}
+        <tr class="hover:bg-slate-50/70 transition-colors">
+          <td class="px-4 py-3.5">
+            <span class="font-bold text-slate-900 block text-xs sm:text-sm">{{ project.display_title }}</span>
+            <span class="font-mono text-[11px] text-slate-400 block">{{ project.slug }}</span>
+          </td>
+          <td class="px-4 py-3.5 text-slate-600">
+            {{ project.author or '—' }}
+          </td>
+          <td class="px-4 py-3.5 text-right font-mono text-xs text-slate-800 font-semibold">
+            {{ project.pages|length }}
+          </td>
+          <td class="px-4 py-3.5 text-right font-mono text-xs text-slate-500">
+            {{ project.created_at.strftime('%Y-%m-%d') if project.created_at else '' }}
+          </td>
+          <td class="px-4 py-3.5 text-right">
+            <a href="{{ url_for('admin.export_project', project_slug=project.slug) }}"
+               class="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-royalblue text-xs font-semibold transition-colors">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+              </svg>
+              <span>{{ _('Export ZIP') }}</span>
+            </a>
           </td>
         </tr>
         {% endfor %}
@@ -118,13 +221,19 @@
     </table>
   </div>
   {% else %}
-  <p class="text-slate-400 text-center py-8 font-medium">{{ _('No projects found.') }}</p>
+  <div class="text-center py-12 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+    <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
+      {{ admin.icon('download', class='w-5 h-5') }}
+    </div>
+    <h3 class="text-slate-800 font-bold text-xs">{{ _('No projects found in this organization.') }}</h3>
+  </div>
   {% endif %}
 </div>
 
 <script>
 function exportProject() {
-  const slug = document.getElementById('project-select').value;
+  const select = document.getElementById('project-select');
+  const slug = select ? select.value : '';
   if (!slug) {
     alert('{{ _('Please select a project to export.') }}');
     return;

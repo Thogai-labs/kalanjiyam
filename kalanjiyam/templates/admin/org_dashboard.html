@@ -1,210 +1,431 @@
 {% extends 'admin/master.html' %}
 {% import 'macros/admin.html' as admin %}
 
-{% block title %}{{ org.name }} | {{ _('Admin') }}{% endblock %}
+{% block title %}{{ org.name }} | {{ _('Organization Admin') }}{% endblock %}
 
 {% block admin_sidebar %}
 {{ admin.nav('org', current_user) }}
 {% endblock %}
 
 {% block content %}
-{{ admin.page_header(org.name, _('Manage users and books for your organization.')) }}
+<!-- Google Admin Org Header -->
+<div class="mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3.5">
+      <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-royalblue to-blue-500 text-white font-bold text-xl flex items-center justify-center shadow-xs shrink-0">
+        {{ org.name[0]|upper }}
+      </div>
+      <div>
+        <div class="flex flex-wrap items-center gap-2">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ org.name }}
+          </h1>
+          <span class="font-mono text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-semibold border border-slate-200">
+            {{ org.slug }}
+          </span>
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-royalblue border border-blue-200">
+            {{ _('Organization Console') }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">
+          {{ _('Manage users, roles, quotas, and book catalog for your organization.') }}
+        </p>
+      </div>
+    </div>
 
-<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-  <div class="premium-card p-6">
-    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ _('Storage') }}</p>
-    <p class="text-2xl font-extrabold text-slate-900">
-      {{ ((org.storage_used_bytes or 0) // (1024 * 1024)) }}MB
-      <span class="text-base font-semibold text-slate-400">/ {{ (org.storage_quota_bytes // (1024 * 1024)) if org.storage_quota_bytes is not none else _('unlimited') }}</span>
-    </p>
-  </div>
-  <div class="premium-card p-6">
-    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ _('OCR credits') }}</p>
-    <p class="text-2xl font-extrabold text-slate-900">
-      {{ org.ocr_credits_used or 0 }}
-      <span class="text-base font-semibold text-slate-400">/ {{ org.ocr_credit_limit if org.ocr_credit_limit is not none else _('unlimited') }}</span>
-    </p>
-  </div>
-  <div class="premium-card p-6">
-    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ _('Translation credits') }}</p>
-    <p class="text-2xl font-extrabold text-slate-900">
-      {{ org.translation_credits_used or 0 }}
-      <span class="text-base font-semibold text-slate-400">/ {{ org.translation_credit_limit if org.translation_credit_limit is not none else _('unlimited') }}</span>
-    </p>
+    <!-- Quick Action Pills -->
+    <div class="flex flex-wrap items-center gap-2">
+      <a href="{{ url_for('proofing.create_project') }}"
+         class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-royalblue hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-all">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+        <span>{{ _('Upload New Book') }}</span>
+      </a>
+      <a href="{{ url_for('org_admin_view.user_analytics') }}"
+         class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-xs transition-all">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+        </svg>
+        <span>{{ _('Analytics') }}</span>
+      </a>
+      <a href="{{ url_for('org_admin_view.cli_batch_ocr') }}"
+         class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-xs transition-all">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+        <span>{{ _('Batch OCR & AI') }}</span>
+      </a>
+    </div>
   </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
-    <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Create user') }}</h2>
-    <form method="post" action="{{ url_for('org_admin_view.index') }}" class="space-y-4">
+<!-- Quota & Resource Consumption Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+  <!-- Storage Card -->
+  {% set storage_mb = ((org.storage_used_bytes or 0) // (1024 * 1024)) %}
+  {% set storage_limit_mb = (org.storage_quota_bytes // (1024 * 1024)) if org.storage_quota_bytes is not none else none %}
+  {% set storage_pct = [((storage_mb / storage_limit_mb * 100)|round|int), 100]|min if storage_limit_mb and storage_limit_mb > 0 else (0 if storage_limit_mb else 10) %}
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('Storage Capacity') }}</span>
+        <span class="text-xs font-bold text-slate-500">{{ storage_pct }}%</span>
+      </div>
+      <div class="flex items-baseline gap-1.5">
+        <span class="text-2xl font-bold text-slate-900">{{ storage_mb }} MB</span>
+        <span class="text-xs text-slate-400 font-semibold">/ {{ storage_limit_mb ~ ' MB' if storage_limit_mb is not none else _('Unlimited') }}</span>
+      </div>
+    </div>
+    <div class="w-full bg-slate-100 rounded-full h-1.5 mt-4 overflow-hidden">
+      <div class="bg-royalblue h-1.5 rounded-full transition-all" style="width: {{ storage_pct }}%"></div>
+    </div>
+  </div>
+
+  <!-- OCR Compute Card -->
+  {% set ocr_used = org.ocr_credits_used or 0 %}
+  {% set ocr_limit = org.ocr_credit_limit %}
+  {% set ocr_pct = [((ocr_used / ocr_limit * 100)|round|int), 100]|min if ocr_limit and ocr_limit > 0 else (0 if ocr_limit else 10) %}
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('OCR Pages Compute') }}</span>
+        <span class="text-xs font-bold text-slate-500">{{ ocr_pct }}%</span>
+      </div>
+      <div class="flex items-baseline gap-1.5">
+        <span class="text-2xl font-bold text-slate-900">{{ ocr_used }}</span>
+        <span class="text-xs text-slate-400 font-semibold">/ {{ ocr_limit if ocr_limit is not none else _('Unlimited') }}</span>
+      </div>
+    </div>
+    <div class="w-full bg-slate-100 rounded-full h-1.5 mt-4 overflow-hidden">
+      <div class="bg-amber-500 h-1.5 rounded-full transition-all" style="width: {{ ocr_pct }}%"></div>
+    </div>
+  </div>
+
+  <!-- Translation AI Card -->
+  {% set trans_used = org.translation_credits_used or 0 %}
+  {% set trans_limit = org.translation_credit_limit %}
+  {% set trans_pct = [((trans_used / trans_limit * 100)|round|int), 100]|min if trans_limit and trans_limit > 0 else (0 if trans_limit else 10) %}
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('Translation AI Tokens') }}</span>
+        <span class="text-xs font-bold text-slate-500">{{ trans_pct }}%</span>
+      </div>
+      <div class="flex items-baseline gap-1.5">
+        <span class="text-2xl font-bold text-slate-900">{{ trans_used }}</span>
+        <span class="text-xs text-slate-400 font-semibold">/ {{ trans_limit if trans_limit is not none else _('Unlimited') }}</span>
+      </div>
+    </div>
+    <div class="w-full bg-slate-100 rounded-full h-1.5 mt-4 overflow-hidden">
+      <div class="bg-emerald-500 h-1.5 rounded-full transition-all" style="width: {{ trans_pct }}%"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 2-Column Section: Create New User & Member Directory -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+  <!-- Left Col: Create New User Form -->
+  <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200">
+    <div class="flex items-center gap-2 pb-4 mb-4 border-b border-slate-100">
+      <div class="w-8 h-8 rounded-xl bg-blue-50 text-royalblue flex items-center justify-center font-bold text-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
+        </svg>
+      </div>
+      <div>
+        <h2 class="text-sm font-bold text-slate-900">{{ _('Create User') }}</h2>
+        <p class="text-[11px] text-slate-500 font-medium">{{ _('Provision a new account for this organization.') }}</p>
+      </div>
+    </div>
+
+    <form method="post" action="{{ url_for('org_admin_view.index') }}" class="space-y-3.5">
       {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
       <input type="hidden" name="action" value="create_user">
       <div>
-        <label class="{{ admin.label_class() }}">{{ _('Username') }}</label>
-        <input type="text" name="username" class="{{ admin.input_class() }}" required>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">{{ _('Username') }}</label>
+        <input type="text" name="username" placeholder="john.doe"
+               class="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-xs" required>
       </div>
       <div>
-        <label class="{{ admin.label_class() }}">{{ _('Email') }}</label>
-        <input type="email" name="email" class="{{ admin.input_class() }}" required>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">{{ _('Email Address') }}</label>
+        <input type="email" name="email" placeholder="john@example.com"
+               class="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-xs" required>
       </div>
       <div>
-        <label class="{{ admin.label_class() }}">{{ _('Password') }}</label>
-        <input type="password" name="password" class="{{ admin.input_class() }}" required>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">{{ _('Password') }}</label>
+        <input type="password" name="password" placeholder="••••••••••••"
+               class="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-xs" required>
       </div>
-      {{ admin.btn_primary(_('Create user'), type='submit') }}
+      <button type="submit"
+              class="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-royalblue hover:bg-blue-700 text-white font-semibold text-xs transition-colors shadow-xs">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+        </svg>
+        <span>{{ _('Create & Add Member') }}</span>
+      </button>
     </form>
   </div>
 
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 flex flex-col justify-center gap-3">
-    <h2 class="text-lg font-bold text-slate-900 mb-1">{{ _('Quick actions') }}</h2>
-    {{ admin.btn_primary(_('Upload a new book'), href=url_for('proofing.create_project'), icon_name='upload') }}
-    {{ admin.btn_secondary(_('View Analytics'), href=url_for('org_admin_view.user_analytics'), icon_name='bar-chart-3') }}
+  <!-- Right Col (2 cols span): Member Directory & Add Existing User -->
+  <div class="lg:col-span-2 bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 flex flex-col justify-between">
+    <div>
+      <div class="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100">
+        <div>
+          <h2 class="text-sm font-bold text-slate-900">{{ _('Organization Members') }} ({{ users|length }})</h2>
+          <p class="text-[11px] text-slate-500 font-medium">{{ _('Manage roles, permissions, and passwords.') }}</p>
+        </div>
+
+        <!-- Add existing user inline form -->
+        <form method="post" action="{{ url_for('org_admin_view.index') }}" class="flex items-center gap-2">
+          {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+          <input type="hidden" name="action" value="add_user">
+          <select name="user_id"
+                  class="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-xs max-w-xs" required>
+            <option value="">{{ _('Add existing user…') }}</option>
+            {% for u in all_users %}
+            {% if u.id not in users_in_group_ids %}
+            <option value="{{ u.id }}">{{ u.username }} ({{ u.email }})</option>
+            {% endif %}
+            {% endfor %}
+          </select>
+          <button type="submit"
+                  class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors shadow-xs shrink-0">
+            <span>{{ _('Add') }}</span>
+          </button>
+        </form>
+      </div>
+
+      {% if users %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-xs sm:text-sm text-left">
+          <thead class="bg-slate-50/80 text-slate-500 uppercase tracking-wider font-bold text-[10px] border-b border-slate-100">
+            <tr>
+              <th class="px-4 py-3">{{ _('Member') }}</th>
+              <th class="px-4 py-3">{{ _('Email & Roles') }}</th>
+              <th class="px-4 py-3 text-right">{{ _('Actions') }}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+            {% for u in users %}
+            <tr class="hover:bg-slate-50/70 transition-colors" x-data="{ editing: false }">
+              <td class="px-4 py-3.5">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-full bg-slate-100 text-royalblue font-bold text-xs flex items-center justify-center border border-slate-200">
+                    {{ u.username[0]|upper }}
+                  </div>
+                  <div>
+                    <span class="font-bold text-slate-900 block">{{ u.username }}</span>
+                    {% if u.id == org.admin_user_id %}
+                    <span class="inline-flex px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                      {{ _('Primary Admin') }}
+                    </span>
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-3.5">
+                <span class="text-xs text-slate-500 block">{{ u.email }}</span>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  {% for r in u.roles %}
+                  <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-royalblue border border-blue-100">
+                    {{ r.name }}
+                  </span>
+                  {% endfor %}
+                </div>
+              </td>
+              <td class="px-4 py-3.5 text-right">
+                <div class="flex items-center justify-end gap-1.5">
+                  <button @click="editing = !editing" type="button"
+                          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors shadow-xs">
+                    <span x-text="editing ? 'Close' : 'Manage'"></span>
+                  </button>
+                  {% if u.id != org.admin_user_id %}
+                  <form method="post" action="{{ url_for('org_admin_view.index') }}" onsubmit="return confirm('Remove {{ u.username }} from organization?');">
+                    {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+                    <input type="hidden" name="action" value="remove_user">
+                    <input type="hidden" name="user_id" value="{{ u.id }}">
+                    <button type="submit" class="inline-flex items-center px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors">
+                      {{ _('Remove') }}
+                    </button>
+                  </form>
+                  {% endif %}
+                </div>
+
+                <!-- Inline Edit Drawer -->
+                <div x-show="editing" x-cloak class="mt-3 text-left p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <form method="post" action="{{ url_for('org_admin_view.index') }}" class="space-y-1.5">
+                      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+                      <input type="hidden" name="action" value="change_password">
+                      <input type="hidden" name="user_id" value="{{ u.id }}">
+                      <label class="block text-[10px] font-bold text-slate-500 uppercase">{{ _('Reset Password') }}</label>
+                      <div class="flex gap-1.5">
+                        <input type="password" name="new_password" placeholder="{{ _('New password') }}"
+                               class="w-full bg-white border border-slate-200 text-slate-900 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-royalblue/20" required>
+                        <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-royalblue text-white text-xs font-semibold hover:bg-blue-700 shrink-0">
+                          {{ _('Save') }}
+                        </button>
+                      </div>
+                    </form>
+
+                    <form method="post" action="{{ url_for('org_admin_view.index') }}" class="space-y-1.5">
+                      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+                      <input type="hidden" name="action" value="change_role">
+                      <input type="hidden" name="user_id" value="{{ u.id }}">
+                      <label class="block text-[10px] font-bold text-slate-500 uppercase">{{ _('Assign Role') }}</label>
+                      <div class="flex gap-1.5">
+                        <select name="role_name" class="w-full bg-white border border-slate-200 text-slate-700 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-royalblue/20">
+                          <option value="p1">{{ _('P1 — Basic proofer') }}</option>
+                          <option value="p2">{{ _('P2 — Advanced proofer') }}</option>
+                          <option value="moderator">{{ _('Moderator') }}</option>
+                        </select>
+                        <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 shrink-0">
+                          {{ _('Update') }}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-10 text-slate-400 font-medium text-xs">
+        {{ _('No users assigned to this organization yet.') }}
+      </div>
+      {% endif %}
+    </div>
   </div>
 </div>
 
-<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 mb-6">
-  <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Users') }}</h2>
-  <form method="post" action="{{ url_for('org_admin_view.index') }}" class="mb-5 flex flex-col sm:flex-row gap-2">
-    {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
-    <input type="hidden" name="action" value="add_user">
-    <select name="user_id" class="{{ admin.select_class() }} flex-1" required>
-      <option value="">{{ _('Add existing user…') }}</option>
-      {% for u in all_users %}
-      {% if u.id not in users_in_group_ids %}
-      <option value="{{ u.id }}">{{ u.username }} ({{ u.email }})</option>
-      {% endif %}
-      {% endfor %}
-    </select>
-    {{ admin.btn_primary(_('Add'), type='submit') }}
-  </form>
-  {% if users %}
-  <ul class="divide-y divide-slate-100">
-    {% for u in users %}
-    <li class="py-3" x-data="{ editing: false }">
-      <div class="flex justify-between items-center gap-4">
-        <div class="flex items-center gap-3">
-          <span class="w-8 h-8 rounded-full bg-royalblue/10 text-royalblue flex items-center justify-center text-sm font-bold">{{ u.username[0]|upper }}</span>
-          <div>
-            <p class="font-semibold text-slate-900">{{ u.username }}</p>
-            <p class="text-sm text-slate-400">{{ u.email }}
-              {% for r in u.roles %}
-              <span class="ml-1 text-xs font-bold uppercase tracking-wide text-royalblue bg-royalblue/10 px-1.5 py-0.5 rounded">{{ r.name }}</span>
-              {% endfor %}
-            </p>
-          </div>
-        </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <button @click="editing = !editing" type="button"
-                  class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
-            {{ _('Edit') }}
-          </button>
-          {% if u.id != org.admin_user_id %}
-          <form method="post" action="{{ url_for('org_admin_view.index') }}">
-            {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
-            <input type="hidden" name="action" value="remove_user">
-            <input type="hidden" name="user_id" value="{{ u.id }}">
-            {{ admin.btn_danger(_('Remove')) }}
-          </form>
-          {% endif %}
-        </div>
+<!-- Books & Catalog Portfolio Card -->
+<div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 mb-8">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-100">
+    <div>
+      <div class="flex items-center gap-2">
+        <h2 class="text-sm font-bold text-slate-900">{{ _('Books & Catalogs') }}</h2>
+        <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600">{{ projects|length }} {{ _('assigned') }}</span>
       </div>
+      <p class="text-xs text-slate-500 font-medium mt-0.5">
+        {{ _('Mark a book as public to list it on') }}
+        <span class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded font-semibold text-slate-700">/books/</span>
+        {{ _('for anyone, including guests.') }}
+      </p>
+    </div>
 
-      <div x-show="editing" x-cloak class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 rounded-xl p-4">
-        <form method="post" action="{{ url_for('org_admin_view.index') }}" class="space-y-2">
-          {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
-          <input type="hidden" name="action" value="change_password">
-          <input type="hidden" name="user_id" value="{{ u.id }}">
-          <label class="{{ admin.label_class() }}">{{ _('New password') }}</label>
-          <input type="password" name="new_password" class="{{ admin.input_class() }}" required placeholder="{{ _('Enter new password') }}">
-          {{ admin.btn_primary(_('Change password'), type='submit') }}
-        </form>
+    <!-- Add Book to Org Form -->
+    <form method="post" action="{{ url_for('org_admin_view.index') }}" class="flex items-center gap-2">
+      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+      <input type="hidden" name="action" value="add_project">
+      <select name="project_id"
+              class="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-xs max-w-sm" required>
+        <option value="">{{ _('Add book to organization…') }}</option>
+        {% for p in all_projects %}
+        {% if p.id not in projects_in_group_ids %}
+        <option value="{{ p.id }}">{{ p.slug }} — {{ p.display_title[:60] }}</option>
+        {% endif %}
+        {% endfor %}
+      </select>
+      <button type="submit"
+              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-royalblue hover:bg-blue-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+        <span>{{ _('Add Book') }}</span>
+      </button>
+    </form>
+  </div>
 
-        <form method="post" action="{{ url_for('org_admin_view.index') }}" class="space-y-2">
-          {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
-          <input type="hidden" name="action" value="change_role">
-          <input type="hidden" name="user_id" value="{{ u.id }}">
-          <label class="{{ admin.label_class() }}">{{ _('Role') }}</label>
-          <select name="role_name" class="{{ admin.select_class() }}">
-            <option value="p1">{{ _('P1 — Basic proofer') }}</option>
-            <option value="p2">{{ _('P2 — Advanced proofer') }}</option>
-            <option value="moderator">{{ _('Moderator') }}</option>
-          </select>
-          {{ admin.btn_primary(_('Change role'), type='submit') }}
-        </form>
-      </div>
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="text-slate-400 text-sm font-medium">{{ _('No users yet.') }}</p>
-  {% endif %}
-</div>
-
-<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
-  <h2 class="text-lg font-bold text-slate-900 mb-2">{{ _('Books') }}</h2>
-  <p class="text-sm text-slate-500 mb-4 font-medium">
-    {{ _('Mark a book as public to list it on') }}
-    <span class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">/books/</span>
-    {{ _('for anyone, including guests. OCR pages and translations are unchanged.') }}
-  </p>
-  <form method="post" action="{{ url_for('org_admin_view.index') }}" class="mb-5 flex flex-col sm:flex-row gap-2">
-    {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
-    <input type="hidden" name="action" value="add_project">
-    <select name="project_id" class="{{ admin.select_class() }} flex-1" required>
-      <option value="">{{ _('Add book to organization…') }}</option>
-      {% for p in all_projects %}
-      {% if p.id not in projects_in_group_ids %}
-      <option value="{{ p.id }}">{{ p.slug }} — {{ p.display_title[:60] }}</option>
-      {% endif %}
-      {% endfor %}
-    </select>
-    {{ admin.btn_primary(_('Add'), type='submit') }}
-  </form>
   {% if projects %}
-  <ul class="divide-y divide-slate-100">
-    {% for p in projects %}
-    <li class="py-3 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-      <div>
-        <p class="font-semibold text-slate-900">{{ p.display_title }}</p>
-        <p class="text-xs font-mono text-slate-400">{{ p.slug }}</p>
-        {% if p.is_publicly_viewable %}
-        <span class="inline-block mt-1 text-xs font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg">{{ _('Public') }}</span>
-        {% else %}
-        <span class="inline-block mt-1 text-xs font-bold uppercase tracking-wide text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">{{ _('Org only') }}</span>
-        {% endif %}
-      </div>
-      <div class="flex flex-wrap items-center gap-2 shrink-0">
-        {% if p.is_publicly_viewable %}
-        <form method="post" action="{{ url_for('org_admin_view.index') }}">
-          {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
-          <input type="hidden" name="action" value="set_project_public">
-          <input type="hidden" name="project_id" value="{{ p.id }}">
-          <input type="hidden" name="is_public" value="0">
-          {{ admin.btn_secondary(_('Make private'), type='submit') }}
-        </form>
-        {% else %}
-        <form method="post" action="{{ url_for('org_admin_view.index') }}">
-          {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
-          <input type="hidden" name="action" value="set_project_public">
-          <input type="hidden" name="project_id" value="{{ p.id }}">
-          <input type="hidden" name="is_public" value="1">
-          {{ admin.btn_primary(_('Make public'), type='submit') }}
-        </form>
-        {% endif %}
-        {{ admin.link_action(_('Export'), url_for('admin.export_project', project_slug=p.slug)) }}
-        <form method="post" action="{{ url_for('org_admin_view.index') }}">
-          {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
-          <input type="hidden" name="action" value="remove_project">
-          <input type="hidden" name="project_id" value="{{ p.id }}">
-          {{ admin.btn_danger(_('Remove')) }}
-        </form>
-      </div>
-    </li>
-    {% endfor %}
-  </ul>
+  <div class="overflow-x-auto rounded-xl border border-slate-100">
+    <table class="min-w-full text-xs sm:text-sm text-left">
+      <thead class="bg-slate-50/80 text-slate-500 uppercase tracking-wider font-bold text-[10px] border-b border-slate-100">
+        <tr>
+          <th class="px-4 py-3.5">{{ _('Book Title & Slug') }}</th>
+          <th class="px-4 py-3.5">{{ _('Visibility') }}</th>
+          <th class="px-4 py-3.5 text-right">{{ _('Actions') }}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+        {% for p in projects %}
+        <tr class="hover:bg-slate-50/70 transition-colors">
+          <td class="px-4 py-3.5">
+            <span class="font-bold text-slate-900 block text-xs sm:text-sm">{{ p.display_title }}</span>
+            <span class="font-mono text-[11px] text-slate-400 block">{{ p.slug }}</span>
+          </td>
+          <td class="px-4 py-3.5">
+            {% if p.is_publicly_viewable %}
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              {{ _('Public') }}
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+              <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+              {{ _('Org only') }}
+            </span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3.5 text-right">
+            <div class="flex items-center justify-end gap-2">
+              {% if p.is_publicly_viewable %}
+              <form method="post" action="{{ url_for('org_admin_view.index') }}">
+                {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+                <input type="hidden" name="action" value="set_project_public">
+                <input type="hidden" name="project_id" value="{{ p.id }}">
+                <input type="hidden" name="is_public" value="0">
+                <button type="submit" class="inline-flex items-center px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors shadow-xs">
+                  {{ _('Make private') }}
+                </button>
+              </form>
+              {% else %}
+              <form method="post" action="{{ url_for('org_admin_view.index') }}">
+                {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+                <input type="hidden" name="action" value="set_project_public">
+                <input type="hidden" name="project_id" value="{{ p.id }}">
+                <input type="hidden" name="is_public" value="1">
+                <button type="submit" class="inline-flex items-center px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold transition-colors">
+                  {{ _('Make public') }}
+                </button>
+              </form>
+              {% endif %}
+
+              <a href="{{ url_for('admin.export_project', project_slug=p.slug) }}"
+                 class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-royalblue text-xs font-semibold transition-colors">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                <span>{{ _('Export') }}</span>
+              </a>
+
+              <form method="post" action="{{ url_for('org_admin_view.index') }}" onsubmit="return confirm('Remove this book from organization?');">
+                {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+                <input type="hidden" name="action" value="remove_project">
+                <input type="hidden" name="project_id" value="{{ p.id }}">
+                <button type="submit" class="inline-flex items-center px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors">
+                  {{ _('Remove') }}
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% else %}
-  <p class="text-slate-400 text-sm font-medium">{{ _('No books in this organization yet.') }}</p>
+  <div class="text-center py-12 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+    <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+      </svg>
+    </div>
+    <h3 class="text-slate-800 font-bold text-xs">{{ _('No books in this organization yet.') }}</h3>
+  </div>
   {% endif %}
 </div>
 {% endblock %}
