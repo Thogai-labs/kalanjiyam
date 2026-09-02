@@ -21,9 +21,11 @@ node_modules/
 
 # i18n files:
 # - .pot can be regenerated with `make babel-extract`.
-# - .mo files are just the compiled version of our .po files.
+# - .mo files are compiled binary catalogs.
+# - .po translation catalogs ignored to avoid git pull merge conflicts on server.
 *.pot
 *.mo
+*.po
 
 # Production config
 .env
