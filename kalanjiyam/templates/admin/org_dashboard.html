@@ -65,61 +65,109 @@
   <!-- Storage Card -->
   {% set storage_mb = ((org.storage_used_bytes or 0) // (1024 * 1024)) %}
   {% set storage_limit_mb = (org.storage_quota_bytes // (1024 * 1024)) if org.storage_quota_bytes is not none else none %}
-  {% set storage_pct = [((storage_mb / storage_limit_mb * 100)|round|int), 100]|min if storage_limit_mb and storage_limit_mb > 0 else (0 if storage_limit_mb else 10) %}
+  {% set storage_pct = [((storage_mb / storage_limit_mb * 100)|round|int), 100]|min if storage_limit_mb and storage_limit_mb > 0 else 0 %}
   <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
     <div>
       <div class="flex items-center justify-between mb-2">
         <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('Storage Capacity') }}</span>
+        {% if storage_limit_mb is not none %}
         <span class="text-xs font-bold text-slate-500">{{ storage_pct }}%</span>
+        {% else %}
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          {{ _('Unlimited') }}
+        </span>
+        {% endif %}
       </div>
       <div class="flex items-baseline gap-1.5">
         <span class="text-2xl font-bold text-slate-900">{{ storage_mb }} MB</span>
         <span class="text-xs text-slate-400 font-semibold">/ {{ storage_limit_mb ~ ' MB' if storage_limit_mb is not none else _('Unlimited') }}</span>
       </div>
     </div>
+    {% if storage_limit_mb is not none %}
     <div class="w-full bg-slate-100 rounded-full h-1.5 mt-4 overflow-hidden">
       <div class="bg-royalblue h-1.5 rounded-full transition-all" style="width: {{ storage_pct }}%"></div>
     </div>
+    {% else %}
+    <div class="text-[11px] text-slate-400 font-medium mt-4 flex items-center gap-1.5">
+      <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+      </svg>
+      <span>{{ _('No storage limit applied') }}</span>
+    </div>
+    {% endif %}
   </div>
 
   <!-- OCR Compute Card -->
   {% set ocr_used = org.ocr_credits_used or 0 %}
   {% set ocr_limit = org.ocr_credit_limit %}
-  {% set ocr_pct = [((ocr_used / ocr_limit * 100)|round|int), 100]|min if ocr_limit and ocr_limit > 0 else (0 if ocr_limit else 10) %}
+  {% set ocr_pct = [((ocr_used / ocr_limit * 100)|round|int), 100]|min if ocr_limit and ocr_limit > 0 else 0 %}
   <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
     <div>
       <div class="flex items-center justify-between mb-2">
         <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('OCR Pages Compute') }}</span>
+        {% if ocr_limit is not none %}
         <span class="text-xs font-bold text-slate-500">{{ ocr_pct }}%</span>
+        {% else %}
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          {{ _('Unlimited') }}
+        </span>
+        {% endif %}
       </div>
       <div class="flex items-baseline gap-1.5">
         <span class="text-2xl font-bold text-slate-900">{{ ocr_used }}</span>
         <span class="text-xs text-slate-400 font-semibold">/ {{ ocr_limit if ocr_limit is not none else _('Unlimited') }}</span>
       </div>
     </div>
+    {% if ocr_limit is not none %}
     <div class="w-full bg-slate-100 rounded-full h-1.5 mt-4 overflow-hidden">
       <div class="bg-amber-500 h-1.5 rounded-full transition-all" style="width: {{ ocr_pct }}%"></div>
     </div>
+    {% else %}
+    <div class="text-[11px] text-slate-400 font-medium mt-4 flex items-center gap-1.5">
+      <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+      </svg>
+      <span>{{ _('No compute limit applied') }}</span>
+    </div>
+    {% endif %}
   </div>
 
   <!-- Translation AI Card -->
   {% set trans_used = org.translation_credits_used or 0 %}
   {% set trans_limit = org.translation_credit_limit %}
-  {% set trans_pct = [((trans_used / trans_limit * 100)|round|int), 100]|min if trans_limit and trans_limit > 0 else (0 if trans_limit else 10) %}
+  {% set trans_pct = [((trans_used / trans_limit * 100)|round|int), 100]|min if trans_limit and trans_limit > 0 else 0 %}
   <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
     <div>
       <div class="flex items-center justify-between mb-2">
         <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('Translation AI Tokens') }}</span>
+        {% if trans_limit is not none %}
         <span class="text-xs font-bold text-slate-500">{{ trans_pct }}%</span>
+        {% else %}
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          {{ _('Unlimited') }}
+        </span>
+        {% endif %}
       </div>
       <div class="flex items-baseline gap-1.5">
         <span class="text-2xl font-bold text-slate-900">{{ trans_used }}</span>
         <span class="text-xs text-slate-400 font-semibold">/ {{ trans_limit if trans_limit is not none else _('Unlimited') }}</span>
       </div>
     </div>
+    {% if trans_limit is not none %}
     <div class="w-full bg-slate-100 rounded-full h-1.5 mt-4 overflow-hidden">
       <div class="bg-emerald-500 h-1.5 rounded-full transition-all" style="width: {{ trans_pct }}%"></div>
     </div>
+    {% else %}
+    <div class="text-[11px] text-slate-400 font-medium mt-4 flex items-center gap-1.5">
+      <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+      </svg>
+      <span>{{ _('No token limit applied') }}</span>
+    </div>
+    {% endif %}
   </div>
 </div>
 
