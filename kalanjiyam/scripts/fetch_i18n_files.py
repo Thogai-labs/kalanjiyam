@@ -1,86 +1,71 @@
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-REPO = "https://github.com/AnaadiAI/kalanjiyam-i18n.git"
 PROJECT_DIR = Path(__file__).resolve().parents[2]
-DATA_DIR = PROJECT_DIR / "data" / "kalanjiyam-i18n"
+TRANSLATIONS_DIR = PROJECT_DIR / "kalanjiyam" / "translations"
+POT_FILE = PROJECT_DIR / "messages.pot"
+CFG_FILE = PROJECT_DIR / "babel.cfg"
+LOCALES = ["ta", "hi_IN", "sa", "te_IN", "en"]
 
 
-def fetch_git_repo(url: str, path: Path) -> bool:
-    """Fetch the latest version of the given repo. Returns False on failure."""
-    if path.exists() and not (path / ".git").is_dir():
-        if not any(path.iterdir()):
-            shutil.rmtree(path)
-        else:
-            print(
-                f"WARNING: {path} exists but is not a git checkout; skipping i18n fetch.",
-                file=sys.stderr,
+def extract_messages() -> bool:
+    """Extract translatable strings into messages.pot."""
+    print("Extracting translatable strings to messages.pot...")
+    cmd = [
+        "pybabel",
+        "extract",
+        "--mapping",
+        str(CFG_FILE),
+        "--keywords",
+        "_l",
+        "--keywords",
+        "pgettext:1c,2",
+        "--keywords",
+        "npgettext:1c,2,3",
+        "--output-file",
+        str(POT_FILE),
+        str(PROJECT_DIR),
+    ]
+    res = subprocess.run(cmd, check=False)
+    return res.returncode == 0
+
+
+def init_or_update_catalogs() -> bool:
+    """Initialize missing locales and update existing catalogs."""
+    TRANSLATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    for loc in LOCALES:
+        po_path = TRANSLATIONS_DIR / loc / "LC_MESSAGES" / "messages.po"
+        if not po_path.exists():
+            print(f"Initializing catalog for locale '{loc}'...")
+            subprocess.run(
+                ["pybabel", "init", "-i", str(POT_FILE), "-d", str(TRANSLATIONS_DIR), "-l", loc],
+                check=False,
             )
-            return False
 
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        result = subprocess.run(
-            ["git", "clone", "--branch=main", url, str(path)],
-            check=False,
-        )
-        if result.returncode != 0:
-            print(
-                f"WARNING: could not clone {url} (private repo or network). "
-                "App will run in English only.",
-                file=sys.stderr,
-            )
-            return False
-
-    for cmd in (
-        ["git", "fetch", "origin"],
-        ["git", "checkout", "main"],
-        ["git", "reset", "--hard", "origin/main"],
-    ):
-        result = subprocess.run(cmd, cwd=path, check=False)
-        if result.returncode != 0:
-            print(
-                f"WARNING: git update failed in {path}; skipping i18n fetch.",
-                file=sys.stderr,
-            )
-            return False
-
-    return True
+    print("Updating all translation catalogs...")
+    res = subprocess.run(
+        ["pybabel", "update", "-i", str(POT_FILE), "-d", str(TRANSLATIONS_DIR)],
+        check=False,
+    )
+    return res.returncode == 0
 
 
-def compile_translations(path: Path) -> bool:
+def compile_translations(path: Path = TRANSLATIONS_DIR) -> bool:
+    """Compile all .po catalogs to .mo files."""
+    print("Compiling translation catalogs to .mo...")
     result = subprocess.run(
-        ["pybabel", "compile", "-d", str(path)],
-        stderr=subprocess.DEVNULL,
+        ["pybabel", "compile", "-d", str(path), "-f"],
         check=False,
     )
     return result.returncode == 0
 
 
-def copy_translation_files(src_dir: Path, dest_dir: Path) -> None:
-    shutil.copytree(str(src_dir), str(dest_dir), dirs_exist_ok=True)
-
-
 def main() -> int:
-    src_dir = DATA_DIR / "translations"
-    dest_dir = PROJECT_DIR / "kalanjiyam" / "translations"
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    if not fetch_git_repo(REPO, DATA_DIR):
-        return 0
-
-    if not src_dir.is_dir():
-        print(
-            f"WARNING: {src_dir} not found after clone; skipping i18n install.",
-            file=sys.stderr,
-        )
-        return 0
-
-    compile_translations(src_dir)
-    copy_translation_files(src_dir, dest_dir)
-    print("Done.")
+    extract_messages()
+    init_or_update_catalogs()
+    compile_translations(TRANSLATIONS_DIR)
+    print("✔ i18n catalogs ready and compiled.")
     return 0
 
 

@@ -221,11 +221,10 @@ def main():
         default=["ta", "hi_IN", "sa", "te_IN"],
         help="List of locales to translate (e.g. ta hi_IN sa te_IN)",
     )
-    default_engine = "bharatgen" if os.environ.get("BHARATGEN_TRANSLATION_API_KEY") else "llm_gemma"
     parser.add_argument(
         "--engine",
-        default=default_engine,
-        help=f"Translation engine to use (default: {default_engine}; options: bharatgen, llm_gemma, google, openai, generic)",
+        default="llm_gemma",
+        help="Translation engine to use (default: llm_gemma; options: llm_gemma, bharatgen, google, openai, generic)",
     )
     parser.add_argument(
         "--batch-size",
@@ -277,28 +276,34 @@ def main():
         sys.exit(0)
 
     total_translated = 0
-    for locale in args.locales:
-        if locale == "en":
-            logger.info("Skipping source locale 'en'.")
-            continue
+    try:
+        for locale in args.locales:
+            if locale == "en":
+                logger.info("Skipping source locale 'en'.")
+                continue
 
-        po_file = TRANSLATIONS_DIR / locale / "LC_MESSAGES" / "messages.po"
-        if not po_file.exists():
-            logger.warning(f"No catalog found for locale '{locale}' at {po_file}. Skipping.")
-            continue
+            po_file = TRANSLATIONS_DIR / locale / "LC_MESSAGES" / "messages.po"
+            if not po_file.exists():
+                logger.warning(f"No catalog found for locale '{locale}' at {po_file}. Skipping.")
+                continue
 
-        count = translate_po_file(
-            po_path=po_file,
-            locale_code=locale,
-            engine=engine,
-            batch_size=args.batch_size,
-            overwrite=args.overwrite,
-            dry_run=args.dry_run,
-        )
-        total_translated += count
+            count = translate_po_file(
+                po_path=po_file,
+                locale_code=locale,
+                engine=engine,
+                batch_size=args.batch_size,
+                overwrite=args.overwrite,
+                dry_run=args.dry_run,
+            )
+            total_translated += count
+            if not args.dry_run and not args.no_compile and count > 0:
+                compile_catalogs()
 
-    if not args.dry_run and not args.no_compile and total_translated > 0:
-        compile_catalogs()
+    except KeyboardInterrupt:
+        logger.info("\nTranslation interrupted by user (Ctrl+C). Saving completed translations...")
+    finally:
+        if not args.dry_run and not args.no_compile and total_translated > 0:
+            compile_catalogs()
 
     logger.info(f"All done! Total translations processed: {total_translated}")
 

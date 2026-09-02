@@ -185,8 +185,8 @@
         x-data="{ open: false }"
         @click.outside="open = false"
         @mouseenter="moveCursor($el)">
-      {% set current_locale_code = get_locale().language %}
-      {% set current_lang = kalanjiyam_locales | selectattr('code', 'equalto', current_locale_code) | list | first %}
+      {% set current_locale_str = (get_locale() | string) if get_locale() else (session.get('locale', 'en')) %}
+      {% set current_lang = kalanjiyam_locales | selectattr('code', 'equalto', current_locale_str) | list | first or kalanjiyam_locales | selectattr('slug', 'equalto', current_locale_str.split('_')[0]) | list | first %}
       <button
         @click="open = !open"
         type="button"
