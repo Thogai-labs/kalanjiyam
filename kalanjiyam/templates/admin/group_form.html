@@ -1,77 +1,115 @@
 {% extends 'admin/master.html' %}
 {% import 'macros/admin.html' as admin %}
 
-{% block title %}{% if group %}{{ _('Edit organization') }}{% else %}{{ _('Create organization') }}{% endif %} | {{
-_('Admin') }}{% endblock %}
+{% block title %}{% if group %}{{ _('Edit Organization') }}: {{ group.name }}{% else %}{{ _('Create Organization') }}{% endif %} | {{ _('Admin Console') }}{% endblock %}
 
 {% block admin_sidebar %}
 {{ admin.nav('organizations', current_user) }}
 {% endblock %}
 
 {% block content %}
-{{ admin.page_header(group and _('Edit organization') or _('Create organization')) }}
+<!-- Google Admin Form Header -->
+<div class="mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0">
+        {{ admin.icon('building-2', class='w-5 h-5') }}
+      </div>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+          {% if group %}{{ _('Edit Organization') }}: {{ group.name }}{% else %}{{ _('Create Organization') }}{% endif %}
+        </h1>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">
+          {{ _('Configure tenant metadata, administrator assignment, and global resource limits.') }}
+        </p>
+      </div>
+    </div>
 
-<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 max-w-xl">
+    <div>
+      <a href="{{ group and url_for('groups_view.manage', id=group.id) or url_for('groups_view.index') }}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-royalblue text-xs font-semibold transition-all shadow-xs">
+        <span>{{ _('Cancel') }}</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Google Form Card -->
+<div class="bg-white rounded-2xl p-6 sm:p-8 shadow-xs border border-slate-200 max-w-2xl">
   <form method="post"
     action="{% if group %}{{ url_for('groups_view.edit', id=group.id) }}{% else %}{{ url_for('groups_view.create') }}{% endif %}"
     class="space-y-5">
     {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
 
     <div>
-      <label for="name" class="{{ admin.label_class() }}">{{ _('Name') }}</label>
+      <label for="name" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{{ _('Organization Name') }}</label>
       <input type="text" id="name" name="name" value="{{ group.name if group else '' }}" required
-        class="{{ admin.input_class() }}">
+        placeholder="e.g. Adyar Library & Research Centre"
+        class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all font-medium text-slate-900 bg-white">
     </div>
 
     <div>
-      <label for="description" class="{{ admin.label_class() }}">{{ _('Description') }} <span
-          class="font-normal text-slate-400">({{ _('optional') }})</span></label>
+      <label for="description" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+        {{ _('Description') }} <span class="font-normal text-slate-400">({{ _('optional') }})</span>
+      </label>
       <textarea id="description" name="description" rows="3"
-        class="{{ admin.input_class() }}">{{ group.description if group else '' }}</textarea>
+        placeholder="Brief description of the enterprise or academic research institution..."
+        class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all font-medium text-slate-900 bg-white">{{ group.description if group else '' }}</textarea>
     </div>
 
     <div>
-      <label for="slug" class="{{ admin.label_class() }}">{{ _('Slug') }}</label>
+      <label for="slug" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{{ _('URL Identifier / Slug') }}</label>
       <input type="text" id="slug" name="slug" value="{{ group.slug if group else '' }}"
-        class="{{ admin.input_class() }} font-mono text-sm">
+        placeholder="e.g. adyar-library"
+        class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all font-mono text-slate-900 bg-white">
+      <p class="text-[11px] text-slate-400 mt-1 font-medium">{{ _('Unique lowercase identifier used in links and API endpoints.') }}</p>
     </div>
 
     <div>
-      <label for="admin_user_id" class="{{ admin.label_class() }}">{{ _('Organization admin') }}</label>
-      <select id="admin_user_id" name="admin_user_id" class="{{ admin.select_class() }}">
-        <option value="">{{ _('(none)') }}</option>
+      <label for="admin_user_id" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{{ _('Organization Admin') }}</label>
+      <select id="admin_user_id" name="admin_user_id" class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all font-medium text-slate-900 bg-white">
+        <option value="">{{ _('(None assigned)') }}</option>
         {% for u in all_users %}
-        <option value="{{ u.id }}" {% if group and group.admin_user_id==u.id %}selected{% endif %}>{{ u.username }}
-        </option>
+        <option value="{{ u.id }}" {% if group and group.admin_user_id==u.id %}selected{% endif %}>{{ u.username }} ({{ u.email }})</option>
         {% endfor %}
       </select>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <div>
-        <label for="storage_quota_mb" class="{{ admin.label_class() }}">{{ _('Storage quota (MB)') }}</label>
-        <input type="number" id="storage_quota_mb" name="storage_quota_mb" min=0
-          value="{{ (group.storage_quota_bytes // (1024 * 1024)) if group and group.storage_quota_bytes is not none else '' }}"
-          class="{{ admin.input_class() }}">
-      </div>
-      <div>
-        <label for="ocr_credit_limit" class="{{ admin.label_class() }}">{{ _('OCR credit limit') }}</label>
-        <input type="number" id="ocr_credit_limit" name="ocr_credit_limit" min=0
-          value="{{ group.ocr_credit_limit if group and group.ocr_credit_limit is not none else '' }}"
-          class="{{ admin.input_class() }}">
-      </div>
-      <div>
-        <label for="translation_credit_limit" class="{{ admin.label_class() }}">{{ _('Translation credit limit') }}</label>
-        <input type="number" id="translation_credit_limit" name="translation_credit_limit" min=0
-          value="{{ group.translation_credit_limit if group and group.translation_credit_limit is not none else '' }}"
-          class="{{ admin.input_class() }}">
+    <!-- Quotas Grid -->
+    <div class="pt-2 border-t border-slate-100">
+      <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{{ _('Global Resource Limits') }}</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label for="storage_quota_mb" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{{ _('Storage Quota (MB)') }}</label>
+          <input type="number" id="storage_quota_mb" name="storage_quota_mb" min=0
+            value="{{ (group.storage_quota_bytes // (1024 * 1024)) if group and group.storage_quota_bytes is not none else '' }}"
+            placeholder="e.g. 5000"
+            class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all font-medium text-slate-900 bg-white">
+        </div>
+        <div>
+          <label for="ocr_credit_limit" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{{ _('OCR Credit Limit') }}</label>
+          <input type="number" id="ocr_credit_limit" name="ocr_credit_limit" min=0
+            value="{{ group.ocr_credit_limit if group and group.ocr_credit_limit is not none else '' }}"
+            placeholder="e.g. 1000"
+            class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all font-medium text-slate-900 bg-white">
+        </div>
+        <div>
+          <label for="translation_credit_limit" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{{ _('Translation Limit') }}</label>
+          <input type="number" id="translation_credit_limit" name="translation_credit_limit" min=0
+            value="{{ group.translation_credit_limit if group and group.translation_credit_limit is not none else '' }}"
+            placeholder="e.g. 500"
+            class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all font-medium text-slate-900 bg-white">
+        </div>
       </div>
     </div>
 
-    <div class="flex flex-wrap gap-3 pt-2">
-      {{ admin.btn_primary(group and _('Save') or _('Create'), type='submit') }}
-      {{ admin.btn_secondary(_('Cancel'), href=group and url_for('groups_view.manage', id=group.id) or
-      url_for('groups_view.index')) }}
+    <!-- Actions -->
+    <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100">
+      <a href="{{ group and url_for('groups_view.manage', id=group.id) or url_for('groups_view.index') }}" class="px-5 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
+        {{ _('Cancel') }}
+      </a>
+      <button type="submit" class="px-7 py-2.5 bg-royalblue hover:bg-blue-600 text-white font-bold rounded-full text-xs sm:text-sm transition-all shadow-xs">
+        {{ group and _('Save Changes') or _('Create Organization') }}
+      </button>
     </div>
   </form>
 </div>
