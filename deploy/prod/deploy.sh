@@ -122,6 +122,18 @@ run_migrations() {
     # ----
 }
 
+update_translations() {
+    echo "Updating and compiling i18n catalogs via Docker..."
+    docker run --rm \
+        -v "${REPO_ROOT}/kalanjiyam/translations:/app/kalanjiyam/translations" \
+        -v "${REPO_ROOT}/messages.pot:/app/messages.pot" \
+        "${KALANJIYAM_IMAGE:-kalanjiyam-rel:latest}" \
+        sh -c "pybabel extract --mapping babel.cfg --keywords _l --keywords pgettext:1c,2 --keywords npgettext:1c,2,3 --output-file messages.pot . && \
+               pybabel update -i messages.pot -d kalanjiyam/translations && \
+               pybabel compile -d kalanjiyam/translations" || true
+    echo "✔  Translations updated"
+}
+
 # ─── Commands ───────────────────────────────────────────────────────────────
 
 CMD="${1:-deploy}"
@@ -130,6 +142,7 @@ case "${CMD}" in
   deploy)
     check_env
     build_image
+    update_translations
     run_migrations
     echo "Starting services..."
     KALANJIYAM_IMAGE="${KALANJIYAM_IMAGE}" \
