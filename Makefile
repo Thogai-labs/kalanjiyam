@@ -268,34 +268,48 @@ js-check-types:
 	npx tsc kalanjiyam/static/js/*.ts -noEmit
 
 
+# Python and pybabel resolution
+ifeq ($(shell test -f .venv/bin/pybabel && echo yes),yes)
+    PYBABEL := .venv/bin/pybabel
+    PYTHON := .venv/bin/python
+else ifeq ($(shell test -f env/bin/pybabel && echo yes),yes)
+    PYBABEL := env/bin/pybabel
+    PYTHON := env/bin/python
+else ifeq ($(shell command -v uv >/dev/null 2>&1 && echo yes),yes)
+    PYBABEL := uv run pybabel
+    PYTHON := uv run python
+else
+    PYBABEL := pybabel
+    PYTHON := python
+endif
+
 # i18n and l10n commands
 # ===============================================
 
 # Extract all translatable text from the application and save it in `messages.pot`.
-babel-extract: py-venv-check
-	pybabel extract --mapping babel.cfg --keywords _l --keywords pgettext:1c,2 --keywords npgettext:1c,2,3 --output-file messages.pot .
+babel-extract:
+	$(PYBABEL) extract --mapping babel.cfg --keywords _l --keywords pgettext:1c,2 --keywords npgettext:1c,2,3 --output-file messages.pot .
 
 # Create a new translation file from `messages.pot`.
-babel-init: py-venv-check
-	pybabel init -i messages.pot -d kalanjiyam/translations --locale $(locale)
+babel-init:
+	$(PYBABEL) init -i messages.pot -d kalanjiyam/translations --locale $(locale)
 
 # Update all translation files with new text from `messages.pot`
-babel-update: py-venv-check
-	pybabel update -i messages.pot -d kalanjiyam/translations
+babel-update:
+	$(PYBABEL) update -i messages.pot -d kalanjiyam/translations
 
 # Compile all translation files.
-# NOTE: you probably want `make install-i18n` instead.
-babel-compile: py-venv-check
-	pybabel compile -d kalanjiyam/translations
+babel-compile:
+	$(PYBABEL) compile -d kalanjiyam/translations
 
 # Translate all untranslated catalog strings using LLM / Gemma backend.
-babel-translate: py-venv-check
-	python -m kalanjiyam.scripts.translate_catalogs
+babel-translate:
+	$(PYTHON) -m kalanjiyam.scripts.translate_catalogs
 
 # Clean up
 # ===============================================
 
 clean:
 	@rm -rf deploy/data/
-	@rm -rf kalanjiyam/translations/*
+	@find kalanjiyam/translations -name "*.mo" -delete 2>/dev/null || true
 	@rm -rf kalanjiyam/static/gen/

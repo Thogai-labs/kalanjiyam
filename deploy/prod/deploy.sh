@@ -124,28 +124,25 @@ run_migrations() {
 
 update_translations() {
     echo "Updating i18n translation catalogs..."
-    if [[ -d .venv ]]; then
-        # shellcheck disable=SC1091
-        source .venv/bin/activate
-    elif [[ -d env ]]; then
-        # shellcheck disable=SC1091
-        source env/bin/activate
+    local pybabel_cmd=""
+    if [[ -x "${REPO_ROOT}/.venv/bin/pybabel" ]]; then
+        pybabel_cmd="${REPO_ROOT}/.venv/bin/pybabel"
+    elif [[ -x "${REPO_ROOT}/env/bin/pybabel" ]]; then
+        pybabel_cmd="${REPO_ROOT}/env/bin/pybabel"
+    elif command -v uv >/dev/null 2>&1; then
+        pybabel_cmd="uv run pybabel"
+    elif command -v pybabel >/dev/null 2>&1; then
+        pybabel_cmd="pybabel"
     fi
 
-    if command -v pybabel >/dev/null 2>&1; then
-        pybabel extract --mapping babel.cfg --keywords _l --keywords pgettext:1c,2 --keywords npgettext:1c,2,3 --output-file messages.pot . || true
-        pybabel update -i messages.pot -d kalanjiyam/translations || true
-        pybabel compile -d kalanjiyam/translations || true
-    elif command -v uv >/dev/null 2>&1; then
-        uv run pybabel extract --mapping babel.cfg --keywords _l --keywords pgettext:1c,2 --keywords npgettext:1c,2,3 --output-file messages.pot . || true
-        uv run pybabel update -i messages.pot -d kalanjiyam/translations || true
-        uv run pybabel compile -d kalanjiyam/translations || true
-    elif command -v make >/dev/null 2>&1 && [[ -n "${VIRTUAL_ENV:-}" ]]; then
-        make babel-extract || true
-        make babel-update || true
-        make babel-compile || true
+    if [[ -n "${pybabel_cmd}" ]]; then
+        ${pybabel_cmd} extract --mapping babel.cfg --keywords _l --keywords pgettext:1c,2 --keywords npgettext:1c,2,3 --output-file messages.pot . || true
+        ${pybabel_cmd} update -i messages.pot -d kalanjiyam/translations || true
+        ${pybabel_cmd} compile -d kalanjiyam/translations || true
+        echo "✔  Translations updated"
+    else
+        echo "WARNING: pybabel not found. Skipping translation update."
     fi
-    echo "✔  Translations updated"
 }
 
 # ─── Commands ───────────────────────────────────────────────────────────────
