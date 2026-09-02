@@ -273,7 +273,7 @@ js-check-types:
 
 # Extract all translatable text from the application and save it in `messages.pot`.
 babel-extract: py-venv-check
-	pybabel extract --mapping babel.cfg --keywords _l --output-file messages.pot .
+	pybabel extract --mapping babel.cfg --keywords _l --keywords pgettext:1c,2 --keywords npgettext:1c,2,3 --output-file messages.pot .
 
 # Create a new translation file from `messages.pot`.
 babel-init: py-venv-check
@@ -287,6 +287,10 @@ babel-update: py-venv-check
 # NOTE: you probably want `make install-i18n` instead.
 babel-compile: py-venv-check
 	pybabel compile -d kalanjiyam/translations
+
+# Translate all untranslated catalog strings using LLM / Gemma backend.
+babel-translate: py-venv-check
+	python -m kalanjiyam.scripts.translate_catalogs
 
 # Clean up
 # ===============================================

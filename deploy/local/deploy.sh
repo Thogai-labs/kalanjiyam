@@ -83,6 +83,32 @@ run_migrations() {
     echo "✔  Lookups seeded"
 }
 
+update_translations() {
+    echo "Updating i18n translation catalogs..."
+    if [[ -d .venv ]]; then
+        # shellcheck disable=SC1091
+        source .venv/bin/activate
+    elif [[ -d env ]]; then
+        # shellcheck disable=SC1091
+        source env/bin/activate
+    fi
+
+    if command -v pybabel >/dev/null 2>&1; then
+        pybabel extract --mapping babel.cfg --keywords _l --keywords pgettext:1c,2 --keywords npgettext:1c,2,3 --output-file messages.pot . || true
+        pybabel update -i messages.pot -d kalanjiyam/translations || true
+        pybabel compile -d kalanjiyam/translations || true
+    elif command -v uv >/dev/null 2>&1; then
+        uv run pybabel extract --mapping babel.cfg --keywords _l --keywords pgettext:1c,2 --keywords npgettext:1c,2,3 --output-file messages.pot . || true
+        uv run pybabel update -i messages.pot -d kalanjiyam/translations || true
+        uv run pybabel compile -d kalanjiyam/translations || true
+    elif command -v make >/dev/null 2>&1 && [[ -n "${VIRTUAL_ENV:-}" ]]; then
+        make babel-extract || true
+        make babel-update || true
+        make babel-compile || true
+    fi
+    echo "✔  Translations updated"
+}
+
 # ─── Commands ───────────────────────────────────────────────────────────────
 
 CMD="${1:-deploy}"
@@ -90,6 +116,7 @@ CMD="${1:-deploy}"
 case "${CMD}" in
   deploy)
     check_env
+    update_translations
     build_image
     run_migrations
     echo "Starting local dev services..."

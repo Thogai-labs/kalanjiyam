@@ -250,8 +250,10 @@ class GenericTranslationEngine(TranslationEngine):
             'mai': 'Maithili',
         }
 
-        source_name = language_map.get(source_lang, source_lang.capitalize())
-        target_name = language_map.get(target_lang, target_lang.capitalize())
+        base_src = source_lang.split("_")[0].lower() if source_lang else ""
+        base_tgt = target_lang.split("_")[0].lower() if target_lang else ""
+        source_name = language_map.get(source_lang, language_map.get(base_src, source_lang.capitalize()))
+        target_name = language_map.get(target_lang, language_map.get(base_tgt, target_lang.capitalize()))
 
         # Determine the model name based on translation direction or engine
         if self.engine_name.startswith("indictrans"):
@@ -452,8 +454,10 @@ class BharatGenTranslateEngine(TranslationEngine):
             "mai": "Maithili",
         }
 
-        source_name = language_map.get(source_lang, source_lang.capitalize())
-        target_name = language_map.get(target_lang, target_lang.capitalize())
+        base_src = source_lang.split("_")[0].lower() if source_lang else ""
+        base_tgt = target_lang.split("_")[0].lower() if target_lang else ""
+        source_name = language_map.get(source_lang, language_map.get(base_src, source_lang.capitalize()))
+        target_name = language_map.get(target_lang, language_map.get(base_tgt, target_lang.capitalize()))
 
         system_content = (
             f"You are a professional machine translation system. Your sole task is to accurately translate text from {source_name} to {target_name}. "
@@ -656,8 +660,10 @@ class LlmGemmaTranslateEngine(TranslationEngine):
             "mai": "Maithili",
         }
 
-        source_name = language_map.get(source_lang, source_lang.capitalize())
-        target_name = language_map.get(target_lang, target_lang.capitalize())
+        base_src = source_lang.split("_")[0].lower() if source_lang else ""
+        base_tgt = target_lang.split("_")[0].lower() if target_lang else ""
+        source_name = language_map.get(source_lang, language_map.get(base_src, source_lang.capitalize()))
+        target_name = language_map.get(target_lang, language_map.get(base_tgt, target_lang.capitalize()))
 
         glossary_part = (
             f" Use domain glossary terms: {kwargs['glossary']}."
