@@ -122,27 +122,6 @@ run_migrations() {
     # ----
 }
 
-update_translations() {
-    echo "Updating, translating, and compiling i18n catalogs via Docker..."
-    touch "${REPO_ROOT}/messages.pot"
-    local env_args=()
-    if [[ -f "${REPO_ROOT}/.env" ]]; then
-        env_args=(--env-file "${REPO_ROOT}/.env")
-    fi
-
-    docker run --rm \
-        "${env_args[@]}" \
-        -v "${REPO_ROOT}/kalanjiyam/translations:/app/kalanjiyam/translations" \
-        -v "${REPO_ROOT}/messages.pot:/app/messages.pot" \
-        -v "${REPO_ROOT}/babel.cfg:/app/babel.cfg" \
-        "${KALANJIYAM_IMAGE:-kalanjiyam-rel:latest}" \
-        sh -c "pybabel extract --mapping babel.cfg --keywords _l --keywords pgettext:1c,2 --keywords npgettext:1c,2,3 --output-file messages.pot . && \
-               pybabel update -i messages.pot -d kalanjiyam/translations && \
-               python -m kalanjiyam.scripts.translate_catalogs && \
-               pybabel compile -d kalanjiyam/translations" || true
-    echo "✔  Translations updated and compiled"
-}
-
 # ─── Commands ───────────────────────────────────────────────────────────────
 
 CMD="${1:-deploy}"
@@ -151,7 +130,6 @@ case "${CMD}" in
   deploy)
     check_env
     build_image
-    update_translations
     run_migrations
     echo "Starting services..."
     KALANJIYAM_IMAGE="${KALANJIYAM_IMAGE}" \
