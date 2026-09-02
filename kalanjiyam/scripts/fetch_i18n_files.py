@@ -6,7 +6,22 @@ PROJECT_DIR = Path(__file__).resolve().parents[2]
 TRANSLATIONS_DIR = PROJECT_DIR / "kalanjiyam" / "translations"
 POT_FILE = PROJECT_DIR / "messages.pot"
 CFG_FILE = PROJECT_DIR / "babel.cfg"
-LOCALES = ["ta", "hi_IN", "sa", "te_IN", "en"]
+LOCALES = [
+    "ta",
+    "hi_IN",
+    "sa",
+    "te_IN",
+    "kn_IN",
+    "ml_IN",
+    "mr_IN",
+    "bn_IN",
+    "gu_IN",
+    "or_IN",
+    "pa_IN",
+    "as_IN",
+    "ur_IN",
+    "en",
+]
 
 
 def extract_messages() -> bool:

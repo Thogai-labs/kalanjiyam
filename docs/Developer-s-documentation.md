@@ -1418,10 +1418,19 @@ Kalanjiyam supports multiple Indian language interfaces as well as English using
 
 ### Supported Languages
 * **English (`en`)** *(Default source)*
-* **Tamil (`ta`)**
-* **Hindi (`hi_IN`)**
-* **Sanskrit (`sa`)**
-* **Telugu (`te_IN`)**
+* **Tamil (`ta`)** — தமிழ்
+* **Hindi (`hi_IN`)** — हिन्दी
+* **Sanskrit (`sa`)** — संस्कृतम्
+* **Telugu (`te_IN`)** — తెలుగు
+* **Kannada (`kn_IN`)** — ಕನ್ನಡ
+* **Malayalam (`ml_IN`)** — മലയാളം
+* **Marathi (`mr_IN`)** — मराठी
+* **Bengali (`bn_IN`)** — বাংলা
+* **Gujarati (`gu_IN`)** — ગુજરાતી
+* **Odia (`or_IN`)** — ଓଡ଼ିଆ
+* **Punjabi (`pa_IN`)** — ਪੰਜਾਬੀ
+* **Assamese (`as_IN`)** — অসমীয়া
+* **Urdu (`ur_IN`)** — اردو
 
 ### 1. Extract & Initialize Catalogs
 To extract all translatable UI strings from Python and Jinja templates into `messages.pot` and initialize/update the `.po` catalogs:

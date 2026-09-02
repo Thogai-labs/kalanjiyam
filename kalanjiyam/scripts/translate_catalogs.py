@@ -223,8 +223,22 @@ def main():
     parser.add_argument(
         "--locales",
         nargs="+",
-        default=["ta", "hi_IN", "sa", "te_IN"],
-        help="List of locales to translate (e.g. ta hi_IN sa te_IN)",
+        default=[
+            "ta",
+            "hi_IN",
+            "sa",
+            "te_IN",
+            "kn_IN",
+            "ml_IN",
+            "mr_IN",
+            "bn_IN",
+            "gu_IN",
+            "or_IN",
+            "pa_IN",
+            "as_IN",
+            "ur_IN",
+        ],
+        help="List of locales to translate (e.g. ta hi_IN sa te_IN kn_IN ml_IN mr_IN bn_IN gu_IN or_IN pa_IN as_IN ur_IN)",
     )
     parser.add_argument(
         "--engine",
