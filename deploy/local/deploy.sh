@@ -83,29 +83,6 @@ run_migrations() {
     echo "✔  Lookups seeded"
 }
 
-update_translations() {
-    echo "Updating i18n translation catalogs..."
-    local pybabel_cmd=""
-    if [[ -x "${REPO_ROOT}/.venv/bin/pybabel" ]]; then
-        pybabel_cmd="${REPO_ROOT}/.venv/bin/pybabel"
-    elif [[ -x "${REPO_ROOT}/env/bin/pybabel" ]]; then
-        pybabel_cmd="${REPO_ROOT}/env/bin/pybabel"
-    elif command -v uv >/dev/null 2>&1; then
-        pybabel_cmd="uv run pybabel"
-    elif command -v pybabel >/dev/null 2>&1; then
-        pybabel_cmd="pybabel"
-    fi
-
-    if [[ -n "${pybabel_cmd}" ]]; then
-        ${pybabel_cmd} extract --mapping babel.cfg --keywords _l --keywords pgettext:1c,2 --keywords npgettext:1c,2,3 --output-file messages.pot . || true
-        ${pybabel_cmd} update -i messages.pot -d kalanjiyam/translations || true
-        ${pybabel_cmd} compile -d kalanjiyam/translations || true
-        echo "✔  Translations updated"
-    else
-        echo "WARNING: pybabel not found. Skipping translation update."
-    fi
-}
-
 # ─── Commands ───────────────────────────────────────────────────────────────
 
 CMD="${1:-deploy}"
@@ -113,7 +90,6 @@ CMD="${1:-deploy}"
 case "${CMD}" in
   deploy)
     check_env
-    update_translations
     build_image
     run_migrations
     echo "Starting local dev services..."
