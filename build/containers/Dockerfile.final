@@ -58,7 +58,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
 RUN pybabel compile -d /app/kalanjiyam/translations -f || \
     echo "WARNING: pybabel compile failed, running with existing catalogs"
 
-COPY config.py wsgi.py alembic.ini ./
+COPY config.py wsgi.py alembic.ini babel.cfg ./
 COPY migrations/ ./migrations/
 COPY scripts/ ./scripts/
 COPY cli.py ./scripts/

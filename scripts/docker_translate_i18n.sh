@@ -22,9 +22,11 @@ if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
 fi
 
 echo "1. Extracting and updating message catalogs inside Docker..."
+touch "${REPO_ROOT}/messages.pot"
 docker run --rm \
     -v "${REPO_ROOT}/kalanjiyam/translations:/app/kalanjiyam/translations" \
     -v "${REPO_ROOT}/messages.pot:/app/messages.pot" \
+    -v "${REPO_ROOT}/babel.cfg:/app/babel.cfg" \
     "${IMAGE}" \
     sh -c "pybabel extract --mapping babel.cfg --keywords _l --keywords pgettext:1c,2 --keywords npgettext:1c,2,3 --output-file messages.pot . && \
            pybabel update -i messages.pot -d kalanjiyam/translations"
