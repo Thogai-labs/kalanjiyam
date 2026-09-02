@@ -32,7 +32,7 @@ def test_is_platform_super_admin_roles(flask_app):
         assert is_platform_super_admin(org_admin) is False
 
 
-def test_org_admin_redirected_from_platform(flask_app, client):
+def test_org_admin_redirected_from_platform(flask_app):
     with flask_app.app_context():
         session = q.get_session()
         org = db.Group(name="Acme", slug="acme-admin-test")
@@ -44,11 +44,8 @@ def test_org_admin_redirected_from_platform(flask_app, client):
         session.add(user)
         session.commit()
 
-    client.post(
-        "/sign-in",
-        data={"username": "orgonly", "password": "test-password"},
-        follow_redirects=True,
-    )
-    r = client.get("/admin/platform/")
-    assert r.status_code == 302
-    assert "/admin/org" in r.headers["Location"]
+        org_client = flask_app.test_client(user=user)
+        r = org_client.get("/admin/platform/")
+        assert r.status_code == 302
+        assert "/admin/org" in r.headers["Location"]
+

@@ -1,56 +1,111 @@
 {% extends 'admin/base.html' %}
 {% import 'macros/admin.html' as admin %}
 
-{% block title %}{{ org.name }} - {{ _('Member Analytics') }} | {{ _('Admin') }}{% endblock %}
+{% block title %}{{ org.name }} - {{ _('Member Analytics') }} | {{ _('Admin Console') }}{% endblock %}
 
 {% block admin_sidebar %}
 {{ admin.nav('user_analytics', current_user) }}
 {% endblock %}
 
 {% block content %}
-{{ admin.page_header(org.name ~ _(' Member Analytics'), _('Detailed usage and activity statistics for each member of this organization.')) }}
+<!-- Google Admin Header -->
+<div class="mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-royalblue/10 text-royalblue font-bold flex items-center justify-center text-sm shrink-0">
+        {{ org.name[:1]|upper }}
+      </div>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+          {{ org.name }} {{ _('Member Analytics') }}
+        </h1>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">
+          {{ _('Detailed usage and activity statistics for each member in this organization.') }}
+        </p>
+      </div>
+    </div>
 
-<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 mb-6">
-  <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Member Breakdown') }}</h2>
-  <div class="overflow-x-auto rounded-xl border border-slate-100">
-    <table class="min-w-full text-sm">
-      <thead class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+    <div>
+      {% if is_platform %}
+        <a href="{{ url_for('platform_view.user_analytics') }}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-royalblue text-xs font-semibold transition-all shadow-xs">
+          <span>{{ _('Back to Organizations') }}</span>
+        </a>
+      {% else %}
+        <a href="{{ url_for('org_admin_view.user_analytics') }}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-royalblue text-xs font-semibold transition-all shadow-xs">
+          <span>{{ _('Back to Overview') }}</span>
+        </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden mb-6">
+  <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">{{ _('Member Activity Breakdown') }}</h2>
+    <span class="text-xs text-slate-500 font-medium">{{ user_stats|length }} {{ _('members') }}</span>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-xs sm:text-sm text-left">
+      <thead class="bg-slate-50/80 text-slate-500 uppercase tracking-wider font-bold text-[10px] border-b border-slate-100">
         <tr>
-          <th class="px-4 py-3">{{ _('Username') }}</th>
-          <th class="px-4 py-3">{{ _('Email') }}</th>
-          <th class="px-4 py-3">{{ _('Roles') }}</th>
-          <th class="px-4 py-3">{{ _('Projects Created') }}</th>
-          <th class="px-4 py-3">{{ _('Page Revisions') }}</th>
-          <th class="px-4 py-3">{{ _('OCR Credits Used') }}</th>
-          <th class="px-4 py-3">{{ _('Translation Credits Used') }}</th>
+          <th class="px-5 py-3.5">{{ _('Member') }}</th>
+          <th class="px-4 py-3.5">{{ _('Email') }}</th>
+          <th class="px-4 py-3.5">{{ _('Roles') }}</th>
+          <th class="px-4 py-3.5">{{ _('Projects Created') }}</th>
+          <th class="px-4 py-3.5">{{ _('Page Revisions') }}</th>
+          <th class="px-4 py-3.5">{{ _('OCR Runs') }}</th>
+          <th class="px-4 py-3.5">{{ _('Translation Credits') }}</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-slate-100">
+      <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
         {% for stat in user_stats %}
-        <tr class="hover:bg-slate-50/80 transition-colors">
-          <td class="px-4 py-3 font-semibold text-slate-900">{{ stat.user.username }}</td>
-          <td class="px-4 py-3 text-slate-600">{{ stat.user.email }}</td>
-          <td class="px-4 py-3">
+        <tr class="hover:bg-slate-50/70 transition-colors">
+          <!-- Member Avatar & Username -->
+          <td class="px-5 py-3.5">
+            <div class="flex items-center gap-2.5">
+              <div class="w-7 h-7 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-[10px] shrink-0 uppercase">
+                {{ stat.user.username[:1] }}
+              </div>
+              <span class="font-bold text-slate-900 block truncate">{{ stat.user.username }}</span>
+            </div>
+          </td>
+
+          <!-- Email -->
+          <td class="px-4 py-3.5 text-slate-600 text-xs">
+            {{ stat.user.email }}
+          </td>
+
+          <!-- Roles -->
+          <td class="px-4 py-3.5">
             {% for r in stat.user.roles %}
-            <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-royalblue/10 text-royalblue uppercase tracking-wider mr-1">{{ r.name }}</span>
+            <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-royalblue/10 text-royalblue uppercase tracking-wider mr-1">{{ r.name }}</span>
             {% endfor %}
           </td>
-          <td class="px-4 py-3 text-slate-600 font-bold">{{ stat.projects_count }}</td>
-          <td class="px-4 py-3 text-slate-600 font-bold">{{ stat.revisions_count }}</td>
-          <td class="px-4 py-3 text-slate-600 font-bold">{{ stat.ocr_count }}</td>
-          <td class="px-4 py-3 text-slate-600 font-bold">{{ stat.translation_count }}</td>
+
+          <!-- Projects -->
+          <td class="px-4 py-3.5 font-bold text-slate-900">
+            {{ stat.projects_count }}
+          </td>
+
+          <!-- Page Revisions -->
+          <td class="px-4 py-3.5 font-bold text-slate-900">
+            {{ stat.revisions_count }}
+          </td>
+
+          <!-- OCR Count -->
+          <td class="px-4 py-3.5 font-semibold text-slate-700">
+            {{ stat.ocr_count }}
+          </td>
+
+          <!-- Translation Count -->
+          <td class="px-4 py-3.5 font-semibold text-slate-700">
+            {{ stat.translation_count }}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-</div>
-
-<div class="flex justify-start">
-  {% if is_platform %}
-    {{ admin.btn_secondary(_('Back to Organizations'), href=url_for('platform_view.user_analytics'), icon_name='arrow-left') }}
-  {% else %}
-    {{ admin.btn_secondary(_('Back to Overview'), href=url_for('org_admin_view.user_analytics'), icon_name='arrow-left') }}
-  {% endif %}
 </div>
 {% endblock %}
