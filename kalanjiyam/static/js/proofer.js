@@ -1521,12 +1521,18 @@ export default () => ({
         if (contentType.includes('application/json')) {
           const payload = await response.json();
           this.applyOcrPayload(payload);
+          if (!payload.available_versions) {
+            await this.fetchAvailableVersions();
+          }
+          if (!payload.version_key) {
+            this.activeVersion = `ocr:${decodedEngine}`;
+          }
         } else {
           const content = await response.text();
           this.applyOcrPayload({ text: content, version_key: `ocr:${decodedEngine}` });
+          await this.fetchAvailableVersions();
+          this.activeVersion = `ocr:${decodedEngine}`;
         }
-        await this.fetchAvailableVersions();
-        this.activeVersion = `ocr:${decodedEngine}`;
         this.showNotification('OCR completed successfully!', 'success');
       } else {
         const errorText = await this.getErrorMessage(response);
@@ -1561,18 +1567,25 @@ export default () => ({
       const response = await fetch(url);
       if (response && response.ok) {
         let versionKey = `ocr:enhanced:${decodedEngine}:${profile}`;
+        const contentType = (response.headers && response.headers.get && response.headers.get('content-type')) || '';
         if (contentType.includes('application/json')) {
           const payload = await response.json();
           if (payload && payload.version_key) {
             versionKey = payload.version_key;
           }
           this.applyOcrPayload(payload);
+          if (!payload.available_versions) {
+            await this.fetchAvailableVersions();
+          }
+          if (!payload.version_key) {
+            this.activeVersion = versionKey;
+          }
         } else {
           const content = await response.text();
           this.applyOcrPayload({ text: content, version_key: versionKey });
+          await this.fetchAvailableVersions();
+          this.activeVersion = versionKey;
         }
-        await this.fetchAvailableVersions();
-        this.activeVersion = versionKey;
         this.showNotification('Enhanced OCR completed successfully!', 'success');
       } else {
         const errorText = await this.getErrorMessage(response);
