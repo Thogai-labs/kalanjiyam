@@ -268,13 +268,48 @@ def get_version_display_name(version_key: str) -> str:
     elif version_key == "role:moderator":
         return _l("Legacy Consolidated Moderator")
     elif version_key.startswith("ocr:"):
-        engine_name = version_key.split(":", 1)[1]
-        from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
+        if version_key.startswith("ocr:enhanced:"):
+            parts = version_key.split(":", 3)
+            engine_name = parts[2] if len(parts) > 2 else ""
+            profile = parts[3] if len(parts) > 3 else ""
 
-        num = REVERSE_ENGINE_MAP.get(engine_name, engine_name)
-        if num.isdigit():
-            return _l("OCR %(number)s", number=num)
-        return _l("%(engine)s OCR", engine=num.capitalize())
+            from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP, normalize_engine
+
+            norm_engine = normalize_engine(engine_name)
+            num = REVERSE_ENGINE_MAP.get(norm_engine, norm_engine)
+            if num.isdigit():
+                ocr_label = _l("OCR %(number)s", number=num)
+            else:
+                ocr_label = _l("%(engine)s OCR", engine=num.capitalize())
+
+            profile_map = {
+                "document_cleanup": _l("Document Cleanup"),
+                "bg_clahe": _l("BG + CLAHE"),
+                "background_clahe": _l("BG + CLAHE"),
+                "sharpen": _l("Sharpen"),
+                "text_enhancement": _l("Text Enhancement"),
+                "hybrid_binarization": _l("Hybrid Binarization"),
+                "hybrid": _l("Hybrid Binarization"),
+            }
+            profile_label = profile_map.get(
+                profile, profile.replace("_", " ").title() if profile else ""
+            )
+            if profile_label:
+                return _l(
+                    "Enhanced %(ocr)s (%(profile)s)",
+                    ocr=ocr_label,
+                    profile=profile_label,
+                )
+            return _l("Enhanced %(ocr)s", ocr=ocr_label)
+        else:
+            engine_name = version_key.split(":", 1)[1]
+            from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP, normalize_engine
+
+            norm_engine = normalize_engine(engine_name)
+            num = REVERSE_ENGINE_MAP.get(norm_engine, norm_engine)
+            if num.isdigit():
+                return _l("OCR %(number)s", number=num)
+            return _l("%(engine)s OCR", engine=num.capitalize())
     elif version_key.startswith("translation:") or version_key.startswith("TR:"):
         parts = version_key.split(":", 2)
         engine_name = parts[1] if len(parts) > 1 else ""
@@ -307,6 +342,27 @@ def get_version_display_name(version_key: str) -> str:
             languages=lang_display,
         )
     return version_key
+
+
+def get_available_versions_for_page(page_id: int) -> list:
+    """Format available versions list for the selector UI directly from DB."""
+    session = q.get_session()
+    page_versions = (
+        session.query(db.PageVersion)
+        .filter_by(page_id=page_id)
+        .order_by(db.PageVersion.id.asc())
+        .all()
+    )
+    available_versions = []
+    for pv in page_versions:
+        available_versions.append(
+            {
+                "version_key": pv.version_key,
+                "display_name": get_version_display_name(pv.version_key),
+                "updated_at": pv.updated_at.isoformat() + "Z" if pv.updated_at else "",
+            }
+        )
+    return available_versions
 
 
 def _translation_context_for_revision(
@@ -876,22 +932,7 @@ def edit(project_slug, page_slug):
     )
 
     # Format available versions list for the selector UI directly from DB
-    available_versions = []
-    session = q.get_session()
-    page_versions = (
-        session.query(db.PageVersion)
-        .filter_by(page_id=cur.id)
-        .order_by(db.PageVersion.id.asc())
-        .all()
-    )
-    for pv in page_versions:
-        available_versions.append(
-            {
-                "version_key": pv.version_key,
-                "display_name": get_version_display_name(pv.version_key),
-                "updated_at": pv.updated_at.isoformat() + "Z" if pv.updated_at else "",
-            }
-        )
+    available_versions = get_available_versions_for_page(cur.id)
 
     from kalanjiyam.utils.ocr_client import get_available_engines
     from kalanjiyam.utils.ocr_types import build_engine_choices
@@ -1092,8 +1133,15 @@ def edit_post(project_slug, page_slug):
                 "error",
             )
 
-    # Get target version counter
+    # Refresh ORM session state to ensure fresh objects across all relationships
     session = q.get_session()
+    session.expire_all()
+    ctx = _get_page_context(project_slug, page_slug)
+    if ctx is None:
+        abort(404)
+    cur = ctx.cur
+
+    # Get target version counter
     target_version_record = (
         session.query(db.PageVersion)
         .filter_by(page_id=cur.id, version_key=target_key)
@@ -1103,19 +1151,17 @@ def edit_post(project_slug, page_slug):
     form.version.data = target_version_val
 
     # Format available versions list for the selector UI directly from DB (fetching fresh versions)
-    available_versions = []
-    page_versions = (
-        session.query(db.PageVersion)
-        .filter_by(page_id=cur.id)
-        .order_by(db.PageVersion.id.asc())
-        .all()
-    )
-    for pv in page_versions:
-        available_versions.append(
+    available_versions = get_available_versions_for_page(cur.id)
+
+    if request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify(
             {
-                "version_key": pv.version_key,
-                "display_name": get_version_display_name(pv.version_key),
-                "updated_at": pv.updated_at.isoformat() + "Z" if pv.updated_at else "",
+                "status": "success",
+                "version": target_version_val,
+                "target_version_key": target_key,
+                "active_version_key": active_key,
+                "available_versions": available_versions,
+                "page_status": cur.status.name,
             }
         )
 
@@ -1564,6 +1610,10 @@ def ocr(project_slug, page_slug):
                         .replace("/static/uploads/", f"{prefix}/static/uploads/")
                     )
 
+        session.expire_all()
+        payload["available_versions"] = get_available_versions_for_page(page_.id)
+        payload["version_key"] = version_key
+
         logging.info(
             "OCR completed successfully, returning %s blocks",
             len(payload.get("blocks") or []),
@@ -1783,6 +1833,9 @@ def enhanced_ocr(project_slug, page_slug):
                         .replace(f"{prefix}/static/uploads/", "/static/uploads/")
                         .replace("/static/uploads/", f"{prefix}/static/uploads/")
                     )
+        session.expire_all()
+        payload["available_versions"] = get_available_versions_for_page(page_.id)
+        payload["version_key"] = version_key
 
         logging.info(
             "Enhanced OCR completed successfully for %s/%s with profile=%s engine=%s, returning %s blocks",
@@ -2587,7 +2640,9 @@ def translate(project_slug, page_slug):
                     logging.warning(
                         f"Error recording single page proofing translation metrics: {metric_err}"
                     )
-
+            session.expire_all()
+            doc_data["available_versions"] = get_available_versions_for_page(page_.id)
+            doc_data["version_key"] = version_key
             return jsonify(doc_data)
         except Exception as e:
             logging.error(
@@ -2797,3 +2852,31 @@ def get_glossaries():
             f"Failed to fetch glossaries from translation service: {e}"
         )
         return jsonify([])
+
+
+@api.route("/versions/<project_slug>/<page_slug>/", methods=["GET"])
+def page_versions(project_slug, page_slug):
+    """Return the available versions for a page."""
+    if current_user.is_authenticated and current_user.is_super_admin:
+        abort(403, description=_l("Superadmins are not allowed to access project data."))
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+    if not q.user_can_view_proofing_project(current_user, project_):
+        abort(403)
+    page_ = q.page(project_.id, page_slug)
+    if not page_:
+        abort(404)
+
+    session = q.get_session()
+    session.expire_all()
+    available_versions = get_available_versions_for_page(page_.id)
+    target_key, active_key = resolve_version_keys(current_user, page_)
+    return jsonify(
+        {
+            "available_versions": available_versions,
+            "target_version_key": target_key,
+            "active_version_key": active_key,
+        }
+    )
+

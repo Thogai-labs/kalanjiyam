@@ -524,5 +524,16 @@ def test_get_version_display_name_translation():
     )
 
 
+def test_api_page_versions(rama_client):
+    r = rama_client.get("/api/versions/test-project/1/")
+    assert r.status_code == 200
+    data = r.get_json()
+    assert "available_versions" in data
+    assert "target_version_key" in data
+    assert "active_version_key" in data
+    assert isinstance(data["available_versions"], list)
+
+
+
 
 

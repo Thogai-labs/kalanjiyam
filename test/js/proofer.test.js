@@ -387,3 +387,23 @@ test('OsdBboxOverlay highlightBlockId applies selected styling to matching rect'
   expect(rects[1].classList.contains('is-selected')).toBe(false);
   expect(rects[1].getAttribute('stroke-width')).toBe('2');
 });
+
+test('getVersionDisplayName formats masked OCR and Enhanced OCR correctly', () => {
+  const p = Proofer();
+  expect(p.getVersionDisplayName('ocr:chandra')).toBe('OCR 6');
+  expect(p.getVersionDisplayName('ocr:google')).toBe('OCR 1');
+  expect(p.getVersionDisplayName('ocr:enhanced:chandra:document_cleanup')).toBe('Enhanced OCR 6 (Document Cleanup)');
+  expect(p.getVersionDisplayName('ocr:enhanced:google:bg_clahe')).toBe('Enhanced OCR 1 (BG + CLAHE)');
+  expect(p.getVersionDisplayName('ocr:enhanced:dots_ocr:hybrid_binarization')).toBe('Enhanced OCR 12 (Hybrid Binarization)');
+});
+
+test('getOcrEngineName formats masked OCR names correctly for preview modal', () => {
+  const p = Proofer();
+  expect(p.getOcrEngineName('1')).toBe('OCR 1');
+  expect(p.getOcrEngineName('6')).toBe('OCR 6');
+  expect(p.getOcrEngineName('chandra')).toBe('OCR 6');
+  expect(p.getOcrEngineName('google')).toBe('OCR 1');
+  expect(p.getOcrEngineName('dots_ocr')).toBe('OCR 12');
+});
+
+

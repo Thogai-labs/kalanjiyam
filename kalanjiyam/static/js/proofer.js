@@ -615,7 +615,44 @@ export default () => ({
     if (versionKey === 'main') return 'Main Branch';
     if (versionKey === 'role:p1') return 'Legacy Consolidated P1';
     if (versionKey === 'role:p2') return 'Legacy Consolidated P2';
-    if (versionKey === 'role:moderator') return 'Legacy Consolidated Moderator';
+    if (versionKey.startsWith('ocr:enhanced:')) {
+      const parts = versionKey.split(':');
+      const engine = parts[2] || '';
+      const profile = parts[3] || '';
+      const engineMap = {
+        "google": "1",
+        "tesseract": "2",
+        "surya": "3",
+        "nanonets": "4",
+        "deepseek": "5",
+        "chandra": "6",
+        "qwen3": "7",
+        "surya_table": "8",
+        "paddle_table": "9",
+        "glm_ocr": "10",
+        "tesseract_manuscript": "11",
+        "dots_ocr": "12",
+        "gemma_ocr": "13",
+        "gemma_4": "13",
+        "gemma-4-31b": "13",
+        "gemma_4_31b": "13",
+        "llm_gemma": "13",
+        "llm-gemma": "13"
+      };
+      const profileMap = {
+        'document_cleanup': 'Document Cleanup',
+        'bg_clahe': 'BG + CLAHE',
+        'background_clahe': 'BG + CLAHE',
+        'sharpen': 'Sharpen',
+        'text_enhancement': 'Text Enhancement',
+        'hybrid_binarization': 'Hybrid Binarization',
+        'hybrid': 'Hybrid Binarization',
+      };
+      const num = engineMap[engine] || engine;
+      const ocrLabel = /^\d+$/.test(num) ? 'OCR ' + num : (num.charAt(0).toUpperCase() + num.slice(1) + ' OCR');
+      const profileLabel = profileMap[profile] || (profile ? profile.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '');
+      return profileLabel ? `Enhanced ${ocrLabel} (${profileLabel})` : `Enhanced ${ocrLabel}`;
+    }
     if (versionKey.startsWith('ocr:')) {
       const engine = versionKey.split(':')[1];
       const engineMap = {
@@ -699,6 +736,22 @@ export default () => ({
     const url = new URL(window.location.href);
     url.searchParams.set('version', versionKey);
     window.location.href = url.toString();
+  },
+
+  async fetchAvailableVersions() {
+    try {
+      const pathname = (window.location && window.location.pathname) || '';
+      const url = pathname.replace('/proofing/', '/api/versions/');
+      const response = await fetch(url);
+      if (response && response.ok) {
+        const data = await response.json();
+        if (data.available_versions) {
+          this.availableVersions = data.available_versions;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch available versions:', err);
+    }
   },
 
   ensureFlowEditor() {
@@ -1060,6 +1113,12 @@ export default () => ({
       });
     }
     this._syncDocumentToForm();
+    if (payload.available_versions) {
+      this.availableVersions = payload.available_versions;
+    }
+    if (payload.version_key) {
+      this.activeVersion = payload.version_key;
+    }
     this.hasUnsavedChanges = false;
   },
 
@@ -1464,8 +1523,10 @@ export default () => ({
           this.applyOcrPayload(payload);
         } else {
           const content = await response.text();
-          this.applyOcrPayload({ text: content });
+          this.applyOcrPayload({ text: content, version_key: `ocr:${decodedEngine}` });
         }
+        await this.fetchAvailableVersions();
+        this.activeVersion = `ocr:${decodedEngine}`;
         this.showNotification('OCR completed successfully!', 'success');
       } else {
         const errorText = await this.getErrorMessage(response);
@@ -1499,14 +1560,19 @@ export default () => ({
     try {
       const response = await fetch(url);
       if (response && response.ok) {
-        const contentType = (response.headers && response.headers.get && response.headers.get('content-type')) || '';
+        let versionKey = `ocr:enhanced:${decodedEngine}:${profile}`;
         if (contentType.includes('application/json')) {
           const payload = await response.json();
+          if (payload && payload.version_key) {
+            versionKey = payload.version_key;
+          }
           this.applyOcrPayload(payload);
         } else {
           const content = await response.text();
-          this.applyOcrPayload({ text: content });
+          this.applyOcrPayload({ text: content, version_key: versionKey });
         }
+        await this.fetchAvailableVersions();
+        this.activeVersion = versionKey;
         this.showNotification('Enhanced OCR completed successfully!', 'success');
       } else {
         const errorText = await this.getErrorMessage(response);
@@ -1526,11 +1592,39 @@ export default () => ({
 
   getOcrEngineName(engineValue) {
     const val = engineValue || window._ocrSelectedEngine || this.selectedEngine;
-    if (this.ocrEngines && this.ocrEngines[val] && this.ocrEngines[val].name) {
-      return this.ocrEngines[val].name;
+    const engineMap = {
+      "google": "1",
+      "tesseract": "2",
+      "surya": "3",
+      "nanonets": "4",
+      "deepseek": "5",
+      "chandra": "6",
+      "qwen3": "7",
+      "surya_table": "8",
+      "paddle_table": "9",
+      "glm_ocr": "10",
+      "tesseract_manuscript": "11",
+      "dots_ocr": "12",
+      "gemma_ocr": "13",
+      "gemma_4": "13",
+      "gemma-4-31b": "13",
+      "gemma_4_31b": "13",
+      "llm_gemma": "13",
+      "llm-gemma": "13"
+    };
+    if (val && /^\d+$/.test(val)) {
+      return 'OCR ' + val;
+    }
+    const num = engineMap[val];
+    if (num) {
+      return 'OCR ' + num;
     }
     const decoded = this.decodeEngine(val);
-    return decoded ? decoded.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Google OCR';
+    const decodedNum = engineMap[decoded] || (/^\d+$/.test(decoded) ? decoded : null);
+    if (decodedNum) {
+      return 'OCR ' + decodedNum;
+    }
+    return decoded ? decoded.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'OCR 1';
   },
 
   zoomInPreview(step = 0.25) {
@@ -1748,6 +1842,17 @@ export default () => ({
         
         // Trigger translation display in the image box
         this.showTranslationInImageBox(translation, sourceLang, targetLang, decodedEngine);
+
+        if (translatedDoc && translatedDoc.available_versions) {
+          this.availableVersions = translatedDoc.available_versions;
+        } else {
+          await this.fetchAvailableVersions();
+        }
+        if (translatedDoc && translatedDoc.version_key) {
+          this.activeVersion = translatedDoc.version_key;
+        } else {
+          this.activeVersion = `translation:${decodedEngine}:${sourceLang}->${targetLang}`;
+        }
         
         // Show success feedback
         this.showNotification('Translation completed successfully!', 'success');
