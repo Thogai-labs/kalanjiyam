@@ -5,7 +5,7 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-  .{
+  body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   }
 
@@ -19,7 +19,7 @@
 {% block title %}{{ _('Download') }}: {{ project.display_title }} | Kalanjiyam{% endblock %}
 
 {% block hero %}
-<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-4">
   <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
     <div class="flex items-start gap-2.5">
       <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0 mt-0.5">
@@ -78,141 +78,184 @@
 
 {% block content %}
 <div class="w-full">
-  <div class="mb-6">
+  <div class="mb-4">
     {{ m.project_tabs(project=project, active='download', is_mod=current_user.is_moderator) }}
   </div>
 
-  <div class="mb-8">
-    <div class="flex items-center gap-2 mb-2">
-      <span class="w-2.5 h-2.5 rounded-full bg-royalblue"></span>
-      <h2 class="text-lg font-bold text-slate-900">{{ _('Available Export Formats') }}</h2>
+  <!-- Header Banner & Summary -->
+  <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200 mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-blue-50 text-royalblue flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+        </svg>
+      </div>
+      <div>
+        <h2 class="text-sm sm:text-base font-bold text-slate-900 leading-snug">{{ _('Available Export Formats') }}</h2>
+        <p class="text-xs text-slate-500 font-medium">
+          {{ _('Download the latest transcription, formatted text, and structured data in your preferred format.') }}
+        </p>
+      </div>
     </div>
-    <p class="text-xs sm:text-sm text-slate-500 leading-relaxed max-w-2xl">
-      {% trans %}Select a format below to download the latest transcription and metadata of this book in your preferred structure.{% endtrans %}
-    </p>
+    <div class="flex items-center gap-2 text-xs">
+      <span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold border border-slate-200">
+        {{ project.pages|length }} {{ _('total pages') }}
+      </span>
+    </div>
   </div>
 
-  <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+  <!-- High-Density Export Cards Grid (2-Column Responsive Layout) -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
     
-    {# Word Document (DOCX) Card #}
-    <div class="flex flex-col justify-between bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-royalblue/40 transition-all duration-200 group">
-      <div>
-        <div class="w-12 h-12 rounded-xl bg-blue-50 text-royalblue border border-blue-100 flex items-center justify-center mb-4 transition-transform group-hover:scale-110">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-          </svg>
+    {# 1. Microsoft Word (DOCX) #}
+    <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs hover:border-royalblue/50 hover:shadow-sm transition-all flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-blue-50 text-royalblue border border-blue-100 flex flex-col items-center justify-center shrink-0">
+          <span class="text-[10px] font-extrabold uppercase tracking-tight">DOCX</span>
         </div>
-        <h3 class="text-base font-bold text-slate-900 mb-1.5">{{ _('Microsoft Word (DOCX)') }}</h3>
-        <p class="text-xs text-slate-500 leading-relaxed mb-6">{{ _('Best for printing and offline editing. Preserves all text styles, formatting, tables, and embedded images.') }}</p>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <h3 class="text-xs sm:text-sm font-bold text-slate-900 truncate">{{ _('Microsoft Word') }}</h3>
+            <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-blue-50 text-royalblue border border-blue-100">.docx</span>
+          </div>
+          <p class="text-[11px] text-slate-500 truncate mt-0.5">
+            {{ _('Preserves typography, styles, tables, and embedded images.') }}
+          </p>
+        </div>
       </div>
-      <a href="{{ url_for("proofing.project.download_as_docx", slug=project.slug) }}" 
-         class="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-royalblue hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-royalblue/20 transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <a href="{{ url_for('proofing.project.download_as_docx', slug=project.slug) }}"
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-royalblue hover:bg-blue-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
         </svg>
-        {{ _('Download DOCX') }}
+        <span>{{ _('Download') }}</span>
       </a>
     </div>
 
-    {# HTML Replica Card #}
-    <div class="flex flex-col justify-between bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-emerald-500/40 transition-all duration-200 group">
-      <div>
-        <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center mb-4 transition-transform group-hover:scale-110">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
-          </svg>
+    {# 2. HTML Replica (ZIP Archive) #}
+    <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs hover:border-emerald-500/50 hover:shadow-sm transition-all flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 flex flex-col items-center justify-center shrink-0">
+          <span class="text-[10px] font-extrabold uppercase tracking-tight">HTML</span>
         </div>
-        <h3 class="text-base font-bold text-slate-900 mb-1.5">{{ _('Layout HTML (ZIP Archive)') }}</h3>
-        <p class="text-xs text-slate-500 leading-relaxed mb-6">{{ _('A complete zip archive containing layout-faithful replica HTML pages and all uploaded images. Ideal for offline reading.') }}</p>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <h3 class="text-xs sm:text-sm font-bold text-slate-900 truncate">{{ _('HTML Replica Archive') }}</h3>
+            <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-100">.zip</span>
+          </div>
+          <p class="text-[11px] text-slate-500 truncate mt-0.5">
+            {{ _('Complete offline web bundle with replica pages & images.') }}
+          </p>
+        </div>
       </div>
-      <a href="{{ url_for("proofing.project.download_as_html", slug=project.slug) }}" 
-         class="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <a href="{{ url_for('proofing.project.download_as_html', slug=project.slug) }}"
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
         </svg>
-        {{ _('Download HTML ZIP') }}
+        <span>{{ _('Download') }}</span>
       </a>
     </div>
 
-    {# PDF Document Card #}
+    {# 3. PDF Document (Replica) #}
     {% if not is_docx %}
-    <div class="flex flex-col justify-between bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-rose-500/40 transition-all duration-200 group">
-      <div>
-        <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center mb-4 transition-transform group-hover:scale-110">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-          </svg>
+    <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs hover:border-rose-500/50 hover:shadow-sm transition-all flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-700 border border-rose-100 flex flex-col items-center justify-center shrink-0">
+          <span class="text-[10px] font-extrabold uppercase tracking-tight">PDF</span>
         </div>
-        <h3 class="text-base font-bold text-slate-900 mb-1.5">{{ _('PDF Document (Replica)') }}</h3>
-        <p class="text-xs text-slate-500 leading-relaxed mb-6">{{ _('Layout-faithful replica PDF compiled with background images and absolutely positioned, selectable text blocks.') }}</p>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <h3 class="text-xs sm:text-sm font-bold text-slate-900 truncate">{{ _('PDF Document') }}</h3>
+            <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-100">.pdf</span>
+          </div>
+          <p class="text-[11px] text-slate-500 truncate mt-0.5">
+            {{ _('High-fidelity replica with selectable text layer.') }}
+          </p>
+        </div>
       </div>
-      <a href="{{ url_for("proofing.project.download_as_pdf", slug=project.slug) }}" 
-         class="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <a href="{{ url_for('proofing.project.download_as_pdf', slug=project.slug) }}"
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
         </svg>
-        {{ _('Download PDF') }}
+        <span>{{ _('Download') }}</span>
       </a>
     </div>
     {% endif %}
 
-    {# Plain Text Card #}
-    <div class="flex flex-col justify-between bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-slate-400 transition-all duration-200 group">
-      <div>
-        <div class="w-12 h-12 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center mb-4 transition-transform group-hover:scale-110">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"></path>
-          </svg>
+    {# 4. Plain Text #}
+    <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs hover:border-slate-400 hover:shadow-sm transition-all flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 flex flex-col items-center justify-center shrink-0">
+          <span class="text-[10px] font-extrabold uppercase tracking-tight">TXT</span>
         </div>
-        <h3 class="text-base font-bold text-slate-900 mb-1.5">{{ _('Plain Text') }}</h3>
-        <p class="text-xs text-slate-500 leading-relaxed mb-6">{{ _('Clean, raw text content. Ideal for fast copy-pasting, word-processing, and text analytics pipelines.') }}</p>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <h3 class="text-xs sm:text-sm font-bold text-slate-900 truncate">{{ _('Plain Text') }}</h3>
+            <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">.txt</span>
+          </div>
+          <p class="text-[11px] text-slate-500 truncate mt-0.5">
+            {{ _('Raw text content for fast copy-pasting & pipelines.') }}
+          </p>
+        </div>
       </div>
-      <a href="{{ url_for("proofing.project.download_as_text", slug=project.slug) }}" 
-         class="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs shadow-md shadow-slate-700/20 transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <a href="{{ url_for('proofing.project.download_as_text', slug=project.slug) }}"
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors shadow-xs shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
         </svg>
-        {{ _('Download TXT') }}
+        <span>{{ _('Download') }}</span>
       </a>
     </div>
 
-    {# TEI XML Card #}
-    <div class="flex flex-col justify-between bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-amber-500/40 transition-all duration-200 group">
-      <div>
-        <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center mb-4 transition-transform group-hover:scale-110">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-          </svg>
+    {# 5. TEI XML #}
+    <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs hover:border-amber-500/50 hover:shadow-sm transition-all flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 border border-amber-100 flex flex-col items-center justify-center shrink-0">
+          <span class="text-[10px] font-extrabold uppercase tracking-tight">XML</span>
         </div>
-        <h3 class="text-base font-bold text-slate-900 mb-1.5">{{ _('TEI XML') }}</h3>
-        <p class="text-xs text-slate-500 leading-relaxed mb-6">{{ _('Standard structured markup. Best for digital humanities archiving, syntax tree annotations, and translation mapping.') }}</p>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <h3 class="text-xs sm:text-sm font-bold text-slate-900 truncate">{{ _('TEI XML') }}</h3>
+            <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-100">.xml</span>
+          </div>
+          <p class="text-[11px] text-slate-500 truncate mt-0.5">
+            {{ _('Structured standard for digital humanities & linguistics.') }}
+          </p>
+        </div>
       </div>
-      <a href="{{ url_for("proofing.project.download_as_xml", slug=project.slug) }}" 
-         class="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-600/20 transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <a href="{{ url_for('proofing.project.download_as_xml', slug=project.slug) }}"
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
         </svg>
-        {{ _('Download XML') }}
+        <span>{{ _('Download') }}</span>
       </a>
     </div>
 
-    {# PageDocument JSON Card #}
-    <div class="flex flex-col justify-between bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-indigo-500/40 transition-all duration-200 group">
-      <div>
-        <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center mb-4 transition-transform group-hover:scale-110">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-          </svg>
+    {# 6. PageDocument JSON #}
+    <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs hover:border-indigo-500/50 hover:shadow-sm transition-all flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex flex-col items-center justify-center shrink-0">
+          <span class="text-[10px] font-extrabold uppercase tracking-tight">JSON</span>
         </div>
-        <h3 class="text-base font-bold text-slate-900 mb-1.5">{{ _('PageDocument JSON') }}</h3>
-        <p class="text-xs text-slate-500 leading-relaxed mb-6">{{ _('Structured developer bundle. Contains raw OCR blocks, bounding boxes, text positions, and edit history metadata.') }}</p>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <h3 class="text-xs sm:text-sm font-bold text-slate-900 truncate">{{ _('PageDocument JSON') }}</h3>
+            <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">.json</span>
+          </div>
+          <p class="text-[11px] text-slate-500 truncate mt-0.5">
+            {{ _('Raw OCR geometry, bounding boxes, & edit histories.') }}
+          </p>
+        </div>
       </div>
-      <a href="{{ url_for("proofing.project.download_as_json", slug=project.slug) }}" 
-         class="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <a href="{{ url_for('proofing.project.download_as_json', slug=project.slug) }}"
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
         </svg>
-        {{ _('Download JSON') }}
+        <span>{{ _('Download') }}</span>
       </a>
     </div>
 
