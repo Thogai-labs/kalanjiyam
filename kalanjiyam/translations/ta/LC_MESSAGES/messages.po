@@ -20,15 +20,15 @@ msgstr ""
 
 #: kalanjiyam/admin.py:2255
 msgid "(deleted)"
-msgstr ""
+msgstr "(நீக்கப்பட்டது)"
 
 #: kalanjiyam/admin.py:4496
 msgid "Record does not exist."
-msgstr ""
+msgstr "பதிவு இல்லை."
 
 #: kalanjiyam/templates/404.html:11
 msgid "Not Found (404)"
-msgstr ""
+msgstr "நீங்கள் தேடும் பக்கம் கிடைக்கவில்லை (404)"
 
 #: kalanjiyam/templates/404.html:13
 #, python-format
@@ -37,10 +37,14 @@ msgid ""
 "found a bug in our project, <a href=\"%(contact_url)s\">let us know</a> "
 "and we'll fix it as soon as we can."
 msgstr ""
+"மன்னிக்கவும்! நீங்கள் தேடும் விஷயத்தை நாங்கள் கண்டுபிடிக்க முடியவில்லை. "
+"எங்கள் திட்டத்தில் ஒரு பிழை இருப்பதாக நீங்கள் நினைத்தால், <a "
+"href=\"%(contact_url)s\">எங்களுக்கு தெரியப்படுத்துங்கள்</a>, அதை விரைவில்"
+" சரிசெய்வோம்."
 
 #: kalanjiyam/templates/500.html:11
 msgid "Server Error (500)"
-msgstr ""
+msgstr "Server Error (500)"
 
 #: kalanjiyam/templates/500.html:13
 #, python-format
@@ -50,45 +54,54 @@ msgid ""
 "what caused this issue, please <a href=\"%(contact_url)s\">let us "
 "know</a> and we'll fix it as soon as we can."
 msgstr ""
+"மன்னிக்கவும், எங்கள் தளம் ஒரு தெரியாத பிழையை சந்தித்துள்ளது. இந்த சிக்கலை"
+" எதிர்காலத்தில் தடுக்க நாங்கள் விசாரிப்போம். இந்த பிரச்சினைக்கு காரணம் "
+"என்னவென்று நீங்கள் நினைத்தால், தயவுசெய்து <a "
+"href=\"%(contact_url)s\">எங்களுக்கு தெரியப்படுத்துங்கள்</a>, நாங்கள் அதை "
+"விரைவில் சரிசெய்வோம்."
 
 #: kalanjiyam/templates/base-auth-form.html:102
 msgid "Return to Kalanjiyam Home"
-msgstr ""
+msgstr "காலஞ்சியம் வீட்டிற்கு திரும்பவும்"
 
 #: kalanjiyam/templates/base-auth-form.html:146
 msgid "Privacy"
-msgstr ""
+msgstr "ரகசியம்"
 
 #: kalanjiyam/templates/base-auth-form.html:148
 msgid "Terms"
-msgstr ""
+msgstr "Terms"
 
 #: kalanjiyam/templates/base-auth-form.html:150
 #: kalanjiyam/templates/include/header.html:149
 msgid "Help"
-msgstr ""
+msgstr "உதவி"
 
 #: kalanjiyam/templates/index.html:7
 msgid "Kalanjiyam - Digital Heritage Library & Proofing"
-msgstr ""
+msgstr "கலஞ்சியம் - டிஜிட்டல் பாரம்பரிய நூலகம் மற்றும் சரிபார்ப்பு"
 
 #: kalanjiyam/templates/index.html:67
 msgid "Powered by BharatGen • Archival Management Platform"
-msgstr ""
+msgstr "பவர் பை பாரத்ஜென் - ஆர்கைவல் மேனேஜ்மென்ட் பிளாட்ஃபார்ம்"
 
 #: kalanjiyam/templates/index.html:73
 msgid "Preserving Ancient Manuscripts & Heritage Knowledge"
-msgstr ""
+msgstr "பண்டைய கையெழுத்துப் பிரதிகள் மற்றும் பாரம்பரிய அறிவை பாதுகாத்தல்"
 
 #: kalanjiyam/templates/index.html:76
 msgid ""
 "An open scholarly archive and collaborative proofreading platform for "
 "Sanskrit literature, palm-leaf manuscripts, and classical heritage texts."
 msgstr ""
+"Sanskrit இலக்கியம், பாம்பு இலைப் பிரதிகள் மற்றும் பாரம்பரிய பாரம்பரிய "
+"நூல்களுக்கான திறந்த அறிவார்ந்த காப்பகம் மற்றும் கூட்டு திருத்த தளம்."
 
 #: kalanjiyam/templates/index.html:90
 msgid "Search manuscript texts, titles, authors, or topics..."
 msgstr ""
+"மனுஸ்கிரிப்ட் உரைகள், தலைப்புகள், ஆசிரியர்கள் அல்லது தலைப்புகளைத் "
+"தேடுங்கள்..."
 
 #: kalanjiyam/templates/dictionaries/index.html:29
 #: kalanjiyam/templates/include/header.html:52

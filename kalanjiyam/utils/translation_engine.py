@@ -211,16 +211,27 @@ class GenericTranslationEngine(TranslationEngine):
 
     def translate(self, text: str, source_lang: str, target_lang: str, **kwargs) -> TranslationResponse:
         import httpx
-        from flask import current_app
+        from flask import current_app, has_app_context
+        import os
 
-        base_url = current_app.config.get("TRANSLATION_SERVICE_URL", "").rstrip("/")
+        base_url = ""
+        api_key = ""
+        timeout = 300.0
+
+        if has_app_context():
+            base_url = current_app.config.get("TRANSLATION_SERVICE_URL", "").rstrip("/")
+            api_key = current_app.config.get("TRANSLATION_SERVICE_API_KEY", "")
+            timeout = float(current_app.config.get("TRANSLATION_SERVICE_TIMEOUT", 300))
+
+        if not base_url:
+            base_url = (os.environ.get("TRANSLATION_SERVICE_URL") or "").rstrip("/")
+            api_key = os.environ.get("TRANSLATION_SERVICE_API_KEY") or api_key
+            timeout = float(os.environ.get("TRANSLATION_SERVICE_TIMEOUT", 300))
+
         if not base_url:
             raise RuntimeError("TRANSLATION_SERVICE_URL is not configured")
 
         url = f"{base_url}/translate/text"
-        api_key = current_app.config.get("TRANSLATION_SERVICE_API_KEY", "")
-        timeout = float(current_app.config.get("TRANSLATION_SERVICE_TIMEOUT", 300))
-
         headers = {"X-API-Key": api_key} if api_key else {}
 
         # Map language codes to English names if available
@@ -997,14 +1008,17 @@ class TranslationEngineFactory:
             return GoogleTranslateEngine()
         if engine_name == "openai":
             return OpenAITranslateEngine(**kwargs)
-        if engine_name in ("llm_gemma", "llm-gemma"):
+        if engine_name in ("llm_gemma", "llm-gemma", "gemma"):
             return LlmGemmaTranslateEngine(**kwargs)
         if (
-            engine_name in ("param_lc_translate_ep4", "translation_1b_exp_40")
+            engine_name == "bharatgen"
+            or engine_name in ("param_lc_translate_ep4", "translation_1b_exp_40")
             or "param_lc" in engine_name
             or "translation_1b" in engine_name
+            or "bharatgen" in engine_name
         ):
-            return BharatGenTranslateEngine(engine_name)
+            model_name = "param_lc_translate_ep4" if engine_name == "bharatgen" else engine_name
+            return BharatGenTranslateEngine(model_name, **kwargs)
         return GenericTranslationEngine(engine_name)
 
     @classmethod

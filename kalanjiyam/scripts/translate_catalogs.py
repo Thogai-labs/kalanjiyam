@@ -221,10 +221,11 @@ def main():
         default=["ta", "hi_IN", "sa", "te_IN"],
         help="List of locales to translate (e.g. ta hi_IN sa te_IN)",
     )
+    default_engine = "bharatgen" if os.environ.get("BHARATGEN_TRANSLATION_API_KEY") else "llm_gemma"
     parser.add_argument(
         "--engine",
-        default="llm_gemma",
-        help="Translation engine to use (default: llm_gemma; options: llm_gemma, bharatgen, google, openai, generic)",
+        default=default_engine,
+        help=f"Translation engine to use (default: {default_engine}; options: bharatgen, llm_gemma, google, openai, generic)",
     )
     parser.add_argument(
         "--batch-size",
@@ -272,8 +273,8 @@ def main():
     try:
         engine = TranslationEngineFactory.create(args.engine, **engine_kwargs)
     except Exception as e:
-        logger.error(f"Failed to initialize engine '{args.engine}': {e}")
-        sys.exit(1)
+        logger.warning(f"Could not initialize translation engine '{args.engine}': {e}. Skipping auto-translation.")
+        sys.exit(0)
 
     total_translated = 0
     for locale in args.locales:

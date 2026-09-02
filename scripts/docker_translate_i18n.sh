@@ -33,8 +33,8 @@ docker run --rm \
 
 echo "2. Running LLM translation inside Docker..."
 ENV_FILE_ARGS=()
-if [[ -f .env ]]; then
-    ENV_FILE_ARGS=(--env-file .env)
+if [[ -f "${REPO_ROOT}/.env" ]]; then
+    ENV_FILE_ARGS=(--env-file "${REPO_ROOT}/.env")
 fi
 
 docker run --rm \
