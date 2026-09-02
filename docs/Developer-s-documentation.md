@@ -1409,3 +1409,69 @@ docker exec -it kalanjiyam-web python scripts/cli.py batch-retry --job-id 1 --or
 3. **Download & Extraction**: The worker downloads the file. PDFs are memory-efficiently split into JPEGs using `PyMuPDF`. Image folders are standardized to JPEGs using `Pillow`. Temporary source files are automatically cleaned up from the host disk.
 4. **Visual Cropping & Storage**: Page images are passed to the OCR API. If tables/figures are detected, the Visual Element Cropper extracts them and stores everything securely in the Kalanjiyam `Storage` backend.
 5. **Database Sync**: Status tracking, metrics (file size, extraction latency, OCR latency, payload bytes), and parsed `OCRBlock` / `PageVersion` data are actively synchronized to PostgreSQL in real-time.
+
+---
+
+## Internationalization & Localization (i18n & l10n)
+
+Kalanjiyam supports multiple Indian language interfaces as well as English using `Flask-Babel`.
+
+### Supported Languages
+* **English (`en`)** *(Default source)*
+* **Tamil (`ta`)**
+* **Hindi (`hi_IN`)**
+* **Sanskrit (`sa`)**
+* **Telugu (`te_IN`)**
+
+### 1. Extract & Initialize Catalogs
+To extract all translatable UI strings from Python and Jinja templates into `messages.pot` and initialize/update the `.po` catalogs:
+
+```bash
+# Run via Makefile
+make init-i18n
+
+# Or run the native Python module directly
+python -m kalanjiyam.scripts.fetch_i18n_files
+```
+
+### 2. Auto-Translate UI Catalogs with LLM
+Kalanjiyam includes an automated machine translation script (`kalanjiyam.scripts.translate_catalogs`) connected to the `llm-gemma` (26B) and `gemma` translation backends.
+
+#### Basic Usage:
+```bash
+# Translate with llm-gemma (26B instruction-tuned model via OCR_SERVICE_URL)
+python -m kalanjiyam.scripts.translate_catalogs --engine llm_gemma
+
+# Or translate with gemma 12B (via TRANSLATION_SERVICE_URL)
+python -m kalanjiyam.scripts.translate_catalogs --engine gemma
+```
+
+#### Key Behaviors & Flags:
+* **Incremental Resume (Default)**: The script automatically skips strings that are already translated (`msgstr != ""`). If the translation process is interrupted (Ctrl+C) or encounters a network error, re-running the command safely resumes where it left off.
+* **Force Re-Translation (`--force` / `-f`)**: Overwrites and re-translates all strings from scratch:
+  ```bash
+  python -m kalanjiyam.scripts.translate_catalogs --engine llm_gemma --force
+  ```
+* **Graceful Exit**: Pressing `Ctrl+C` at any time safely saves all translated entries and automatically compiles `messages.mo` before exiting.
+
+### 3. Docker Staging & Production Commands
+
+#### Run Translation in Container (with Proxy Bypass):
+```bash
+NO_PROXY="*" docker exec -it kalanjiyam-web-staging python -m kalanjiyam.scripts.translate_catalogs --engine llm_gemma
+```
+
+#### Sync Translated Catalogs to Host Repository:
+```bash
+cd ~/kalanjiyam-dev/kalanjiyam
+docker exec kalanjiyam-web-staging tar -C /app/kalanjiyam -cf - translations | tar -xf -
+```
+
+#### Compile & Reload Web App:
+```bash
+# 1. Compile .po to .mo inside container
+docker exec -it kalanjiyam-web-staging pybabel compile -d kalanjiyam/translations
+
+# 2. Restart container to reload memory cache
+docker restart kalanjiyam-web-staging
+```

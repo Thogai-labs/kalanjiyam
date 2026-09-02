@@ -700,29 +700,42 @@ class LlmGemmaTranslateEngine(TranslationEngine):
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.1,
             }
-            with httpx.Client(timeout=timeout) as client:
-                res = client.post(url, json=chat_payload, headers=headers)
-            if res.status_code >= 400:
-                detail = res.text
+            last_err = None
+            for attempt in range(1, 4):
                 try:
-                    res_json = res.json()
-                    detail = (
-                        res_json.get("detail")
-                        or res_json.get("error", {}).get("message")
-                        or detail
-                    )
-                except Exception:
-                    pass
-                raise RuntimeError(
-                    f"LLM Gemma translation service error ({res.status_code}): {detail}"
-                )
-            res_json = res.json()
-            choices = res_json.get("choices") or []
-            translated_str = ""
-            if choices and isinstance(choices, list):
-                msg = choices[0].get("message") or {}
-                translated_str = msg.get("content") or ""
-            return translated_str, res_json
+                    # trust_env=False prevents institutional squid proxies from intercepting direct IPs
+                    with httpx.Client(timeout=timeout, trust_env=False) as client:
+                        res = client.post(url, json=chat_payload, headers=headers)
+                    if res.status_code == 200:
+                        res_json = res.json()
+                        choices = res_json.get("choices") or []
+                        translated_str = ""
+                        if choices and isinstance(choices, list):
+                            msg = choices[0].get("message") or {}
+                            translated_str = msg.get("content") or ""
+                        return translated_str, res_json
+                    elif res.status_code == 503 or res.status_code == 502:
+                        time.sleep(2 * attempt)
+                        last_err = RuntimeError(f"Service returned {res.status_code} (attempt {attempt}/3)")
+                        continue
+                    else:
+                        detail = res.text
+                        try:
+                            res_json = res.json()
+                            detail = (
+                                res_json.get("detail")
+                                or res_json.get("error", {}).get("message")
+                                or detail
+                            )
+                        except Exception:
+                            pass
+                        raise RuntimeError(
+                            f"LLM Gemma translation service error ({res.status_code}): {detail}"
+                        )
+                except (httpx.TransportError, httpx.TimeoutException) as exc:
+                    last_err = exc
+                    time.sleep(2 * attempt)
+            raise RuntimeError(f"LLM Gemma translation request failed after 3 attempts: {last_err}")
 
         def _call_ocr(url: str):
             ocr_payload = {
@@ -735,7 +748,7 @@ class LlmGemmaTranslateEngine(TranslationEngine):
                 "source_lang": source_lang,
                 "target_lang": target_lang,
             }
-            with httpx.Client(timeout=timeout) as client:
+            with httpx.Client(timeout=timeout, trust_env=False) as client:
                 res = client.post(url, json=ocr_payload, headers=headers)
             if res.status_code >= 400:
                 detail = res.text

@@ -111,15 +111,20 @@ def batch_translate_strings(
     # Fallback to translating string by string if batch fails
     fallback_results = {}
     for key, text in items:
-        try:
-            resp = engine.translate(
-                text=text,
-                source_lang=source_lang,
-                target_lang=target_lang,
-            )
-            fallback_results[key] = (resp.translated_text if hasattr(resp, "translated_text") else str(resp)).strip()
-        except Exception as err:
-            logger.error(f"Failed to translate item '{text[:30]}...': {err}")
+        for attempt in range(1, 4):
+            try:
+                resp = engine.translate(
+                    text=text,
+                    source_lang=source_lang,
+                    target_lang=target_lang,
+                )
+                fallback_results[key] = (resp.translated_text if hasattr(resp, "translated_text") else str(resp)).strip()
+                break
+            except Exception as err:
+                if attempt == 3:
+                    logger.error(f"Failed to translate item '{text[:30]}...': {err}")
+                else:
+                    time.sleep(1.5 * attempt)
     return fallback_results
 
 
@@ -233,9 +238,12 @@ def main():
         help="Number of strings to batch per translation request (default: 20)",
     )
     parser.add_argument(
+        "--force",
+        "-f",
         "--overwrite",
+        dest="overwrite",
         action="store_true",
-        help="Overwrite existing translations",
+        help="Force re-translation of all strings (overwrites already translated entries)",
     )
     parser.add_argument(
         "--dry-run",
