@@ -51,13 +51,13 @@ these components in our help text and documentation.
 {# A small status badge we display in the page header. #}
 {% macro status_badge(status) %}
 {% if status == 'reviewed-0' %}
-<span class="px-3 py-1 rounded-full text-xs bg-red-100 text-red-800 border border-red-200">{{ _('Needs more work') }}</span>
+<span class="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-800 border border-red-200 whitespace-nowrap shrink-0">{{ _('Needs more work') }}</span>
 {% elif status == 'reviewed-1' %}
-<span class="px-3 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800 border border-yellow-200">{{ _('Proofed once') }}</span>
+<span class="px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-800 border border-yellow-200 whitespace-nowrap shrink-0">{{ _('Proofed once') }}</span>
 {% elif status == 'reviewed-2' %}
-<span class="px-3 py-1 rounded-full text-xs bg-emerald-100 text-emerald-800 border border-emerald-200">{{ _('Proofed twice') }}</span>
+<span class="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap shrink-0">{{ _('Proofed twice') }}</span>
 {% elif status == 'skip' %}
-<span class="px-3 py-1 rounded-full text-xs bg-slate-100 text-slate-800 border border-slate-200">{{ _('Not relevant') }}</span>
+<span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-800 border border-slate-200 whitespace-nowrap shrink-0">{{ _('Not relevant') }}</span>
 {% endif %}
 {% endmacro %}
 
@@ -65,30 +65,30 @@ these components in our help text and documentation.
 {# Compact toolbar for book editing: navigation + OCR/tools + publish. #}
 {% macro book_toolbar(ctx, page_number, image_number, num_images, ocr_status="unavailable", engine_choices=[], can_save=false, translation_engines=[], cur_page_issues=[], default_translation_value="1", voice_edit_enabled=false) %}
 {% set project = ctx.project %}
-{% set button_css = "p-2 rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors" %}
+{% set button_css = "p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors shrink-0" %}
 <header class="book-editor-toolbar">
   <div class="book-editor-toolbar-left">
-    <a class="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+    <a class="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors shrink-0"
        href="{{ url_for('proofing.project.summary', slug=project.slug) }}"
        title="{{ _('Back to Project Summary') }}">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path>
       </svg>
     </a>
-    <a class="book-editor-back text-slate-600 hover:text-slate-900 truncate max-w-[12rem] sm:max-w-xs"
+    <a class="book-editor-back text-slate-600 hover:text-slate-900 truncate max-w-[8rem] sm:max-w-[12rem] xl:max-w-xs"
        href="{{ url_for('proofing.project.summary', slug=project.slug) }}"
        title="{{ project.display_title }}">
       {{ project.display_title }}
     </a>
     <span class="book-editor-page-label">{{ image_number }}</span>
     {% if image_number != page_number %}
-    <span class="text-xs text-slate-400 hidden sm:inline">({{ _('Page') }} {{ page_number }})</span>
+    <span class="text-xs text-slate-400 hidden xl:inline shrink-0">({{ _('Page') }} {{ page_number }})</span>
     {% endif %}
     {{ status_badge(ctx.cur.status.name) }}
     {% if cur_page_issues %}
-    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-sm" title="{{ _('Condition: %(issues)s', issues=cur_page_issues|join(', ')) }}">
-      <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-      <span class="truncate max-w-[130px]">{{ cur_page_issues|join(', ') }}</span>
+    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-sm shrink-0" title="{{ _('Condition: %(issues)s', issues=cur_page_issues|join(', ')) }}">
+      <span class="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+      <span class="truncate max-w-[75px] xl:max-w-[120px]">{{ cur_page_issues|join(', ') }}</span>
     </span>
     {% endif %}
   </div>
@@ -111,7 +111,7 @@ these components in our help text and documentation.
             title="{{ _('Blocks the OCR model was unsure about. Click to review the next one. Red: likely error (<50%%), amber: check (<75%%), blue edge: human-edited.') }}">
       <span class="ocr-review-dot"></span>
       <span x-text="uncertainCount"></span>
-      <span class="hidden sm:inline">{{ _('to review') }}</span>
+      <span class="hidden xl:inline">{{ _('to review') }}</span>
     </button>
   </div>
 
@@ -130,7 +130,7 @@ these components in our help text and documentation.
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
     </a>
 
-    <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block" x-show="!isDocx" x-cloak></span>
+    <span class="w-px h-4 bg-slate-200 mx-0.5 hidden sm:block shrink-0" x-show="!isDocx" x-cloak></span>
 
     {# OCR — reuse dropdown from menu_bar #}
     <div x-show="!isDocx" x-cloak class="flex items-center">
@@ -142,7 +142,7 @@ these components in our help text and documentation.
       {{ _book_enhanced_ocr_controls(ocr_status, engine_choices, button_css) }}
     </div>
 
-    <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block" x-show="!isDocx" x-cloak></span>
+    <span class="w-px h-4 bg-slate-200 mx-0.5 hidden sm:block shrink-0" x-show="!isDocx" x-cloak></span>
 
     {# Translation #}
     {{ _book_translation_controls(button_css, translation_engines, default_translation_value) }}
@@ -154,7 +154,7 @@ these components in our help text and documentation.
     </div>
     {% endif %}
 
-    <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></span>
+    <span class="w-px h-4 bg-slate-200 mx-0.5 hidden sm:block shrink-0"></span>
 
     {# Version Selector Dropdown #}
     <div class="relative" x-data="{ open: false }" @click.outside="open=false">
@@ -164,7 +164,7 @@ these components in our help text and documentation.
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
         </svg>
-        <span class="text-xs font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 hidden lg:inline" x-text="getVersionDisplayName(activeVersion)"></span>
+        <span class="text-xs font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 hidden 2xl:inline" x-text="getVersionDisplayName(activeVersion)"></span>
       </button>
       <div x-show="open" x-cloak class="dropdown-pane w-80 right-0 left-auto" style="display: none;">
         <div class="p-2 border-b border-slate-100 font-semibold text-xs text-slate-500 uppercase tracking-wider">
@@ -203,7 +203,7 @@ these components in our help text and documentation.
       </div>
     </div>
 
-    <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></span>
+    <span class="w-px h-4 bg-slate-200 mx-0.5 hidden sm:block shrink-0"></span>
 
     {# Page Download Dropdown #}
     <div class="relative" x-data="{ open: false }" @click.outside="open=false">
@@ -286,7 +286,7 @@ these components in our help text and documentation.
       </div>
     </div>
 
-    <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></span>
+    <span class="w-px h-4 bg-slate-200 mx-0.5 hidden sm:block shrink-0"></span>
 
     <button type="button" class="{{ button_css }}"
             @click.prevent="showMetaPanel = !showMetaPanel"
@@ -304,7 +304,7 @@ these components in our help text and documentation.
     </button>
     {% endif %}
 
-    <span class="book-editor-unsaved text-xs text-amber-600 font-medium" x-show="hasUnsavedChanges" x-cloak>{{ _('Unsaved') }}</span>
+    <span class="book-editor-unsaved text-xs text-amber-600 font-medium shrink-0" x-show="hasUnsavedChanges" x-cloak>{{ _('Unsaved') }}</span>
   </div>
 </header>
 {% endmacro %}
