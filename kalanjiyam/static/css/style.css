@@ -782,7 +782,7 @@
 
   .voice-change {
     @apply self-start w-full text-left rounded-xl border border-slate-200
-      bg-white overflow-hidden hover:border-violet-300 transition-colors;
+      bg-white overflow-hidden hover:border-royalblue/40 transition-colors;
   }
 
   .voice-change--bad { @apply border-rose-200 bg-rose-50/40 cursor-default; }
@@ -796,7 +796,7 @@
   .voice-tag {
     @apply text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0;
   }
-  .voice-tag--ok  { @apply bg-violet-100 text-violet-700; }
+  .voice-tag--ok  { @apply bg-royalblue/10 text-royalblue; }
   .voice-tag--bad { @apply bg-rose-100 text-rose-700; }
 
   .voice-diff { @apply px-2.5 pb-2 space-y-0.5; }
@@ -934,18 +934,16 @@
     @apply border-l-2 border-l-sky-400;
   }
 
-  /* A block just changed by voice. Violet, deliberately unlike the amber
-     selection ring and the red/amber confidence tints -- the user has to be
-     able to tell "the model changed this" from "this is selected". */
+  /* A block just changed by voice. */
   .ocr-replica-block.voice-edited,
   .voice-edited {
-    @apply ring-2 ring-violet-500 bg-violet-50;
+    @apply ring-2 ring-royalblue bg-blue-50/70;
     animation: voiceEditFlash 0.5s ease-out;
   }
 
   @keyframes voiceEditFlash {
-    from { background-color: rgb(196 181 253); }
-    to   { background-color: rgb(245 243 255); }
+    from { background-color: rgb(191 219 254); }
+    to   { background-color: rgb(239 246 255); }
   }
 
   .ocr-review-chip {

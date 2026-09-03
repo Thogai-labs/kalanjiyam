@@ -382,7 +382,7 @@ these components in our help text and documentation.
 {% macro _book_enhanced_ocr_controls(ocr_status, engine_choices, button_css) %}
 {% set is_restricted_ocr = is_restricted_ocr_user(current_user) %}
 <div class="relative" @click.outside="enhancedOcrDropdownOpen=false">
-  <button class="{{ button_css }} flex items-center justify-center text-violet-600 hover:text-violet-800 hover:bg-violet-50 transition-colors"
+  <button class="{{ button_css }} flex items-center justify-center text-royalblue hover:text-blue-700 hover:bg-royalblue/10 transition-colors"
      @click.prevent="enhancedOcrDropdownOpen=!enhancedOcrDropdownOpen"
      title="{{ _('Enhanced OCR') }}">
     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -393,7 +393,7 @@ these components in our help text and documentation.
     <!-- Header (Sticky Top) -->
     <div class="px-3 py-2 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/50">
       <div class="flex items-center gap-1.5 font-semibold text-xs text-slate-800">
-        <svg class="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <svg class="w-4 h-4 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"></path>
         </svg>
         <span>{{ _('Enhanced OCR') }}</span>
@@ -408,7 +408,7 @@ these components in our help text and documentation.
         <div class="grid grid-cols-2 gap-1.5">
           <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'document_cleanup'"
                   class="p-1.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between"
-                  :class="selectedEnhancementProfile === 'document_cleanup' ? 'border-violet-500 bg-violet-50/70 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
+                  :class="selectedEnhancementProfile === 'document_cleanup' ? 'border-royalblue bg-royalblue/10 text-royalblue font-semibold ring-1 ring-royalblue' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
             <div class="flex items-center justify-between w-full">
               <span class="text-xs">{{ _('Document Cleanup') }}</span>
             </div>
@@ -417,31 +417,31 @@ these components in our help text and documentation.
 
           <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'bg_clahe'"
                   class="p-1.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between"
-                  :class="selectedEnhancementProfile === 'bg_clahe' || selectedEnhancementProfile === 'background_clahe' ? 'border-violet-500 bg-violet-50/70 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
+                  :class="selectedEnhancementProfile === 'bg_clahe' || selectedEnhancementProfile === 'background_clahe' ? 'border-royalblue bg-royalblue/10 text-royalblue font-semibold ring-1 ring-royalblue' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
             <div class="text-xs">{{ _('BG + CLAHE') }}</div>
             <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">{{ _('Flatten lighting & contrast') }}</span>
           </button>
 
           <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'sharpen'"
                   class="p-1.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between"
-                  :class="selectedEnhancementProfile === 'sharpen' ? 'border-violet-500 bg-violet-50/70 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
+                  :class="selectedEnhancementProfile === 'sharpen' ? 'border-royalblue bg-royalblue/10 text-royalblue font-semibold ring-1 ring-royalblue' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
             <div class="text-xs">{{ _('Sharpen') }}</div>
             <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">{{ _('Enhance glyph edges') }}</span>
           </button>
 
           <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'text_enhancement'"
                   class="p-1.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between"
-                  :class="selectedEnhancementProfile === 'text_enhancement' ? 'border-violet-500 bg-violet-50/70 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
+                  :class="selectedEnhancementProfile === 'text_enhancement' ? 'border-royalblue bg-royalblue/10 text-royalblue font-semibold ring-1 ring-royalblue' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
             <div class="text-xs">{{ _('Text Enhancement') }}</div>
             <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">{{ _('Improve faint text') }}</span>
           </button>
 
           <button type="button" @click.prevent.stop="selectedEnhancementProfile = 'hybrid_binarization'"
                   class="p-1.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between col-span-2"
-                  :class="selectedEnhancementProfile === 'hybrid_binarization' || selectedEnhancementProfile === 'hybrid' ? 'border-violet-500 bg-violet-50/70 text-violet-950 font-semibold ring-1 ring-violet-500' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
+                  :class="selectedEnhancementProfile === 'hybrid_binarization' || selectedEnhancementProfile === 'hybrid' ? 'border-royalblue bg-royalblue/10 text-royalblue font-semibold ring-1 ring-royalblue' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
             <div class="flex items-center justify-between w-full">
               <span class="text-xs font-medium">{{ _('Hybrid Binarization') }}</span>
-              <span class="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-violet-100 text-violet-700 uppercase tracking-wider">{{ _('Manuscript') }}</span>
+              <span class="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-royalblue/10 text-royalblue uppercase tracking-wider">{{ _('Manuscript') }}</span>
             </div>
             <span class="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">{{ _('Adaptive TSMO + Nick for historical paper & bleed-through') }}</span>
           </button>
@@ -498,7 +498,7 @@ these components in our help text and documentation.
       </button>
 
       <button type="button"
-              class="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-medium rounded-lg py-2 text-xs hover:from-violet-700 hover:to-indigo-700 shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              class="w-full bg-royalblue hover:bg-blue-600 text-white font-medium rounded-lg py-2 text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               @click.prevent.stop="runEnhancedOCR(); enhancedOcrDropdownOpen=false"
               :disabled="isRunningEnhancedOCR">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" x-show="!isRunningEnhancedOCR">
@@ -528,7 +528,7 @@ these components in our help text and documentation.
     <!-- Modal Header -->
     <div class="px-5 py-3.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50/80 shrink-0">
       <div class="flex items-center gap-2.5">
-        <div class="w-8 h-8 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center">
+        <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"></path>
           </svg>
@@ -543,27 +543,27 @@ these components in our help text and documentation.
       <div class="flex items-center gap-1 bg-slate-200/70 p-1 rounded-xl">
         <button type="button" @click="enhancementPreviewProfile = 'hybrid_binarization'; loadEnhancementPreview()"
                 class="px-2.5 py-1 text-xs rounded-lg font-medium transition cursor-pointer"
-                :class="enhancementPreviewProfile === 'hybrid_binarization' || enhancementPreviewProfile === 'hybrid' ? 'bg-white text-violet-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'">
+                :class="enhancementPreviewProfile === 'hybrid_binarization' || enhancementPreviewProfile === 'hybrid' ? 'bg-white text-royalblue shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'">
           {{ _('Hybrid Binarization') }}
         </button>
         <button type="button" @click="enhancementPreviewProfile = 'document_cleanup'; loadEnhancementPreview()"
                 class="px-2.5 py-1 text-xs rounded-lg font-medium transition cursor-pointer"
-                :class="enhancementPreviewProfile === 'document_cleanup' ? 'bg-white text-violet-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'">
+                :class="enhancementPreviewProfile === 'document_cleanup' ? 'bg-white text-royalblue shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'">
           {{ _('Cleanup') }}
         </button>
         <button type="button" @click="enhancementPreviewProfile = 'bg_clahe'; loadEnhancementPreview()"
                 class="px-2.5 py-1 text-xs rounded-lg font-medium transition cursor-pointer"
-                :class="enhancementPreviewProfile === 'bg_clahe' || enhancementPreviewProfile === 'background_clahe' ? 'bg-white text-violet-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'">
+                :class="enhancementPreviewProfile === 'bg_clahe' || enhancementPreviewProfile === 'background_clahe' ? 'bg-white text-royalblue shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'">
           {{ _('BG+CLAHE') }}
         </button>
         <button type="button" @click="enhancementPreviewProfile = 'sharpen'; loadEnhancementPreview()"
                 class="px-2.5 py-1 text-xs rounded-lg font-medium transition cursor-pointer"
-                :class="enhancementPreviewProfile === 'sharpen' ? 'bg-white text-violet-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'">
+                :class="enhancementPreviewProfile === 'sharpen' ? 'bg-white text-royalblue shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'">
           {{ _('Sharpen') }}
         </button>
         <button type="button" @click="enhancementPreviewProfile = 'text_enhancement'; loadEnhancementPreview()"
                 class="px-2.5 py-1 text-xs rounded-lg font-medium transition cursor-pointer"
-                :class="enhancementPreviewProfile === 'text_enhancement' ? 'bg-white text-violet-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'">
+                :class="enhancementPreviewProfile === 'text_enhancement' ? 'bg-white text-royalblue shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'">
           {{ _('Text Boost') }}
         </button>
       </div>
@@ -584,17 +584,17 @@ these components in our help text and documentation.
         <span class="text-slate-500 font-medium mr-1">{{ _('View:') }}</span>
         <button type="button" @click="enhancementPreviewViewMode = 'split'"
                 class="px-2.5 py-1 rounded-md transition font-medium cursor-pointer"
-                :class="enhancementPreviewViewMode === 'split' ? 'bg-violet-100 text-violet-800 font-semibold' : 'text-slate-600 hover:bg-slate-100'">
+                :class="enhancementPreviewViewMode === 'split' ? 'bg-royalblue/10 text-royalblue font-semibold' : 'text-slate-600 hover:bg-slate-100'">
           {{ _('Side-by-Side (Split)') }}
         </button>
         <button type="button" @click="enhancementPreviewViewMode = 'preprocessed'"
                 class="px-2.5 py-1 rounded-md transition font-medium cursor-pointer"
-                :class="enhancementPreviewViewMode === 'preprocessed' ? 'bg-violet-100 text-violet-800 font-semibold' : 'text-slate-600 hover:bg-slate-100'">
+                :class="enhancementPreviewViewMode === 'preprocessed' ? 'bg-royalblue/10 text-royalblue font-semibold' : 'text-slate-600 hover:bg-slate-100'">
           {{ _('Preprocessed Only') }}
         </button>
         <button type="button" @click="enhancementPreviewViewMode = 'original'"
                 class="px-2.5 py-1 rounded-md transition font-medium cursor-pointer"
-                :class="enhancementPreviewViewMode === 'original' ? 'bg-violet-100 text-violet-800 font-semibold' : 'text-slate-600 hover:bg-slate-100'">
+                :class="enhancementPreviewViewMode === 'original' ? 'bg-royalblue/10 text-royalblue font-semibold' : 'text-slate-600 hover:bg-slate-100'">
           {{ _('Original Scan Only') }}
         </button>
       </div>
@@ -631,7 +631,7 @@ these components in our help text and documentation.
         {% if engine_choices %}
         <div class="flex items-center gap-1 bg-slate-100/90 rounded-lg px-2 py-1 border border-slate-200">
           <label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{{ _('OCR:') }}</label>
-          <select class="text-xs bg-transparent border-0 font-semibold text-violet-900 focus:ring-0 py-0 pl-1 pr-6 cursor-pointer"
+          <select class="text-xs bg-transparent border-0 font-semibold text-slate-800 focus:ring-0 py-0 pl-1 pr-6 cursor-pointer"
                   x-model="selectedEngine"
                   @change="selectOcrEngine(selectedEngine, true)">
             {% for e in engine_choices %}
@@ -642,7 +642,7 @@ these components in our help text and documentation.
         {% else %}
         <div class="text-[11px] text-slate-500">
           <span class="font-medium">{{ _('Engine:') }}</span>
-          <span class="font-bold text-violet-700" x-text="getOcrEngineName(selectedEngine)"></span>
+          <span class="font-bold text-royalblue" x-text="getOcrEngineName(selectedEngine)"></span>
         </div>
         {% endif %}
       </div>
@@ -661,7 +661,7 @@ these components in our help text and documentation.
       <div x-show="enhancementPreviewLoading"
            class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs flex flex-col items-center justify-center gap-2 text-white z-20 pointer-events-none"
            x-cloak>
-        <div class="w-8 h-8 rounded-full border-2 border-white/20 border-t-violet-400 animate-spin"></div>
+        <div class="w-8 h-8 rounded-full border-2 border-white/20 border-t-royalblue animate-spin"></div>
         <span class="text-xs text-slate-200 font-medium">{{ _('Applying enhancement profile ...') }}</span>
       </div>
 
@@ -683,9 +683,9 @@ these components in our help text and documentation.
 
         <!-- Preprocessed Side -->
         <div class="flex flex-col h-full bg-slate-900 rounded-xl overflow-hidden border border-slate-800 relative">
-          <div class="px-3 py-1.5 bg-violet-950/80 text-violet-200 text-[11px] font-semibold flex items-center justify-between shrink-0 border-b border-violet-800/50 z-10">
+          <div class="px-3 py-1.5 bg-slate-900/90 text-blue-200 text-[11px] font-semibold flex items-center justify-between shrink-0 border-b border-blue-900/50 z-10">
             <span x-text="'{{ _('Preprocessed:') }} ' + (enhancementPreviewProfile || '').replace('_', ' ').toUpperCase()"></span>
-            <span class="text-[10px] text-violet-300 font-mono" x-text="Math.round(previewZoom * 100) + '%'"></span>
+            <span class="text-[10px] text-blue-300 font-mono" x-text="Math.round(previewZoom * 100) + '%'"></span>
           </div>
           <div class="flex-1 overflow-hidden p-2 flex items-center justify-center relative">
             <img :src="enhancementPreviewUrl"
@@ -742,8 +742,8 @@ these components in our help text and documentation.
         
         <button type="button"
                 @click="selectedEnhancementProfile = enhancementPreviewProfile; runEnhancedOCR(); enhancementPreviewModalOpen = false"
-                class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-violet-100 text-violet-900 hover:bg-violet-200 border border-violet-300 transition cursor-pointer flex items-center gap-1.5 shadow-xs">
-          <svg class="w-3.5 h-3.5 text-violet-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-royalblue/10 text-royalblue hover:bg-royalblue/20 border border-royalblue/30 transition cursor-pointer flex items-center gap-1.5 shadow-xs">
+          <svg class="w-3.5 h-3.5 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"></path>
           </svg>
           <span x-text="'{{ _("Run Enhanced OCR (") }}' + getOcrEngineName(selectedEngine) + ')'"></span>
@@ -894,7 +894,7 @@ these components in our help text and documentation.
 {% macro _book_voice_controls(button_css) %}
 <button type="button"
         class="{{ button_css }} relative"
-        :class="voicePanelOpen ? 'bg-violet-50 text-violet-700' : (voiceActive ? 'text-rose-600' : '')"
+        :class="voicePanelOpen ? 'bg-royalblue/10 text-royalblue' : (voiceActive ? 'text-rose-600' : '')"
         @click.prevent="toggleVoicePanel()"
         :title="voiceActive ? '{{ _('Voice editing is on') }}' : '{{ _('Voice editing (Alt+M)') }}'">
   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
