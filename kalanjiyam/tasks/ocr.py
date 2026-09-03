@@ -27,6 +27,7 @@ def _run_ocr_for_page_inner(
     page_slug: str,
     engine: str = "google",
     language: str = "auto",
+    force: bool = False,
 ):
     """Must run in the application context."""
     import json
@@ -34,6 +35,7 @@ def _run_ocr_for_page_inner(
 
     from kalanjiyam.models.batch import BatchItem, BatchJob, BatchOcrPage
     from kalanjiyam.utils.storage import get_storage
+    from kalanjiyam.utils.ocr_runner import normalize_engine, run_ocr
 
     page_start_time = time.time()
     flask_app = create_config_only_app(app_env)
@@ -42,12 +44,173 @@ def _run_ocr_for_page_inner(
         if bot_user is None:
             raise ValueError(f'User "{consts.BOT_USERNAME}" is not defined.')
 
+        session = q.get_session()
+        project = q.project(project_slug)
+        if project is None:
+            raise ValueError(f'Project "{project_slug}" not found.')
+
+        page = q.page(project.id, page_slug)
+        if page is None:
+            raise ValueError(
+                f'Page "{page_slug}" not found in project "{project_slug}".'
+            )
+
+        engine = normalize_engine(engine)
+        version_key = f"ocr:{engine}"
+
+        # Resolve version_key and current version of the track
+        pv = (
+            session.query(db.PageVersion)
+            .filter_by(page_id=page.id, version_key=version_key)
+            .first()
+        )
+        current_ver = pv.version if pv else 0
+
+        # Check if the bot has already generated an OCR revision for this same engine track
+        existing_bot_revision = None
+        if pv and not force:
+            existing_bot_revision = (
+                session.query(db.Revision)
+                .filter_by(
+                    page_id=page.id,
+                    page_version_id=pv.id,
+                    author_id=bot_user.id,
+                )
+                .order_by(db.Revision.created.desc())
+                .first()
+            )
+
+        if existing_bot_revision:
+            logging.info(
+                f"OCR revision already exists for {project_slug}/{page_slug} with engine '{engine}' ({version_key}). Skipping OCR."
+            )
+            # Record/update UI Batch OCR metrics in BatchItem / BatchOcrPage
+            try:
+                batch_item = (
+                    session.query(BatchItem)
+                    .join(BatchJob)
+                    .filter(
+                        BatchItem.project_id == project.id,
+                        BatchJob.job_type == "UI_BATCH_OCR",
+                    )
+                    .order_by(BatchItem.id.desc())
+                    .first()
+                )
+                if not batch_item:
+                    batch_item = (
+                        session.query(BatchItem)
+                        .filter_by(project_id=project.id)
+                        .order_by(BatchItem.id.desc())
+                        .first()
+                    )
+                if batch_item:
+                    p_num = page.order
+                    ocr_page = (
+                        session.query(BatchOcrPage)
+                        .filter_by(batch_item_id=batch_item.id, page_number=p_num)
+                        .first()
+                    )
+                    if not ocr_page and page_slug.isdigit():
+                        ocr_page = (
+                            session.query(BatchOcrPage)
+                            .filter_by(
+                                batch_item_id=batch_item.id, page_number=int(page_slug)
+                            )
+                            .first()
+                        )
+                    if not ocr_page:
+                        ocr_page = BatchOcrPage(
+                            batch_item_id=batch_item.id,
+                            chunk_id=None,
+                            page_number=p_num,
+                            status="PENDING",
+                        )
+
+                    plain_text = existing_bot_revision.content or ""
+                    doc_dict = existing_bot_revision.document or {}
+                    doc_json_str = json.dumps(doc_dict) if doc_dict else ""
+                    blocks = doc_dict.get("blocks", []) if isinstance(doc_dict, dict) else []
+
+                    ocr_page.ocr_latency_ms = ocr_page.ocr_latency_ms or 0.0
+                    ocr_page.status = "COMPLETED"
+                    ocr_page.completed_at = ocr_page.completed_at or datetime.utcnow()
+                    ocr_page.engine = engine
+                    ocr_page.chars = len(plain_text) if plain_text else 0
+                    ocr_page.blocks = len(blocks) if blocks else None
+                    ocr_page.ocr_data_size_bytes = len(plain_text.encode("utf-8")) + len(doc_json_str.encode("utf-8"))
+
+                    image_path = get_page_image_filepath(project_slug, page_slug)
+                    try:
+                        if image_path and image_path.exists():
+                            ocr_page.extracted_image_size_bytes = image_path.stat().st_size
+                    except Exception:
+                        pass
+
+                    session.add(ocr_page)
+                    session.flush()
+
+                    # Recalculate cumulative item metrics from all completed pages
+                    item_pages = (
+                        session.query(BatchOcrPage)
+                        .filter_by(batch_item_id=batch_item.id, status="COMPLETED")
+                        .all()
+                    )
+                    batch_item.engine = engine
+                    batch_item.total_ocr_latency_ms = sum(
+                        p.ocr_latency_ms or 0 for p in item_pages
+                    )
+                    batch_item.extracted_images_size_bytes = sum(
+                        p.extracted_image_size_bytes or 0 for p in item_pages
+                    )
+                    batch_item.cropped_images_size_bytes = sum(
+                        p.cropped_image_size_bytes or 0 for p in item_pages
+                    )
+                    batch_item.ocr_data_size_bytes = sum(
+                        p.ocr_data_size_bytes or 0 for p in item_pages
+                    )
+
+                    conf_list = [
+                        p.confidence for p in item_pages if p.confidence is not None
+                    ]
+                    batch_item.avg_confidence = (
+                        (sum(conf_list) / len(conf_list)) if conf_list else None
+                    )
+                    p05_list = [p.p05 for p in item_pages if p.p05 is not None]
+                    batch_item.avg_p05 = (
+                        (sum(p05_list) / len(p05_list)) if p05_list else None
+                    )
+                    batch_item.total_blocks = sum(p.blocks or 0 for p in item_pages)
+                    batch_item.total_chars = sum(p.chars or 0 for p in item_pages)
+                    batch_item.total_engine_latency_ms = sum(
+                        p.engine_latency_ms or 0 for p in item_pages
+                    )
+
+                    # Update status if all pages completed
+                    completed_count = len(item_pages)
+                    target_total = (
+                        batch_item.total_pages
+                        or session.query(BatchOcrPage)
+                        .filter_by(batch_item_id=batch_item.id)
+                        .count()
+                        or 1
+                    )
+                    if completed_count >= target_total:
+                        batch_item.status = "COMPLETED"
+                        batch_item.completed_at = datetime.utcnow()
+                        if batch_item.job:
+                            batch_item.job.status = "COMPLETED"
+                            batch_item.job.completed_at = datetime.utcnow()
+
+                    session.commit()
+            except Exception as metric_err:
+                logging.warning(f"Error recording UI batch OCR metrics for skipped page: {metric_err}")
+
+            return existing_bot_revision.id
+
         # The actual API call.
         image_path = get_page_image_filepath(project_slug, page_slug)
 
-        from kalanjiyam.utils.ocr_runner import normalize_engine, run_ocr
-
-        engine = normalize_engine(engine)
+        ensure_ocr_quota_for_project(project)
         ocr_response = run_ocr(image_path, engine_name=engine, language=language)
 
         # Extract visual elements if blocks are returned
@@ -64,30 +227,9 @@ def _run_ocr_for_page_inner(
             except Exception as e:
                 logging.exception(f"Failed to crop visual elements: {e}")
 
-        session = q.get_session()
-        project = q.project(project_slug)
-        if project is None:
-            raise ValueError(f'Project "{project_slug}" not found.')
-        ensure_ocr_quota_for_project(project)
-
-        page = q.page(project.id, page_slug)
-        if page is None:
-            raise ValueError(
-                f'Page "{page_slug}" not found in project "{project_slug}".'
-            )
-
         doc = apply_ocr_to_page(page, ocr_response, engine, image_path=image_path)
         session.add(page)
         session.commit()
-
-        # Resolve version_key and current version of the track
-        version_key = f"ocr:{engine}"
-        pv = (
-            session.query(db.PageVersion)
-            .filter_by(page_id=page.id, version_key=version_key)
-            .first()
-        )
-        current_ver = pv.version if pv else 0
 
         summary = "OCR run"
         try:
@@ -274,6 +416,7 @@ def run_ocr_for_page(
     page_slug: str,
     engine: str = "1",  # Default to Google OCR (1)
     language: str = "auto",
+    force: bool = False,
 ):
     _run_ocr_for_page_inner(
         app_env,
@@ -281,6 +424,7 @@ def run_ocr_for_page(
         page_slug,
         engine,
         language,
+        force=force,
     )
 
 
@@ -402,13 +546,17 @@ def _run_enhanced_ocr_for_page_inner(
     profile: str = "document_cleanup",
     language: str = "auto",
     save_enhanced_images: bool = False,
+    force: bool = False,
 ):
     """Run Enhanced OCR in application context."""
     import io
 
     from PIL import Image
 
-    from kalanjiyam.utils.document_storage import save_page_enhanced_ocr
+    from kalanjiyam.utils.document_storage import (
+        load_page_enhanced_ocr,
+        save_page_enhanced_ocr,
+    )
     from kalanjiyam.utils.enhanced_ocr import run_enhanced_ocr
     from kalanjiyam.utils.image_preprocessing import (
         preprocess_image,
@@ -434,10 +582,49 @@ def _run_enhanced_ocr_for_page_inner(
         if project is None:
             raise ValueError(f'Project "{project_slug}" not found.')
 
+        page = q.page(project.id, page_slug)
+        if page is None:
+            raise ValueError(
+                f'Page "{page_slug}" not found in project "{project_slug}".'
+            )
+
         org_slug = get_project_org_slug(project)
         image_path = get_page_image_filepath(project_slug, page_slug, org_slug=org_slug)
         engine = normalize_engine(engine)
         profile = validate_enhancement_profile(profile)
+        version_key = f"ocr:enhanced:{engine}:{profile}"
+
+        pv = (
+            session.query(db.PageVersion)
+            .filter_by(page_id=page.id, version_key=version_key)
+            .first()
+        )
+        current_ver = pv.version if pv else 0
+
+        # Check if the bot has already generated an Enhanced OCR revision for this engine & profile
+        existing_bot_revision = None
+        if pv and not force:
+            existing_bot_revision = (
+                session.query(db.Revision)
+                .filter_by(
+                    page_id=page.id,
+                    page_version_id=pv.id,
+                    author_id=bot_user.id,
+                )
+                .order_by(db.Revision.created.desc())
+                .first()
+            )
+
+        if existing_bot_revision:
+            logging.info(
+                f"Enhanced OCR revision already exists for {project_slug}/{page_slug} with engine '{engine}' and profile '{profile}' ({version_key}). Skipping Enhanced OCR."
+            )
+            cached_payload = load_page_enhanced_ocr(page, engine, profile)
+            if cached_payload:
+                return cached_payload
+            if existing_bot_revision.document:
+                return existing_bot_revision.document
+            return {"text_content": existing_bot_revision.content or "", "blocks": []}
 
         # If save_enhanced_images is True, replace active page image with preprocessed version
         if save_enhanced_images and image_path and image_path.exists():
@@ -505,12 +692,6 @@ def _run_enhanced_ocr_for_page_inner(
 
         ensure_ocr_quota_for_project(project)
 
-        page = q.page(project.id, page_slug)
-        if page is None:
-            raise ValueError(
-                f'Page "{page_slug}" not found in project "{project_slug}".'
-            )
-
         doc = apply_ocr_to_page(page, ocr_response, engine, image_path=image_path)
         session.add(page)
         session.commit()
@@ -523,15 +704,6 @@ def _run_enhanced_ocr_for_page_inner(
             image_height=page.page_height,
         )
         save_page_enhanced_ocr(page, payload_dict, engine, profile)
-
-        # Track revision under dedicated enhanced OCR version track
-        version_key = f"ocr:enhanced:{engine}:{profile}"
-        pv = (
-            session.query(db.PageVersion)
-            .filter_by(page_id=page.id, version_key=version_key)
-            .first()
-        )
-        current_ver = pv.version if pv else 0
 
         summary = f"Enhanced OCR run ({engine}, {profile})"
         try:
@@ -565,6 +737,7 @@ def run_enhanced_ocr_for_page(
     profile: str = "document_cleanup",
     language: str = "auto",
     save_enhanced_images: bool = False,
+    force: bool = False,
 ):
     _run_enhanced_ocr_for_page_inner(
         app_env,
@@ -574,6 +747,7 @@ def run_enhanced_ocr_for_page(
         profile,
         language,
         save_enhanced_images=save_enhanced_images,
+        force=force,
     )
 
 
