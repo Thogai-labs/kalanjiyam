@@ -321,7 +321,7 @@
                             </span>
                         </div>
                         <div class="text-[10px] text-slate-400 mb-2 flex items-center gap-1">
-                            <span x-text="task.type === 'ocr' ? 'OCR' : (task.type === 'translation' ? 'Translation' : (task.type === 'docx_translation' ? 'DOCX Translation' : 'Create Project'))"></span>
+                            <span x-text="task.type === 'ocr' ? 'OCR' : (task.type === 'enhanced_ocr' ? 'Enhanced OCR' : (task.type === 'translation' ? 'Translation' : (task.type === 'docx_translation' ? 'DOCX Translation' : 'Create Project')))"></span>
                             <span>•</span>
                             <span x-text="new Date(task.started_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></span>
                         </div>

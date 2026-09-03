@@ -575,9 +575,11 @@ def _run_enhanced_ocr_for_page_inner(
 ):
     """Run Enhanced OCR in application context."""
     import io
-
+    import json
+    import time
     from PIL import Image
 
+    from kalanjiyam.models.batch import BatchItem, BatchJob, BatchOcrPage
     from kalanjiyam.utils.document_storage import (
         load_page_enhanced_ocr,
         save_page_enhanced_ocr,
@@ -596,6 +598,7 @@ def _run_enhanced_ocr_for_page_inner(
         page_master_image_key,
     )
 
+    page_start_time = time.time()
     flask_app = create_config_only_app(app_env)
     with flask_app.app_context():
         bot_user = q.user(consts.BOT_USERNAME)
@@ -644,6 +647,126 @@ def _run_enhanced_ocr_for_page_inner(
             logging.info(
                 f"Enhanced OCR revision already exists for {project_slug}/{page_slug} with engine '{engine}' and profile '{profile}' ({version_key}). Skipping Enhanced OCR."
             )
+            # Record/update UI Batch Enhanced OCR metrics in BatchItem / BatchOcrPage
+            try:
+                batch_item = (
+                    session.query(BatchItem)
+                    .join(BatchJob)
+                    .filter(
+                        BatchItem.project_id == project.id,
+                        BatchJob.job_type == "UI_BATCH_ENHANCED_OCR",
+                    )
+                    .order_by(BatchItem.id.desc())
+                    .first()
+                )
+                if not batch_item:
+                    batch_item = (
+                        session.query(BatchItem)
+                        .filter_by(project_id=project.id)
+                        .order_by(BatchItem.id.desc())
+                        .first()
+                    )
+                if batch_item:
+                    p_num = page.order
+                    ocr_page = (
+                        session.query(BatchOcrPage)
+                        .filter_by(batch_item_id=batch_item.id, page_number=p_num)
+                        .first()
+                    )
+                    if not ocr_page and page_slug.isdigit():
+                        ocr_page = (
+                            session.query(BatchOcrPage)
+                            .filter_by(
+                                batch_item_id=batch_item.id, page_number=int(page_slug)
+                            )
+                            .first()
+                        )
+                    if not ocr_page:
+                        ocr_page = BatchOcrPage(
+                            batch_item_id=batch_item.id,
+                            chunk_id=None,
+                            page_number=p_num,
+                            status="PENDING",
+                        )
+
+                    plain_text = existing_bot_revision.content or ""
+                    doc_dict = existing_bot_revision.document or {}
+                    doc_json_str = json.dumps(doc_dict) if doc_dict else ""
+                    blocks = doc_dict.get("blocks", []) if isinstance(doc_dict, dict) else []
+
+                    ocr_page.ocr_latency_ms = ocr_page.ocr_latency_ms or 0.0
+                    ocr_page.status = "COMPLETED"
+                    ocr_page.completed_at = ocr_page.completed_at or datetime.utcnow()
+                    ocr_page.engine = engine
+                    ocr_page.chars = len(plain_text) if plain_text else 0
+                    ocr_page.blocks = len(blocks) if blocks else None
+                    ocr_page.ocr_data_size_bytes = len(plain_text.encode("utf-8")) + len(doc_json_str.encode("utf-8"))
+
+                    try:
+                        if image_path and image_path.exists():
+                            ocr_page.extracted_image_size_bytes = image_path.stat().st_size
+                    except Exception:
+                        pass
+
+                    session.add(ocr_page)
+                    session.flush()
+
+                    # Recalculate cumulative item metrics from all completed pages
+                    item_pages = (
+                        session.query(BatchOcrPage)
+                        .filter_by(batch_item_id=batch_item.id, status="COMPLETED")
+                        .all()
+                    )
+                    batch_item.engine = engine
+                    batch_item.total_ocr_latency_ms = sum(
+                        p.ocr_latency_ms or 0 for p in item_pages
+                    )
+                    batch_item.extracted_images_size_bytes = sum(
+                        p.extracted_image_size_bytes or 0 for p in item_pages
+                    )
+                    batch_item.cropped_images_size_bytes = sum(
+                        p.cropped_image_size_bytes or 0 for p in item_pages
+                    )
+                    batch_item.ocr_data_size_bytes = sum(
+                        p.ocr_data_size_bytes or 0 for p in item_pages
+                    )
+
+                    conf_list = [
+                        p.confidence for p in item_pages if p.confidence is not None
+                    ]
+                    batch_item.avg_confidence = (
+                        (sum(conf_list) / len(conf_list)) if conf_list else None
+                    )
+                    p05_list = [p.p05 for p in item_pages if p.p05 is not None]
+                    batch_item.avg_p05 = (
+                        (sum(p05_list) / len(p05_list)) if p05_list else None
+                    )
+                    batch_item.total_blocks = sum(p.blocks or 0 for p in item_pages)
+                    batch_item.total_chars = sum(p.chars or 0 for p in item_pages)
+                    batch_item.total_engine_latency_ms = sum(
+                        p.engine_latency_ms or 0 for p in item_pages
+                    )
+
+                    # Update status if all pages completed
+                    completed_count = len(item_pages)
+                    target_total = (
+                        batch_item.total_pages
+                        or session.query(BatchOcrPage)
+                        .filter_by(batch_item_id=batch_item.id)
+                        .count()
+                        or 1
+                    )
+                    if completed_count >= target_total:
+                        batch_item.status = "COMPLETED"
+                        batch_item.completed_at = datetime.utcnow()
+                        if batch_item.job:
+                            batch_item.job.status = "COMPLETED"
+                            batch_item.job.completed_at = datetime.utcnow()
+
+                    session.commit()
+            except Exception as metric_err:
+                logging.warning(f"Error recording UI batch enhanced OCR metrics for skipped page: {metric_err}")
+
             cached_payload = load_page_enhanced_ocr(page, engine, profile)
             if cached_payload:
                 return cached_payload
@@ -747,6 +870,159 @@ def _run_enhanced_ocr_for_page_inner(
         except Exception as e:
             logging.exception(f"Failed to save revision for enhanced OCR: {e}")
             raise
+
+        # Record UI Batch Enhanced OCR metrics in BatchItem / BatchOcrPage
+        try:
+            page_latency_ms = (time.time() - page_start_time) * 1000.0
+            batch_item = (
+                session.query(BatchItem)
+                .join(BatchJob)
+                .filter(
+                    BatchItem.project_id == project.id,
+                    BatchJob.job_type == "UI_BATCH_ENHANCED_OCR",
+                )
+                .order_by(BatchItem.id.desc())
+                .first()
+            )
+            if not batch_item:
+                batch_item = (
+                    session.query(BatchItem)
+                    .filter_by(project_id=project.id)
+                    .order_by(BatchItem.id.desc())
+                    .first()
+                )
+            if batch_item:
+                p_num = page.order
+                ocr_page = (
+                    session.query(BatchOcrPage)
+                    .filter_by(batch_item_id=batch_item.id, page_number=p_num)
+                    .first()
+                )
+                if not ocr_page and page_slug.isdigit():
+                    ocr_page = (
+                        session.query(BatchOcrPage)
+                        .filter_by(
+                            batch_item_id=batch_item.id, page_number=int(page_slug)
+                        )
+                        .first()
+                    )
+                if not ocr_page:
+                    ocr_page = BatchOcrPage(
+                        batch_item_id=batch_item.id,
+                        chunk_id=None,
+                        page_number=p_num,
+                        status="PENDING",
+                    )
+
+                plain_text = doc.to_plain_text() or ocr_response.text_content or ""
+                ocr_page.ocr_latency_ms = page_latency_ms
+                ocr_page.status = "COMPLETED"
+                ocr_page.completed_at = datetime.utcnow()
+                ocr_page.engine = engine
+                ocr_page.confidence = getattr(ocr_response, "page_confidence", None)
+                ocr_page.p05 = getattr(ocr_response, "p05", None)
+                ocr_page.blocks = getattr(ocr_response, "blocks_count", None) or (
+                    len(doc.blocks) if doc else None
+                )
+                ocr_page.chars = getattr(ocr_response, "chars_count", None) or (
+                    len(plain_text) if plain_text else None
+                )
+                ocr_page.engine_latency_ms = getattr(
+                    ocr_response, "engine_latency_ms", None
+                )
+
+                try:
+                    if image_path and image_path.exists():
+                        ocr_page.extracted_image_size_bytes = (
+                            image_path.stat().st_size
+                        )
+                except Exception:
+                    pass
+
+                doc_json_str = json.dumps(doc.to_dict()) if doc else ""
+                ocr_page.ocr_data_size_bytes = len(
+                    plain_text.encode("utf-8")
+                ) + len(doc_json_str.encode("utf-8"))
+
+                page_crop_bytes = 0
+                if ocr_response.blocks:
+                    from kalanjiyam.utils.storage import editor_image_key
+
+                    for block in ocr_response.blocks:
+                        blk_id = (
+                            block.get("id")
+                            if isinstance(block, dict)
+                            else getattr(block, "id", None)
+                        )
+                        if blk_id:
+                            c_key = editor_image_key(
+                                project.slug, f"extracted_{blk_id}.png"
+                            )
+                            try:
+                                c_path = get_storage().local_copy(c_key)
+                                if c_path.exists():
+                                    page_crop_bytes += c_path.stat().st_size
+                            except Exception:
+                                pass
+                ocr_page.cropped_image_size_bytes = page_crop_bytes
+                session.add(ocr_page)
+                session.flush()
+
+                # Recalculate cumulative item metrics from all completed pages
+                item_pages = (
+                    session.query(BatchOcrPage)
+                    .filter_by(batch_item_id=batch_item.id, status="COMPLETED")
+                    .all()
+                )
+                batch_item.engine = engine
+                batch_item.total_ocr_latency_ms = sum(
+                    p.ocr_latency_ms or 0 for p in item_pages
+                )
+                batch_item.extracted_images_size_bytes = sum(
+                    p.extracted_image_size_bytes or 0 for p in item_pages
+                )
+                batch_item.cropped_images_size_bytes = sum(
+                    p.cropped_image_size_bytes or 0 for p in item_pages
+                )
+                batch_item.ocr_data_size_bytes = sum(
+                    p.ocr_data_size_bytes or 0 for p in item_pages
+                )
+
+                conf_list = [
+                    p.confidence for p in item_pages if p.confidence is not None
+                ]
+                batch_item.avg_confidence = (
+                    (sum(conf_list) / len(conf_list)) if conf_list else None
+                )
+                p05_list = [p.p05 for p in item_pages if p.p05 is not None]
+                batch_item.avg_p05 = (
+                    (sum(p05_list) / len(p05_list)) if p05_list else None
+                )
+                batch_item.total_blocks = sum(p.blocks or 0 for p in item_pages)
+                batch_item.total_chars = sum(p.chars or 0 for p in item_pages)
+                batch_item.total_engine_latency_ms = sum(
+                    p.engine_latency_ms or 0 for p in item_pages
+                )
+
+                # Update status if all pages completed
+                completed_count = len(item_pages)
+                target_total = (
+                    batch_item.total_pages
+                    or session.query(BatchOcrPage)
+                    .filter_by(batch_item_id=batch_item.id)
+                    .count()
+                    or 1
+                )
+                if completed_count >= target_total:
+                    batch_item.status = "COMPLETED"
+                    batch_item.completed_at = datetime.utcnow()
+                    if batch_item.job:
+                        batch_item.job.status = "COMPLETED"
+                        batch_item.job.completed_at = datetime.utcnow()
+
+                session.commit()
+        except Exception as metric_err:
+            logging.warning(f"Error recording UI batch enhanced OCR metrics: {metric_err}")
 
     return payload_dict
 

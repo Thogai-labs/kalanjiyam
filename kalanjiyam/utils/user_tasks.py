@@ -103,7 +103,7 @@ def get_user_tasks(user_identifier):
         # query Celery to update progress/status.
         if status in ['pending', 'running']:
             try:
-                if task_type in ['ocr', 'translation']:
+                if task_type in ['ocr', 'enhanced_ocr', 'translation']:
                     # Group result task checking
                     r = GroupResult.restore(task_id, app=celery_app)
                     if r and r.results:
@@ -142,13 +142,73 @@ def get_user_tasks(user_identifier):
                                 if failed > 0:
                                     info['failed_count'] = failed
                     else:
-                        # Fallback for old/unrestorable task groups
-                        started_at_str = info.get('started_at')
-                        if started_at_str:
-                            started_at = datetime.fromisoformat(started_at_str)
-                            if (datetime.utcnow() - started_at).total_seconds() > 3600:
-                                info['status'] = 'completed'
-                                updated_entries[task_id] = json.dumps(info)
+                        # Fallback for un-restorable task groups: check database BatchItem/BatchOcrPage
+                        db_updated = False
+                        try:
+                            from kalanjiyam import queries as q
+                            from kalanjiyam.models.batch import BatchItem, BatchJob, BatchOcrPage
+                            session = q.get_session()
+                            p_slug = info.get('project_slug')
+                            if p_slug:
+                                project = q.project(p_slug)
+                                if project:
+                                    job_type_map = {
+                                        'ocr': 'UI_BATCH_OCR',
+                                        'enhanced_ocr': 'UI_BATCH_ENHANCED_OCR',
+                                        'translation': 'UI_BATCH_TRANSLATION',
+                                    }
+                                    batch_job_type = job_type_map.get(task_type)
+                                    if batch_job_type:
+                                        batch_item = (
+                                            session.query(BatchItem)
+                                            .join(BatchJob)
+                                            .filter(
+                                                BatchItem.project_id == project.id,
+                                                BatchJob.job_type == batch_job_type,
+                                            )
+                                            .order_by(BatchItem.id.desc())
+                                            .first()
+                                        )
+                                        if batch_item:
+                                            total = batch_item.total_pages or len(project.pages) or 1
+                                            completed = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, status='COMPLETED').count()
+                                            failed = session.query(BatchOcrPage).filter_by(batch_item_id=batch_item.id, status='FAILED').count()
+                                            
+                                            if batch_item.status == 'COMPLETED' or (total > 0 and completed >= total):
+                                                info['status'] = 'completed'
+                                                info['progress'] = 1.0
+                                                info['completed_count'] = total
+                                                info['total_count'] = total
+                                                updated_entries[task_id] = json.dumps(info)
+                                                db_updated = True
+                                            elif batch_item.status == 'FAILED':
+                                                info['status'] = 'failed'
+                                                info['progress'] = completed / total if total > 0 else 0
+                                                info['completed_count'] = completed
+                                                info['total_count'] = total
+                                                updated_entries[task_id] = json.dumps(info)
+                                                db_updated = True
+                                            elif completed > 0 or failed > 0:
+                                                info['status'] = 'running'
+                                                info['progress'] = completed / total if total > 0 else 0
+                                                info['completed_count'] = completed
+                                                info['total_count'] = total
+                                                if failed > 0:
+                                                    info['failed_count'] = failed
+                                                db_updated = True
+                        except Exception as db_fallback_err:
+                            LOG.warning(f"Error checking database fallback for task {task_id}: {db_fallback_err}")
+                            
+                        if not db_updated:
+                            started_at_str = info.get('started_at')
+                            if started_at_str:
+                                try:
+                                    started_at = datetime.fromisoformat(started_at_str)
+                                    if (datetime.utcnow() - started_at).total_seconds() > 3600:
+                                        info['status'] = 'completed'
+                                        updated_entries[task_id] = json.dumps(info)
+                                except Exception:
+                                    pass
                 else:
                     # Single result task checking (like create_project)
                     r = AsyncResult(task_id, app=celery_app)
@@ -229,7 +289,7 @@ def cancel_user_task(user_identifier, task_id):
         if status in ['pending', 'running']:
             # Revoke the task in Celery
             try:
-                if task_type in ['ocr', 'translation']:
+                if task_type in ['ocr', 'enhanced_ocr', 'translation']:
                     r = GroupResult.restore(task_id, app=celery_app)
                     if r:
                         r.revoke(terminate=True)

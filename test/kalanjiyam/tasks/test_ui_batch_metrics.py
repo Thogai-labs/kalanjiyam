@@ -368,3 +368,90 @@ def test_enhanced_ocr_same_engine_profile_skips(flask_app, tmp_path):
             mock_consume_credit.assert_not_called()
 
 
+def test_run_enhanced_ocr_for_project_creates_batch_job_and_updates_metrics(flask_app, tmp_path):
+    from kalanjiyam import consts
+    from kalanjiyam.tasks.ocr import run_enhanced_ocr_for_project, _run_enhanced_ocr_for_page_inner
+    from kalanjiyam.utils.ocr_types import OcrResponse
+
+    with flask_app.app_context():
+        session = q.get_session()
+        bot_user = q.user(consts.BOT_USERNAME)
+        if not bot_user:
+            bot_user = db.User(username=consts.BOT_USERNAME, email="bot@test.local")
+            session.add(bot_user)
+            session.flush()
+
+        board = session.query(db.Board).first()
+        if not board:
+            board = db.Board(name="Test Board Enh Batch")
+            session.add(board)
+            session.flush()
+
+        status = session.query(db.PageStatus).first()
+
+        project = db.Project(
+            slug="test-enh-batch-proj",
+            display_title="Test Enh Batch Proj",
+            board_id=board.id,
+        )
+        session.add(project)
+        session.flush()
+
+        page1 = db.Page(project_id=project.id, order=1, slug="1", status_id=status.id)
+        session.add(page1)
+        session.commit()
+
+        with patch("kalanjiyam.tasks.ocr.group") as mock_group:
+            mock_group_result = MagicMock()
+            mock_group.return_value = mock_group_result
+            mock_group_result.apply_async.return_value = mock_group_result
+
+            res = run_enhanced_ocr_for_project("testing", project, engine="dots_ocr", profile="hybrid_binarization")
+            assert res is not None
+
+        # Verify BatchJob created
+        job = session.query(BatchJob).filter_by(target_uri=f"ui://project/{project.slug}/enhanced").first()
+        assert job is not None
+        assert job.job_type == "UI_BATCH_ENHANCED_OCR"
+
+        item = session.query(BatchItem).filter_by(job_id=job.id).first()
+        assert item is not None
+        assert item.total_pages == 1
+
+        ocr_p = session.query(BatchOcrPage).filter_by(batch_item_id=item.id, page_number=1).first()
+        assert ocr_p is not None
+        assert ocr_p.status == "PENDING"
+
+        # Now run the page inner function
+        mock_resp_dots = OcrResponse(
+            text_content="Dots OCR Enhanced Result",
+            bounding_boxes=[(0, 0, 100, 100, "Dots OCR Enhanced Result")],
+            engine="dots_ocr",
+            ocr_mode="enhanced",
+            enhancement_profile="hybrid_binarization",
+        )
+        dummy_img = tmp_path / "1.png"
+        dummy_img.write_bytes(
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc`\x00\x00\x00\x02\x00\x01H\xaf\xa4q\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+        with patch("kalanjiyam.tasks.ocr.get_page_image_filepath", return_value=dummy_img), \
+             patch("kalanjiyam.tasks.ocr.ensure_ocr_quota_for_project"), \
+             patch("kalanjiyam.tasks.ocr.consume_ocr_credit_for_project"), \
+             patch("kalanjiyam.utils.enhanced_ocr.run_enhanced_ocr", return_value=mock_resp_dots):
+
+            _run_enhanced_ocr_for_page_inner(
+                app_env="testing",
+                project_slug=project.slug,
+                page_slug="1",
+                engine="dots_ocr",
+                profile="hybrid_binarization",
+            )
+
+        # Verify BatchOcrPage status updated to COMPLETED
+        session.refresh(ocr_p)
+        assert ocr_p.status == "COMPLETED"
+        session.refresh(item)
+        assert item.status == "COMPLETED"
+
+
+

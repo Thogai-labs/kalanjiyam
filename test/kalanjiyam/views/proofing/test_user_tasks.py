@@ -191,5 +191,48 @@ def test_cancel_task_api_auth(mock_cancel_user_task, rama_client):
     assert resp.json == {"success": True}
 
 
+@patch('kalanjiyam.utils.user_tasks.redis_client')
+@patch('kalanjiyam.utils.user_tasks.GroupResult')
+def test_get_user_tasks_enhanced_ocr(mock_group_result, mock_redis):
+    from datetime import datetime
+    now_str = datetime.utcnow().isoformat()
+    mock_redis.hgetall.return_value = {
+        b"task-enh-123": f'{{"task_id": "task-enh-123", "type": "enhanced_ocr", "project_slug": "my-book", "project_title": "My Book Title", "status": "running", "started_at": "{now_str}"}}'.encode('utf-8')
+    }
+    
+    mock_group = MagicMock()
+    mock_group.results = [MagicMock(), MagicMock(), MagicMock(), MagicMock()]
+    mock_group.completed_count.return_value = 2
+    mock_group.ready.return_value = False
+    mock_group_result.restore.return_value = mock_group
+    
+    tasks = get_user_tasks("user:42")
+    
+    assert len(tasks) == 1
+    assert tasks[0]['task_id'] == "task-enh-123"
+    assert tasks[0]['type'] == "enhanced_ocr"
+    assert tasks[0]['status'] == "running"
+    assert tasks[0]['progress'] == 0.5
+    assert tasks[0]['completed_count'] == 2
+    assert tasks[0]['total_count'] == 4
+
+
+@patch('kalanjiyam.utils.user_tasks.redis_client')
+@patch('kalanjiyam.utils.user_tasks.GroupResult')
+def test_cancel_user_task_enhanced_ocr(mock_group_result, mock_redis):
+    mock_redis.hget.return_value = b'{"task_id": "task-enh-123", "type": "enhanced_ocr", "status": "running"}'
+    mock_redis.hset.return_value = 1
+    
+    mock_group = MagicMock()
+    mock_group_result.restore.return_value = mock_group
+    
+    res = cancel_user_task("user:42", "task-enh-123")
+    
+    assert res is True
+    mock_group.revoke.assert_called_once_with(terminate=True)
+    assert "cancelled" in str(mock_redis.hset.call_args)
+
+
+
 
 
