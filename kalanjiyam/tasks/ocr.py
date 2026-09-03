@@ -246,6 +246,28 @@ def _run_ocr_for_page_inner(
             )
             consume_ocr_credit_for_project(project)
 
+            # Warm Redis OCR cache for latest version
+            try:
+                from kalanjiyam.utils.ocr_cache import set_cached_ocr_document, set_cached_page_bboxes
+
+                set_cached_ocr_document(
+                    project_slug,
+                    page_slug,
+                    version_key,
+                    doc.to_dict(),
+                    version=revision_id,
+                )
+                if getattr(page, "ocr_bounding_boxes", None):
+                    set_cached_page_bboxes(
+                        project_slug,
+                        page_slug,
+                        version_key,
+                        page.ocr_bounding_boxes,
+                        version=revision_id,
+                    )
+            except Exception as cache_err:
+                logging.debug(f"Could not warm Redis OCR cache for {project_slug}/{page_slug}: {cache_err}")
+
             # Record UI Batch OCR metrics in BatchItem / BatchOcrPage
             try:
                 page_latency_ms = (time.time() - page_start_time) * 1000.0

@@ -106,8 +106,10 @@ def save_page_enhanced_ocr(
 ) -> bool:
     """Persist Enhanced OCR JSON payload to object storage as .json.gz.
 
+    Also updates Redis cache and invalidates stale entries.
     Returns True if successfully written to storage, False otherwise.
     """
+    from kalanjiyam.utils.ocr_cache import invalidate_page_ocr_cache, set_cached_ocr_document
     from kalanjiyam.utils.storage import get_project_org_slug, get_storage, page_enhanced_ocr_key
 
     try:
@@ -117,6 +119,11 @@ def save_page_enhanced_ocr(
         page_slug = getattr(page, "slug", str(page))
         key = page_enhanced_ocr_key(project_slug, page_slug, engine, profile, org_slug=org_slug)
         get_storage().save_json_gz(key, payload)
+
+        version_key = f"ocr:enhanced:{engine}:{profile}"
+        if isinstance(payload, dict):
+            set_cached_ocr_document(project_slug, page_slug, version_key, payload)
+        invalidate_page_ocr_cache(project_slug, page_slug, version_key=version_key)
         return True
     except Exception as err:
         LOG.warning(
@@ -134,18 +141,29 @@ def load_page_enhanced_ocr(
     engine: str,
     profile: str,
 ) -> dict | list | str | None:
-    """Load Enhanced OCR payload for a page from object storage."""
+    """Load Enhanced OCR payload for a page from object storage or Redis cache."""
+    from kalanjiyam.utils.ocr_cache import get_cached_ocr_document, set_cached_ocr_document
     from kalanjiyam.utils.storage import get_project_org_slug, get_storage, page_enhanced_ocr_key
 
     project = getattr(page, "project", None)
     if project is None:
         return None
+
+    project_slug = getattr(project, "slug", str(project))
+    page_slug = getattr(page, "slug", str(page))
+    version_key = f"ocr:enhanced:{engine}:{profile}"
+
+    cached = get_cached_ocr_document(project_slug, page_slug, version_key)
+    if cached is not None:
+        return cached
+
     try:
-        project_slug = getattr(project, "slug", str(project))
         org_slug = get_project_org_slug(project)
-        page_slug = getattr(page, "slug", str(page))
         key = page_enhanced_ocr_key(project_slug, page_slug, engine, profile, org_slug=org_slug)
-        return get_storage().load_json_gz(key)
+        data = get_storage().load_json_gz(key)
+        if data is not None and isinstance(data, dict):
+            set_cached_ocr_document(project_slug, page_slug, version_key, data)
+        return data
     except Exception as err:
         LOG.warning(
             "Failed to fetch page %s Enhanced OCR (%s/%s) from storage: %s",
@@ -164,11 +182,17 @@ def load_page_ocr(page: Any) -> str | None:
     the page's latest revision document (`load_revision_document(latest_rev)`)
     and dynamically derive bounding box JSON from `PageDocument.blocks`.
 
-    If missing or no revision exists, it falls back to reading the legacy S3/VersityGW
-    `/ocr/{page_slug}.json.gz` key or legacy PostgreSQL column.
+    Checks Redis cache with version and revision validation first.
+    If missing or stale, it derives from S3/DB and refreshes the Redis cache.
 
     Returns ``None`` when no OCR data exists in any location.
     """
+    from kalanjiyam.utils.ocr_cache import get_cached_page_bboxes, set_cached_page_bboxes
+
+    project = getattr(page, "project", None)
+    project_slug = getattr(project, "slug", str(project)) if project else ""
+    page_slug = getattr(page, "slug", str(page))
+
     # Strategy 1: Prefer revisions from explicit OCR tracks (ocr:google, etc.)
     versions = getattr(page, "versions", None)
     if versions:
@@ -181,9 +205,33 @@ def load_page_ocr(page: Any) -> str | None:
         for track in ocr_tracks:
             try:
                 latest_rev = track.revisions[-1]
+                expected_ver = getattr(track, "version", None)
+                expected_rev_id = getattr(latest_rev, "id", None)
+
+                # Check Redis cache with version validation
+                if project_slug and page_slug:
+                    cached = get_cached_page_bboxes(
+                        project_slug,
+                        page_slug,
+                        track.version_key,
+                        expected_version=expected_ver,
+                        expected_revision_id=expected_rev_id,
+                    )
+                    if cached is not None:
+                        return cached
+
                 doc_dict = load_revision_document(latest_rev)
                 derived = _derive_bounding_boxes_from_document(doc_dict)
                 if derived is not None:
+                    if project_slug and page_slug:
+                        set_cached_page_bboxes(
+                            project_slug,
+                            page_slug,
+                            track.version_key,
+                            derived,
+                            version=expected_ver or 1,
+                            revision_id=expected_rev_id,
+                        )
                     return derived
             except Exception as err:
                 LOG.warning(
@@ -196,9 +244,32 @@ def load_page_ocr(page: Any) -> str | None:
         for track in main_tracks:
             try:
                 latest_rev = track.revisions[-1]
+                expected_ver = getattr(track, "version", None)
+                expected_rev_id = getattr(latest_rev, "id", None)
+
+                if project_slug and page_slug:
+                    cached = get_cached_page_bboxes(
+                        project_slug,
+                        page_slug,
+                        "main",
+                        expected_version=expected_ver,
+                        expected_revision_id=expected_rev_id,
+                    )
+                    if cached is not None:
+                        return cached
+
                 doc_dict = load_revision_document(latest_rev)
                 derived = _derive_bounding_boxes_from_document(doc_dict)
                 if derived is not None:
+                    if project_slug and page_slug:
+                        set_cached_page_bboxes(
+                            project_slug,
+                            page_slug,
+                            "main",
+                            derived,
+                            version=expected_ver or 1,
+                            revision_id=expected_rev_id,
+                        )
                     return derived
             except Exception as err:
                 LOG.warning(
@@ -222,7 +293,6 @@ def load_page_ocr(page: Any) -> str | None:
             )
 
     # Legacy dual-read fallback: S3 / VersityGW payload
-    project = getattr(page, "project", None)
     if project is not None:
         try:
             from kalanjiyam.utils.storage import get_storage, page_ocr_key
@@ -345,13 +415,14 @@ def derive_revision_tag(revision: Any) -> str:
 
 
 def save_revision_document(revision: Any, document: dict) -> bool:
-    """Persist a revision's structured block document to object storage.
+    """Persist a revision's structured block document to object storage and Redis cache.
 
     Ensures timestamp is embedded inside user/model document JSON payload.
     If S3/VersityGW write fails, falls back to saving in DB column `document`.
     Returns True if written to S3, False if fell back to DB.
     """
     from datetime import datetime
+    from kalanjiyam.utils.ocr_cache import invalidate_page_ocr_cache, set_cached_revision_document
     from kalanjiyam.utils.storage import get_project_org_slug, get_storage, revision_document_key
 
     try:
@@ -372,6 +443,14 @@ def save_revision_document(revision: Any, document: dict) -> bool:
                     document["timestamp"] = datetime.utcnow().isoformat()
 
         get_storage().save_json_gz(key, document)
+
+        # Cache in Redis and invalidate composite page OCR cache
+        rev_id = getattr(revision, "id", None)
+        if rev_id:
+            set_cached_revision_document(rev_id, document)
+        if project and page:
+            invalidate_page_ocr_cache(project.slug, page.slug)
+
         return True
     except Exception as err:
         LOG.warning(
@@ -384,11 +463,21 @@ def save_revision_document(revision: Any, document: dict) -> bool:
 
 
 def load_revision_document(revision: Any) -> dict | None:
-    """Load revision document, trying S3/VersityGW first, then DB.
+    """Load revision document, trying Redis cache, then S3/VersityGW, then DB.
 
     Returns ``None`` when no document exists in either location.
     """
+    from kalanjiyam.utils.ocr_cache import (
+        get_cached_revision_document,
+        set_cached_revision_document,
+    )
     from kalanjiyam.utils.storage import get_project_org_slug, get_storage, revision_document_key
+
+    rev_id = getattr(revision, "id", None)
+    if rev_id:
+        cached = get_cached_revision_document(rev_id)
+        if cached is not None:
+            return cached
 
     page = getattr(revision, "page", None)
     project = getattr(revision, "project", None)
@@ -403,6 +492,8 @@ def load_revision_document(revision: Any) -> dict | None:
             key = revision_document_key(project.slug, page.slug, v_num, tag=tag, org_slug=org_slug)
             data = storage.load_json_gz(key)
             if data is not None:
+                if rev_id and isinstance(data, dict):
+                    set_cached_revision_document(rev_id, data)
                 return data
         except Exception as err:
             LOG.warning("Failed to fetch revision %s document from S3: %s", getattr(revision, "id", revision), err)
