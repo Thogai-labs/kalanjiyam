@@ -1,76 +1,330 @@
 {% extends 'admin/master.html' %}
 {% import 'macros/admin.html' as admin %}
 
-{% block title %}{{ _('Platform') }} | {{ _('Admin') }}{% endblock %}
+{% block title %}{{ _('Platform Governance') }} | {{ _('Admin Console') }}{% endblock %}
 
 {% block admin_sidebar %}
 {{ admin.nav('platform', current_user) }}
 {% endblock %}
 
 {% block content %}
-{{ admin.page_header(_('Platform overview'), _('Organizations, quotas, and global export/import.')) }}
+<!-- Google Admin Page Header -->
+<div class="mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0">
+        {{ admin.icon('layout-dashboard', class='w-5 h-5') }}
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ _('Platform Overview') }}
+          </h1>
+          <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+            {{ _('Super Admin') }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">
+          {{ _('Global governance, tenant organizations, resource quotas, and AI compute metrics.') }}
+        </p>
+      </div>
+    </div>
 
-<div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
-  {{ admin.stat_card(_('Organizations'), org_count) }}
-  {{ admin.stat_card(_('Storage used (all orgs)'), (total_storage_used // (1024 * 1024)) ~ ' MB') }}
-  {{ admin.stat_card(_('OCR credits used'), total_ocr_used) }}
-  {{ admin.stat_card(_('Translation credits used'), total_translation_used) }}
+    <div class="flex items-center gap-2">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span>{{ _('Cluster Operational') }}</span>
+      </span>
+    </div>
+  </div>
 </div>
 
-<div class="flex flex-wrap gap-3 mb-8">
-  {{ admin.btn_primary(_('Manage organizations'), href=url_for('groups_view.index'), icon_name='building-2') }}
-  {{ admin.btn_secondary(_('View Analytics'), href=url_for('platform_view.user_analytics'), icon_name='bar-chart-3') }}
+<!-- Key Performance & Resource Metric Cards (Google Cloud Style) -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  
+  <!-- Organizations Metric -->
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-slate-300 transition-all">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('Organizations') }}</span>
+      <div class="w-7 h-7 rounded-xl bg-blue-50 text-royalblue flex items-center justify-center">
+        {{ admin.icon('building-2', class='w-3.5 h-3.5') }}
+      </div>
+    </div>
+    <div class="text-2xl sm:text-3xl font-bold text-slate-900">{{ org_count }}</div>
+    <p class="text-xs text-slate-500 font-medium mt-1">
+      <span class="text-emerald-600 font-semibold">{{ orgs|selectattr('is_active')|list|length }} active</span> across cluster
+    </p>
+  </div>
+
+  <!-- Global Storage Used -->
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-slate-300 transition-all">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('Global Storage') }}</span>
+      <div class="w-7 h-7 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+        {{ admin.icon('book', class='w-3.5 h-3.5') }}
+      </div>
+    </div>
+    <div class="text-2xl sm:text-3xl font-bold text-slate-900">
+      {{ (total_storage_used // (1024 * 1024)) }} <span class="text-sm font-semibold text-slate-500">MB</span>
+    </div>
+    <p class="text-xs text-slate-500 font-medium mt-1">
+      {{ _('Total disk consumption') }}
+    </p>
+  </div>
+
+  <!-- OCR Engine Credits Used -->
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-slate-300 transition-all">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('OCR Engine Compute') }}</span>
+      <div class="w-7 h-7 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+        {{ admin.icon('gauge', class='w-3.5 h-3.5') }}
+      </div>
+    </div>
+    <div class="text-2xl sm:text-3xl font-bold text-slate-900">{{ total_ocr_used }}</div>
+    <p class="text-xs text-slate-500 font-medium mt-1">
+      {{ _('Pages transcribed across orgs') }}
+    </p>
+  </div>
+
+  <!-- Translation Credits Used -->
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-slate-300 transition-all">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('Translation AI') }}</span>
+      <div class="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+        {{ admin.icon('arrow-left-right', class='w-3.5 h-3.5') }}
+      </div>
+    </div>
+    <div class="text-2xl sm:text-3xl font-bold text-slate-900">{{ total_translation_used }}</div>
+    <p class="text-xs text-slate-500 font-medium mt-1">
+      {{ _('Tokens processed for translation') }}
+    </p>
+  </div>
+
 </div>
 
-<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
-  <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Organizations') }}</h2>
-  <div class="overflow-x-auto rounded-xl border border-slate-100">
-    <table class="min-w-full text-sm">
-      <thead class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+<!-- Quick Action Toolbar (Google Action Pills) -->
+<div class="flex flex-wrap items-center gap-2.5 mb-6">
+  <a href="{{ url_for('groups_view.index') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-royalblue hover:bg-blue-600 text-white font-semibold text-xs transition-all shadow-xs">
+    {{ admin.icon('building-2', class='w-3.5 h-3.5') }}
+    <span>{{ _('Manage Organizations') }}</span>
+  </a>
+
+  <a href="{{ url_for('platform_view.user_analytics') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold text-xs transition-all shadow-xs">
+    {{ admin.icon('bar-chart-3', class='w-3.5 h-3.5 text-slate-500') }}
+    <span>{{ _('Global Analytics') }}</span>
+  </a>
+
+  <a href="{{ url_for('platform_view.cli_batch_ocr') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold text-xs transition-all shadow-xs">
+    {{ admin.icon('gauge', class='w-3.5 h-3.5 text-slate-500') }}
+    <span>{{ _('OCR & TR Metrics') }}</span>
+  </a>
+
+  <a href="{{ url_for('platform_view.settings') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold text-xs transition-all shadow-xs">
+    {{ admin.icon('settings', class='w-3.5 h-3.5 text-slate-500') }}
+    <span>{{ _('Platform Settings') }}</span>
+  </a>
+</div>
+
+<!-- Organizations & Quotas Table Card (Google Material Table) -->
+<div class="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden mb-8">
+  <div class="p-5 sm:p-6 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-base font-bold text-slate-900">{{ _('Organizations & Quotas') }}</h2>
+      <p class="text-xs text-slate-500 font-medium">{{ _('Active tenant quotas for storage, OCR, and AI translation.') }}</p>
+    </div>
+    <span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-bold text-xs border border-slate-200">
+      {{ orgs|length }} {{ _('total tenants') }}
+    </span>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-xs sm:text-sm text-left">
+      <thead class="bg-slate-50/80 text-slate-500 uppercase tracking-wider font-bold text-[10px] border-b border-slate-100">
         <tr>
-          <th class="px-4 py-3">{{ _('Name') }}</th>
-          <th class="px-4 py-3">{{ _('Slug') }}</th>
-          <th class="px-4 py-3">{{ _('Storage') }}</th>
-          <th class="px-4 py-3">{{ _('OCR credits') }}</th>
-          <th class="px-4 py-3">{{ _('Translation credits') }}</th>
-          <th class="px-4 py-3">{{ _('Active') }}</th>
-          <th class="px-4 py-3"></th>
+          <th class="px-5 py-3.5">{{ _('Organization') }}</th>
+          <th class="px-4 py-3.5">{{ _('Slug') }}</th>
+          <th class="px-4 py-3.5">{{ _('Storage Quota') }}</th>
+          <th class="px-4 py-3.5">{{ _('OCR Credits') }}</th>
+          <th class="px-4 py-3.5">{{ _('Translation AI') }}</th>
+          <th class="px-4 py-3.5">{{ _('Status') }}</th>
+          <th class="px-5 py-3.5 text-right">{{ _('Actions') }}</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-slate-100">
+      <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
         {% for org in orgs %}
-        <tr class="hover:bg-slate-50/80 transition-colors">
-          <td class="px-4 py-3 font-semibold text-slate-900">{{ org.name }}</td>
-          <td class="px-4 py-3 font-mono text-xs text-slate-500">{{ org.slug }}</td>
-          <td class="px-4 py-3 text-slate-600">
-            {{ ((org.storage_used_bytes or 0) // (1024 * 1024)) }}MB /
-            {{ (org.storage_quota_bytes // (1024 * 1024)) if org.storage_quota_bytes is not none else "∞" }}
+        <tr class="hover:bg-slate-50/70 transition-colors">
+          <!-- Org Name & Avatar -->
+          <td class="px-5 py-3.5">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue font-bold flex items-center justify-center text-xs shrink-0">
+                {{ org.name[:1]|upper }}
+              </div>
+              <div>
+                <span class="font-bold text-slate-900 block text-xs sm:text-sm">{{ org.name }}</span>
+                <span class="text-[11px] text-slate-400">ID #{{ org.id }}</span>
+              </div>
+            </div>
           </td>
-          <td class="px-4 py-3 text-slate-600">
-            {{ org.ocr_credits_used or 0 }} /
-            {{ org.ocr_credit_limit if org.ocr_credit_limit is not none else "∞" }}
+
+          <!-- Slug -->
+          <td class="px-4 py-3.5">
+            <span class="font-mono text-xs px-2 py-1 rounded-md bg-slate-100 text-slate-600 font-semibold">
+              {{ org.slug }}
+            </span>
           </td>
-          <td class="px-4 py-3 text-slate-600">
-            {{ org.translation_credits_used or 0 }} /
-            {{ org.translation_credit_limit if org.translation_credit_limit is not none else "∞" }}
+
+          <!-- Storage Quota -->
+          <td class="px-4 py-3.5">
+            <div class="space-y-1">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-semibold text-slate-900">{{ ((org.storage_used_bytes or 0) // (1024 * 1024)) }} MB</span>
+                <span class="text-slate-400">/ {{ (org.storage_quota_bytes // (1024 * 1024)) if org.storage_quota_bytes is not none else "∞" }} MB</span>
+              </div>
+              {% if org.storage_quota_bytes %}
+              {% set pct = [((org.storage_used_bytes or 0) * 100 // org.storage_quota_bytes), 100]|min %}
+              <div class="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-full {{ 'bg-red-500' if pct > 90 else ('bg-amber-500' if pct > 75 else 'bg-royalblue') }}" style="width: {{ pct }}%"></div>
+              </div>
+              {% endif %}
+            </div>
           </td>
-          <td class="px-4 py-3">
+
+          <!-- OCR Credits -->
+          <td class="px-4 py-3.5">
+            <div class="space-y-1">
+              <div class="text-xs">
+                <span class="font-semibold text-slate-900">{{ org.ocr_credits_used or 0 }}</span>
+                <span class="text-slate-400">/ {{ org.ocr_credit_limit if org.ocr_credit_limit is not none else "∞" }}</span>
+              </div>
+              {% if org.ocr_credit_limit %}
+              {% set ocr_pct = [((org.ocr_credits_used or 0) * 100 // org.ocr_credit_limit), 100]|min %}
+              <div class="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-full {{ 'bg-red-500' if ocr_pct > 90 else 'bg-amber-500' }}" style="width: {{ ocr_pct }}%"></div>
+              </div>
+              {% endif %}
+            </div>
+          </td>
+
+          <!-- Translation Credits -->
+          <td class="px-4 py-3.5">
+            <div class="space-y-1">
+              <div class="text-xs">
+                <span class="font-semibold text-slate-900">{{ org.translation_credits_used or 0 }}</span>
+                <span class="text-slate-400">/ {{ org.translation_credit_limit if org.translation_credit_limit is not none else "∞" }}</span>
+              </div>
+              {% if org.translation_credit_limit %}
+              {% set tr_pct = [((org.translation_credits_used or 0) * 100 // org.translation_credit_limit), 100]|min %}
+              <div class="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-full {{ 'bg-red-500' if tr_pct > 90 else 'bg-emerald-500' }}" style="width: {{ tr_pct }}%"></div>
+              </div>
+              {% endif %}
+            </div>
+          </td>
+
+          <!-- Status -->
+          <td class="px-4 py-3.5">
             {% if org.is_active %}
-            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">{{ _('Active') }}</span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              <span>{{ _('Active') }}</span>
+            </span>
             {% else %}
-            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-500">{{ _('Inactive') }}</span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+              <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+              <span>{{ _('Inactive') }}</span>
+            </span>
             {% endif %}
           </td>
-          <td class="px-4 py-3 text-right">
-            <div class="inline-flex items-center gap-3 justify-end w-full">
-              {{ admin.link_action(_('Manage'), url_for('groups_view.manage', id=org.id), icon_name='settings') }}
-              {{ admin.link_action(_('View Details'), url_for('platform_view.org_user_analytics', org_id=org.id), icon_name='eye') }}
+
+          <!-- Actions -->
+          <td class="px-5 py-3.5 text-right">
+            <div class="inline-flex items-center gap-2 justify-end">
+              <a href="{{ url_for('groups_view.manage', id=org.id) }}" class="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors" title="{{ _('Manage Quotas & Members') }}">
+                {{ admin.icon('settings', class='w-3 h-3 text-slate-500') }}
+                <span>{{ _('Manage') }}</span>
+              </a>
+              <a href="{{ url_for('platform_view.org_user_analytics', org_id=org.id) }}" class="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-royalblue font-semibold text-xs transition-colors" title="{{ _('Detailed Analytics') }}">
+                {{ admin.icon('bar-chart-3', class='w-3 h-3 text-royalblue') }}
+                <span>{{ _('Analytics') }}</span>
+              </a>
             </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="px-6 py-12 text-center text-slate-400">
+            <div class="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
+              {{ admin.icon('building-2', class='w-6 h-6') }}
+            </div>
+            <p class="text-sm font-semibold text-slate-700">{{ _('No organizations configured yet.') }}</p>
+            <p class="text-xs text-slate-400 mt-1">{{ _('Create your first organization tenant to allocate storage and AI quotas.') }}</p>
           </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+</div>
+
+<!-- Secondary System Services Grid (Google Cloud Console Style) -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+  
+  <!-- Search Index Health -->
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+    <div class="flex items-start gap-3">
+      <div class="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+        {{ admin.icon('search', class='w-4 h-4') }}
+      </div>
+      <div>
+        <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">{{ _('OpenSearch Cluster') }}</h3>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">{{ _('Search index ingestion, text blocks, and vector health.') }}</p>
+      </div>
+    </div>
+    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+      <span class="text-xs text-slate-400 font-medium">{{ _('Multi-tenant search') }}</span>
+      <a href="{{ url_for('platform_view.search_index') }}" class="text-xs font-bold text-royalblue hover:underline">
+        {{ _('View Index') }} &rarr;
+      </a>
+    </div>
+  </div>
+
+  <!-- Telemetry & Logs -->
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+    <div class="flex items-start gap-3">
+      <div class="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+        {{ admin.icon('activity', class='w-4 h-4') }}
+      </div>
+      <div>
+        <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">{{ _('Telemetry & Logs') }}</h3>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">{{ _('System error rates, API latency, and OpenTelemetry.') }}</p>
+      </div>
+    </div>
+    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+      <span class="text-xs text-slate-400 font-medium">{{ _('Real-time diagnostics') }}</span>
+      <a href="{{ url_for('platform_view.metrics') }}" class="text-xs font-bold text-royalblue hover:underline">
+        {{ _('Open Logs') }} &rarr;
+      </a>
+    </div>
+  </div>
+
+  <!-- Reported Issues -->
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+    <div class="flex items-start gap-3">
+      <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+        {{ admin.icon('help-circle', class='w-4 h-4') }}
+      </div>
+      <div>
+        <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">{{ _('Reported Issues') }}</h3>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">{{ _('Community reports, scan issues, and project feedback.') }}</p>
+      </div>
+    </div>
+    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+      <span class="text-xs text-slate-400 font-medium">{{ _('User triage') }}</span>
+      <a href="{{ url_for('platform_view.reported_issues') }}" class="text-xs font-bold text-royalblue hover:underline">
+        {{ _('Review Issues') }} &rarr;
+      </a>
+    </div>
+  </div>
+
 </div>
 {% endblock %}

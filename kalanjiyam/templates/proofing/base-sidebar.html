@@ -16,6 +16,7 @@
 
 
 {% block main %}
+{% block hero %}{% endblock %}
 <article class="p-4 xl:p-0 max-w-6xl mx-auto mb-24">
 
   {{ components.flash_messages() }}
@@ -36,15 +37,13 @@
   </div>
   {% endif %}
 
-  <div class="md:flex md:mt-8 items-start">
-    <div class="md:mr-8 md:min-w-[16rem]">
-      <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-50">
-        {% block sidebar %}{% endblock %}
-      </div>
-    </div>
-    <div class="grow mt-8 md:mt-0">
-      {% block content %}{% endblock %}
-    </div>
+  {% if self.sidebar and self.sidebar()|trim %}
+  <div class="mt-4 mb-6">
+    {% block sidebar %}{% endblock %}
+  </div>
+  {% endif %}
+  <div class="w-full">
+    {% block content %}{% endblock %}
   </div>
 
 </article>

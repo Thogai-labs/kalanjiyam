@@ -17,6 +17,14 @@ def test_summary__bad_project(client):
 def test_activity(client):
     resp = client.get("/proofing/test-project/activity")
     assert resp.status_code == 200
+    assert "activities in the past 12 months" in resp.text
+
+
+def test_activity_with_date_filter(client):
+    resp = client.get("/proofing/test-project/activity?date=2026-08-15")
+    assert resp.status_code == 200
+    assert "Filtered by date" in resp.text
+    assert "2026-08-15" in resp.text
 
 
 def test_activity__bad_project(client):
@@ -41,9 +49,9 @@ def test_edit__auth__post_succeeds(rama_client):
     resp = rama_client.post(
         "/proofing/test-project/edit",
         data={
+            "display_title": "Test Project",
             "description": "some description",
             "page_numbers": "",
-            "title": "some title",
             "author": "some author",
             "editor": "",
             "publisher": "some publisher",
@@ -51,6 +59,42 @@ def test_edit__auth__post_succeeds(rama_client):
         },
     )
     assert resp.status_code == 302
+
+
+def test_edit__condition_tags(rama_client):
+    import json
+    tags = [
+        {"name": "Shmushing", "pages": "1-2"},
+        {"name": "Torn", "pages": "3"},
+    ]
+    resp = rama_client.post(
+        "/proofing/test-project/edit",
+        data={
+            "display_title": "Test Project",
+            "condition_tags": json.dumps(tags),
+        },
+    )
+    assert resp.status_code == 302
+
+    proj = q.project("test-project")
+    assert len(proj.condition_tag_list) == 2
+    assert proj.condition_tag_list[0]["name"] == "Shmushing"
+    assert proj.condition_tag_list[0]["page_numbers"] == [1, 2]
+    assert proj.condition_tag_list[1]["name"] == "Torn"
+    assert proj.condition_tag_list[1]["page_numbers"] == [3]
+
+    # Check summary page renders the tags and page issues
+    summary_resp = rama_client.get("/proofing/test-project/")
+    assert summary_resp.status_code == 200
+    assert "Shmushing" in summary_resp.text
+    assert "Torn" in summary_resp.text
+
+    # Check edit page contains the saved tags in initial-condition-tags JSON script
+    edit_resp = rama_client.get("/proofing/test-project/edit")
+    assert edit_resp.status_code == 200
+    assert "Shmushing" in edit_resp.text
+    assert "initial-condition-tags" in edit_resp.text
+
 
 
 def test_edit__auth__post_fails(rama_client):
@@ -328,5 +372,27 @@ def test_batch_ocr_status_progress_math(mock_group_result, mock_redis_from_url, 
     assert resp.status_code == 200
     assert "50%" in resp.text
     assert "width: 50.0%" in resp.text
+    assert "AUTO" in resp.text
+
+
+@patch("redis.Redis.from_url")
+@patch("kalanjiyam.views.proofing.project.GroupResult")
+def test_batch_ocr_status_default_language_auto(mock_group_result, mock_redis_from_url, rama_client):
+    mock_redis = MagicMock()
+    mock_redis.scan_iter.return_value = []
+    mock_redis_from_url.return_value = mock_redis
+
+    mock_group = MagicMock()
+    mock_results = [MagicMock()]
+    mock_results[0].state = "STARTED"
+    mock_results[0].failed.return_value = False
+    mock_group.results = mock_results
+    mock_group.completed_count.return_value = 0
+    mock_group_result.restore.return_value = mock_group
+
+    resp = rama_client.get("/proofing/batch-ocr-status/task-123")
+    assert resp.status_code == 200
+    assert "AUTO" in resp.text
+
 
 

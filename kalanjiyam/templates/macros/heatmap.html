@@ -1,61 +1,85 @@
 {% macro color(count) -%}
-  {%- if count == 0 -%}l1
-  {%- elif count == 1 -%}l2
-  {%- elif count <= 5 -%}l3
+  {%- if count == 0 -%}l0
+  {%- elif count <= 2 -%}l1
+  {%- elif count <= 6 -%}l2
+  {%- elif count <= 12 -%}l3
   {%- else %}l4
   {%- endif -%}
 {%- endmacro %}
 
 
-{# Display a heatmap as an SVG.
-
-HTML tables are inflexible and hard to style, and HTML elements with `grid`
-are finicky and difficult to style precisely. Creating an SVG directly was
-the most straightforward way to implement this logic.
-#}
-{% macro show_heatmap(heatmap) %}
-{% set box_width = 12 %}
-{% set box_gap = 2 %}
+{# Display a GitHub-style calendar heatmap as an SVG. #}
+{% macro show_heatmap(heatmap, selected_date=None, endpoint=None, endpoint_kwargs=None) %}
+{% set ep_kwargs = endpoint_kwargs or {} %}
+{% set box_width = 11 %}
+{% set box_gap = 3 %}
 {% set box_total = box_width + box_gap %}
-{% set day_margin = 30 %}
-{% set month_margin = 20 %}
+{% set day_margin = 28 %}
+{% set month_margin = 18 %}
 {% set width = day_margin + box_total * (heatmap.weeks|length + 1) %}
-{% set height = month_margin + box_total * 7 %}
-<svg class="heatmap" width="{{ width }}" height="{{ height }}">
+{% set height = month_margin + box_total * 7 + 4 %}
+<svg class="heatmap select-none" width="{{ width }}" height="{{ height }}" viewBox="0 0 {{ width }} {{ height }}" style="max-width: 100%; height: auto;">
 
-  {# Boxes #}
+  {# Months Labels #}
+  <g transform="translate({{ day_margin }}, 0)">
+    {% for month in heatmap.month_labels %}
+    {% set offset_x = month.offset * box_total %}
+    <text x="{{ offset_x }}" y="{{ month_margin - 4 }}" class="text-[10px] fill-slate-400 font-semibold select-none">{{ month.name }}</text>
+    {% endfor %}
+  </g>
+
+  {# Days of the week Labels #}
+  <g>
+    {% for day in ['Sun', '', 'Tue', '', 'Thu', '', 'Sat'] %}
+    {% if day %}
+    <text x="0" y="{{ month_margin + loop.index * box_total - 4 }}" class="text-[9px] fill-slate-400 font-semibold select-none">{{ day }}</text>
+    {% endif %}
+    {% endfor %}
+  </g>
+
+  {# Boxes Grid #}
   <g transform="translate({{ day_margin }}, {{ month_margin }})">
     {% for week in heatmap.weeks %}
     {% set i_week = loop.index0 %}
     <g transform="translate({{ i_week * box_total }}, 0)">
       {% for date in week %}
       {% set count = heatmap.counts.get(date, 0) %}
-      <g>
-        <title>{{ count }} edit{% if count != 1 %}s{% endif %} on {{ date }}</title>
-        <rect class="{{ color(count) }}"
-              width="{{ box_width }}" height="{{ box_width }}"
-              x="0" y="{{ loop.index0 * box_total }}"
-              rx="2" ry="2"></rect>
-      </g>
+      {% set date_str = date.strftime('%Y-%m-%d') %}
+      {% set is_selected = (selected_date == date_str) %}
+      
+      {% if endpoint %}
+        {% if is_selected %}
+          {% set link_target = url_for(endpoint, **ep_kwargs) %}
+        {% else %}
+          {% set custom_kwargs = dict(ep_kwargs, date=date_str) %}
+          {% set link_target = url_for(endpoint, **custom_kwargs) %}
+        {% endif %}
+        <a href="{{ link_target }}" class="cursor-pointer">
+          <title>{{ count }} contribution{% if count != 1 %}s{% endif %} on {{ date.strftime('%b %d, %Y') }}{% if is_selected %} (Selected - click to clear){% else %} (Click to filter){% endif %}</title>
+          <rect class="{{ color(count) }}"
+                width="{{ box_width }}" height="{{ box_width }}"
+                x="0" y="{{ loop.index0 * box_total }}"
+                rx="2" ry="2"
+                {% if is_selected %}
+                  stroke="#1a73e8" stroke-width="2" style="filter: drop-shadow(0 0 2px rgba(26,115,232,0.6));"
+                {% else %}
+                  stroke="rgba(0,0,0,0.04)" stroke-width="0.5"
+                {% endif %}
+          ></rect>
+        </a>
+      {% else %}
+        <g>
+          <title>{{ count }} edit{% if count != 1 %}s{% endif %} on {{ date.strftime('%b %d, %Y') }}</title>
+          <rect class="{{ color(count) }}"
+                width="{{ box_width }}" height="{{ box_width }}"
+                x="0" y="{{ loop.index0 * box_total }}"
+                rx="2" ry="2"
+                stroke="rgba(0,0,0,0.04)" stroke-width="0.5"></rect>
+        </g>
+      {% endif %}
       {% endfor %}
     </g>
     {% endfor %}
   </g>
-
-  {# Months #}
-  <g transform="translate({{ day_margin }}, 0)">
-    {% for month in heatmap.month_labels %}
-    {% set offset_x = month.offset * box_total %}
-    <text x="{{ offset_x }}" y="{{ month_margin - 4 }}">{{ month.name }}</text>
-    {% endfor %}
-  </g>
-
-  {# Days of the week #}
-  <g>
-    {% for day in ['Sun', '', 'Tue', '', 'Thu', '', 'Sat'] %}
-    <text x="0" y="{{ month_margin + loop.index * box_total - 4 }}">{{ day }}</text>
-    {% endfor %}
-  </g>
 </svg>
 {% endmacro %}
-

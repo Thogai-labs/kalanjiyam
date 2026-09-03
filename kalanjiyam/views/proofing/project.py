@@ -1,13 +1,13 @@
-import logging
-import re
-import os
 import json
+import logging
+import os
+import re
 from datetime import datetime
 
+import redis
 from celery.result import GroupResult
 from flask import (
     Blueprint,
-    abort as flask_abort,
     current_app,
     flash,
     jsonify,
@@ -16,11 +16,13 @@ from flask import (
     request,
     url_for,
 )
+from flask import (
+    abort as flask_abort,
+)
 from flask_babel import lazy_gettext as _l
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from markupsafe import Markup, escape
-from sqlalchemy import orm
 from sqlalchemy.orm.attributes import flag_modified
 from werkzeug.exceptions import abort
 from werkzeug.utils import redirect
@@ -36,27 +38,26 @@ from wtforms import (
 from wtforms.validators import DataRequired, ValidationError
 from wtforms.widgets import TextArea
 from wtforms_sqlalchemy.fields import QuerySelectField
-import redis
 
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
-from kalanjiyam.utils.translation_engine import (
-    get_available_translation_engines,
-    get_supported_languages_list,
-)
 from kalanjiyam.models.proofing import OCRComparison
 from kalanjiyam.tasks import app as celery_app
-from kalanjiyam.tasks import ocr as ocr_tasks
-from kalanjiyam.tasks.comparison import run_ocr_comparison_task
-from kalanjiyam.tasks import translation as translation_tasks
-from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
 from kalanjiyam.tasks import archival_extract as archival_tasks
 from kalanjiyam.tasks import metadata as metadata_tasks
+from kalanjiyam.tasks import ocr as ocr_tasks
+from kalanjiyam.tasks import translation as translation_tasks
+from kalanjiyam.tasks.comparison import run_ocr_comparison_task
 from kalanjiyam.utils import archival_description as ad
 from kalanjiyam.utils import archival_taxonomy as at
 from kalanjiyam.utils import project_metadata as pm
 from kalanjiyam.utils import project_utils, proofing_utils
+from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
 from kalanjiyam.utils.revisions import add_revision
+from kalanjiyam.utils.translation_engine import (
+    get_available_translation_engines,
+    get_supported_languages_list,
+)
 from kalanjiyam.views.proofing.decorators import moderator_required, p2_required
 from kalanjiyam.views.proofing.stats import calculate_stats
 
@@ -132,6 +133,7 @@ class EditMetadataForm(FlaskForm):
             "placeholder": _l("Coming soon."),
         },
     )
+    condition_tags = HiddenField(_l("Condition tags"))
     genre = QuerySelectField(
         query_factory=q.genres, allow_blank=True, blank_text=_l("(none)")
     )
@@ -352,25 +354,83 @@ def summary(slug):
 
     page_rules = project_utils.parse_page_number_spec(project_.page_numbers)
     page_titles = project_utils.apply_rules(len(project_.pages), page_rules)
+    page_issues_map = project_utils.get_page_issues_map(
+        project_.condition_tags, len(project_.pages)
+    )
     return render_template(
         "proofing/projects/summary.html",
         project=project_,
         pages=zip(page_titles, project_.pages),
+        page_issues_map=page_issues_map,
         recent_revisions=recent_revisions,
     )
 
 
 @bp.route("/<slug>/activity")
 def activity(slug):
-    """Show recent activity on this project."""
+    """Show recent activity on this project with interactive heatmap and date filter."""
+    from datetime import date as dt_date, datetime, timedelta
+    from sqlalchemy import func
+    from kalanjiyam.utils import heatmap
+
     project_ = q.project(slug)
     if project_ is None:
         abort(404)
 
+    date_str = request.args.get("date")
+    filter_date = None
+    if date_str:
+        try:
+            filter_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            filter_date = None
+            date_str = None
+
     session = q.get_session()
+
+    # 1. Compute 1-Year Heatmap Activity Data for this project
+    one_year_ago = datetime.utcnow() - timedelta(days=365)
+    hm_rev_rows = (
+        session.query(
+            func.date(db.Revision.created).label("d"),
+            func.count(db.Revision.id).label("c"),
+        )
+        .filter(db.Revision.project_id == project_.id, db.Revision.created >= one_year_ago)
+        .group_by(func.date(db.Revision.created))
+        .all()
+    )
+    hm_proj_row = (
+        session.query(
+            func.date(db.Project.created_at).label("d"),
+            func.count(db.Project.id).label("c"),
+        )
+        .filter(db.Project.id == project_.id, db.Project.created_at >= one_year_ago)
+        .group_by(func.date(db.Project.created_at))
+        .all()
+    )
+    counts_map = {}
+    for row in hm_rev_rows:
+        if row[0]:
+            d = row[0] if isinstance(row[0], dt_date) else datetime.strptime(str(row[0])[:10], "%Y-%m-%d").date()
+            counts_map[d] = counts_map.get(d, 0) + int(row[1])
+    for row in hm_proj_row:
+        if row[0]:
+            d = row[0] if isinstance(row[0], dt_date) else datetime.strptime(str(row[0])[:10], "%Y-%m-%d").date()
+            counts_map[d] = counts_map.get(d, 0) + int(row[1])
+
+    hm = heatmap.create_from_counts(counts_map)
+    total_heatmap_contributions = sum(counts_map.values())
+
+    # 2. Query revisions
+    rev_filters = [db.Revision.project_id == project_.id]
+    if filter_date:
+        start_dt = datetime.combine(filter_date, datetime.min.time())
+        end_dt = datetime.combine(filter_date, datetime.max.time())
+        rev_filters.extend([db.Revision.created >= start_dt, db.Revision.created <= end_dt])
+
     recent_revisions = (
         session.query(db.Revision)
-        .filter_by(project_id=project_.id)
+        .filter(*rev_filters)
         .order_by(db.Revision.created.desc())
         .limit(100)
         .all()
@@ -391,6 +451,7 @@ def activity(slug):
     for r in all_page_revisions:
         revisions_by_page.setdefault(r.page_id, []).append(r)
 
+    from kalanjiyam.utils import proofing_utils
     from kalanjiyam.utils.diff import revision_diff
 
     for r in recent_revisions:
@@ -400,19 +461,30 @@ def activity(slug):
         except ValueError:
             idx = -1
 
+        cur_text = proofing_utils.revision_plain_content(r)
         if idx != -1 and idx + 1 < len(page_revs):
             prev_r = page_revs[idx + 1]
-            r.diff = revision_diff(prev_r.content, r.content)
+            prev_text = proofing_utils.revision_plain_content(prev_r)
+            r.prev_revision_id = prev_r.id
+            r.diff = revision_diff(prev_text, cur_text)
         else:
-            r.diff = None
+            r.prev_revision_id = None
+            if cur_text:
+                r.diff = revision_diff("", cur_text)
+            else:
+                r.diff = None
 
     recent_activity = [("revision", r.created, r) for r in recent_revisions]
-    recent_activity.append(("project", project_.created_at, project_))
+    if not filter_date or (project_.created_at and project_.created_at.date() == filter_date):
+        recent_activity.append(("project", project_.created_at, project_))
 
     return render_template(
         "proofing/projects/activity.html",
         project=project_,
         recent_activity=recent_activity,
+        heatmap=hm,
+        selected_date=date_str,
+        total_heatmap_contributions=total_heatmap_contributions,
     )
 
 
@@ -430,9 +502,18 @@ def edit(slug):
             abort(403)
 
     form = EditMetadataForm(obj=project_)
+    if request.method == "GET":
+        form.condition_tags.data = json.dumps(project_.condition_tag_list)
+
     if form.validate_on_submit():
         session = q.get_session()
         form.populate_obj(project_)
+
+        raw_tags = request.form.get("condition_tags") or form.condition_tags.data
+        project_.condition_tags = project_utils.normalize_condition_tags(
+            raw_tags, total_pages=len(project_.pages)
+        )
+        flag_modified(project_, "condition_tags")
         session.commit()
 
         # Title, author, and visibility are all indexed on every page
@@ -632,7 +713,9 @@ def description_extract(slug):
 
     try:
         archival_tasks.extract_archival_metadata.delay(
-            project_.id, force=bool(form.force.data)
+            project_.id,
+            force=bool(form.force.data),
+            enqueued_at=datetime.utcnow().isoformat(),
         )
         flash(
             _l("Extraction started. It reads every page, so it takes a while."),
@@ -861,7 +944,7 @@ def download(slug):
     if project_ is None:
         abort(404)
 
-    from kalanjiyam.utils.storage import project_docx_key, get_storage
+    from kalanjiyam.utils.storage import get_storage, project_docx_key
 
     is_docx = get_storage().exists(project_docx_key(slug))
 
@@ -882,7 +965,7 @@ def download_as_text(slug):
     content_blobs = []
     for p in project_.pages:
         rev = get_main_revision(p)
-        content_blobs.append(rev.content if rev else "")
+        content_blobs.append(proofing_utils.revision_plain_content(rev) if rev else "")
 
     raw_text = proofing_utils.to_plain_text(content_blobs)
 
@@ -911,14 +994,15 @@ def download_as_xml(slug):
     }
     project_meta = {k: v or "TODO" for k, v in project_meta.items()}
     from kalanjiyam.utils.document_storage import load_revision_document as _load_doc
-
     from kalanjiyam.utils.proofing_utils import get_main_revision
 
     has_blocks = any(
         (
-            lambda rev: rev
-            and getattr(rev, "content_format", "plain") == "blocks"
-            and _load_doc(rev)
+            lambda rev: (
+                rev
+                and getattr(rev, "content_format", "plain") == "blocks"
+                and _load_doc(rev)
+            )
         )(get_main_revision(p))
         for p in project_.pages
     )
@@ -1247,7 +1331,6 @@ def _select_changes(project_, selected_keys, query: str, replace: str):
         latest = page_.revisions[-1]
         matches = []
         for line_num, line in enumerate(latest.content.splitlines()):
-
             form_key = f"match{page_.slug}-{line_num}"
             replace_form_key = f"match{page_.slug}-{line_num}-replace"
 
@@ -1433,7 +1516,7 @@ def batch_ocr(slug):
             task_data = json.loads(task_info)
             task_id = task_data.get("task_id")
             engine = task_data.get("engine", "google")
-            language = task_data.get("language", "sa")
+            language = task_data.get("language") or "auto"
 
             # Try to restore the task to check if it's still active
             r = GroupResult.restore(task_id, app=celery_app)
@@ -1487,8 +1570,8 @@ def batch_ocr(slug):
     from kalanjiyam.utils.ocr_client import get_available_engines
     from kalanjiyam.utils.ocr_types import (
         ENGINE_MAP,
-        build_engine_choices,
         REVERSE_ENGINE_MAP,
+        build_engine_choices,
     )
 
     system_settings = q.get_system_settings()
@@ -1516,7 +1599,7 @@ def batch_ocr(slug):
                 return redirect(url_for("proofing.project.batch_ocr", slug=slug))
 
         engine_num = request.form.get("engine", "")
-        language = request.form.get("language", "sa")
+        language = request.form.get("language") or "auto"
         if is_restricted_ocr:
             engine = default_ocr_engine
         else:
@@ -1642,12 +1725,12 @@ def batch_ocr_status(task_id):
             pending_tasks=0,
             failed_tasks=0,
             engine="google",
-            language="sa",
+            language="auto",
         )
 
     # Get task info from Redis to include engine and language
     engine = "google"
-    language = "sa"
+    language = "auto"
     try:
         for key in redis_client.scan_iter(match="ocr_task:*"):
             task_info = redis_client.get(key)
@@ -1655,7 +1738,7 @@ def batch_ocr_status(task_id):
                 task_data = json.loads(task_info)
                 if task_data.get("task_id") == task_id:
                     engine = task_data.get("engine", "google")
-                    language = task_data.get("language", "sa")
+                    language = task_data.get("language") or "auto"
                     break
     except Exception as e:
         LOG.warning(f"Error getting OCR task info from Redis: {e}")
@@ -1724,6 +1807,324 @@ def batch_ocr_status(task_id):
     )
 
 
+def _clear_enhanced_ocr_task_from_redis(task_id):
+    """Clear Enhanced OCR task from Redis when it completes or fails."""
+    try:
+        for key in redis_client.scan_iter(match="enhanced_ocr_task:*"):
+            task_info = redis_client.get(key)
+            if task_info:
+                task_data = json.loads(task_info)
+                if task_data.get("task_id") == task_id:
+                    redis_client.delete(key)
+                    LOG.debug(
+                        f"Cleared Enhanced OCR task {task_id} from Redis key {key}"
+                    )
+                    break
+    except Exception as e:
+        LOG.warning(f"Error clearing Enhanced OCR task from Redis: {e}")
+
+
+@bp.route("/<slug>/batch-enhanced-ocr", methods=["GET", "POST"])
+@p2_required
+def batch_enhanced_ocr(slug):
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    # Check if there's an ongoing Enhanced OCR task using Redis
+    task_key = f"enhanced_ocr_task:{slug}"
+    task_info = redis_client.get(task_key)
+
+    if task_info:
+        try:
+            task_data = json.loads(task_info)
+            task_id = task_data.get("task_id")
+            engine = task_data.get("engine", "dots_ocr")
+            profile = task_data.get("profile", "hybrid_binarization")
+            language = task_data.get("language") or "auto"
+            save_enhanced_images = bool(task_data.get("save_enhanced_images", False))
+
+            r = GroupResult.restore(task_id, app=celery_app)
+            if r and r.results:
+                current = r.completed_count()
+                total = len(r.results)
+                if current < total:
+                    percent = (current / total * 100) if total > 0 else 0
+                    active_tasks = sum(
+                        1 for result in r.results if result.state == "STARTED"
+                    )
+                    pending_tasks = sum(
+                        1 for result in r.results if result.state == "PENDING"
+                    )
+                    failed_tasks = sum(1 for result in r.results if result.failed())
+
+                    from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
+
+                    numeric_value = REVERSE_ENGINE_MAP.get(engine, "12")
+                    engine_label = (
+                        f"OCR {numeric_value} ({profile.replace('_', ' ').title()})"
+                    )
+
+                    return render_template(
+                        "proofing/projects/batch-enhanced-ocr-post.html",
+                        project=project_,
+                        status="PROGRESS",
+                        current=current,
+                        total=total,
+                        percent=percent,
+                        task_id=task_id,
+                        active_tasks=active_tasks,
+                        pending_tasks=pending_tasks,
+                        failed_tasks=failed_tasks,
+                        engine=engine,
+                        profile=profile,
+                        engine_label=engine_label,
+                        language=language,
+                        save_enhanced_images=save_enhanced_images,
+                    )
+                else:
+                    redis_client.delete(task_key)
+            else:
+                redis_client.delete(task_key)
+        except Exception as e:
+            LOG.warning(f"Error checking Enhanced OCR task for {slug}: {e}")
+            redis_client.delete(task_key)
+
+    from kalanjiyam.utils.image_preprocessing import validate_enhancement_profile
+    from kalanjiyam.utils.ocr_client import get_available_engines
+    from kalanjiyam.utils.ocr_types import (
+        ENGINE_MAP,
+        REVERSE_ENGINE_MAP,
+        build_engine_choices,
+    )
+
+    system_settings = q.get_system_settings()
+    default_ocr_engine = system_settings.default_ocr_engine or "dots_ocr"
+    default_engine_value = REVERSE_ENGINE_MAP.get(default_ocr_engine, "12")
+    from kalanjiyam.utils.org_access import is_restricted_ocr_user
+
+    is_restricted_ocr = is_restricted_ocr_user(current_user)
+
+    if request.method == "POST":
+        if not current_user.is_authenticated:
+            from kalanjiyam.utils.rate_limit import is_rate_limited
+
+            ip_address = request.remote_addr
+            fingerprint_id = request.cookies.get("device_fingerprint")
+            limit = system_settings.unregistered_user_ocr_limit
+            if is_rate_limited("run_ocr", ip_address, fingerprint_id, limit=limit):
+                flash(
+                    _l(
+                        f"Rate limit exceeded. Guests can only run OCR {limit} times per 24 hours."
+                    ),
+                    "error",
+                )
+                return redirect(
+                    url_for("proofing.project.batch_enhanced_ocr", slug=slug)
+                )
+
+        engine_num = request.form.get("engine", "")
+        profile_raw = request.form.get("profile", "hybrid_binarization")
+        profile = validate_enhancement_profile(profile_raw)
+        language = request.form.get("language") or "auto"
+        save_enhanced_images = request.form.get("save_enhanced_images") == "1"
+
+        if is_restricted_ocr:
+            engine = default_ocr_engine
+        else:
+            engine = ENGINE_MAP.get(engine_num, engine_num)
+
+        if not engine or engine not in SUPPORTED_ENGINES:
+            flash(_l("Unsupported OCR engine selected."), "error")
+        else:
+            queue_name = "low_priority" if not current_user.is_authenticated else None
+            task = ocr_tasks.run_enhanced_ocr_for_project(
+                app_env=current_app.config["KALANJIYAM_ENVIRONMENT"],
+                project=project_,
+                engine=engine,
+                profile=profile,
+                language=language,
+                save_enhanced_images=save_enhanced_images,
+                queue=queue_name,
+            )
+            if task:
+                if not current_user.is_authenticated:
+                    from kalanjiyam.utils.rate_limit import log_usage_action
+
+                    log_usage_action(
+                        action="run_ocr",
+                        ip_address=request.remote_addr,
+                        fingerprint_id=request.cookies.get("device_fingerprint"),
+                        project_slug=slug,
+                    )
+                task_info = {
+                    "task_id": task.id,
+                    "engine": engine,
+                    "profile": profile,
+                    "language": language,
+                    "save_enhanced_images": save_enhanced_images,
+                    "started_at": datetime.utcnow().isoformat(),
+                    "project_slug": slug,
+                }
+                redis_client.setex(task_key, 86400, json.dumps(task_info))
+
+                from kalanjiyam.utils.user_tasks import (
+                    add_user_task,
+                    get_user_identifier,
+                )
+
+                user_id = get_user_identifier(current_user, request)
+                if user_id:
+                    add_user_task(
+                        user_identifier=user_id,
+                        task_id=task.id,
+                        task_type="enhanced_ocr",
+                        project_slug=slug,
+                        project_title=project_.display_title,
+                        extra_info={
+                            "engine": engine,
+                            "profile": profile,
+                            "language": language,
+                            "save_enhanced_images": save_enhanced_images,
+                        },
+                    )
+                numeric_value = REVERSE_ENGINE_MAP.get(engine, "12")
+                engine_label = (
+                    f"OCR {numeric_value} ({profile.replace('_', ' ').title()})"
+                )
+
+                return render_template(
+                    "proofing/projects/batch-enhanced-ocr-post.html",
+                    project=project_,
+                    status="PENDING",
+                    current=0,
+                    total=0,
+                    percent=0,
+                    task_id=task.id,
+                    active_tasks=0,
+                    pending_tasks=0,
+                    failed_tasks=0,
+                    engine=engine,
+                    profile=profile,
+                    language=language,
+                    save_enhanced_images=save_enhanced_images,
+                    engine_label=engine_label,
+                    is_restricted_ocr=is_restricted_ocr,
+                    default_engine_value=default_engine_value,
+                )
+            else:
+                flash(
+                    _l("All pages in this project have at least one edit already."),
+                    "error",
+                )
+
+    ocr_status = get_available_engines()
+    engine_choices = build_engine_choices(
+        ocr_status["engines"],
+        is_super_admin=current_user.is_super_admin,
+        recommended_engine=system_settings.recommended_ocr_engine or "dots_ocr",
+    )
+    return render_template(
+        "proofing/projects/batch-enhanced-ocr.html",
+        project=project_,
+        ocr_status=ocr_status["status"],
+        engine_choices=engine_choices,
+        is_restricted_ocr=is_restricted_ocr,
+        default_engine_value=default_engine_value,
+    )
+
+
+@bp.route("/batch-enhanced-ocr-status/<task_id>")
+def batch_enhanced_ocr_status(task_id):
+    r = GroupResult.restore(task_id, app=celery_app)
+    if not r or not r.results:
+        return render_template(
+            "include/ocr-progress.html",
+            status="PENDING",
+            current=0,
+            total=0,
+            percent=0,
+            active_tasks=0,
+            pending_tasks=0,
+            failed_tasks=0,
+            engine="dots_ocr",
+            language="auto",
+        )
+
+    engine = "dots_ocr"
+    profile = "hybrid_binarization"
+    language = "auto"
+    try:
+        for key in redis_client.scan_iter(match="enhanced_ocr_task:*"):
+            task_info = redis_client.get(key)
+            if task_info:
+                task_data = json.loads(task_info)
+                if task_data.get("task_id") == task_id:
+                    engine = task_data.get("engine", "dots_ocr")
+                    profile = task_data.get("profile", "hybrid_binarization")
+                    language = task_data.get("language") or "auto"
+                    break
+    except Exception as e:
+        LOG.warning(f"Error getting Enhanced OCR task info from Redis: {e}")
+
+    from kalanjiyam.utils.ocr_types import REVERSE_ENGINE_MAP
+
+    numeric_value = REVERSE_ENGINE_MAP.get(engine, "12")
+    engine_label = f"OCR {numeric_value} ({profile.replace('_', ' ').title()})"
+
+    if r.results:
+        current = r.completed_count()
+        total = len(r.results)
+        percent = (current / total * 100) if total > 0 else 0
+
+        active_tasks = sum(1 for result in r.results if result.state == "STARTED")
+        pending_tasks = sum(1 for result in r.results if result.state == "PENDING")
+        failed_tasks = sum(1 for result in r.results if result.failed())
+        revoked_tasks = sum(1 for result in r.results if result.state == "REVOKED")
+
+        status = None
+        if total:
+            if current == total:
+                status = "SUCCESS"
+                _clear_enhanced_ocr_task_from_redis(task_id)
+            elif failed_tasks > 0:
+                status = "FAILURE"
+                _clear_enhanced_ocr_task_from_redis(task_id)
+            elif revoked_tasks > 0:
+                status = "CANCELLED"
+                _clear_enhanced_ocr_task_from_redis(task_id)
+            else:
+                status = "PROGRESS"
+
+        data = {
+            "status": status,
+            "current": current,
+            "total": total,
+            "percent": percent,
+            "active_tasks": active_tasks,
+            "pending_tasks": pending_tasks,
+            "failed_tasks": failed_tasks,
+            "engine": engine,
+            "language": language,
+            "engine_label": engine_label,
+        }
+        return render_template("include/ocr-progress.html", **data)
+
+    return render_template(
+        "include/ocr-progress.html",
+        status="PENDING",
+        current=0,
+        total=0,
+        percent=0,
+        active_tasks=0,
+        pending_tasks=0,
+        failed_tasks=0,
+        engine=engine,
+        language=language,
+        engine_label=engine_label,
+    )
+
+
 @bp.route("/<slug>/batch-translate", methods=["GET", "POST"])
 @p2_required
 def batch_translate(slug):
@@ -1731,7 +2132,28 @@ def batch_translate(slug):
     if project_ is None:
         abort(404)
 
-    engines = get_available_translation_engines()
+    system_settings = q.get_system_settings()
+    default_trans_engine = (
+        getattr(system_settings, "default_translation_engine", "indictrans2")
+        or "indictrans2"
+    )
+    rec_trans_engine = getattr(
+        system_settings, "recommended_translation_engine", None
+    )
+    is_super_admin = getattr(current_user, "is_super_admin", False)
+
+    from kalanjiyam.utils.translation_engine import (
+        build_translation_choices,
+        normalize_translation_engine,
+        REVERSE_TRANSLATION_ENGINE_MAP,
+        TRANSLATION_ENGINE_LABELS,
+    )
+
+    engines = build_translation_choices(
+        is_super_admin=is_super_admin,
+        recommended_engine=rec_trans_engine,
+        default_engine=default_trans_engine,
+    )
     languages = get_supported_languages_list()
 
     # Check if there's an ongoing translation task using Redis
@@ -1746,6 +2168,16 @@ def batch_translate(slug):
         try:
             task_data = json.loads(task_info)
             task_id = task_data.get("task_id")
+            running_engine = task_data.get("engine", default_trans_engine)
+            norm_running_engine = normalize_translation_engine(running_engine)
+            numeric_value = REVERSE_TRANSLATION_ENGINE_MAP.get(norm_running_engine, "1")
+            engine_label = (
+                TRANSLATION_ENGINE_LABELS.get(
+                    norm_running_engine, norm_running_engine.replace("_", " ").title()
+                )
+                if is_super_admin
+                else f"Translation {numeric_value}"
+            )
 
             # Try to restore the task to check if it's still active
             r = GroupResult.restore(task_id, app=celery_app)
@@ -1776,6 +2208,8 @@ def batch_translate(slug):
                         active_tasks=active_tasks,
                         pending_tasks=pending_tasks,
                         failed_tasks=failed_tasks,
+                        engine=norm_running_engine,
+                        engine_label=engine_label,
                         engines=engines,
                         languages=languages,
                     )
@@ -1794,7 +2228,8 @@ def batch_translate(slug):
         # Get translation parameters from form
         source_lang = request.form.get("source_lang", "sa")
         target_lang = request.form.get("target_lang", "en")
-        engine = request.form.get("engine", "google")
+        engine_val = request.form.get("engine", default_trans_engine)
+        engine = normalize_translation_engine(engine_val)
         glossary = request.form.get("glossary") or None
 
         if source_lang == target_lang:
@@ -1809,7 +2244,7 @@ def batch_translate(slug):
         # Validate engine
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
 
-        if engine not in TranslationEngineFactory.get_supported_engines():
+        if not TranslationEngineFactory.is_supported(engine):
             flash(_l("Unsupported translation engine selected."), "error")
             return render_template(
                 "proofing/projects/batch-translate.html",
@@ -1861,6 +2296,15 @@ def batch_translate(slug):
                     },
                 )
 
+            numeric_value = REVERSE_TRANSLATION_ENGINE_MAP.get(engine, "1")
+            engine_label = (
+                TRANSLATION_ENGINE_LABELS.get(
+                    engine, engine.replace("_", " ").title()
+                )
+                if is_super_admin
+                else f"Translation {numeric_value}"
+            )
+
             return render_template(
                 "proofing/projects/batch-translate.html",
                 project=project_,
@@ -1872,6 +2316,8 @@ def batch_translate(slug):
                 active_tasks=0,
                 pending_tasks=0,
                 failed_tasks=0,
+                engine=engine,
+                engine_label=engine_label,
                 engines=engines,
                 languages=languages,
             )
@@ -1900,6 +2346,39 @@ def batch_translate_status(task_id):
             pending_tasks=0,
             failed_tasks=0,
         )
+
+    engine = "indictrans2"
+    source_lang = "sa"
+    target_lang = "en"
+    try:
+        for key in redis_client.scan_iter(match="translation_task:*"):
+            task_info = redis_client.get(key)
+            if task_info:
+                task_data = json.loads(task_info)
+                if task_data.get("task_id") == task_id:
+                    engine = task_data.get("engine", "indictrans2")
+                    source_lang = task_data.get("source_lang", "sa")
+                    target_lang = task_data.get("target_lang", "en")
+                    break
+    except Exception as e:
+        LOG.warning(f"Error getting translation task info from Redis: {e}")
+
+    from kalanjiyam.utils.translation_engine import (
+        REVERSE_TRANSLATION_ENGINE_MAP,
+        TRANSLATION_ENGINE_LABELS,
+        normalize_translation_engine,
+    )
+
+    norm_engine = normalize_translation_engine(engine)
+    numeric_value = REVERSE_TRANSLATION_ENGINE_MAP.get(norm_engine, "1")
+    is_super_admin = getattr(current_user, "is_super_admin", False)
+    engine_label = (
+        TRANSLATION_ENGINE_LABELS.get(
+            norm_engine, norm_engine.replace("_", " ").title()
+        )
+        if is_super_admin
+        else f"Translation {numeric_value}"
+    )
 
     if r.results:
         current = r.completed_count()
@@ -1948,6 +2427,10 @@ def batch_translate_status(task_id):
             "active_tasks": active_tasks,
             "pending_tasks": pending_tasks,
             "failed_tasks": failed_tasks,
+            "engine": norm_engine,
+            "engine_label": engine_label,
+            "source_lang": source_lang,
+            "target_lang": target_lang,
         }
     else:
         data = {
@@ -1958,6 +2441,10 @@ def batch_translate_status(task_id):
             "active_tasks": 0,
             "pending_tasks": 0,
             "failed_tasks": 0,
+            "engine": norm_engine,
+            "engine_label": engine_label,
+            "source_lang": source_lang,
+            "target_lang": target_lang,
         }
 
     return render_template(

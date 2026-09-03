@@ -2,43 +2,159 @@
 {% from "macros/forms.html" import field %}
 {% import "macros/proofing.html" as m %}
 
-{% block title %}{{ _('Search and Replace') }} | {{ project.display_title }}{% endblock %}
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  .{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
+  }
+</style>
+{% endblock %}
+
+{% block title %}{{ _('Changes: Confirm and Review') }} | {{ project.display_title }}{% endblock %}
+
+{% block hero %}
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+  <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+    <div class="flex items-start gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0 mt-0.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="flex flex-wrap items-center gap-2">
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ project.display_title }}
+          </h1>
+          {% if project.condition_tag_list %}
+            <div class="flex flex-wrap items-center gap-1.5">
+              {% for tag in project.condition_tag_list %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200 shadow-xs" title="{{ _('Condition issue: %(tag)s', tag=tag.name) }}{% if tag.pages %} ({{ _('Pages:') }} {{ tag.pages }}){% endif %}">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  <span>{{ tag.name }}</span>
+                  {% if tag.pages %}
+                    <span class="text-[11px] text-amber-700 font-normal">({{ tag.pages }})</span>
+                  {% endif %}
+                </span>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- Meta Info -->
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium mt-1">
+          {% if project.author %}
+          <span class="text-slate-700 font-semibold">{{ project.author }}</span>
+          {% endif %}
+          {% if project.publication_year %}
+          <span class="text-slate-300">•</span>
+          <span>{{ project.publication_year }}</span>
+          {% endif %}
+          {% if project.publisher %}
+          <span class="text-slate-300">•</span>
+          <span>{{ project.publisher }}</span>
+          {% endif %}
+          <span class="text-slate-300">•</span>
+          <span class="text-royalblue font-semibold">{{ project.pages|length }} {{ _('pages') }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Action Button back to Workspace -->
+    <div class="flex items-center gap-2 text-xs shrink-0">
+      <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
+        <span>{{ _('Workspace') }}</span>
+      </a>
+    </div>
+  </div>
+</header>
+{% endblock %}
 
 {% block content %}
+<div class="w-full">
+  <div class="mb-6">
+    {{ m.project_tabs(project=project, active='search_operations', is_mod=current_user.is_moderator) }}
+  </div>
 
-{{ m.project_header_nested(_('Review and Confirm Changes'), project) }}
-{{ m.project_tabs(project=project, active='edit') }}
+  {% set match_counts = results|map(attribute='matches')|map('length')|list %}
+  {% set nr = match_counts|sum %}
 
-<div class="prose">
-  <h1>{{ _('Confirm Changes') }}</h1>
-  {% macro sp(s, p, n) %}{% if n == 1 %}{{ s }}{% else %}{{ p }}{% endif %}{% endmacro %}
-  <p>{{ _('Please carefully review and confirm the changes you selected:') }}</p>
-  <form method="POST" action="{{ url_for('proofing.project.confirm_changes', slug=project.slug) }}" class="bg-slate-100 p-4 my-4">
+  <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 mb-8">
+    <h2 class="text-base font-bold text-slate-900 flex items-center gap-2 mb-2">
+      <span class="w-2 h-2 rounded-full bg-royalblue"></span>
+      {{ _('Review & Confirm Changes') }}
+    </h2>
+    <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+      {{ ngettext('Confirm changes on %(count)s match containing', 'Confirm changes on %(count)s matches containing', nr, count=nr) }}
+      <span class="px-2 py-0.5 bg-red-100 text-red-800 rounded font-mono text-xs font-bold">{{ query }}</span>
+      {{ _('to be replaced by') }}
+      <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-mono text-xs font-bold">{{ replace }}</span>.
+    </p>
+  </div>
+
+  <form method="POST" action="{{ url_for('proofing.project.confirm_changes', slug=project.slug) }}">
     {{ form.csrf_token }}
     <input type="hidden" name="query" value="{{ query }}">
     <input type="hidden" name="replace" value="{{ replace }}">
 
-    {% set match_counts = results|map(attribute='matches')|map('length')|list %}
-    {% set nr = match_counts|sum %}
-    <p>{{ ngettext('Confirm changes on %(count)s match containing', 'Confirm changes on %(count)s matches containing', nr, count=nr) }} <span style="color: red;"><kbd>{{ query }}</kbd></span> {{ _('to be replaced by') }} <span style="color: green;"><kbd>{{ replace }}</kbd></span>.</p>
-    
-    {% for result in results %}
-      {% set page = result.page %}
-      {% set page_url = url_for("proofing.page.edit", project_slug=project.slug, page_slug=page.slug) %}
-      {% set matches = result.matches %}
-      {% for match in matches %}
-        <div class="match" style="background-color: rgb(243, 239, 239);">
-          <p>{{ _('Page') }} <a href="{{ page_url }}">{{ project.display_title }}/{{ page.slug }}:</a> {{ _('Line') }} {{ match.line_num }}</p>
-          <label for="match{{ page.slug }}-{{ match.line_num }}">{{ match.query }}</label>
-          <input type="hidden" name="match{{ page.slug }}-{{ match.line_num }}-query" value="{{ match.query }}">
-          <br>
-          <label for="match{{ page.slug }}-{{ match.line_num }}-replace" style="color: rgb(97, 86, 66); background-color: rgb(219, 215, 215);"> {{ match.replace }} </label>
-          <input type="hidden" name="match{{ page.slug }}-{{ match.line_num }}-replace" value="{{ match.replace }}">
+    <div class="space-y-4 mb-8">
+      {% for result in results %}
+        {% set page = result.page %}
+        {% set page_url = url_for("proofing.page.edit", project_slug=project.slug, page_slug=page.slug) %}
+        {% set matches = result.matches %}
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+            <a href="{{ page_url }}" class="inline-flex items-center gap-2 font-bold text-sm text-royalblue hover:underline">
+              <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              <span>{{ project.display_title }} / {{ page.slug }}</span>
+            </a>
+            <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-xs">
+              {{ matches|length }} {{ _('matches') }}
+            </span>
+          </div>
+
+          <div class="space-y-3 font-mono text-xs">
+            {% for match in matches %}
+              <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
+                <div class="font-sans text-slate-500 font-semibold text-xs">
+                  {{ _('Line %(line)s', line=match.line_num) }}
+                </div>
+                <div class="p-2 bg-red-50 text-red-800 rounded-lg border border-red-100 flex items-baseline gap-2">
+                  <span class="font-sans font-bold text-[10px] text-red-500 uppercase shrink-0">- OLD</span>
+                  <span class="leading-relaxed">{{ match.query }}</span>
+                  <input type="hidden" name="match{{ page.slug }}-{{ match.line_num }}-query" value="{{ match.query }}">
+                </div>
+                <div class="p-2 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-100 flex items-baseline gap-2">
+                  <span class="font-sans font-bold text-[10px] text-emerald-600 uppercase shrink-0">+ NEW</span>
+                  <span class="leading-relaxed">{{ match.replace }}</span>
+                  <input type="hidden" name="match{{ page.slug }}-{{ match.line_num }}-replace" value="{{ match.replace }}">
+                </div>
+              </div>
+            {% endfor %}
+          </div>
         </div>
       {% endfor %}
-    {% endfor %}
-    <button class="btn btn-submit" type="submit" name="cancel" value="cancel">{{ _('Cancel') }}</button>
-    <button class="btn btn-submit" type="submit" name="confirm" value="confirm">{{ _('Confirm') }}</button>
+    </div>
+
+    <!-- Sticky Confirmation Toolbar -->
+    <div class="sticky bottom-4 z-30 p-4 bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl shadow-lg flex items-center justify-between gap-4">
+      <button class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer" 
+              type="submit" name="cancel" value="cancel">{{ _('Cancel') }}</button>
+      <button class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-royalblue hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-royalblue/20 transition-all cursor-pointer" 
+              type="submit" name="confirm" value="confirm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        {{ _('Confirm and Apply Changes') }}
+      </button>
+    </div>
   </form>
-  </div>
+</div>
 {% endblock %}

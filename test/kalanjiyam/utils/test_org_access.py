@@ -145,3 +145,37 @@ def test_unregistered_guest_project_access_only_when_not_signed_in(flask_app):
             assert user_can_view_proofing_project(signed_in_user, guest_project) is False
 
 
+def test_master_user_multi_org_access(flask_app):
+    from kalanjiyam.utils.org_access import user_can_access_project, user_can_view_proofing_project
+
+    flask_app.config["MULTI_TENANT_MODE"] = True
+    flask_app.config["ENFORCE_ORG_ACCESS"] = True
+
+    with flask_app.app_context():
+        session = q.get_session()
+        org_a = _make_org(session, "master-org-a")
+        org_b = _make_org(session, "master-org-b")
+        org_c = _make_org(session, "master-org-c")
+
+        # Create master user assigned to Org A and Org B
+        master_user = _make_user(session, "master_user_1", org_a, roles=[SiteRole.MASTER_USER.value])
+        session.add(db.UserGroups(user_id=master_user.id, group_id=org_b.id))
+        session.flush()
+
+        proj_a = _make_project(session, "proj-in-a", org_a)
+        proj_b = _make_project(session, "proj-in-b", org_b)
+        proj_c = _make_project(session, "proj-in-c", org_c)
+        session.commit()
+
+        # Master user can access projects from both assigned organizations
+        assert user_can_access_project(master_user, proj_a) is True
+        assert user_can_access_project(master_user, proj_b) is True
+        assert user_can_view_proofing_project(master_user, proj_a) is True
+        assert user_can_view_proofing_project(master_user, proj_b) is True
+
+        # Master user cannot access project from unassigned organization C
+        assert user_can_access_project(master_user, proj_c) is False
+        assert user_can_view_proofing_project(master_user, proj_c) is False
+        assert master_user.is_master_user is True
+
+

@@ -23,7 +23,9 @@ Kalanjiyam locally or contribute to Kalanjiyam's technical work.
    batch-cli
    search
    ocr-api
+   ocr-service-contract
    ocr-editing
+   metadata-extraction
    production-deploy
    i18n-and-l10n
    tei-xml

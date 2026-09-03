@@ -19,21 +19,21 @@ def _make_user(session, username: str, roles: list[str]) -> db.User:
     return user
 
 
-def test_is_platform_super_admin_roles(app):
-    with app.app_context():
+def test_is_platform_super_admin_roles(flask_app):
+    with flask_app.app_context():
         session = q.get_session()
         super_user = _make_user(session, "super1", [SiteRole.SUPER_ADMIN.value])
-        legacy_admin = _make_user(session, "legacy1", [SiteRole.ADMIN.value])
+        master_user = _make_user(session, "master1", [SiteRole.MASTER_USER.value])
         org_admin = _make_user(session, "org1", [SiteRole.ORG_ADMIN.value])
         session.commit()
 
         assert is_platform_super_admin(super_user) is True
-        assert is_platform_super_admin(legacy_admin) is False
+        assert is_platform_super_admin(master_user) is False
         assert is_platform_super_admin(org_admin) is False
 
 
-def test_org_admin_redirected_from_platform(app, client):
-    with app.app_context():
+def test_org_admin_redirected_from_platform(flask_app):
+    with flask_app.app_context():
         session = q.get_session()
         org = db.Group(name="Acme", slug="acme-admin-test")
         session.add(org)
@@ -44,11 +44,8 @@ def test_org_admin_redirected_from_platform(app, client):
         session.add(user)
         session.commit()
 
-    client.post(
-        "/sign-in",
-        data={"username": "orgonly", "password": "test-password"},
-        follow_redirects=True,
-    )
-    r = client.get("/admin/platform/")
-    assert r.status_code == 302
-    assert "/admin/org" in r.headers["Location"]
+        org_client = flask_app.test_client(user=user)
+        r = org_client.get("/admin/platform/")
+        assert r.status_code == 302
+        assert "/admin/org" in r.headers["Location"]
+

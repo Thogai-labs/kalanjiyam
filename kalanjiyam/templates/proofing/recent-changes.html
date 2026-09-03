@@ -1,22 +1,306 @@
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
+{% import "macros/components.html" as components %}
 {% import "macros/proofing.html" as m %}
 
+{% block extra_css %}
+<style>
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
+  }
+  .google-search-bar {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 9999px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .google-search-bar:focus-within {
+    background: #ffffff;
+    border-color: #4169e1;
+    box-shadow: 0 1px 6px rgba(65, 105, 225, 0.2);
+  }
+</style>
+{% endblock %}
 
-{% block title %}{{ _('Recent changes') }} | Kalanjiyam{% endblock %}
+{% block title %}{{ _('Recent Changes') }} | Kalanjiyam{% endblock %}
 
+{% block main %}
+<div x-data="recentChangesExplorer()">
+  <!-- Embedded Header with Live Dynamic Search & Filter Controls -->
+  <header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+    <div class="max-w-6xl mx-auto space-y-3">
 
-{% block sidebar %}{{ m.main_nav('changes', current_user=current_user) }}{% endblock %}
+      <!-- Top Row: Title, Subtitle, Live Indicator, and Actions -->
+      <div class="flex flex-wrap items-center justify-between gap-2.5">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+                {{ _('Recent Changes') }}
+              </h1>
+            </div>
+            <p class="text-slate-500 text-[11px] sm:text-xs font-medium">
+              {{ _('Track real-time proofreading revisions and library updates across the organization.') }}
+            </p>
+          </div>
+        </div>
 
+        <div class="flex items-center gap-2">
+          <!-- Live Matching Counter Badge -->
+          <div class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold">
+            <span class="text-slate-500">{{ _('Total:') }}</span>
+            <span class="font-bold text-royalblue" id="active-recent-changes-count" x-text="totalItems">{{ total_items }}</span>
+          </div>
 
-{% block content %}
-{{ m.title_and_subtitle(
-    _("Recent changes"),
-    "Recent edits and revisions made by people like you!") }}
+          <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue text-xs font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
+            <span>{{ _('Workspace') }}</span>
+          </a>
+        </div>
+      </div>
 
-{% if recent_activity -%}
-{{ m.activity_log(recent_activity) }}
-{% else %}
-  <p>{{ _('No changes found.') }}</p>
-{% endif %}
+      <!-- Integrated Search & Filter Form inside Header -->
+      <form method="GET" action="{{ url_for('proofing.recent_changes') }}" @submit.prevent="fetchResults(1)" class="w-full space-y-2.5">
 
+        <!-- Google-Style Omni Dynamic Search Bar -->
+        <div class="google-search-bar flex items-center px-3.5 py-1.5 sm:py-2">
+          <svg class="w-4 h-4 text-slate-400 shrink-0 mr-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+          <input
+            type="text"
+            name="q"
+            x-model="query"
+            placeholder="{{ _('Search dynamically by project title, author, editor, or revision summary…') }}"
+            class="w-full bg-transparent text-slate-800 placeholder-slate-400 text-xs sm:text-sm focus:outline-none"
+            @input.debounce.300ms="fetchResults(1)"
+            aria-label="{{ _('Search recent changes') }}"
+          />
+          <div class="flex items-center gap-1.5 shrink-0 ml-2">
+            <template x-if="isLoading">
+              <svg class="animate-spin w-4 h-4 text-royalblue" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </template>
+            <button
+              type="button"
+              x-show="query && !isLoading"
+              @click="query = ''; fetchResults(1)"
+              class="text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer"
+              title="{{ _('Clear search query') }}"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Controls Row (Date Range & Quick Presets) -->
+        <div class="flex flex-wrap items-center justify-between gap-2.5 pt-0.5">
+          <!-- Date Range Inputs -->
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <div class="flex items-center gap-1.5">
+              <label for="start_date" class="font-bold text-slate-600 whitespace-nowrap text-[11px] sm:text-xs">{{ _('From:') }}</label>
+              <input
+                type="date"
+                id="start_date"
+                name="start_date"
+                x-model="startDate"
+                @change="setCustomDate()"
+                class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
+              />
+            </div>
+
+            <div class="flex items-center gap-1.5">
+              <label for="end_date" class="font-bold text-slate-600 whitespace-nowrap text-[11px] sm:text-xs">{{ _('To:') }}</label>
+              <input
+                type="date"
+                id="end_date"
+                name="end_date"
+                x-model="endDate"
+                @change="setCustomDate()"
+                class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
+              />
+            </div>
+          </div>
+
+          <!-- Quick Range Shortcut Pills -->
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              @click="setQuickRange('')"
+              class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+              :class="!quickRange && !startDate && !endDate ? 'bg-royalblue text-white shadow-xs' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'"
+            >
+              {{ _('All Time') }}
+            </button>
+            <button
+              type="button"
+              @click="setQuickRange('today')"
+              class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+              :class="quickRange === 'today' ? 'bg-royalblue text-white shadow-xs' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'"
+            >
+              {{ _('Today') }}
+            </button>
+            <button
+              type="button"
+              @click="setQuickRange('7d')"
+              class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+              :class="quickRange === '7d' ? 'bg-royalblue text-white shadow-xs' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'"
+            >
+              {{ _('Last 7 Days') }}
+            </button>
+            <button
+              type="button"
+              @click="setQuickRange('30d')"
+              class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+              :class="quickRange === '30d' ? 'bg-royalblue text-white shadow-xs' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'"
+            >
+              {{ _('Last 30 Days') }}
+            </button>
+
+            <!-- Reset Filters Pill -->
+            <button
+              type="button"
+              x-show="query || startDate || endDate || quickRange"
+              @click="clearFilters()"
+              class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all cursor-pointer ml-1"
+              title="{{ _('Clear all filters') }}"
+            >
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+              <span>{{ _('Reset') }}</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </header>
+
+  <!-- Content Container with Activity List -->
+  <article class="p-4 xl:p-0 max-w-6xl mx-auto mb-24">
+    {{ components.flash_messages() }}
+    <div id="recent-changes-results-container">
+      {% include 'proofing/_recent_changes_list.html' %}
+    </div>
+  </article>
+</div>
+
+<script>
+function recentChangesExplorer() {
+  return {
+    query: {{ (search_query or '')|tojson }},
+    startDate: {{ (start_date or '')|tojson }},
+    endDate: {{ (end_date or '')|tojson }},
+    quickRange: {{ (quick_range or '')|tojson }},
+    page: {{ page|default(1) }},
+    perPage: {{ per_page|default(25) }},
+    totalItems: {{ total_items|default(0) }},
+    isLoading: false,
+    abortController: null,
+
+    init() {
+      window.addEventListener('popstate', () => {
+        const params = new URLSearchParams(window.location.search);
+        this.query = params.get('q') || '';
+        this.startDate = params.get('start_date') || '';
+        this.endDate = params.get('end_date') || '';
+        this.quickRange = params.get('range') || '';
+        this.page = parseInt(params.get('page') || '1', 10);
+        this.perPage = parseInt(params.get('per_page') || '25', 10);
+        this.fetchResults(this.page, false);
+      });
+    },
+
+    setQuickRange(val) {
+      this.quickRange = val;
+      this.startDate = '';
+      this.endDate = '';
+      this.fetchResults(1);
+    },
+
+    setCustomDate() {
+      this.quickRange = '';
+      this.fetchResults(1);
+    },
+
+    clearFilters() {
+      this.query = '';
+      this.startDate = '';
+      this.endDate = '';
+      this.quickRange = '';
+      this.fetchResults(1);
+    },
+
+    goToPage(pageNum) {
+      this.fetchResults(pageNum);
+    },
+
+    async fetchResults(targetPage = 1, updateUrl = true) {
+      if (this.abortController) {
+        this.abortController.abort();
+      }
+      this.abortController = new AbortController();
+      this.page = targetPage;
+      this.isLoading = true;
+
+      const params = new URLSearchParams();
+      if (this.query && this.query.trim()) params.set('q', this.query.trim());
+      if (this.startDate) params.set('start_date', this.startDate);
+      if (this.endDate) params.set('end_date', this.endDate);
+      if (this.quickRange) params.set('range', this.quickRange);
+      if (this.page && this.page > 1) params.set('page', this.page);
+      if (this.perPage && this.perPage !== 25) params.set('per_page', this.perPage);
+
+      const qs = params.toString();
+      const baseUrl = '{{ url_for("proofing.recent_changes") }}';
+      const targetUrl = baseUrl + (qs ? '?' + qs : '');
+
+      if (updateUrl) {
+        window.history.pushState({}, '', targetUrl);
+      }
+
+      try {
+        const response = await fetch(targetUrl, {
+          signal: this.abortController.signal,
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+
+        const html = await response.text();
+        const resultsEl = document.getElementById('recent-changes-results-container');
+        if (resultsEl) {
+          resultsEl.innerHTML = html;
+          if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+            window.Alpine.initTree(resultsEl);
+          }
+        }
+
+        const totalHeader = response.headers.get('X-Total-Items');
+        if (totalHeader !== null) {
+          this.totalItems = parseInt(totalHeader, 10);
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('Failed to fetch recent changes:', err);
+        }
+      } finally {
+        this.isLoading = false;
+      }
+    }
+  };
+}
+</script>
 {% endblock %}

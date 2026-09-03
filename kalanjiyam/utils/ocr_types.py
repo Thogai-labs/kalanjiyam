@@ -54,6 +54,14 @@ class OcrResponse:
     chars_count: int | None = None
     #: Engine API latency in milliseconds.
     engine_latency_ms: float | None = None
+    #: OCR mode: 'standard' or 'enhanced'.
+    ocr_mode: str = "standard"
+    #: Enhancement profile used when ocr_mode == 'enhanced'.
+    enhancement_profile: str | None = None
+    #: Enhancement pipeline version (e.g. '1.0').
+    enhancement_version: str | None = None
+    #: Preprocessing duration in milliseconds.
+    preprocessing_latency_ms: float | None = None
 
 
 def calculate_p05_confidence(
@@ -98,6 +106,7 @@ SUPPORTED_ENGINES = [
     "glm_ocr",
     "tesseract_manuscript",
     "dots_ocr",
+    "gemma_ocr",
 ]
 
 # OCR service ids (hyphenated) ↔ Kalanjiyam internal ids (underscored).
@@ -105,6 +114,13 @@ SERVICE_ENGINE_ALIASES = {
     "surya-table": "surya_table",
     "glm-ocr": "glm_ocr",
     "dots-ocr": "dots_ocr",
+    "gemma-ocr": "gemma_ocr",
+    "gemma-4": "gemma_ocr",
+    "gemma-4-31b": "gemma_ocr",
+    "gemma_4_31b": "gemma_ocr",
+    "gemma-31b": "gemma_ocr",
+    "llm-gemma": "gemma_ocr",
+    "llm_gemma": "gemma_ocr",
 }
 
 ENGINE_MAP = {
@@ -120,6 +136,7 @@ ENGINE_MAP = {
     "10": "glm_ocr",
     "11": "tesseract_manuscript",
     "12": "dots_ocr",
+    "13": "gemma_ocr",
 }
 
 
@@ -162,13 +179,14 @@ ENGINE_LABELS = {
     "glm_ocr": "GLM OCR",
     "tesseract_manuscript": "Sanskrit Manuscript OCR",
     "dots_ocr": "Dots OCR",
+    "gemma_ocr": "Gemma OCR",
 }
 
 # Engines that return HTML (not plain text or Markdown)
 HTML_ENGINES = {"nanonets", "chandra"}
 
 # Engines that return Markdown
-MARKDOWN_ENGINES = {"deepseek", "qwen3"}
+MARKDOWN_ENGINES = {"deepseek", "qwen3", "gemma_ocr"}
 
 
 def build_engine_choices(

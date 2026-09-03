@@ -54,3 +54,41 @@ def test_home_page_search_box_points_at_search(client):
     resp = client.get("/")
     assert resp.status_code == 200
     assert b'action="/search/"' in resp.data
+
+
+def test_search_page_includes_alpine_and_debounce_directives(client):
+    """Ensure Alpine.js reactivity and debounced input are present on empty and query states."""
+    # Landing page (empty query)
+    resp_empty = client.get("/search/")
+    assert resp_empty.status_code == 200
+    assert b"x-data" in resp_empty.data
+    assert b"@input.debounce" in resp_empty.data
+    assert b"fetchSuggestions()" in resp_empty.data
+    assert b"suggestions" in resp_empty.data
+
+    # Query SERP page (with query)
+    resp_serp = client.get("/search/?q=siddha")
+    assert resp_serp.status_code == 200
+    assert b"x-data" in resp_serp.data
+    assert b"@input.debounce" in resp_serp.data
+    assert b"fetchSuggestions()" in resp_serp.data
+    assert b"suggestions" in resp_serp.data
+
+
+def test_search_page_includes_material_advanced_toggle(client):
+    """Ensure Google Material UI switch for advanced syntax toggling is present."""
+    # When advanced syntax is off
+    resp_off = client.get("/search/?q=siddha")
+    assert resp_off.status_code == 200
+    assert b'role="switch"' in resp_off.data
+    assert b'aria-checked="false"' in resp_off.data
+    assert b"m3-switch" in resp_off.data
+    assert b"advanced=1" in resp_off.data
+
+    # When advanced syntax is on
+    resp_on = client.get("/search/?q=siddha&advanced=1")
+    assert resp_on.status_code == 200
+    assert b'role="switch"' in resp_on.data
+    assert b'aria-checked="true"' in resp_on.data
+    assert b"m3-switch" in resp_on.data
+

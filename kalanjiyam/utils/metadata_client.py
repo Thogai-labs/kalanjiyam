@@ -89,14 +89,15 @@ class WindowResult:
 
 def _get_targets() -> list[tuple[str, str]]:
     """(base_url, api_key) pairs for the primary and fallback services."""
+    import os
     targets = []
-    url1 = (current_app.config.get("OCR_SERVICE_URL") or "").rstrip("/")
-    key1 = current_app.config.get("OCR_SERVICE_API_KEY") or ""
+    url1 = (current_app.config.get("OCR_SERVICE_URL") or os.environ.get("OCR_SERVICE_URL") or "").rstrip("/")
+    key1 = current_app.config.get("OCR_SERVICE_API_KEY") or os.environ.get("OCR_SERVICE_API_KEY") or ""
     if url1:
         targets.append((url1, key1))
 
-    url2 = (current_app.config.get("OCR_SERVICE_URL_2") or "").rstrip("/")
-    key2 = current_app.config.get("OCR_SERVICE_API_KEY_2") or key1
+    url2 = (current_app.config.get("OCR_SERVICE_URL_2") or os.environ.get("OCR_SERVICE_URL_2") or "").rstrip("/")
+    key2 = current_app.config.get("OCR_SERVICE_API_KEY_2") or os.environ.get("OCR_SERVICE_API_KEY_2") or key1
     if url2 and url2 != url1:
         targets.append((url2, key2))
     return targets
@@ -297,7 +298,7 @@ def extract_window(request_body: dict, *, timeout: float | None = None) -> Windo
     requested = list(request_body.get("tags") or [])
     last_error: Exception | None = None
 
-    for base_url, api_key in targets:
+    for idx, (base_url, api_key) in enumerate(targets):
         url = f"{base_url}/v1/metadata"
         headers = {"X-API-Key": api_key} if api_key else {}
 
@@ -316,13 +317,13 @@ def extract_window(request_body: dict, *, timeout: float | None = None) -> Windo
                 )
                 continue
 
-            if response.status_code >= 500:
+            if response.status_code >= 500 or (response.status_code == 404 and idx < len(targets) - 1):
                 last_error = MetadataServiceError(
                     f"service returned {response.status_code}",
                     status=response.status_code,
                 )
                 logger.warning(
-                    "metadata service %s at %s (attempt %s)",
+                    "metadata service %s at %s (attempt %s). Falling back if next target exists...",
                     response.status_code,
                     base_url,
                     attempt,
@@ -335,8 +336,6 @@ def extract_window(request_body: dict, *, timeout: float | None = None) -> Windo
                 except ValueError:
                     payload = {}
                 message, code = _error_message(payload)
-                # A 4xx is the service rejecting *this* request; another target
-                # would reject it identically, so do not fail over.
                 raise MetadataServiceError(
                     message, status=response.status_code, code=code
                 )

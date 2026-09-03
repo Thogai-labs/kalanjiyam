@@ -21,11 +21,11 @@ node_modules/
 
 # i18n files:
 # - .pot can be regenerated with `make babel-extract`.
-# - .po files are fetched from our GitHub repo (`kalanjiyam/kalanjiyam-i18n`).
-# - .mo files are just the compiled version of our .po files.
+# - .mo files are compiled binary catalogs.
+# - .po translation catalogs ignored to avoid git pull merge conflicts on server.
 *.pot
-*.po
 *.mo
+*.po
 
 # Production config
 .env

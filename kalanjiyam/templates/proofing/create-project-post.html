@@ -33,7 +33,7 @@
 
     {% set url = url_for('proofing.create_project_status', task_id=task_id) %}
     <div x-data="htmlPoller('{{ url }}')">
-      {% with current=current, total=total, percent=percent, slug=slug, status=status %}
+      {% with current=current, total=total, percent=percent, slug=slug, status=status, doc_type=doc_type %}
         {% include 'include/task-progress.html' %}
       {% endwith %}
     </div>

@@ -1,123 +1,216 @@
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% import "macros/proofing.html" as m %}
 
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  .{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
+  }
+</style>
+{% endblock %}
 
 {% block title %}{{ _('Stats: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
 
+{% block hero %}
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+  <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+    <div class="flex items-start gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0 mt-0.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="flex flex-wrap items-center gap-2">
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ project.display_title }}
+          </h1>
+          {% if project.condition_tag_list %}
+            <div class="flex flex-wrap items-center gap-1.5">
+              {% for tag in project.condition_tag_list %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200 shadow-xs" title="{{ _('Condition issue: %(tag)s', tag=tag.name) }}{% if tag.pages %} ({{ _('Pages:') }} {{ tag.pages }}){% endif %}">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  <span>{{ tag.name }}</span>
+                  {% if tag.pages %}
+                    <span class="text-[11px] text-amber-700 font-normal">({{ tag.pages }})</span>
+                  {% endif %}
+                </span>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
 
-{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
+        <!-- Meta Info -->
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium mt-1">
+          {% if project.author %}
+          <span class="text-slate-700 font-semibold">{{ project.author }}</span>
+          {% endif %}
+          {% if project.publication_year %}
+          <span class="text-slate-300">•</span>
+          <span>{{ project.publication_year }}</span>
+          {% endif %}
+          {% if project.publisher %}
+          <span class="text-slate-300">•</span>
+          <span>{{ project.publisher }}</span>
+          {% endif %}
+          <span class="text-slate-300">•</span>
+          <span class="text-royalblue font-semibold">{{ project.pages|length }} {{ _('pages') }}</span>
+        </div>
+      </div>
+    </div>
 
+    <!-- Right: Action Button back to Workspace -->
+    <div class="flex items-center gap-2 text-xs shrink-0">
+      <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
+        <span>{{ _('Workspace') }}</span>
+      </a>
+    </div>
+  </div>
+</header>
+{% endblock %}
 
 {% block content %}
-{{ m.project_header_nested(_('Stats'), project) }}
-{{ m.project_tabs(project=project, active='stats', is_mod=current_user.is_moderator) }}
+<div class="w-full space-y-8">
+  <div>
+    {{ m.project_tabs(project=project, active='stats', is_mod=current_user.is_moderator) }}
+  </div>
 
-<div class="overflow-x-auto bg-white border border-slate-100 rounded-2xl shadow-sm mb-10">
-  <table class="min-w-full divide-y divide-slate-100 text-left text-sm text-slate-700">
-    <thead class="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
-      <tr>
-        <th class="px-6 py-4">&nbsp;</th>
-        <th class="px-6 py-4">{{ _('Total') }}</th>
-        <th class="px-6 py-4">{{ _('Per page') }}</th>
-      </tr>
-    </thead>
-    <tbody class="divide-y divide-slate-100 font-medium">
-      <tr class="hover:bg-slate-50/50 transition-colors">
-        <th class="px-6 py-4 text-slate-900 font-bold">{{ _('Pages') }}</th>
-        <td class="px-6 py-4 font-mono">{{ "{:,}".format(stats.num_pages) }}</td>
-        <td class="px-6 py-4 text-slate-400">&ndash;</td>
-      </tr>
-      <tr class="hover:bg-slate-50/50 transition-colors">
-        <th class="px-6 py-4 text-slate-900 font-bold">{{ _('Words') }}</th>
-        <td class="px-6 py-4 font-mono">{{ "{:,}".format(stats.num_words) }}</td>
-        <td class="px-6 py-4 font-mono text-slate-500">{% if stats.num_pages > 0 %}{{ "{:,}".format(stats.num_words // stats.num_pages) }}{% else %}0{% endif %}</td>
-      </tr>
-      <tr class="hover:bg-slate-50/50 transition-colors">
-        <th class="px-6 py-4 text-slate-900 font-bold">{{ _('Roman characters') }}</th>
-        <td class="px-6 py-4 font-mono">{{ "{:,}".format(stats.num_roman_characters) }}</td>
-        <td class="px-6 py-4 font-mono text-slate-500">{% if stats.num_pages > 0 %}{{ "{:,}".format(stats.num_roman_characters // stats.num_pages) }}{% else %}0{% endif %}</td>
-      </tr>
-      <tr class="hover:bg-slate-50/50 transition-colors">
-        <th class="px-6 py-4 text-slate-900 font-bold">{{ _('Aksharas') }}</th>
-        <td class="px-6 py-4 font-mono">{{ "{:,}".format(stats.num_aksharas) }}</td>
-        <td class="px-6 py-4 font-mono text-slate-500">{% if stats.num_pages > 0 %}{{ "{:,}".format(stats.num_aksharas // stats.num_pages) }}{% else %}0{% endif %}</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-<div class="border border-blue-500 rounded p-6 my-8 bg-blue-50/10">
-  <h3 class="text-blue-700 font-bold text-lg mb-2">{{ _('OCR Comparison') }}</h3>
-  <p class="text-sm text-slate-600 my-2">
-    {{ _('Run an OCR comparison against ground truth for this project.') }}
-  </p>
-  <form action="{{ url_for('proofing.project.run_comparison', slug=project.slug) }}" method="POST" class="mt-4">
-
-    <div class="flex gap-2 items-center">
-      <select name="engine" class="form-select border rounded px-3 py-2 text-sm focus:border-royalblue outline-none">
-        {% for engine in supported_engines %}
-        <option value="{{ engine }}">{{ engine | capitalize }}</option>
-        {% endfor %}
-      </select>
-      <button type="submit" class="btn bg-blue-600 hover:bg-blue-800 text-white font-semibold py-2 px-4 rounded cursor-pointer transition">{{ _('Run Comparison') }}</button>
+  {# Corpus Stats Table #}
+  <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+    <div class="bg-slate-50/80 px-6 py-4 border-b border-slate-200">
+      <h3 class="text-xs font-bold text-slate-600 uppercase tracking-wider">{{ _('Text & Corpus Volume') }}</h3>
     </div>
-  </form>
-</div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-100 text-left text-sm text-slate-700">
+        <thead class="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <tr>
+            <th class="px-6 py-3.5">{{ _('Metric') }}</th>
+            <th class="px-6 py-3.5">{{ _('Total') }}</th>
+            <th class="px-6 py-3.5">{{ _('Per Page Average') }}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 font-medium">
+          <tr class="hover:bg-slate-50/50 transition-colors">
+            <th class="px-6 py-4 text-slate-900 font-bold">{{ _('Pages') }}</th>
+            <td class="px-6 py-4 font-mono font-bold text-slate-900">{{ "{:,}".format(stats.num_pages) }}</td>
+            <td class="px-6 py-4 text-slate-400">&ndash;</td>
+          </tr>
+          <tr class="hover:bg-slate-50/50 transition-colors">
+            <th class="px-6 py-4 text-slate-900 font-bold">{{ _('Words') }}</th>
+            <td class="px-6 py-4 font-mono font-bold text-royalblue">{{ "{:,}".format(stats.num_words) }}</td>
+            <td class="px-6 py-4 font-mono text-slate-600">{% if stats.num_pages > 0 %}{{ "{:,}".format(stats.num_words // stats.num_pages) }}{% else %}0{% endif %}</td>
+          </tr>
+          <tr class="hover:bg-slate-50/50 transition-colors">
+            <th class="px-6 py-4 text-slate-900 font-bold">{{ _('Roman characters') }}</th>
+            <td class="px-6 py-4 font-mono text-slate-800">{{ "{:,}".format(stats.num_roman_characters) }}</td>
+            <td class="px-6 py-4 font-mono text-slate-600">{% if stats.num_pages > 0 %}{{ "{:,}".format(stats.num_roman_characters // stats.num_pages) }}{% else %}0{% endif %}</td>
+          </tr>
+          <tr class="hover:bg-slate-50/50 transition-colors">
+            <th class="px-6 py-4 text-slate-900 font-bold">{{ _('Aksharas') }}</th>
+            <td class="px-6 py-4 font-mono text-slate-800">{{ "{:,}".format(stats.num_aksharas) }}</td>
+            <td class="px-6 py-4 font-mono text-slate-600">{% if stats.num_pages > 0 %}{{ "{:,}".format(stats.num_aksharas // stats.num_pages) }}{% else %}0{% endif %}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 
-  {% if comparisons %}
-  <div class="overflow-x-auto bg-white border border-slate-100 rounded-2xl shadow-sm">
-    <table class="min-w-full divide-y divide-slate-100 text-left text-sm text-slate-700">
-      <thead class="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
-        <tr>
-          <th class="px-6 py-4">{{ _('Date') }}</th>
-          <th class="px-6 py-4">{{ _('Engine') }}</th>
-          <th class="px-6 py-4">{{ _('Status') }}</th>
-          <th class="px-6 py-4">WER</th>
-          <th class="px-6 py-4">CER</th>
-          <th class="px-6 py-4">{{ _('Details') }}</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-slate-100">
-        {% for comp in comparisons %}
-        <tr class="hover:bg-slate-50/50 transition-colors font-medium">
-          <td class="px-6 py-4 text-slate-500">{{ comp.created_at | time_ago }}</td>
-          <td class="px-6 py-4"><span class="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold uppercase">{{ comp.engine }}</span></td>
-          <td class="px-6 py-4">
-            {% if comp.status == 'completed' %}
-              <span class="px-2.5 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-bold uppercase">{{ _('Completed') }}</span>
-            {% elif comp.status.startswith('in_progress') %}
-              <span class="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold uppercase">{{ _('In Progress') }}</span>
-            {% elif comp.status == 'failed' %}
-              <span class="px-2.5 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-bold uppercase">{{ _('Failed') }}</span>
-            {% else %}
-              <span class="px-2.5 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-xs font-bold uppercase">{{ comp.status | capitalize }}</span>
-            {% endif %}
-          </td>
-          <td class="px-6 py-4 font-mono">
-            {% if comp.summary_metrics and comp.summary_metrics.avg_wer is defined %}
-              {{ "%.2f"|format(comp.summary_metrics.avg_wer * 100) }}%
-            {% else %}
-              <span class="text-slate-300">&ndash;</span>
-            {% endif %}
-          </td>
-          <td class="px-6 py-4 font-mono">
-            {% if comp.summary_metrics and comp.summary_metrics.avg_cer is defined %}
-              {{ "%.2f"|format(comp.summary_metrics.avg_cer * 100) }}%
-            {% else %}
-              <span class="text-slate-300">&ndash;</span>
-            {% endif %}
-          </td>
-          <td class="px-6 py-4">
-            <a href="{{ url_for('proofing.project.comparison_details', slug=project.slug, comparison_id=comp.id) }}" class="text-royalblue font-bold hover:text-blue-800 transition-colors">{{ _('View Details') }}</a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  {# OCR Comparison Trigger #}
+  <div class="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <h3 class="text-slate-900 font-bold text-base mb-1 flex items-center gap-2">
+          <svg class="w-5 h-5 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          {{ _('OCR Evaluation & Accuracy Benchmark') }}
+        </h3>
+        <p class="text-xs text-slate-500 max-w-xl leading-relaxed">
+          {{ _('Run an OCR accuracy evaluation (WER / CER) against ground truth proofed transcriptions for this project.') }}
+        </p>
+      </div>
+
+      <form action="{{ url_for('proofing.project.run_comparison', slug=project.slug) }}" method="POST" class="flex items-center gap-3 shrink-0">
+        <select name="engine" class="px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-royalblue/20 focus:border-royalblue outline-none">
+          {% for engine in supported_engines %}
+          <option value="{{ engine }}">{{ engine | capitalize }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="inline-flex items-center justify-center px-5 py-2.5 bg-royalblue hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-royalblue/20 transition-all cursor-pointer">{{ _('Run Comparison') }}</button>
+      </form>
+    </div>
   </div>
-  {% else %}
-  <div class="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-    <p class="text-slate-500 font-medium">{{ _('No comparisons run yet.') }}</p>
+
+  {# Comparisons History #}
+  <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+    <div class="bg-slate-50/80 px-6 py-4 border-b border-slate-200">
+      <h3 class="text-xs font-bold text-slate-600 uppercase tracking-wider">{{ _('Benchmark History') }}</h3>
+    </div>
+
+    {% if comparisons %}
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-100 text-left text-sm text-slate-700">
+        <thead class="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <tr>
+            <th class="px-6 py-3.5">{{ _('Date') }}</th>
+            <th class="px-6 py-3.5">{{ _('Engine') }}</th>
+            <th class="px-6 py-3.5">{{ _('Status') }}</th>
+            <th class="px-6 py-3.5">WER</th>
+            <th class="px-6 py-3.5">CER</th>
+            <th class="px-6 py-3.5 text-right">{{ _('Action') }}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 font-medium">
+          {% for comp in comparisons %}
+          <tr class="hover:bg-slate-50/50 transition-colors">
+            <td class="px-6 py-4 text-slate-500 text-xs">{{ comp.created_at | time_ago }}</td>
+            <td class="px-6 py-4"><span class="px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-bold uppercase">{{ comp.engine }}</span></td>
+            <td class="px-6 py-4">
+              {% if comp.status == 'completed' %}
+                <span class="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-xs font-bold uppercase">{{ _('Completed') }}</span>
+              {% elif comp.status.startswith('in_progress') %}
+                <span class="px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs font-bold uppercase">{{ _('In Progress') }}</span>
+              {% elif comp.status == 'failed' %}
+                <span class="px-2.5 py-1 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-bold uppercase">{{ _('Failed') }}</span>
+              {% else %}
+                <span class="px-2.5 py-1 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-lg text-xs font-bold uppercase">{{ comp.status | capitalize }}</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 font-mono text-xs font-bold text-slate-800">
+              {% if comp.summary_metrics and comp.summary_metrics.avg_wer is defined %}
+                {{ "%.2f"|format(comp.summary_metrics.avg_wer * 100) }}%
+              {% else %}
+                <span class="text-slate-300">&ndash;</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 font-mono text-xs font-bold text-slate-800">
+              {% if comp.summary_metrics and comp.summary_metrics.avg_cer is defined %}
+                {{ "%.2f"|format(comp.summary_metrics.avg_cer * 100) }}%
+              {% else %}
+                <span class="text-slate-300">&ndash;</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 text-right">
+              <a href="{{ url_for('proofing.project.comparison_details', slug=project.slug, comparison_id=comp.id) }}" class="inline-flex items-center gap-1 text-xs text-royalblue font-bold hover:underline">
+                <span>{{ _('View Details') }}</span>
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-10 px-4 bg-slate-50/50">
+      <p class="text-xs text-slate-500 font-semibold">{{ _('No OCR comparisons run yet for this project.') }}</p>
+    </div>
+    {% endif %}
   </div>
-  {% endif %}
+</div>
 {% endblock %}

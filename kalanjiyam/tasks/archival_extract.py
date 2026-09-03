@@ -108,7 +108,9 @@ def _get_app_context():
 
 
 @app.task(bind=True)
-def extract_archival_metadata(self, project_id: int, force: bool = False) -> dict:
+def extract_archival_metadata(
+    self, project_id: int, force: bool = False, enqueued_at: str | None = None
+) -> dict:
     """Describe one project. Returns a summary of the run."""
     with _get_app_context():
         lock = lock_key(project_id)
@@ -127,7 +129,7 @@ def extract_archival_metadata(self, project_id: int, force: bool = False) -> dic
             LOG.warning("could not acquire extraction lock for %s", project_id)
 
         try:
-            return _run(project_id, force=force)
+            return _run(project_id, force=force, enqueued_at=enqueued_at)
         except Exception as e:  # noqa: BLE001 - surfaced to the UI
             LOG.exception("archival extraction failed for project %s", project_id)
             _set_progress(
@@ -166,11 +168,20 @@ def _previous_hashes(session, project_id: int) -> dict:
     }
 
 
-def _run(project_id: int, *, force: bool) -> dict:
+def _run(
+    project_id: int, *, force: bool, enqueued_at: str | None = None
+) -> dict:
     session = q.get_session()
     project = session.query(db.Project).filter(db.Project.id == project_id).first()
     if project is None:
         raise ValueError(f"project {project_id} not found")
+
+    start_time = datetime.utcnow()
+    if enqueued_at:
+        try:
+            start_time = datetime.fromisoformat(enqueued_at)
+        except (ValueError, TypeError):
+            start_time = datetime.utcnow()
 
     _set_progress(
         project_id, status=STATUS_RUNNING, stage="resolving pages", done=0, error=None
@@ -196,6 +207,7 @@ def _run(project_id: int, *, force: bool) -> dict:
         taxonomy_version=at.TAXONOMY_VERSION,
         contract_version=mc.CONTRACT_VERSION,
         pages_total=len(tracks),
+        created_at=start_time,
     )
     session.add(run)
     session.commit()
@@ -293,9 +305,13 @@ def _run(project_id: int, *, force: bool) -> dict:
             run.model_version = result.model_version
 
     if not completed:
+        now = datetime.utcnow()
         run.status = STATUS_FAILED
         run.error_message = "no window produced a usable description"
-        run.completed_at = datetime.utcnow()
+        run.completed_at = now
+        run.total_extraction_latency_ms = max(
+            0.0, (now - run.created_at).total_seconds() * 1000.0
+        )
         session.commit()
         _set_progress(
             project_id, status=STATUS_FAILED, stage="failed", error=run.error_message
@@ -309,7 +325,11 @@ def _run(project_id: int, *, force: bool) -> dict:
     _save_fields(session, run, project_id, fields)
     _apply_run_metrics(run, metrics, completed, failed, len(pages_read))
     run.status = STATUS_OK if not failed else STATUS_PARTIAL
-    run.completed_at = datetime.utcnow()
+    now = datetime.utcnow()
+    run.completed_at = now
+    run.total_extraction_latency_ms = max(
+        0.0, (now - run.created_at).total_seconds() * 1000.0
+    )
     session.commit()
 
     _write_down(session, project, fields)
@@ -408,6 +428,7 @@ def _apply_run_metrics(
         "total_prompt_tokens",
         "total_completion_tokens",
         "total_engine_latency_ms",
+        "total_extraction_latency_ms",
     ):
         setattr(run, key, metrics.get(key))
 

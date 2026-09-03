@@ -1,126 +1,241 @@
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% from "macros/forms.html" import field %}
 {% import "macros/proofing.html" as m %}
 
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  .{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
+  }
+</style>
+{% endblock %}
 
 {# Show search results for a given page. #}
 {% macro page_results(project, page) %}
 {% set page_url = url_for("proofing.page.edit", project_slug=project.slug, page_slug=page.slug) %}
-{% for match in page.matches %}
-  {% set match_name = "match{}-{}".format(page.slug, match.line_num) %}
-  <li class="match my-4 pt-4 flex border-t">
-    <label class="p-4">
-      <input type="checkbox" name="{{ match_name }}" id="{{ match_name }}"
-        value="selected" />
-    </label>
-    <div>
-      <p class="prose text-sm mb-2">
-        <a href="{{ page_url }}">{{ _('Page %(page)s', page=page.slug) }}</a>,
-        {{ _('line %(line)s', line=match.line_num) }}
-      </p>
-
-      <p class="p-1 bg-slate-50 rounded mb-2" for="{{ match_name }}">{{ match.query|safe }}</p>
-      <p class="p-1 bg-slate-50 rounded" for="{{ match_name }}-replace">{{ match.replace|safe }}</p>
-      <input type="hidden" name="{{ match_name }}-replace" id="{{ match_name }}-replace"
-        value="{{ match.replace }}">
-    </div>
-  </li>
-{% endfor %}
-{% endmacro %}
-
-
-{% block title %}{{ _('Search and Replace %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
-
-
-{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
-
-
-{% block content %}
-{{ m.project_header_nested(_('Search and Replace'), project) }}
-{{ m.project_tabs(project=project, active='edit') }}
-
-<div class="prose">
-  <p>{{ _('Use this simple search and replace form to make edits across this project. The search supports regular expressions.') }}</p>
-  <form method="POST" class="bg-slate-100 p-4 my-4">
-
-    {{ field(form.query) }}
-    {{ field(form.replace) }}
-    <input class="btn btn-submit" type="submit" name="search" value="{{ _('Show matches') }}">
-  </form>
-</div>
-
-{% if results %}
-<div class="prose">
-  <h2>{{ _('Matches') }}</h2>
-
-  {% if num_matches == 1 %}
-  <p>{{ ngettext('Found %(count)s matching line for query', 'Found %(count)s matching lines for query', num_matches, count=num_matches) }} <kbd>{{ query }}</kbd>.</p>
-  {% else %}
-  <p>{{ ngettext('Found %(count)s matching line for query', 'Found %(count)s matching lines for query', num_matches, count=num_matches) }} <kbd>{{ query }}</kbd>.</p>
-  {% endif %}
-</div>
-
-<form method="POST" action="{{ url_for('proofing.project.submit_changes', slug=project.slug) }}">
-  {{ submit_changes_form.csrf_token }}
-  <input type="hidden" name="query" value="{{ query }}">
-  <input type="hidden" name="replace" value="{{ replace }}">
-
-  <div class="match flex items-center bg-slate-100 rounded py-2">
-    <label class="px-4">
-      <input type="checkbox" name="select-all" id="select-all">
-    </label>
-    <label for="select-all">{{ _('Select all %(count)s matches.', count=num_matches) }}</label>
+<div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 mb-4">
+  <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+    <a href="{{ page_url }}" class="inline-flex items-center gap-2 font-bold text-sm text-royalblue hover:underline">
+      <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+      </svg>
+      <span>{{ _('Page %(page)s', page=page.slug) }}</span>
+    </a>
+    <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-xs">
+      {{ page.matches|length }} {{ _('matches') }}
+    </span>
   </div>
 
-  <ul>
-  {% for page in results %}
-    {{ page_results(project, page) }}
-  {% endfor %}
-  </ul>
+  <div class="space-y-3">
+    {% for match in page.matches %}
+      {% set match_name = "match{}-{}".format(page.slug, match.line_num) %}
+      <div class="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+        <div class="pt-1">
+          <input type="checkbox" name="{{ match_name }}" id="{{ match_name }}" value="selected"
+                 class="w-4 h-4 rounded text-royalblue border-slate-300 focus:ring-royalblue cursor-pointer" />
+        </div>
+        <div class="grow font-mono text-xs space-y-1.5 overflow-x-auto">
+          <div class="flex items-center gap-2 text-slate-500 font-sans text-xs font-semibold">
+            <span>{{ _('Line %(line)s', line=match.line_num) }}:</span>
+          </div>
+          <div class="p-2 bg-red-50 text-red-800 rounded-lg border border-red-100 flex items-baseline gap-2">
+            <span class="font-sans font-bold text-[10px] text-red-500 uppercase shrink-0">- OLD</span>
+            <span class="leading-relaxed">{{ match.query|safe }}</span>
+          </div>
+          <div class="p-2 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-100 flex items-baseline gap-2" id="{{ match_name }}-replace-container">
+            <span class="font-sans font-bold text-[10px] text-emerald-600 uppercase shrink-0">+ NEW</span>
+            <span class="leading-relaxed">{{ match.replace|safe }}</span>
+          </div>
+          <input type="hidden" name="{{ match_name }}-replace" id="{{ match_name }}-replace" value="{{ match.replace }}">
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endmacro %}
 
-  {% if submit_changes_form %}
-    {{ submit_changes_form.submit(class="btn btn-submit") }}
-  {% else %}
-    <input class="btn btn-submit" type="submit" name="submit" value="{{ _('Review changes') }}">
+{% block title %}{{ _('Replace:') }} {{ project.display_title }} | Kalanjiyam{% endblock %}
+
+{% block hero %}
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+  <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+    <div class="flex items-start gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0 mt-0.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="flex flex-wrap items-center gap-2">
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ project.display_title }}
+          </h1>
+          {% if project.condition_tag_list %}
+            <div class="flex flex-wrap items-center gap-1.5">
+              {% for tag in project.condition_tag_list %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200 shadow-xs" title="{{ _('Condition issue: %(tag)s', tag=tag.name) }}{% if tag.pages %} ({{ _('Pages:') }} {{ tag.pages }}){% endif %}">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  <span>{{ tag.name }}</span>
+                  {% if tag.pages %}
+                    <span class="text-[11px] text-amber-700 font-normal">({{ tag.pages }})</span>
+                  {% endif %}
+                </span>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- Meta Info -->
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium mt-1">
+          {% if project.author %}
+          <span class="text-slate-700 font-semibold">{{ project.author }}</span>
+          {% endif %}
+          {% if project.publication_year %}
+          <span class="text-slate-300">•</span>
+          <span>{{ project.publication_year }}</span>
+          {% endif %}
+          {% if project.publisher %}
+          <span class="text-slate-300">•</span>
+          <span>{{ project.publisher }}</span>
+          {% endif %}
+          <span class="text-slate-300">•</span>
+          <span class="text-royalblue font-semibold">{{ project.pages|length }} {{ _('pages') }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Action Button back to Workspace -->
+    <div class="flex items-center gap-2 text-xs shrink-0">
+      <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
+        <span>{{ _('Workspace') }}</span>
+      </a>
+    </div>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="w-full">
+  <div class="mb-6">
+    {{ m.project_tabs(project=project, active='search_operations', is_mod=current_user.is_moderator) }}
+  </div>
+
+  <!-- Search & Replace Input Card -->
+  <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 mb-8">
+    <div class="flex items-center justify-between gap-4 mb-4">
+      <div>
+        <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-royalblue"></span>
+          {{ _('Search & Replace in Project') }}
+        </h2>
+        <p class="text-xs text-slate-500 mt-1">
+          {{ _('Find matching occurrences across the project and preview replacements before confirming. Supports regular expressions.') }}
+        </p>
+      </div>
+      <a href="{{ url_for('proofing.project.search_operations', slug=project.slug) }}" 
+         class="text-xs font-semibold text-slate-500 hover:text-royalblue flex items-center gap-1 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        {{ _('All Operations') }}
+      </a>
+    </div>
+
+    <form method="POST" class="mt-6 space-y-4">
+      {{ form.csrf_token }}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="query" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+            {{ _('Search Pattern / Query') }}
+          </label>
+          <input type="text" name="query" id="query" value="{{ form.query.data or '' }}" required
+                 placeholder="{{ _('e.g. pattern or regex') }}"
+                 class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all">
+        </div>
+        <div>
+          <label for="replace" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+            {{ _('Replacement Text') }}
+          </label>
+          <input type="text" name="replace" id="replace" value="{{ form.replace.data or '' }}"
+                 placeholder="{{ _('e.g. replacement text') }}"
+                 class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all">
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-2">
+        <button type="submit" name="search" value="search"
+                class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-royalblue hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-royalblue/20 transition-all cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+          {{ _('Show matches') }}
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {% if results %}
+    <div class="mb-6 flex items-center justify-between">
+      <h3 class="text-sm font-bold text-slate-900">
+        {{ ngettext('Found %(count)s matching line for query', 'Found %(count)s matching lines for query', num_matches, count=num_matches) }} 
+        <kbd class="px-2 py-0.5 bg-slate-200 text-slate-800 rounded font-mono text-xs font-bold">{{ query }}</kbd>
+      </h3>
+      <span class="text-xs font-semibold text-slate-500">{{ num_matches }} {{ _('total matches') }}</span>
+    </div>
+
+    <form method="POST" action="{{ url_for('proofing.project.submit_changes', slug=project.slug) }}">
+      {{ submit_changes_form.csrf_token }}
+      <input type="hidden" name="query" value="{{ query }}">
+      <input type="hidden" name="replace" value="{{ replace }}">
+
+      <!-- Select All Toolbar Card -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 mb-6 flex items-center justify-between">
+        <label class="inline-flex items-center gap-3 cursor-pointer select-none">
+          <input type="checkbox" name="select-all" id="select-all" 
+                 class="w-4 h-4 rounded text-royalblue border-slate-300 focus:ring-royalblue cursor-pointer">
+          <span class="text-xs font-bold text-slate-700">{{ _('Select all %(count)s matches', count=num_matches) }}</span>
+        </label>
+        <span class="text-xs text-slate-400">{{ _('Check only the occurrences you wish to replace') }}</span>
+      </div>
+
+      <div class="space-y-4 mb-8">
+        {% for page in results %}
+          {{ page_results(project, page) }}
+        {% endfor %}
+      </div>
+
+      <div class="sticky bottom-4 z-30 p-4 bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl shadow-lg flex items-center justify-between">
+        <span class="text-xs text-slate-500">{{ _('Proceed to review diff before applying changes across pages.') }}</span>
+        <button type="submit" name="submit" value="{{ _('Review changes') }}"
+                class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-royalblue hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-royalblue/20 transition-all cursor-pointer">
+          {{ _('Review changes') }} &rarr;
+        </button>
+      </div>
+    </form>
+
+    <script>
+      (function() {
+        const checkAll = document.querySelector("#select-all");
+        const checkboxes = document.querySelectorAll('input[type="checkbox"][name^="match"]');
+
+        checkAll.addEventListener("change", function(event) {
+          checkboxes.forEach(function(checkbox) {
+            checkbox.checked = event.target.checked;
+          });
+        });
+
+        checkboxes.forEach(function(checkbox) {
+          checkbox.addEventListener("change", function() {
+            checkAll.checked = Array.from(checkboxes).every(cb => cb.checked);
+          });
+        });
+      })();
+    </script>
   {% endif %}
-</form>
-
-<script>
-  (function() {
-    // Get references to the "select-all" checkbox and all the other checkboxes
-    const checkAll = document.querySelector("#select-all");
-    const checkboxes = document.querySelectorAll('input[type="checkbox"][name^="match"]');
-
-    // Function to update the visibility of the replaceField element
-    function updateReplaceFieldVisibility(checkbox) {
-      const replaceField = document.querySelector(`#${checkbox.id}-replace`);
-      if (checkbox.checked) {
-        replaceField.style.display = "";
-      } else {
-        replaceField.style.display = "none";
-      }
-    }
-
-    // Add a change event listener to the "select-all" checkbox
-    checkAll.addEventListener("change", function(event) {
-      // If the "select-all" checkbox is checked, check all the other checkboxes
-      // and update the replaceField visibility
-      checkboxes.forEach(function(checkbox) {
-        checkbox.checked = event.target.checked;
-        updateReplaceFieldVisibility(checkbox);
-      });
-    });
-
-    // Add change event listeners to each individual checkbox
-    checkboxes.forEach(function(checkbox) {
-      checkbox.addEventListener("change", function(event) {
-        updateReplaceFieldVisibility(event.target);
-
-        // Update the state of the 'select-all' checkbox
-        checkAll.checked = Array.from(checkboxes).every(checkbox => checkbox.checked);
-      });
-    });
-  })();
-</script>
-{% endif %}
+</div>
 {% endblock %}

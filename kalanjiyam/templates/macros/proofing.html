@@ -51,44 +51,29 @@
 {% endmacro %}
 
 
-{# Sidebar link #}
+{# Horizontal sub-nav link #}
 {% macro _link(label, route, text, active, icon_name=None) -%}
-<li class="sidebar-nav-item">
-  <a href="{{ url_for(route) }}"
-    class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 font-semibold
-   {{ 'text-white shadow-md shadow-royalblue/20' if active == label else 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' }}" {% if
-    active==label %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}>
-    {% if icon_name %}
-      {{ icon(icon_name, class='w-4 h-4 shrink-0') }}
-    {% endif %}
-    <span>{{ text }}</span>
-  </a>
-</li>
+<a href="{{ url_for(route) }}"
+  class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all duration-200 text-xs font-semibold whitespace-nowrap {{ 'text-white font-bold bg-royalblue shadow-sm shadow-royalblue/20' if active == label else 'text-slate-600 hover:bg-slate-100 hover:text-royalblue' }}">
+  {% if icon_name %}
+    {{ icon(icon_name, class='w-4 h-4 shrink-0 ' + ('text-white' if active == label else 'text-slate-400 group-hover:text-royalblue')) }}
+  {% endif %}
+  <span>{{ text }}</span>
+</a>
 {%- endmacro %}
 
 
-{# Sidebar shown on most proofing pages. #}
+{# Sub-horizontal nav bar shown across proofing pages. #}
 {% macro main_nav(active, current_user) %}
-
-{% if current_user.is_moderator %}
-<nav>
-  <h1 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Moderation') }}</h1>
-  <ul class="space-y-1">
+<nav class="bg-white p-2 rounded-2xl shadow-sm border border-slate-200/80 flex flex-wrap items-center gap-1.5 overflow-x-auto">
+  {% if current_user.is_moderator %}
     {{ _link('stats', "proofing.dashboard", _("Dashboard"), active, icon_name='layout-dashboard') }}
-  </ul>
-</nav>
-{% endif %}
-
-<nav>
-  <h1 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Contribute') }}</h1>
-  <ul class="space-y-1">
-    {{ _link('projects', "proofing.index", _("Ongoing projects"), active, icon_name='list') }}
-    {{ _link('create', "proofing.create_project", _("Create project"), active, icon_name='plus-circle') }}
-    {{ _link('docx_translate', "proofing.docx_translate", _("DOCX Translator"), active, icon_name='file-text') }}
-    {{ _link('changes', "proofing.recent_changes", _("Recent changes"), active, icon_name='clock') }}
-    {{ _link('tagging', "proofing.tagging.index", _("Tagging"), active, icon_name='tag') }}
-    {# {{ _link('talk', "proofing.talk", _("Talk"), active, icon_name='message-circle') }} #}
-  </ul>
+    <span class="w-px h-5 bg-slate-200 mx-1 hidden sm:inline-block"></span>
+  {% endif %}
+  {{ _link('projects', "proofing.index", _("Proofing Workspace"), active, icon_name='list') }}
+  {{ _link('create', "proofing.create_project", _("Create project"), active, icon_name='plus-circle') }}
+  {{ _link('changes', "proofing.recent_changes", _("Recent changes"), active, icon_name='clock') }}
+  {{ _link('tagging', "proofing.tagging.index", _("Tagging"), active, icon_name='tag') }}
 </nav>
 {% endmacro %}
 
@@ -192,51 +177,82 @@ project_slug=r.project.slug, page_slug=r.page.slug) %}
 {% endif %}
 {% set page_title = r.project.display_title + " / " + r.page.slug %}
 
-<div class="premium-card p-5 mb-3 flex flex-col gap-3">
-  <div class="flex items-center justify-between gap-4">
-    <div class="flex items-center gap-4">
-      <span class="{{ revision_colors(r.status.name) }} w-3 h-3 rounded-full shadow-sm"></span>
+<div class="bg-white rounded-2xl p-5 mb-4 shadow-sm border border-slate-200 transition-all hover:border-slate-300 flex flex-col gap-3">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div class="flex items-start gap-3">
+      <div class="mt-1 flex items-center gap-1.5 shrink-0">
+        <span class="{{ revision_colors(r.status.name) }} w-3 h-3 rounded-full shadow-sm"></span>
+      </div>
       <div>
-        <div class="font-bold text-slate-900">
-          <a href="{{ page_url }}" class="hover:text-royalblue transition-colors">{{ page_title }}</a>
-        </div>
-        <div class="text-xs font-medium text-slate-400 mt-1">
-          {% if author_url %}
-          <a href="{{ author_url }}" class="font-bold text-slate-600 hover:text-royalblue">{{ author }}</a>
-          {% else %}
-          <span class="font-bold text-slate-600">{{ author }}</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <a href="{{ page_url }}" class="font-bold text-slate-900 hover:text-royalblue transition-colors text-sm sm:text-base">
+            {{ page_title }}
+          </a>
+          <span class="font-mono bg-slate-100 border border-slate-200 text-slate-600 px-2 py-0.5 rounded-md text-[11px] font-semibold">
+            rev #{{ r.id }}
+          </span>
+          {% if r.status.name == 'reviewed-0' %}
+            <span class="px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded text-[10px] font-bold uppercase tracking-wider">{{ _('Raw / OCR') }}</span>
+          {% elif r.status.name == 'reviewed-1' %}
+            <span class="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded text-[10px] font-bold uppercase tracking-wider">{{ _('Proofread 1') }}</span>
+          {% elif r.status.name == 'reviewed-2' %}
+            <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold uppercase tracking-wider">{{ _('Proofread 2') }}</span>
+          {% elif r.status.name == 'skip' %}
+            <span class="px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-[10px] font-bold uppercase tracking-wider">{{ _('Skipped') }}</span>
           {% endif %}
-          <span class="mx-1">•</span>
-          <a href="{{ revision_url }}" class="hover:underline">{{ r.created.strftime("%Y-%m-%d %H:%M") }}</a>
+        </div>
+        <div class="text-xs font-medium text-slate-500 mt-1.5 flex flex-wrap items-center gap-1.5">
+          {% if author_url %}
+          <a href="{{ author_url }}" class="font-bold text-slate-700 hover:text-royalblue">{{ author }}</a>
+          {% else %}
+          <span class="font-bold text-slate-700">{{ author }}</span>
+          {% endif %}
+          <span class="text-slate-300">•</span>
+          <a href="{{ revision_url }}" class="text-slate-500 hover:text-royalblue hover:underline">{{ r.created.strftime("%Y-%m-%d %H:%M") }}</a>
           {% if r.summary %}
-          <span class="mx-1">•</span>
-          <span class="italic text-slate-500 font-normal">"{{ r.summary }}"</span>
+          <span class="text-slate-300">•</span>
+          <span class="italic text-slate-600 font-normal">"{{ r.summary }}"</span>
           {% endif %}
         </div>
       </div>
     </div>
     
-    {% if r.diff %}
-    <button type="button" onclick="document.getElementById('diff-{{ r.id }}').classList.toggle('hidden'); this.querySelector('svg').classList.toggle('rotate-90')" class="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded hover:bg-slate-100 flex items-center gap-1 text-xs font-bold shrink-0">
-      <span>{{ _('View Changes') }}</span>
-      <svg class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-      </svg>
-    </button>
-    {% else %}
-    <svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-    </svg>
-    {% endif %}
+    <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
+      {% if r.diff %}
+      <button type="button" onclick="document.getElementById('diff-{{ r.id }}').classList.toggle('hidden'); this.querySelector('.diff-arrow').classList.toggle('rotate-90')" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-royalblue/10 hover:text-royalblue border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+        </svg>
+        <span>{{ _('View Changes') }}</span>
+        <svg class="diff-arrow w-3.5 h-3.5 transition-transform duration-200 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        </svg>
+      </button>
+      {% endif %}
+      <a href="{{ revision_url }}" class="p-1.5 text-slate-400 hover:text-royalblue rounded-lg hover:bg-slate-100 transition-colors" title="{{ _('View full revision') }}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+        </svg>
+      </a>
+    </div>
   </div>
 
   {% if r.diff %}
-  <div id="diff-{{ r.id }}" class="hidden mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm overflow-x-auto max-h-96 whitespace-pre-wrap break-all">
-    {% for line in r.diff.splitlines() %}
-      {% set line = line.strip()|safe or '&nbsp;'|safe %}
-      {% if loop.index0 %}<br>{% endif %}
-      {{ line }}
-    {% endfor %}
+  <div id="diff-{{ r.id }}" class="hidden mt-3 rounded-xl border border-slate-200 overflow-hidden shadow-inner">
+    <div class="bg-slate-100/90 px-4 py-2 border-b border-slate-200 flex items-center justify-between text-[11px] font-mono text-slate-600">
+      <div class="flex items-center gap-2">
+        <span class="px-1.5 py-0.5 bg-white rounded border border-slate-200 text-slate-700 font-bold">git diff</span>
+        <span>{% if r.prev_revision_id %}rev #{{ r.prev_revision_id }} &rarr; {% endif %}rev #{{ r.id }}</span>
+      </div>
+      <a href="{{ revision_url }}" class="text-royalblue font-bold hover:underline">{{ _('Revision Details') }} &rarr;</a>
+    </div>
+    <div class="p-4 bg-slate-50 font-mono text-xs overflow-x-auto max-h-96 whitespace-pre-wrap break-all leading-relaxed text-slate-800">
+      {% for line in r.diff.splitlines() %}
+        {% set line = line.strip()|safe or '&nbsp;'|safe %}
+        {% if loop.index0 %}<br>{% endif %}
+        {{ line }}
+      {% endfor %}
+    </div>
   </div>
   {% endif %}
 </div>
@@ -250,30 +266,31 @@ project_slug=r.project.slug, page_slug=r.page.slug) %}
 {% set creator = p.creator.username %}
 {% set creator_url = url_for('proofing.user.summary', username=creator) %}
 
-<div class="premium-card p-5 flex items-center justify-between gap-4 mb-3 bg-royalblue/[0.02]">
-  <div class="flex items-center gap-4">
-    <span class="bg-royalblue/20 border-2 border-royalblue/30 w-3 h-3 rounded-full shadow-sm"></span>
+<div class="bg-white rounded-2xl p-5 mb-4 shadow-sm border border-slate-200 bg-royalblue/[0.02] flex items-center justify-between gap-4 transition-all hover:border-slate-300">
+  <div class="flex items-center gap-3.5">
+    <span class="bg-royalblue/20 border-2 border-royalblue/40 w-3 h-3 rounded-full shadow-sm shrink-0"></span>
     <div>
-      <div class="font-black text-slate-900 text-lg">
+      <div class="font-bold text-slate-900 text-base">
         <a href="{{ project_url }}" class="hover:text-royalblue transition-colors">{{ title }}</a>
       </div>
-      <div class="text-xs font-medium text-slate-400 mt-1">
-        {{ _('New project created by') }} <a href="{{ creator_url }}"
-          class="font-bold text-slate-600 hover:text-royalblue">{{ creator }}</a>
-        <span class="mx-1">•</span>
-        <span class="font-bold text-royalblue/70">{{ p.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
+      <div class="text-xs font-medium text-slate-500 mt-1 flex items-center gap-1.5">
+        <span>{{ _('New project created by') }}</span>
+        <a href="{{ creator_url }}" class="font-bold text-slate-700 hover:text-royalblue">{{ creator }}</a>
+        <span class="text-slate-300">•</span>
+        <span class="font-semibold text-royalblue/80">{{ p.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
       </div>
     </div>
   </div>
-  <div class="px-3 py-1 bg-royalblue/10 text-royalblue text-[10px] font-black uppercase tracking-widest rounded-full">
-    New Project</div>
+  <div class="px-3 py-1 bg-royalblue/10 text-royalblue border border-royalblue/20 text-xs font-bold rounded-full shrink-0">
+    {{ _('New Project') }}
+  </div>
 </div>
 {% endmacro %}
 
 
 {# List various activity (edits, new projects, etc.) #}
 {% macro activity_log(activity) %}
-<div class="mt-8">
+<div class="mt-4 space-y-2">
   {% for type_, _, obj in activity %}
   {% if type_ == 'revision' %}{{ revision_li(obj) }}
   {% elif type_ == 'project' %}{{ project_li(obj) }}

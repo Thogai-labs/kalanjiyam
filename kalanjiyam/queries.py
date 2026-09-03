@@ -261,8 +261,10 @@ def get_system_settings() -> db.SystemSetting:
     if not settings:
         from flask import current_app
         default_eng = "tesseract"
+        default_trans = "indictrans2"
         try:
             default_eng = current_app.config.get("DEFAULT_OCR_ENGINE", "tesseract")
+            default_trans = current_app.config.get("DEFAULT_TRANSLATION_ENGINE", "indictrans2")
         except RuntimeError:
             pass
         settings = db.SystemSetting(
@@ -271,6 +273,8 @@ def get_system_settings() -> db.SystemSetting:
             unregistered_user_upload_limit=10,
             default_ocr_engine=default_eng,
             recommended_ocr_engine=None,
+            default_translation_engine=default_trans,
+            recommended_translation_engine=None,
             auto_cleanup_days=7,
         )
         session.add(settings)

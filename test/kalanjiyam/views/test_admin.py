@@ -5,7 +5,7 @@ def test_admin_index__unauth(client):
 
 def test_admin_index__auth_admin(admin_client):
     resp = admin_client.get("/admin/")
-    assert resp.status_code == 200
+    assert resp.status_code == 302
 
 
 def test_admin_index__auth_moderator(moderator_client):

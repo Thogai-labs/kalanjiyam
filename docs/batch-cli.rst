@@ -34,23 +34,25 @@ Ingest and process PDFs or Image directories from S3 or a local filesystem.
 * ``--s3-uri TEXT``: S3 URI target path (e.g., ``s3://my-bucket/batch_pdfs/``).
 * ``--local-uri TEXT``: Local filesystem path inside the container (e.g., ``/data/uploads/batch_pdfs/``).
 * ``--org TEXT``: Organization slug to attach processed projects to (e.g., ``udaan``). Fails fast if the organization does not exist.
-* ``--lang, --language TEXT``: Target OCR language code (default: ``eng``). Examples: ``eng``, ``tam``, ``hin``.
+* ``--lang, --language TEXT``: Target OCR language code (default: ``en``). Examples: ``en``, ``ta``, ``hi``.
+* ``--engine TEXT``: Target OCR engine (default: ``surya``). Examples: ``surya``, ``google``, ``deepseek``, ``dots_ocr``.
+* ``--extract-metadata``: Automatically trigger archival metadata extraction on the ``metadata`` Celery queue once each book completes OCR.
 * ``--pdf``: Process PDF files only.
 * ``--image``: Process image directories only.
 
 **Examples:**
 
-*Process local PDFs for an organization in English:*
+*Process local PDFs for an organization in English with automatic metadata extraction:*
 
 .. code-block:: bash
 
-   docker exec -it kalanjiyam-web python scripts/cli.py batch-ocr --local-uri /data/uploads/batch_pdfs/ --pdf --org "udaan" --lang "eng"
+   docker exec -it kalanjiyam-web python cli.py batch-ocr --local-uri /data/uploads/batch_pdfs/ --pdf --org "udaan" --lang "en" --extract-metadata
 
-*Process an S3 bucket for Tamil documents:*
+*Process an S3 bucket for Tamil documents with Google OCR:*
 
 .. code-block:: bash
 
-   docker exec -it kalanjiyam-web python scripts/cli.py batch-ocr --s3-uri s3://my-bucket/documents/ --org "udaan" --lang "tam"
+   docker exec -it kalanjiyam-web python cli.py batch-ocr --s3-uri s3://my-bucket/documents/ --org "udaan" --lang "ta" --engine "google"
 
 import-jsonl
 ~~~~~~~~~~~~
@@ -131,6 +133,10 @@ Check detailed item breakdown and performance metrics (time taken, extraction la
    Total Size : 14.25 MB
    Avg Extraction Latency   : 120.45 ms
    Avg OCR Latency          : 450.12 ms
+   Metadata   : 5/5 Described (0 In Progress, 0 Failed) [enabled=True]
+   Meta Fields: 92 total tags extracted across 5 project(s)
+   Meta Evidence: 88.5% average verified citations
+   Meta Tokens: 18450 tokens consumed
 
 batch-cancel
 ~~~~~~~~~~~~
@@ -141,36 +147,40 @@ Cancel an in-progress or pending batch job. Marks pending items as failed with `
 
 .. code-block:: bash
 
-   docker exec -it kalanjiyam-web python scripts/cli.py batch-cancel --job-id <JOB_ID>
+   docker exec -it kalanjiyam-web python cli.py batch-cancel --job-id <JOB_ID>
 
 **Example:**
 
 .. code-block:: bash
 
-   docker exec -it kalanjiyam-web python scripts/cli.py batch-cancel --job-id 7
+   docker exec -it kalanjiyam-web python cli.py batch-cancel --job-id 7
 
 batch-retry
 ~~~~~~~~~~~
 
 Re-queue failed or incomplete items for an existing batch job without re-scanning files.
+Can also be used with ``--force`` and ``--engine`` to benchmark/rerun a completed batch with a different OCR engine.
 
 **Syntax:**
 
 .. code-block:: bash
 
-   docker exec -it kalanjiyam-web python scripts/cli.py batch-retry --job-id <JOB_ID> [OPTIONS]
+   docker exec -it kalanjiyam-web python cli.py batch-retry --job-id <JOB_ID> [OPTIONS]
 
 **Options:**
 
 * ``--job-id INTEGER``: Batch Job ID to retry (required).
 * ``--org TEXT``: Organization slug (optional).
-* ``--lang, --language TEXT``: OCR language code (default: ``eng``).
+* ``--lang, --language TEXT``: OCR language code (default: ``en``).
+* ``--engine TEXT``: OCR engine override (e.g. ``google``, ``surya``, ``dots_ocr``).
+* ``--force``: Force rerun OCR on all pages (including completed ones).
+* ``--extract-metadata / --no-extract-metadata``: Enable or disable metadata extraction on completion.
 
 **Example:**
 
 .. code-block:: bash
 
-   docker exec -it kalanjiyam-web python scripts/cli.py batch-retry --job-id 7 --org "udaan" --lang "eng"
+   docker exec -it kalanjiyam-web python cli.py batch-retry --job-id 7 --org "udaan" --lang "en" --engine "google" --force --extract-metadata
 
 Architecture & Data Models
 --------------------------

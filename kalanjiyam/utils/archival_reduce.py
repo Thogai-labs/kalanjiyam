@@ -406,4 +406,7 @@ def run_metrics(window_stats: list[dict], fields: dict, pages_total: int) -> dic
         "total_engine_latency_ms": sum(
             w.get("engine_latency_ms", 0) or 0 for w in window_stats
         ),
+        "total_extraction_latency_ms": sum(
+            w.get("extraction_latency_ms", 0) or 0 for w in window_stats
+        ),
     }

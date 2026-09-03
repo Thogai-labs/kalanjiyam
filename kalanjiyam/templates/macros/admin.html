@@ -40,8 +40,7 @@
 {% macro _nav_link(route, label, text, active, icon_name=None) %}
 <li>
   <a href="{{ url_for(route) }}"
-     class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 font-semibold text-sm
-     {{ 'text-white shadow-md shadow-royalblue/20' if active else 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' }}"
+     class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 font-semibold text-sm {{ 'text-white shadow-md shadow-royalblue/20' if active else 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' }}"
      {% if active %}style="background: linear-gradient(135deg, royalblue, #3f51b5);"{% endif %}>
     {% if icon_name %}
       {{ icon(icon_name, class='w-4 h-4 shrink-0') }}
@@ -79,7 +78,6 @@
   <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Site') }}</h2>
   <ul class="space-y-1">
     {{ _nav_link('proofing.index', 'proofing', _('Proofing'), active == 'proofing', icon_name='check-square') }}
-    {{ _nav_link('public.books.index', 'books', _('Books'), active == 'books', icon_name='book') }}
     {{ _nav_link('site.index', 'home', _('Home'), active == 'home', icon_name='home') }}
   </ul>
 </nav>
@@ -94,6 +92,22 @@
     {{ _nav_link('org_admin_view.search_index', 'search_index', _('Search Index'), active == 'search_index', icon_name='search') }}
     {{ _nav_link('admin.export_import_dashboard', 'export', _('Export / Import'), active == 'export', icon_name='arrow-left-right') }}
     {{ _nav_link('proofing.create_project', 'upload', _('Upload book'), active == 'upload', icon_name='upload') }}
+  </ul>
+</nav>
+{% elif current_user.is_master_user %}
+<nav class="mb-6">
+  <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Metrics') }}</h2>
+  <ul class="space-y-1">
+    {{ _nav_link('master_metrics_view.cli_batch_ocr', 'cli_batch_ocr', _('OCR & TR Metrics'), active == 'cli_batch_ocr', icon_name='gauge') }}
+    {{ _nav_link('master_metrics_view.metadata_metrics', 'metadata_metrics', _('Extraction Metrics'), active == 'metadata_metrics', icon_name='gauge') }}
+    {{ _nav_link('master_metrics_view.metrics', 'metrics', _('Telemetry & Logs'), active == 'metrics', icon_name='activity') }}
+  </ul>
+</nav>
+<nav>
+  <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Site') }}</h2>
+  <ul class="space-y-1">
+    {{ _nav_link('proofing.index', 'proofing', _('Proofing'), active == 'proofing', icon_name='check-square') }}
+    {{ _nav_link('site.index', 'home', _('Home'), active == 'home', icon_name='home') }}
   </ul>
 </nav>
 {% endif %}

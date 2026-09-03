@@ -83,5 +83,13 @@ LOCALES = [
     Locale(code="hi_IN", slug="hi", text="हिन्दी"),
     Locale(code="sa", slug="sa", text="संस्कृतम्"),
     Locale(code="te_IN", slug="te", text="తెలుగు"),
-    
+    Locale(code="kn_IN", slug="kn", text="ಕನ್ನಡ"),
+    Locale(code="ml_IN", slug="ml", text="മലയാളം"),
+    Locale(code="mr_IN", slug="mr", text="मराठी"),
+    Locale(code="bn_IN", slug="bn", text="বাংলা"),
+    Locale(code="gu_IN", slug="gu", text="ગુજરાતી"),
+    Locale(code="or_IN", slug="or", text="ଓଡ଼ିଆ"),
+    Locale(code="pa_IN", slug="pa", text="ਪੰਜਾਬੀ"),
+    Locale(code="as_IN", slug="as", text="অসমীয়া"),
+    Locale(code="ur_IN", slug="ur", text="اردو"),
 ]

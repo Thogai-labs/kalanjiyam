@@ -16,8 +16,10 @@ Architecture
 
    Browser → nginx → Gunicorn (Kalanjiyam)
                        ├── PostgreSQL
-                       ├── Redis → Celery (queues: default, ocr)
+                       ├── Redis → Celery (queues: default, ocr, low_priority, s3_batch, search_index, metadata)
+                       ├── OpenSearch (search index)
                        ├── HTTP → OCR service (OCR_SERVICE_URL)
+                       ├── HTTP → Translation service (TRANSLATION_SERVICE_URL)
                        └── S3 API → Versity Gateway → ~/kalanjiyam-data/uploads/
 
 
@@ -139,11 +141,18 @@ Redis is the Celery broker and result backend::
 Celery
 ------
 
-Batch OCR and OCR comparison use the **ocr** queue::
+Kalanjiyam processes background tasks across 6 queues:
 
-   celery -A kalanjiyam.tasks worker -Q default,ocr --loglevel=INFO --concurrency=2
+* `default`: General tasks and emails
+* `ocr`: Interactive single-page OCR and comparison jobs
+* `s3_batch`: Bulk PDF/image folder batch OCR ingestion
+* `metadata`: Token-budgeted full-document archival metadata extraction
+* `search_index`: Incremental OpenSearch indexing and sync jobs
+* `low_priority`: Heavy background exports and non-urgent maintenance
 
-For a production Celery service, see the `Celery daemonizing guide`_.
+In Docker Compose, these are split across three worker containers (`kalanjiyam-celery`, `kalanjiyam-celery-batch`, `kalanjiyam-celery-metadata`). For bare-metal workers::
+
+   celery -A kalanjiyam.tasks worker -Q default,ocr,low_priority,s3_batch,search_index,metadata --loglevel=INFO --concurrency=2
 
 .. _Celery daemonizing guide: https://docs.celeryq.dev/en/stable/userguide/daemonizing.html
 
@@ -229,6 +238,7 @@ Pre-go-live checklist
 - At least one organization and org admin; ``migrate_multi_tenant.py`` clean or fixes applied
 - ``MULTI_TENANT_MODE=true`` and related flags set **after** bootstrap, then app restarted
 - Admin UI reachable at ``/admin/platform/`` for super admin
-- Celery worker includes both ``default`` and ``ocr`` queues
+- Celery workers include all required queues (``default``, ``ocr``, ``low_priority``, ``s3_batch``, ``search_index``, ``metadata``)
+- OpenSearch service online and indices initialized (``python cli.py search-index init``)
 - Static assets built (``make css js``) before Docker image build
 - nginx TLS terminating; OCR service ``/admin`` not publicly routable

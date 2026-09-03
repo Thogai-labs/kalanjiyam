@@ -6,12 +6,12 @@
 {% include "include/header.html" %}
 {% endblock %}
 
-<div class="flex-1 flex flex-col min-h-0">
+<div class="flex-1 flex flex-col min-h-0 bg-slate-100">
 {% block main %}{% endblock %}
 </div>
 {% block footer %}{% include "include/footer.html" %}{% endblock %}
 {% block scripts %}
-    <script async defer data-domain="siddhasagaram.in" src="https://plausible.io/js/plausible.js"></script>
+    <script async defer data-domain="kalanjiyam.org" src="https://plausible.io/js/plausible.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@indic-transliteration/sanscript@1.2.7/sanscript.min.js"></script>
     {# Load scripts before Alpine so that our init hooks are properly set up. #}
     <script defer src="{{ asset('gen/main.js') }}"></script>

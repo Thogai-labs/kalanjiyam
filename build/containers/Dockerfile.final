@@ -54,12 +54,11 @@ COPY --from=build-js /app /app
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app"
 
-# i18n (non-fatal: runs in English if repo unavailable)
-RUN python /app/kalanjiyam/scripts/fetch_i18n_files.py && \
-    pybabel compile -d /app/kalanjiyam/translations -f || \
-    echo "WARNING: i18n fetch failed, running in English only"
+# i18n catalogs compilation
+RUN pybabel compile -d /app/kalanjiyam/translations -f || \
+    echo "WARNING: pybabel compile failed, running with existing catalogs"
 
-COPY config.py wsgi.py alembic.ini ./
+COPY config.py wsgi.py alembic.ini babel.cfg ./
 COPY migrations/ ./migrations/
 COPY scripts/ ./scripts/
 COPY cli.py ./scripts/

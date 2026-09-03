@@ -48,6 +48,17 @@ def test_activity(client):
     assert resp.status_code == 200
 
 
+def test_activity_pagination(client):
+    resp = client.get("/proofing/users/u-admin/activity?page=1&per_page=10")
+    assert resp.status_code == 200
+    assert "Contribution History" in resp.text
+
+
+def test_activity_date_filter(client):
+    resp = client.get("/proofing/users/u-admin/activity?date=2024-01-01")
+    assert resp.status_code == 200
+
+
 def test_activity__missing(client):
     resp = client.get("/proofing/users/bad-user/activity")
     assert resp.status_code == 404

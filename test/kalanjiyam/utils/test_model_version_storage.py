@@ -153,9 +153,41 @@ def test_export_project_data_model_payload_filenames(monkeypatch):
 
     assert len(data["revisions"]) == 1
     rev_export = data["revisions"][0]
-    assert rev_export["payload_filename"] == "translation-nayan_sa-en_v1.json.gz"
+    assert rev_export["payload_filename"] == "translation-nayan_sa-en_v1.json"
     assert rev_export["translation_model"] == "nayan"
     assert rev_export["source_language"] == "sa"
     assert rev_export["target_language"] == "en"
     assert rev_export["document"]["timestamp"] == "2026-08-10T12:00:00Z"
+
+
+def test_export_revision_payloads_as_plain_json(tmp_path, monkeypatch):
+    import json
+    from kalanjiyam.admin import _export_revision_payloads
+
+    monkeypatch.setattr(
+        "kalanjiyam.utils.document_storage.load_revision_document",
+        lambda rev: {"blocks": [{"text": "Hello world"}]},
+    )
+
+    project = SimpleNamespace(slug="test-proj", pages=[])
+    page = SimpleNamespace(slug="page-1", revisions=[])
+    page_ver = SimpleNamespace(version_key="ocr:google", version=1)
+    rev = SimpleNamespace(
+        id=1,
+        page_version=page_ver,
+        summary="OCR run",
+        author=None,
+        translations=None,
+        created=None,
+    )
+    page.revisions.append(rev)
+    project.pages.append(page)
+
+    files_dir = tmp_path / "files"
+    _export_revision_payloads(project, files_dir)
+
+    payload_file = files_dir / "revisions" / "page-1" / "ocr-google.json"
+    assert payload_file.exists()
+    content = json.loads(payload_file.read_text(encoding="utf-8"))
+    assert content["blocks"][0]["text"] == "Hello world"
 

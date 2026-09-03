@@ -8,6 +8,7 @@ from pathlib import Path
 # package called `fitz` (https://pypi.org/project/fitz/) that is completely
 # unrelated to PDF parsing.
 import fitz
+from PIL import Image, ImageOps
 from slugify import slugify
 
 from kalanjiyam import database as db
@@ -32,7 +33,7 @@ def _split_pdf_into_pages(
     :return: the page count, which we use downstream.
     """
     doc = fitz.open(pdf_path)
-    task_status.progress(0, doc.page_count)
+    task_status.progress(0, doc.page_count, doc_type="pdf")
     with tempfile.TemporaryDirectory() as tmp_dir:
         for page in doc:
             n = page.number + 1
@@ -41,8 +42,55 @@ def _split_pdf_into_pages(
             pix.pil_save(tmp_path, optimize=True)
             storage.save(page_image_key(slug, str(n), org_slug=org_slug), tmp_path)
             tmp_path.unlink()
-            task_status.progress(n, doc.page_count)
+            task_status.progress(n, doc.page_count, doc_type="pdf")
     return doc.page_count
+
+
+def process_page_image_for_storage(im: Image.Image) -> Image.Image:
+    """Normalize a page scan image to 200 DPI RGB.
+
+    1. Transposes orientation according to EXIF metadata (camera/phone rotation).
+    2. Converts color space to RGB.
+    3. Resamples to 200 DPI if scanned at higher resolution (> 200 DPI)
+       or if uncalibrated image dimensions exceed standard 200 DPI document sizes.
+    """
+    im = ImageOps.exif_transpose(im)
+    if im.mode != "RGB":
+        im = im.convert("RGB")
+
+    dpi_info = im.info.get("dpi")
+    src_dpi = None
+    if isinstance(dpi_info, (tuple, list)) and len(dpi_info) >= 1:
+        try:
+            val = float(dpi_info[0])
+            if len(dpi_info) >= 2:
+                val_y = float(dpi_info[1])
+                if val_y > 0 and val > 0:
+                    val = max(val, val_y)
+            if val > 0:
+                src_dpi = val
+        except (ValueError, TypeError):
+            pass
+    elif isinstance(dpi_info, (int, float)) and dpi_info > 0:
+        src_dpi = float(dpi_info)
+
+    w, h = im.size
+    scale = 1.0
+
+    # If scanner embedded a calibrated DPI > 200 (e.g. 300, 400, 600 DPI)
+    if src_dpi and src_dpi > 200:
+        scale = 200.0 / src_dpi
+    elif (not src_dpi or src_dpi <= 100) and max(w, h) > 2400:
+        # Camera / phone scan or uncalibrated high-res scan:
+        # Scale longest edge to ~2400 px (standard document height at 200 DPI)
+        scale = 2400.0 / max(w, h)
+
+    if scale < 1.0:
+        new_w = max(1, int(round(w * scale)))
+        new_h = max(1, int(round(h * scale)))
+        im = im.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+    return im
 
 
 def _add_project_to_database(
@@ -52,6 +100,7 @@ def _add_project_to_database(
     creator_id: int | None,
     require_org: bool,
     fingerprint_id: str | None = None,
+    org_slug: str = "open-tenant",
 ):
     """Create a project on the database.
 
@@ -89,12 +138,19 @@ def _add_project_to_database(
             )
         )
     creator = session.query(db.User).filter_by(id=creator_id).first() if creator_id else None
-    # Auto-assign projects to the creator's organization for tenant isolation.
-    from kalanjiyam.utils.org_access import user_organization_id
-    creator_org_id = user_organization_id(creator) if creator else None
-    if creator_org_id:
-        session.add(db.ProjectGroups(group_id=creator_org_id, project_id=project.id))
-    elif not creator_org_id and fingerprint_id:
+    # Auto-assign projects to the target or creator's organization for tenant isolation.
+    target_group = None
+    if org_slug and org_slug != "open-tenant":
+        target_group = session.query(db.Group).filter_by(slug=org_slug).first()
+    if not target_group and creator:
+        from kalanjiyam.utils.org_access import user_organization_id
+        creator_org_id = user_organization_id(creator)
+        if creator_org_id:
+            target_group = session.query(db.Group).filter_by(id=creator_org_id).first()
+
+    if target_group:
+        session.add(db.ProjectGroups(group_id=target_group.id, project_id=project.id))
+    elif not creator and fingerprint_id:
         # Guests default to the open-tenant workspace
         try:
             open_tenant = q.get_or_create_open_tenant()
@@ -570,14 +626,17 @@ def create_project_inner(
     display_title: str,
     pdf_key: str | None = None,
     docx_key: str | None = None,
+    image_keys: list[str] | None = None,
     app_environment: str,
     creator_id: int | None,
     fingerprint_id: str | None = None,
     task_status: TaskStatus,
     org_slug: str = "open-tenant",
 ):
-    """Split the given PDF or DOCX into pages and register the project on the database."""
-    logging.info(f'Received upload task "{display_title}" for key {pdf_key or docx_key}.')
+    """Split the given PDF, DOCX, or images into pages and register the project on the database."""
+    logging.info(
+        f'Received upload task "{display_title}" for key {pdf_key or docx_key or (f"{len(image_keys)} images" if image_keys else "none")}.'
+    )
 
     app = create_config_only_app(app_environment)
     with app.app_context():
@@ -611,6 +670,7 @@ def create_project_inner(
                 creator_id=creator_id,
                 require_org=require_org,
                 fingerprint_id=fingerprint_id,
+                org_slug=org_slug,
             )
 
             db_project = session.query(db.Project).filter_by(slug=slug).one()
@@ -714,7 +774,88 @@ def create_project_inner(
             from kalanjiyam.tasks.search_index import enqueue_project
 
             enqueue_project(db_project.id)
+            doc_type = "docx"
+        elif image_keys:
+            doc_type = "images"
+            num_pages = len(image_keys)
+            require_org = bool(app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True))
+            _add_project_to_database(
+                display_title=display_title,
+                slug=slug,
+                num_pages=num_pages,
+                creator_id=creator_id,
+                require_org=require_org,
+                fingerprint_id=fingerprint_id,
+                org_slug=org_slug,
+            )
+
+            total_images_size_bytes = 0
+            task_status.progress(0, num_pages, doc_type="images")
+
+            for idx, img_key in enumerate(image_keys, start=1):
+                local_src = storage.local_copy(img_key)
+                if not local_src.exists():
+                    raise ValueError(f'Source image not found in storage: "{img_key}".')
+
+                total_images_size_bytes += local_src.stat().st_size
+                dest_key = page_image_key(slug, str(idx), org_slug=org_slug)
+
+                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_dest:
+                    tmp_dest_path = Path(tmp_dest.name)
+                    try:
+                        with Image.open(local_src) as im:
+                            im = process_page_image_for_storage(im)
+                            im.save(tmp_dest_path, "JPEG", quality=90, optimize=True, dpi=(200, 200))
+                        storage.save(dest_key, tmp_dest_path)
+                    finally:
+                        if tmp_dest_path.exists():
+                            tmp_dest_path.unlink()
+
+                # Clean up staged raw image from storage
+                if storage.exists(img_key):
+                    storage.delete(img_key)
+
+                task_status.progress(idx, num_pages, doc_type="images")
+
+            db_project = session.query(db.Project).filter_by(slug=slug).one()
+            meta = db_project.extracted_metadata or {}
+            if "source_file" not in meta or not isinstance(meta["source_file"], dict):
+                meta["source_file"] = {}
+            meta["source_file"]["size_bytes"] = total_images_size_bytes
+            meta["source_file"]["type"] = "images"
+            meta["source_file"]["num_images"] = num_pages
+            meta["source_file"]["deleted_after_extraction"] = True
+            db_project.extracted_metadata = meta
+            from sqlalchemy.orm.attributes import flag_modified
+
+            flag_modified(db_project, "extracted_metadata")
+            session.commit()
+
+            from kalanjiyam.utils.metrics import record_metric
+            from kalanjiyam.utils.org_access import user_organization_id
+
+            creator_user = (
+                session.query(db.User).filter_by(id=creator_id).first()
+                if creator_id
+                else None
+            )
+            org_id = user_organization_id(creator_user) if creator_user else None
+            record_metric(
+                category="project_upload",
+                name="images_extracted_and_deleted",
+                user_id=creator_id,
+                group_id=org_id,
+                status="SUCCESS",
+                details={
+                    "project_slug": slug,
+                    "source_file_size_bytes": total_images_size_bytes,
+                    "num_pages": num_pages,
+                },
+            )
+
+            add_storage_usage_for_project(slug)
         else:
+            doc_type = "pdf"
             pdf_path = storage.local_copy(pdf_key)
             if not pdf_path.exists():
                 raise ValueError(f'Source PDF not found in storage: "{pdf_key}".')
@@ -735,6 +876,7 @@ def create_project_inner(
                 creator_id=creator_id,
                 require_org=require_org,
                 fingerprint_id=fingerprint_id,
+                org_slug=org_slug,
             )
 
             # Update DB project metadata and metrics log
@@ -774,7 +916,14 @@ def create_project_inner(
 
             add_storage_usage_for_project(slug)
 
-    task_status.success(num_pages, slug)
+    task_status.success(num_pages, slug, doc_type=doc_type)
+    return {
+        "current": num_pages,
+        "total": num_pages,
+        "slug": slug,
+        "num_pages": num_pages,
+        "doc_type": doc_type,
+    }
 
 
 @app.task(bind=True)
@@ -784,17 +933,19 @@ def create_project(
     display_title: str,
     pdf_key: str | None = None,
     docx_key: str | None = None,
+    image_keys: list[str] | None = None,
     app_environment: str,
     creator_id: int | None,
     fingerprint_id: str | None = None,
     org_slug: str = "open-tenant",
 ):
-    """Split the given PDF or DOCX into pages and register the project on the database."""
+    """Split the given PDF, DOCX, or images into pages and register the project on the database."""
     task_status = CeleryTaskStatus(self)
-    create_project_inner(
+    return create_project_inner(
         display_title=display_title,
         pdf_key=pdf_key,
         docx_key=docx_key,
+        image_keys=image_keys,
         app_environment=app_environment,
         creator_id=creator_id,
         fingerprint_id=fingerprint_id,

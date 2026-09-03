@@ -2,18 +2,92 @@
 {% from "macros/forms.html" import field %}
 {% import "macros/proofing.html" as m %}
 
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-{% block title %}{{ _('OCR: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
+  .{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
 
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
+  }
+</style>
+{% endblock %}
+
+{% block title %}{{ _('Batch OCR Progress:') }} {{ project.display_title }} | Kalanjiyam{% endblock %}
+
+{% block hero %}
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+  <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+    <div class="flex items-start gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0 mt-0.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="flex flex-wrap items-center gap-2">
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ project.display_title }}
+          </h1>
+          {% if project.condition_tag_list %}
+            <div class="flex flex-wrap items-center gap-1.5">
+              {% for tag in project.condition_tag_list %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200 shadow-xs" title="{{ _('Condition issue: %(tag)s', tag=tag.name) }}{% if tag.pages %} ({{ _('Pages:') }} {{ tag.pages }}){% endif %}">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  <span>{{ tag.name }}</span>
+                  {% if tag.pages %}
+                    <span class="text-[11px] text-amber-700 font-normal">({{ tag.pages }})</span>
+                  {% endif %}
+                </span>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- Meta Info -->
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium mt-1">
+          {% if project.author %}
+          <span class="text-slate-700 font-semibold">{{ project.author }}</span>
+          {% endif %}
+          {% if project.publication_year %}
+          <span class="text-slate-300">•</span>
+          <span>{{ project.publication_year }}</span>
+          {% endif %}
+          {% if project.publisher %}
+          <span class="text-slate-300">•</span>
+          <span>{{ project.publisher }}</span>
+          {% endif %}
+          <span class="text-slate-300">•</span>
+          <span class="text-royalblue font-semibold">{{ project.pages|length }} {{ _('pages') }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Action Button back to Workspace -->
+    <div class="flex items-center gap-2 text-xs shrink-0">
+      <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
+        <span>{{ _('Workspace') }}</span>
+      </a>
+    </div>
+  </div>
+</header>
+{% endblock %}
 
 {% block content %}
-{{ m.project_header_nested(_('OCR'), project) }}
-{{ m.project_tabs(project=project, active='batch_processes', is_mod=current_user.is_moderator) }}
+<div class="w-full">
+  <div class="mb-6">
+    {{ m.project_tabs(project=project, active='batch_processes', is_mod=current_user.is_moderator) }}
+  </div>
 
-{% set url = url_for('proofing.project.batch_ocr_status', task_id=task_id) %}
-<div id="progress" x-data="htmlPoller('{{ url }}')">
-  {% with current=current, total=total, percent=percent, slug=slug, status=status, active_tasks=active_tasks, pending_tasks=pending_tasks, failed_tasks=failed_tasks, engine=engine, language=language %}
-    {% include 'include/ocr-progress.html' %}
-  {% endwith %}
+  {% set url = url_for('proofing.project.batch_ocr_status', task_id=task_id) %}
+  <div id="progress" x-data="htmlPoller('{{ url }}')">
+    {% with current=current, total=total, percent=percent, slug=slug, status=status, active_tasks=active_tasks, pending_tasks=pending_tasks, failed_tasks=failed_tasks, engine=engine, language=language %}
+      {% include 'include/ocr-progress.html' %}
+    {% endwith %}
+  </div>
 </div>
 {% endblock %}

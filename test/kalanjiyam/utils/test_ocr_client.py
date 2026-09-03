@@ -173,23 +173,34 @@ def test_sanitize_block_clamps_confidence_and_filters_words():
 
 def test_engine_aliases_map_service_ids():
     from kalanjiyam.utils.ocr_types import (
+        ENGINE_MAP,
         build_engine_choices,
         engine_for_service,
+        normalize_engine,
         normalize_service_engine,
     )
 
     assert normalize_service_engine("surya-table") == "surya_table"
     assert normalize_service_engine("glm-ocr") == "glm_ocr"
+    assert normalize_service_engine("gemma-ocr") == "gemma_ocr"
+    assert normalize_service_engine("gemma-4") == "gemma_ocr"
+    assert normalize_service_engine("gemma-4-31b") == "gemma_ocr"
+    assert normalize_service_engine("llm-gemma") == "gemma_ocr"
+    assert normalize_service_engine("llm_gemma") == "gemma_ocr"
     assert engine_for_service("surya_table") == "surya-table"
     assert engine_for_service("glm_ocr") == "glm-ocr"
+    assert engine_for_service("gemma_ocr") == "gemma-ocr"
+    assert normalize_engine("13") == "gemma_ocr"
+    assert ENGINE_MAP["13"] == "gemma_ocr"
 
     choices = build_engine_choices(
-        ["tesseract", "surya-table", "chandra", "glm-ocr"],
+        ["tesseract", "surya-table", "chandra", "glm-ocr", "gemma-ocr"],
         is_super_admin=True,
     )
     labels = {c["label"] for c in choices}
     assert "Surya Table" in labels
     assert "GLM OCR" in labels
+    assert "Gemma OCR" in labels
 
 
 def test_run_ocr_remote_parses_v2_contract_fields(flask_app, tmp_path):

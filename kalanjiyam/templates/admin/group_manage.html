@@ -1,100 +1,159 @@
 {% extends 'admin/master.html' %}
 {% import 'macros/admin.html' as admin %}
 
-{% block title %}{{ group.name }} | {{ _('Admin') }}{% endblock %}
+{% block title %}{{ group.name }} | {{ _('Admin Console') }}{% endblock %}
 
 {% block admin_sidebar %}
 {{ admin.nav('organizations', current_user) }}
 {% endblock %}
 
 {% block content %}
-<header class="mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-  <div>
-    <h1 class="text-3xl font-extrabold text-slate-900 flex items-center">
-      <span class="pulse-indicator"></span>
-      {{ group.name }}
-    </h1>
-    {% if group.description %}
-    <p class="text-slate-500 mt-2 font-medium ml-6">{{ group.description }}</p>
-    {% endif %}
-    <p class="text-xs font-mono text-slate-400 mt-1 ml-6">{{ group.slug }}</p>
+<!-- Google Admin Org Management Header -->
+<div class="mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-royalblue/10 text-royalblue font-bold flex items-center justify-center text-sm shrink-0">
+        {{ group.name[:1]|upper }}
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ group.name }}
+          </h1>
+          <span class="font-mono text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-semibold">
+            {{ group.slug }}
+          </span>
+        </div>
+        {% if group.description %}
+        <p class="text-xs text-slate-500 font-medium mt-0.5">{{ group.description }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <a href="{{ url_for('groups_view.edit', id=group.id) }}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-royalblue text-xs font-semibold transition-all shadow-xs">
+        {{ admin.icon('settings', class='w-3.5 h-3.5 text-slate-500') }}
+        <span>{{ _('Edit Settings') }}</span>
+      </a>
+      <a href="{{ url_for('groups_view.index') }}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-royalblue text-xs font-semibold transition-all shadow-xs">
+        <span>{{ _('All Organizations') }}</span>
+      </a>
+    </div>
   </div>
-  <div class="flex flex-wrap gap-2 shrink-0">
-    {{ admin.btn_secondary(_('Edit'), href=url_for('groups_view.edit', id=group.id)) }}
-    {{ admin.btn_secondary(_('All organizations'), href=url_for('groups_view.index')) }}
-  </div>
-</header>
+</div>
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
-    <h2 class="text-lg font-bold text-slate-900 mb-4">{{ _('Users') }}</h2>
-    <form method="post" action="{{ url_for('groups_view.manage', id=group.id) }}" class="mb-5 flex flex-col sm:flex-row gap-2">
+
+  <!-- Card 1: Users & Members Management -->
+  <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 space-y-4">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+      <div>
+        <h2 class="text-sm sm:text-base font-bold text-slate-900">{{ _('Assigned Members') }}</h2>
+        <p class="text-xs text-slate-500 font-medium">{{ _('Scholars and proofreaders with access to this tenant.') }}</p>
+      </div>
+      <span class="px-2.5 py-0.5 rounded-full bg-blue-50 text-royalblue font-bold text-xs">
+        {{ users|length }} {{ _('users') }}
+      </span>
+    </div>
+
+    <!-- Add User Form -->
+    <form method="post" action="{{ url_for('groups_view.manage', id=group.id) }}" class="flex flex-col sm:flex-row gap-2 pt-1">
       {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
       <input type="hidden" name="action" value="add_user">
-      <select name="user_id" class="{{ admin.select_class() }} flex-1" required>
-        <option value="">{{ _('Select a user…') }}</option>
+      <select name="user_id" class="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none bg-white text-slate-900" required>
+        <option value="">{{ _('Select a user to add…') }}</option>
         {% for u in all_users %}
         {% if u.id not in users_in_group_ids %}
         <option value="{{ u.id }}">{{ u.username }} ({{ u.email }})</option>
         {% endif %}
         {% endfor %}
       </select>
-      {{ admin.btn_primary(_('Add user'), type='submit') }}
+      <button type="submit" class="px-4 py-2 bg-royalblue hover:bg-blue-600 text-white font-semibold text-xs rounded-xl transition-all shadow-xs shrink-0">
+        {{ _('Add User') }}
+      </button>
     </form>
+
+    <!-- Users List -->
     {% if users %}
-    <ul class="divide-y divide-slate-100">
+    <div class="divide-y divide-slate-100 max-h-96 overflow-y-auto pr-1">
       {% for u in users %}
-      <li class="py-3 flex justify-between items-center gap-4">
-        <span class="font-medium text-slate-900">{{ u.username }}
-          <span class="text-sm text-slate-400 font-normal">({{ u.email }})</span>
-        </span>
+      <div class="py-3 flex items-center justify-between gap-3 text-xs">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-7 h-7 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-[10px] shrink-0 uppercase">
+            {{ u.username[:1] }}
+          </div>
+          <div class="min-w-0">
+            <span class="font-bold text-slate-900 block truncate">{{ u.username }}</span>
+            <span class="text-slate-400 text-[11px] truncate block">{{ u.email }}</span>
+          </div>
+        </div>
+
         <form method="post" action="{{ url_for('groups_view.manage', id=group.id) }}" class="shrink-0">
           {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
           <input type="hidden" name="action" value="remove_user">
           <input type="hidden" name="user_id" value="{{ u.id }}">
-          {{ admin.btn_danger(_('Remove')) }}
+          <button type="submit" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-[11px] transition-colors border border-rose-100">
+            {{ _('Remove') }}
+          </button>
         </form>
-      </li>
+      </div>
       {% endfor %}
-    </ul>
+    </div>
     {% else %}
-    <p class="text-slate-400 font-medium text-sm">{{ _('No users in this organization yet.') }}</p>
+    <p class="text-slate-400 font-medium text-xs py-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+      {{ _('No users assigned to this organization yet.') }}
+    </p>
     {% endif %}
   </div>
 
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
-    <h2 class="text-lg font-bold text-slate-900 mb-2">{{ _('Books') }}</h2>
-    <p class="text-sm text-slate-500 mb-4">{{ _('Org admins can publish books to') }} <span class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">/books/</span>{{ _('. Super admins can toggle visibility here too.') }}</p>
+  <!-- Card 2: Books / Project Catalog Assignment -->
+  <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 space-y-4">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+      <div>
+        <h2 class="text-sm sm:text-base font-bold text-slate-900">{{ _('Assigned Books') }}</h2>
+        <p class="text-xs text-slate-500 font-medium">{{ _('Books and manuscripts managed by this organization.') }}</p>
+      </div>
+      <span class="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold text-xs">
+        {{ projects|length }} {{ _('books') }}
+      </span>
+    </div>
+
+    <!-- Add Project Form -->
     <form method="post" action="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page, texts_page=texts_page) }}"
-          class="mb-5 flex flex-col sm:flex-row gap-2">
+          class="flex flex-col sm:flex-row gap-2 pt-1">
       {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
       <input type="hidden" name="action" value="add_project">
       <input type="hidden" name="projects_page" value="{{ projects_page }}">
       <input type="hidden" name="texts_page" value="{{ texts_page }}">
-      <select name="project_id" class="{{ admin.select_class() }} flex-1" required>
-        <option value="">{{ _('Select a project…') }}</option>
+      <select name="project_id" class="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none bg-white text-slate-900" required>
+        <option value="">{{ _('Select a project to assign…') }}</option>
         {% for p in all_projects %}
         {% if p.id not in projects_in_group_ids %}
-        <option value="{{ p.id }}">{{ p.slug }} — {{ p.display_title[:60] }}{% if p.display_title|length > 60 %}…{% endif %}</option>
+        <option value="{{ p.id }}">{{ p.slug }} — {{ p.display_title[:50] }}{% if p.display_title|length > 50 %}…{% endif %}</option>
         {% endif %}
         {% endfor %}
       </select>
-      {{ admin.btn_primary(_('Add book'), type='submit') }}
+      <button type="submit" class="px-4 py-2 bg-royalblue hover:bg-blue-600 text-white font-semibold text-xs rounded-xl transition-all shadow-xs shrink-0">
+        {{ _('Add Book') }}
+      </button>
     </form>
 
+    <!-- Projects List -->
     {% if projects %}
-    <ul class="divide-y divide-slate-100">
+    <div class="divide-y divide-slate-100 max-h-96 overflow-y-auto pr-1">
       {% for p in projects %}
-      <li class="py-3 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-        <div class="text-sm text-slate-800">
-          <span class="font-mono text-xs text-royalblue">{{ p.slug }}</span>
-          <span class="text-slate-400 mx-1">—</span>
-          {{ p.display_title[:70] }}{% if p.display_title|length > 70 %}…{% endif %}
-          {% if p.is_publicly_viewable %}
-          <span class="ml-2 text-xs font-bold uppercase text-emerald-700">{{ _('Public') }}</span>
-          {% endif %}
+      <div class="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 text-xs">
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            <span class="font-mono text-xs font-semibold text-royalblue">{{ p.slug }}</span>
+            {% if p.is_publicly_viewable %}
+            <span class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-emerald-100 text-emerald-800 uppercase">{{ _('Public') }}</span>
+            {% endif %}
+          </div>
+          <span class="text-slate-700 font-medium block truncate mt-0.5">{{ p.display_title }}</span>
         </div>
-        <div class="flex flex-wrap gap-2 shrink-0">
+
+        <div class="flex items-center gap-2 shrink-0">
           <form method="post" action="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page, texts_page=texts_page) }}">
             {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
             <input type="hidden" name="action" value="set_project_public">
@@ -102,85 +161,101 @@
             <input type="hidden" name="is_public" value="{{ '0' if p.is_publicly_viewable else '1' }}">
             <input type="hidden" name="projects_page" value="{{ projects_page }}">
             {% if p.is_publicly_viewable %}
-            {{ admin.btn_secondary(_('Make private'), type='submit') }}
+            <button type="submit" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] transition-colors">
+              {{ _('Make Private') }}
+            </button>
             {% else %}
-            {{ admin.btn_primary(_('Make public'), type='submit') }}
+            <button type="submit" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-semibold text-[11px] transition-colors border border-emerald-200">
+              {{ _('Make Public') }}
+            </button>
             {% endif %}
           </form>
+
           <form method="post" action="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page, texts_page=texts_page) }}">
             {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
             <input type="hidden" name="action" value="remove_project">
             <input type="hidden" name="project_id" value="{{ p.id }}">
             <input type="hidden" name="projects_page" value="{{ projects_page }}">
             <input type="hidden" name="texts_page" value="{{ texts_page }}">
-            {{ admin.btn_danger(_('Remove')) }}
+            <button type="submit" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-[11px] transition-colors border border-rose-100">
+              {{ _('Remove') }}
+            </button>
           </form>
         </div>
-      </li>
+      </div>
       {% endfor %}
-    </ul>
+    </div>
+
     {% if projects_num_pages > 1 %}
-    <div class="mt-4 flex items-center justify-between text-sm">
-      <span class="text-slate-500">{{ _('Page') }} {{ projects_page }} / {{ projects_num_pages }}</span>
-      <div class="flex gap-2">
+    <div class="pt-2 flex items-center justify-between text-xs text-slate-500">
+      <span>{{ _('Page') }} {{ projects_page }} / {{ projects_num_pages }}</span>
+      <div class="flex items-center gap-1.5">
         {% if projects_page > 1 %}
         <a href="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page - 1, texts_page=texts_page) }}"
-           class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 text-xs">{{ _('Previous') }}</a>
+           class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 transition-colors">{{ _('Previous') }}</a>
         {% endif %}
         {% if projects_page < projects_num_pages %}
         <a href="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page + 1, texts_page=texts_page) }}"
-           class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 text-xs">{{ _('Next') }}</a>
+           class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold text-slate-700 transition-colors">{{ _('Next') }}</a>
         {% endif %}
       </div>
     </div>
     {% endif %}
+
     {% else %}
-    <p class="text-slate-400 font-medium text-sm">{{ _('No books assigned yet.') }}</p>
+    <p class="text-slate-400 font-medium text-xs py-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+      {{ _('No books assigned to this organization yet.') }}
+    </p>
     {% endif %}
   </div>
 
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 lg:col-span-2 mt-2">
-    <h2 class="text-lg font-bold text-slate-900 mb-2">{{ _('Per-User Quotas') }}</h2>
-    <p class="text-sm text-slate-500 mb-6">{{ _('Configure default storage and OCR limits for each individual user in this organization.') }}</p>
+  <!-- Card 3: Per-User Quota Defaults (Google Cloud Quota Card) -->
+  <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 lg:col-span-2 space-y-4">
+    <div class="pb-3 border-b border-slate-100">
+      <h2 class="text-sm sm:text-base font-bold text-slate-900">{{ _('Default Per-User Quotas') }}</h2>
+      <p class="text-xs text-slate-500 font-medium">{{ _('Configure default storage and AI compute limits for each individual member in this organization.') }}</p>
+    </div>
     
-    <form method="post" action="{{ url_for('groups_view.manage', id=group.id) }}" class="space-y-6">
+    <form method="post" action="{{ url_for('groups_view.manage', id=group.id) }}" class="space-y-5">
       {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
       <input type="hidden" name="action" value="update_user_quotas">
       
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
         <div>
-          <label for="default_user_storage_mb" class="{{ admin.label_class() }}">{{ _('Per-User Storage Limit (MB)') }}</label>
+          <label for="default_user_storage_mb" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{{ _('Per-User Storage (MB)') }}</label>
           <input type="number" id="default_user_storage_mb" name="default_user_storage_mb" min=0
             value="{{ (group.default_user_storage_limit // (1024 * 1024)) if group.default_user_storage_limit is not none else '' }}"
-            class="{{ admin.input_class() }}" placeholder="e.g. 500 (leave blank for fallback / unlimited)">
-          <span class="text-xs text-slate-400 mt-1.5 block">
-            Fallback to organization storage limit: <strong>{{ ((group.storage_quota_bytes // (1024 * 1024)) if group.storage_quota_bytes is not none else "∞") }} MB</strong>
+            class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all font-medium text-slate-900 bg-white" placeholder="e.g. 500">
+          <span class="text-[11px] text-slate-400 mt-1 block font-medium">
+            Fallback org quota: <strong>{{ ((group.storage_quota_bytes // (1024 * 1024)) if group.storage_quota_bytes is not none else "∞") }} MB</strong>
           </span>
         </div>
         
         <div>
-          <label for="default_user_ocr_limit" class="{{ admin.label_class() }}">{{ _('Per-User OCR Limit') }}</label>
+          <label for="default_user_ocr_limit" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{{ _('Per-User OCR Limit') }}</label>
           <input type="number" id="default_user_ocr_limit" name="default_user_ocr_limit" min=0
             value="{{ group.default_user_ocr_limit if group.default_user_ocr_limit is not none else '' }}"
-            class="{{ admin.input_class() }}" placeholder="e.g. 100 (leave blank for fallback / unlimited)">
-          <span class="text-xs text-slate-400 mt-1.5 block">
-            Fallback to organization OCR credit limit: <strong>{{ (group.ocr_credit_limit if group.ocr_credit_limit is not none else "∞") }}</strong>
+            class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all font-medium text-slate-900 bg-white" placeholder="e.g. 100">
+          <span class="text-[11px] text-slate-400 mt-1 block font-medium">
+            Fallback org limit: <strong>{{ (group.ocr_credit_limit if group.ocr_credit_limit is not none else "∞") }}</strong>
           </span>
         </div>
 
         <div>
-          <label for="default_user_translation_limit" class="{{ admin.label_class() }}">{{ _('Per-User Translation Limit') }}</label>
+          <label for="default_user_translation_limit" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{{ _('Per-User Translation Limit') }}</label>
           <input type="number" id="default_user_translation_limit" name="default_user_translation_limit" min=0
             value="{{ group.default_user_translation_limit if group.default_user_translation_limit is not none else '' }}"
-            class="{{ admin.input_class() }}" placeholder="e.g. 100 (leave blank for fallback / unlimited)">
-          <span class="text-xs text-slate-400 mt-1.5 block">
-            Fallback to organization translation credit limit: <strong>{{ (group.translation_credit_limit if group.translation_credit_limit is not none else "∞") }}</strong>
+            class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all font-medium text-slate-900 bg-white" placeholder="e.g. 100">
+          <span class="text-[11px] text-slate-400 mt-1 block font-medium">
+            Fallback org limit: <strong>{{ (group.translation_credit_limit if group.translation_credit_limit is not none else "∞") }}</strong>
           </span>
         </div>
       </div>
       
       <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-        {{ admin.btn_primary(_('Save Quotas'), type='submit') }}
+        <button type="submit" class="px-6 py-2.5 bg-royalblue hover:bg-blue-600 text-white font-bold rounded-full text-xs transition-all shadow-xs">
+          {{ _('Save User Quotas') }}
+        </button>
       </div>
     </form>
   </div>

@@ -130,6 +130,7 @@ TIER_UNKNOWN = 5
 OCR_ENGINE_PREFERENCE = (
     "chandra",
     "dots_ocr",
+    "gemma_ocr",
     "glm_ocr",
     "qwen3",
     "deepseek",
@@ -409,16 +410,27 @@ def _script_of(char: str) -> str | None:
 
 def _stream_text(session, rows: list[TrackRow]):
     """Yield (row, plain_text) in batches, holding one batch in memory."""
+    from kalanjiyam.utils.document_storage import load_revision_document
+    from kalanjiyam.utils.page_document import PageDocument
+
     by_revision = {r.revision_id: r for r in rows}
     revision_ids = list(by_revision)
     for i in range(0, len(revision_ids), _STREAM_BATCH):
         chunk = revision_ids[i : i + _STREAM_BATCH]
-        results = session.query(db.Revision.id, db.Revision.content).filter(
-            db.Revision.id.in_(chunk)
-        )
-        for revision_id, content in results:
+        results = session.query(
+            db.Revision.id, db.Revision.content, db.Revision.document
+        ).filter(db.Revision.id.in_(chunk))
+        for revision_id, content, document in results:
             row = by_revision[revision_id]
-            yield row, to_plain_text(content, row.content_format, row.version_key)
+            if not content:
+                doc_data = document
+                if not doc_data:
+                    rev = session.query(db.Revision).get(revision_id)
+                    if rev:
+                        doc_data = load_revision_document(rev)
+                if doc_data:
+                    content = PageDocument.from_dict(doc_data).to_plain_text()
+            yield row, to_plain_text(content or "", row.content_format, row.version_key)
 
 
 def script_profile(session, rows: list[TrackRow]) -> dict:
@@ -497,7 +509,7 @@ def estimate_tokens(text: str, scripts: dict | None = None) -> int:
     """
     if not text:
         return 0
-    return math.ceil(len(text) / _chars_per_token(scripts))
+    return math.ceil(round(len(text) / _chars_per_token(scripts), 9))
 
 
 def _budget_chars(persona: str, scripts: dict | None) -> int:
@@ -689,6 +701,8 @@ def plan_windows(
 
 def _stream_documents(session, rows: list[TrackRow]):
     """Yield (row, content, document) in batches, holding one batch in memory."""
+    from kalanjiyam.utils.document_storage import load_revision_document
+
     by_revision = {r.revision_id: r for r in rows}
     revision_ids = list(by_revision)
     for i in range(0, len(revision_ids), _STREAM_BATCH):
@@ -697,6 +711,10 @@ def _stream_documents(session, rows: list[TrackRow]):
             db.Revision.id, db.Revision.content, db.Revision.document
         ).filter(db.Revision.id.in_(chunk))
         for revision_id, content, document in results:
+            if not document:
+                rev = session.query(db.Revision).get(revision_id)
+                if rev:
+                    document = load_revision_document(rev)
             yield by_revision[revision_id], content, document
 
 

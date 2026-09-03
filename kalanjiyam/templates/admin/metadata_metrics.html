@@ -13,58 +13,274 @@
 {% endblock %}
 
 {% block content %}
-{% set view_endpoint = 'org_admin_view.metadata_metrics' if is_org_admin else 'platform_view.metadata_metrics' %}
-{% set export_endpoint = 'org_admin_view.metadata_metrics_export_csv' if is_org_admin else 'platform_view.metadata_metrics_export_csv' %}
+{% set view_endpoint = 'master_metrics_view.metadata_metrics' if is_master_user else ('org_admin_view.metadata_metrics' if is_org_admin else 'platform_view.metadata_metrics') %}
+{% set export_endpoint = 'master_metrics_view.metadata_metrics_export_csv' if is_master_user else ('org_admin_view.metadata_metrics_export_csv' if is_org_admin else 'platform_view.metadata_metrics_export_csv') %}
 
-{{ admin.page_header(_('Metadata Extraction Metrics'),
-    _('Per-document runs of the archival description extractor: coverage, citation quality, and token cost.')) }}
+<!-- Google Admin Header -->
+<div class="mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+        {{ admin.icon('gauge', class='w-5 h-5') }}
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ _('Metadata Extraction Metrics') }}
+          </h1>
+          <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+            {{ _('Description Extractor') }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">
+          {{ _('Per-document runs of the archival description extractor: coverage, citation quality, and token cost.') }}
+        </p>
+      </div>
+    </div>
+
+    <div>
+      <a href="{{ url_for(export_endpoint, status=current_status, q=search_query, start_date=start_date, end_date=end_date) }}"
+         class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-all shadow-xs whitespace-nowrap">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        <span>{{ _('Export CSV') }}</span>
+      </a>
+    </div>
+  </div>
+</div>
 
 {# --- Summary ------------------------------------------------------------- #}
-<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
   {{ admin.stat_card(_('Runs'), summary.runs) }}
-  {{ admin.stat_card(_('Documents'), summary.documents) }}
   {{ admin.stat_card(_('Pages read'), '%s / %s'|format(summary.pages_read, summary.pages_total)) }}
-  {{ admin.stat_card(_('Failed / partial'), '%s / %s'|format(summary.failed, summary.partial)) }}
   {# Token totals skip runs whose service reported no usage, rather than
      counting them as zero -- see `_metadata_metrics_payload`. #}
   {{ admin.stat_card(_('Tokens in / out'),
       '%s / %s'|format(summary.tokens_in if summary.tokens_in is not none else '—',
                        summary.tokens_out if summary.tokens_out is not none else '—')) }}
+  {{ admin.stat_card(_('Avg Engine Time'),
+      ('%.1fs'|format(summary.avg_engine_latency)) if summary.avg_engine_latency is not none else '—') }}
+
+  {{ admin.stat_card(_('Documents'), summary.documents) }}
+  {{ admin.stat_card(_('Failed / partial'), '%s / %s'|format(summary.failed, summary.partial)) }}
   {{ admin.stat_card(_('Evidence verified'),
       ('%.0f%%'|format(summary.avg_evidence_verified * 100)) if summary.avg_evidence_verified is not none else '—') }}
+  {{ admin.stat_card(_('Avg Time Taken'),
+      ('%.1fs'|format(summary.avg_time_taken)) if summary.avg_time_taken is not none else '—') }}
 </div>
 
 {# --- Filters ------------------------------------------------------------- #}
-<div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 mb-6">
+<div class="bg-white rounded-2xl p-5 shadow-xs border border-slate-200 mb-6">
   <div class="flex flex-wrap items-center gap-3">
     <nav class="flex items-center gap-1 bg-slate-100/80 p-1.5 rounded-xl text-xs font-semibold text-slate-600">
       {% for key, label in [('all', _('All')), ('completed', _('Complete')), ('partial', _('Partial')),
                             ('failed', _('Failed')), ('running', _('Running'))] %}
-        <a href="{{ url_for(view_endpoint, status=key, q=search_query) }}"
+        <a href="{{ url_for(view_endpoint, status=key, q=search_query, start_date=start_date, end_date=end_date) }}"
            class="px-4 py-2 rounded-lg transition-all {% if current_status == key %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
           {{ label }}
         </a>
       {% endfor %}
     </nav>
 
-    <form method="GET" action="{{ url_for(view_endpoint) }}" class="flex items-center gap-2">
+    <form method="GET" action="{{ url_for(view_endpoint) }}" class="flex flex-wrap items-center gap-2">
       <input type="hidden" name="status" value="{{ current_status }}">
+
+      <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs">
+        <label for="filter-start-date" class="text-slate-500 font-medium whitespace-nowrap">{{ _('From') }}</label>
+        <input type="date" id="filter-start-date" name="start_date" value="{{ start_date }}"
+               class="bg-transparent border-0 text-xs p-0 text-slate-700 focus:outline-none focus:ring-0">
+        <span class="text-slate-300">→</span>
+        <label for="filter-end-date" class="text-slate-500 font-medium whitespace-nowrap">{{ _('To') }}</label>
+        <input type="date" id="filter-end-date" name="end_date" value="{{ end_date }}"
+               class="bg-transparent border-0 text-xs p-0 text-slate-700 focus:outline-none focus:ring-0">
+      </div>
+
       <input type="text" name="q" value="{{ search_query }}" placeholder="{{ _('Search by project') }}"
-             class="rounded-xl border-slate-200 text-xs px-3 py-2 w-56">
-      <button type="submit" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700">
-        {{ _('Search') }}
+             class="rounded-xl border-slate-200 text-xs px-3 py-2 w-48">
+      <button type="submit" class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 transition-colors">
+        {{ _('Filter') }}
       </button>
+
+      {% if search_query or start_date or end_date or current_status != 'all' %}
+        <a href="{{ url_for(view_endpoint) }}" class="px-2.5 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors">
+          {{ _('Clear') }}
+        </a>
+      {% endif %}
     </form>
 
-    <a href="{{ url_for(export_endpoint) }}"
-       class="ml-auto inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors shadow-sm">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-      </svg>
-      {{ _('Export CSV') }}
-    </a>
+    <div class="flex items-center gap-2 ml-auto">
+      <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
+        </svg>
+        <label for="freeze-columns-select" class="text-slate-500 font-medium whitespace-nowrap">{{ _('Freeze') }}:</label>
+        <select id="freeze-columns-select" onchange="setFreezeColumns(this.value)"
+                class="bg-transparent border-0 text-xs py-1 px-1 text-slate-700 font-semibold focus:outline-none focus:ring-0 cursor-pointer">
+          <option value="none">{{ _('None') }}</option>
+          <option value="1">{{ _('1 Col (Run)') }}</option>
+          <option value="2" selected>{{ _('2 Cols (Run, Doc)') }}</option>
+          <option value="3">{{ _('3 Cols (Run, Doc, Status)') }}</option>
+        </select>
+      </div>
+
+      <a href="{{ url_for(export_endpoint, status=current_status, q=search_query, start_date=start_date, end_date=end_date) }}"
+         class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors shadow-sm whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        {{ _('Export CSV') }}
+      </a>
+    </div>
   </div>
 </div>
+
+<style>
+  /* Freeze Columns (Excel-like freeze panes) */
+  .col-freeze-1, .col-freeze-2, .col-freeze-3 {
+    transition: box-shadow 0.15s ease;
+  }
+
+  /* When freeze-1 is active */
+  .freeze-col-1 .col-freeze-1 {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+  }
+  .freeze-col-1 thead .col-freeze-1 {
+    z-index: 20;
+    background-color: #f8fafc;
+  }
+  .freeze-col-1 tbody tr td.col-freeze-1 {
+    background-color: #ffffff;
+  }
+  .freeze-col-1 tbody tr:hover td.col-freeze-1 {
+    background-color: #f8fafc;
+  }
+  .freeze-col-1 tbody tr.row-failed td.col-freeze-1 {
+    background-color: #fef2f2;
+  }
+  .freeze-col-1 tbody tr.row-failed:hover td.col-freeze-1 {
+    background-color: #fee2e2;
+  }
+  .freeze-col-1 .col-freeze-1 {
+    box-shadow: 2px 0 5px -2px rgba(0, 0, 0, 0.08);
+  }
+
+  /* When freeze-2 is active */
+  .freeze-col-2 .col-freeze-1 {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+  }
+  .freeze-col-2 thead .col-freeze-1 {
+    z-index: 20;
+    background-color: #f8fafc;
+  }
+  .freeze-col-2 tbody tr td.col-freeze-1 {
+    background-color: #ffffff;
+  }
+  .freeze-col-2 tbody tr:hover td.col-freeze-1 {
+    background-color: #f8fafc;
+  }
+  .freeze-col-2 tbody tr.row-failed td.col-freeze-1 {
+    background-color: #fef2f2;
+  }
+  .freeze-col-2 tbody tr.row-failed:hover td.col-freeze-1 {
+    background-color: #fee2e2;
+  }
+
+  .freeze-col-2 .col-freeze-2 {
+    position: sticky;
+    left: 70px;
+    z-index: 10;
+    box-shadow: 2px 0 5px -2px rgba(0, 0, 0, 0.08);
+  }
+  .freeze-col-2 thead .col-freeze-2 {
+    z-index: 20;
+    background-color: #f8fafc;
+  }
+  .freeze-col-2 tbody tr td.col-freeze-2 {
+    background-color: #ffffff;
+  }
+  .freeze-col-2 tbody tr:hover td.col-freeze-2 {
+    background-color: #f8fafc;
+  }
+  .freeze-col-2 tbody tr.row-failed td.col-freeze-2 {
+    background-color: #fef2f2;
+  }
+  .freeze-col-2 tbody tr.row-failed:hover td.col-freeze-2 {
+    background-color: #fee2e2;
+  }
+
+  /* When freeze-3 is active */
+  .freeze-col-3 .col-freeze-1 {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+  }
+  .freeze-col-3 thead .col-freeze-1 {
+    z-index: 20;
+    background-color: #f8fafc;
+  }
+  .freeze-col-3 tbody tr td.col-freeze-1 {
+    background-color: #ffffff;
+  }
+  .freeze-col-3 tbody tr:hover td.col-freeze-1 {
+    background-color: #f8fafc;
+  }
+  .freeze-col-3 tbody tr.row-failed td.col-freeze-1 {
+    background-color: #fef2f2;
+  }
+  .freeze-col-3 tbody tr.row-failed:hover td.col-freeze-1 {
+    background-color: #fee2e2;
+  }
+
+  .freeze-col-3 .col-freeze-2 {
+    position: sticky;
+    left: 70px;
+    z-index: 10;
+  }
+  .freeze-col-3 thead .col-freeze-2 {
+    z-index: 20;
+    background-color: #f8fafc;
+  }
+  .freeze-col-3 tbody tr td.col-freeze-2 {
+    background-color: #ffffff;
+  }
+  .freeze-col-3 tbody tr:hover td.col-freeze-2 {
+    background-color: #f8fafc;
+  }
+  .freeze-col-3 tbody tr.row-failed td.col-freeze-2 {
+    background-color: #fef2f2;
+  }
+  .freeze-col-3 tbody tr.row-failed:hover td.col-freeze-2 {
+    background-color: #fee2e2;
+  }
+
+  .freeze-col-3 .col-freeze-3 {
+    position: sticky;
+    left: 270px;
+    z-index: 10;
+    box-shadow: 2px 0 5px -2px rgba(0, 0, 0, 0.08);
+  }
+  .freeze-col-3 thead .col-freeze-3 {
+    z-index: 20;
+    background-color: #f8fafc;
+  }
+  .freeze-col-3 tbody tr td.col-freeze-3 {
+    background-color: #ffffff;
+  }
+  .freeze-col-3 tbody tr:hover td.col-freeze-3 {
+    background-color: #f8fafc;
+  }
+  .freeze-col-3 tbody tr.row-failed td.col-freeze-3 {
+    background-color: #fef2f2;
+  }
+  .freeze-col-3 tbody tr.row-failed:hover td.col-freeze-3 {
+    background-color: #fee2e2;
+  }
+</style>
 
 {# --- Runs ---------------------------------------------------------------- #}
 {% if not runs %}
@@ -74,12 +290,12 @@
 {% else %}
 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
   <div class="overflow-x-auto">
-    <table class="min-w-full text-sm text-left">
+    <table id="metadata-metrics-table" class="min-w-full text-sm text-left freeze-col-2">
       <thead class="bg-slate-50 text-[10px] text-slate-500 uppercase tracking-wider">
         <tr>
-          <th class="px-4 py-3 font-bold">{{ _('Run') }}</th>
-          <th class="px-4 py-3 font-bold">{{ _('Document') }}</th>
-          <th class="px-4 py-3 font-bold">{{ _('Status') }}</th>
+          <th class="px-4 py-3 font-bold col-freeze-1 w-[70px] min-w-[70px]">{{ _('Run') }}</th>
+          <th class="px-4 py-3 font-bold col-freeze-2 w-[200px] min-w-[200px]">{{ _('Document') }}</th>
+          <th class="px-4 py-3 font-bold col-freeze-3 w-[130px] min-w-[130px]">{{ _('Status') }}</th>
           <th class="px-4 py-3 font-bold">{{ _('Model') }}</th>
           <th class="px-4 py-3 font-bold text-right" title="{{ _('Pages actually sent, of pages with text') }}">{{ _('Pages') }}</th>
           <th class="px-4 py-3 font-bold text-right">{{ _('Windows') }}</th>
@@ -88,15 +304,18 @@
           <th class="px-4 py-3 font-bold text-right">{{ _('Tok in') }}</th>
           <th class="px-4 py-3 font-bold text-right">{{ _('Tok out') }}</th>
           <th class="px-4 py-3 font-bold text-right" title="{{ _('An average: tokens are charged per window, not per page') }}">{{ _('Tok/pg') }}</th>
+          <th class="px-4 py-3 font-bold text-right" title="{{ _('Pure model/engine processing time across all windows') }}">{{ _('Engine Time') }}</th>
+          <th class="px-4 py-3 font-bold text-right" title="{{ _('Total time taken to complete the extraction request (wall-clock duration)') }}">{{ _('Time Taken') }}</th>
+          <th class="px-4 py-3 font-bold text-right" title="{{ _('Average time taken per completed window') }}">{{ _('Time / Win') }}</th>
           <th class="px-4 py-3 font-bold">{{ _('When') }}</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
         {% for row in runs %}
           {% set r = row.run %}
-          <tr class="hover:bg-slate-50 transition-colors {% if r.status == 'FAILED' %}bg-red-50/40{% endif %}">
-            <td class="px-4 py-3 font-mono text-xs text-slate-400">#{{ r.id }}</td>
-            <td class="px-4 py-3">
+          <tr class="hover:bg-slate-50 transition-colors {% if r.status == 'FAILED' %}bg-red-50/40 row-failed{% endif %}">
+            <td class="px-4 py-3 font-mono text-xs text-slate-400 col-freeze-1 w-[70px] min-w-[70px]">#{{ r.id }}</td>
+            <td class="px-4 py-3 col-freeze-2 w-[200px] min-w-[200px]">
               {% if row.slug %}
                 <a href="{{ url_for('proofing.project.description_log', slug=row.slug, run_id=r.id) }}"
                    class="font-semibold text-indigo-600 hover:text-indigo-800">{{ row.title }}</a>
@@ -105,7 +324,7 @@
                 <span class="text-slate-400 italic">{{ row.title }}</span>
               {% endif %}
             </td>
-            <td class="px-4 py-3">
+            <td class="px-4 py-3 col-freeze-3 w-[130px] min-w-[130px]">
               {% if r.status == 'COMPLETED' %}
                 <span class="px-2 py-0.5 rounded bg-green-100 text-green-800 text-[10px] font-bold uppercase tracking-wide">{{ _('complete') }}</span>
               {% elif r.status == 'PARTIAL' %}
@@ -150,14 +369,43 @@
             <td class="px-4 py-3 text-right font-mono text-xs text-slate-500">
               {{ '%.0f'|format(r.tokens_per_page) if r.tokens_per_page is not none else '—' }}
             </td>
+            <td class="px-4 py-3 text-right font-mono text-xs font-semibold text-slate-700">
+              {% if r.total_engine_latency_sec is not none %}
+                <span title="{% if r.avg_engine_latency_sec is not none %}{{ _('Avg per window: %(sec).2fs', sec=r.avg_engine_latency_sec) }}{% endif %}">
+                  {{ r.engine_latency_display }}
+                </span>
+              {% else %}
+                <span class="text-slate-300">—</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs font-semibold text-slate-700">
+              {% if r.duration_sec is not none %}
+                <span>
+                  {{ r.time_taken_display }}
+                </span>
+              {% else %}
+                <span class="text-slate-300">—</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs font-semibold text-slate-700">
+              {% if r.avg_time_per_window_sec is not none %}
+                <span title="{% if r.avg_engine_latency_sec is not none %}{{ _('Avg engine latency: %(sec).2fs/w', sec=r.avg_engine_latency_sec) }}{% endif %}">
+                  {{ r.avg_time_per_window_display }}
+                </span>
+              {% else %}
+                <span class="text-slate-300">—</span>
+              {% endif %}
+            </td>
             <td class="px-4 py-3 text-[11px] text-slate-400 whitespace-nowrap">
               {{ (r.completed_at or r.created_at).strftime('%Y-%m-%d %H:%M') }}
             </td>
           </tr>
           {% if r.error_message %}
-            <tr class="{% if r.status == 'FAILED' %}bg-red-50/40{% endif %}">
-              <td></td>
-              <td colspan="11" class="px-4 pb-3 text-xs text-red-800 font-mono">{{ r.error_message }}</td>
+            <tr class="{% if r.status == 'FAILED' %}bg-red-50/40 row-failed{% endif %}">
+              <td class="col-freeze-1"></td>
+              <td class="col-freeze-2"></td>
+              <td class="col-freeze-3"></td>
+              <td colspan="12" class="px-4 pb-3 text-xs text-red-800 font-mono">{{ r.error_message }}</td>
             </tr>
           {% endif %}
         {% endfor %}
@@ -165,5 +413,30 @@
     </table>
   </div>
 </div>
+
+<script>
+function setFreezeColumns(val) {
+  const table = document.getElementById('metadata-metrics-table');
+  if (!table) return;
+  table.classList.remove('freeze-col-1', 'freeze-col-2', 'freeze-col-3');
+  if (val === '1') table.classList.add('freeze-col-1');
+  else if (val === '2') table.classList.add('freeze-col-2');
+  else if (val === '3') table.classList.add('freeze-col-3');
+  try {
+    localStorage.setItem('metadata_metrics_freeze', val);
+  } catch (e) {}
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const saved = localStorage.getItem('metadata_metrics_freeze') || '2';
+    const select = document.getElementById('freeze-columns-select');
+    if (select) {
+      select.value = saved;
+    }
+    setFreezeColumns(saved);
+  } catch (e) {}
+});
+</script>
 {% endif %}
 {% endblock %}

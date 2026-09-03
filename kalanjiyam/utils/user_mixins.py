@@ -28,6 +28,10 @@ class KalanjiyamAnonymousUser(AnonymousUserMixin):
         return False
 
     @property
+    def is_master_user(self) -> bool:
+        return False
+
+    @property
     def is_admin(self) -> bool:
         return False
 
@@ -66,13 +70,15 @@ class KalanjiyamUserMixin(UserMixin):
 
     @property
     def is_moderator(self) -> bool:
-        return self.has_any_role(SiteRole.MODERATOR, SiteRole.ADMIN, SiteRole.SUPER_ADMIN)
+        return self.has_any_role(SiteRole.MODERATOR, SiteRole.SUPER_ADMIN)
+
+    @property
+    def is_master_user(self) -> bool:
+        return self.has_role(SiteRole.MASTER_USER)
 
     @property
     def is_admin(self) -> bool:
-        # Legacy site-wide moderator access (proofing, etc.). Not the same as
-        # platform super admin — use is_super_admin for /admin/platform/ access.
-        return self.has_any_role(SiteRole.ADMIN, SiteRole.SUPER_ADMIN)
+        return self.has_role(SiteRole.SUPER_ADMIN)
 
     @property
     def is_super_admin(self) -> bool:

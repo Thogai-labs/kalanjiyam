@@ -1,5 +1,6 @@
 import { $ } from '@/core.ts';
 import Proofer from '@/proofer';
+import { OsdBboxOverlay } from '@/osd-overlay.js';
 
 const sampleHTML = `
 <div>
@@ -11,29 +12,62 @@ const sampleHTML = `
 // (See beforeEach and the tests below.)
 delete window.location;
 window.IMAGE_URL = 'IMAGE_URL';
-window.OpenSeadragon = (_) => ({
-  addHandler: jest.fn((_, callback) => callback()),
-  viewport: {
-    getHomeZoom: jest.fn(() => 0.5),
-    zoomTo: jest.fn((_) => {}),
-  }
-});
+window.OpenSeadragon = (_) => {
+  const elem = document.createElement('div');
+  Object.defineProperty(elem, 'clientWidth', { value: 800, configurable: true });
+  Object.defineProperty(elem, 'clientHeight', { value: 600, configurable: true });
+  return {
+    element: elem,
+    addHandler: jest.fn((_, callback) => callback && callback()),
+    removeHandler: jest.fn(),
+    isOpen: jest.fn(() => true),
+    viewport: {
+      getHomeZoom: jest.fn(() => 0.5),
+      getZoom: jest.fn(() => 0.5),
+      zoomTo: jest.fn((_) => {}),
+      goHome: jest.fn(() => {}),
+      applyConstraints: jest.fn(() => {}),
+      getContainerSize: jest.fn(() => ({ x: 800, y: 600 })),
+      deltaPointsFromPixels: jest.fn((pt) => pt),
+      pointFromPixel: jest.fn((pt) => pt),
+      imageToViewerElementCoordinates: jest.fn((pt) => ({ x: pt.x, y: pt.y })),
+      panBy: jest.fn((pt) => {}),
+      setRotation: jest.fn((_) => {}),
+      getRotation: jest.fn(() => 0),
+    }
+  };
+};
+window.OpenSeadragon.Point = function(x, y) {
+  this.x = x;
+  this.y = y;
+};
 window.Sanscript = {
   // Preface `s` with a marker so that we can verify that we're using the right
   // selection range.
   t: jest.fn((s, from, to) => `:${s}:${to}`),
 }
 window.fetch = jest.fn(async (url) => {
-  // Special URL so we can test server errors.
-  if (url === '/api/ocr/error') {
-    return { ok: false }
+  const cleanUrl = url.split('?')[0];
+  if (cleanUrl === '/api/ocr/error') {
+    return {
+      ok: false,
+      text: async () => '(server error)',
+      json: async () => ({ error: 'server error' }),
+    };
+  } else if (cleanUrl.endsWith('/api/glossaries')) {
+    return {
+      ok: true,
+      json: async () => [],
+      text: async () => '[]',
+    };
   } else {
-    const segments = url.split('/');
+    const segments = cleanUrl.split('/');
     const page = segments.pop();
     return {
       ok: true,
       text: async () => `text for ${page}`,
-    }
+      json: async () => ({ text: `text for ${page}` }),
+    };
   }
 });
 navigator.clipboard = {
@@ -255,3 +289,121 @@ test('copyCharacter works', () => {
   const { p } = markupFixtures();
   p.copyCharacter({ target: { textContent: 'foo' }});
 });
+
+test('panImage calls viewport.panBy with calculated delta', () => {
+  const p = Proofer();
+  p.init();
+  const panBySpy = jest.spyOn(p.imageViewer.viewport, 'panBy');
+  p.panImage(0, -0.15);
+  expect(panBySpy).toHaveBeenCalled();
+});
+
+test('rotateLeft and rotateRight work', () => {
+  const p = Proofer();
+  p.init();
+  const setRotationSpy = jest.spyOn(p.imageViewer.viewport, 'setRotation');
+  p.rotateLeft();
+  expect(setRotationSpy).toHaveBeenCalledWith(-90);
+  p.rotateRight();
+  expect(setRotationSpy).toHaveBeenCalledWith(90);
+});
+
+test('OsdBboxOverlay renders rect elements with pointer-events and pointer cursor', () => {
+  const viewer = window.OpenSeadragon({});
+  const overlay = new OsdBboxOverlay(viewer);
+  overlay.setBoxes([
+    { x1: 10, y1: 10, x2: 100, y2: 50, blockId: 'b1', text: 'Hello' }
+  ]);
+
+  const svg = viewer.element.querySelector('svg.ocr-osd-overlay');
+  expect(svg).not.toBeNull();
+  const rect = svg.querySelector('rect');
+  expect(rect).not.toBeNull();
+  expect(rect.style.pointerEvents).toBe('all');
+  expect(rect.style.cursor).toBe('pointer');
+});
+
+test('OsdBboxOverlay click triggers onBoxClick with matched block', () => {
+  const onBoxClick = jest.fn();
+  const viewer = window.OpenSeadragon({});
+  const overlay = new OsdBboxOverlay(viewer, { onBoxClick });
+  const blocks = [
+    { id: 'b1', bbox: [10, 10, 100, 50], content: 'Block 1' }
+  ];
+  overlay.setBlocksForMatching(blocks);
+  overlay.setBoxes([
+    { x1: 10, y1: 10, x2: 100, y2: 50, blockId: 'b1' }
+  ]);
+
+  const rect = viewer.element.querySelector('svg rect');
+  expect(rect).not.toBeNull();
+
+  // Simulate click on rect
+  rect.dispatchEvent(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, bubbles: true }));
+  rect.dispatchEvent(new MouseEvent('click', { clientX: 20, clientY: 20, bubbles: true }));
+
+  expect(onBoxClick).toHaveBeenCalledTimes(1);
+  expect(onBoxClick).toHaveBeenCalledWith(expect.objectContaining({
+    bbox: [10, 10, 100, 50],
+    block: expect.objectContaining({ id: 'b1', content: 'Block 1' })
+  }));
+});
+
+test('OsdBboxOverlay drag (pointer move > 5px) triggers viewport pan and suppresses click', () => {
+  const onBoxClick = jest.fn();
+  const viewer = window.OpenSeadragon({});
+  const panBySpy = jest.spyOn(viewer.viewport, 'panBy');
+  const overlay = new OsdBboxOverlay(viewer, { onBoxClick });
+  overlay.setBoxes([
+    { x1: 10, y1: 10, x2: 100, y2: 50, blockId: 'b1' }
+  ]);
+
+  const rect = viewer.element.querySelector('svg rect');
+  expect(rect).not.toBeNull();
+
+  // Simulate drag on rect
+  rect.dispatchEvent(new MouseEvent('pointerdown', { clientX: 20, clientY: 20, bubbles: true }));
+  window.dispatchEvent(new MouseEvent('pointermove', { clientX: 40, clientY: 35, bubbles: true }));
+  window.dispatchEvent(new MouseEvent('pointerup', { clientX: 40, clientY: 35, bubbles: true }));
+  rect.dispatchEvent(new MouseEvent('click', { clientX: 40, clientY: 35, bubbles: true }));
+
+  expect(panBySpy).toHaveBeenCalled();
+  expect(onBoxClick).not.toHaveBeenCalled();
+});
+
+test('OsdBboxOverlay highlightBlockId applies selected styling to matching rect', () => {
+  const viewer = window.OpenSeadragon({});
+  const overlay = new OsdBboxOverlay(viewer);
+  overlay.setBoxes([
+    { x1: 10, y1: 10, x2: 100, y2: 50, blockId: 'b1' },
+    { x1: 10, y1: 60, x2: 100, y2: 100, blockId: 'b2' }
+  ]);
+
+  overlay.highlightBlockId('b1');
+
+  const rects = viewer.element.querySelectorAll('svg rect');
+  expect(rects[0].classList.contains('is-selected')).toBe(true);
+  expect(rects[0].getAttribute('stroke-width')).toBe('3');
+  expect(rects[1].classList.contains('is-selected')).toBe(false);
+  expect(rects[1].getAttribute('stroke-width')).toBe('2');
+});
+
+test('getVersionDisplayName formats masked OCR and Enhanced OCR correctly', () => {
+  const p = Proofer();
+  expect(p.getVersionDisplayName('ocr:chandra')).toBe('OCR 6');
+  expect(p.getVersionDisplayName('ocr:google')).toBe('OCR 1');
+  expect(p.getVersionDisplayName('ocr:enhanced:chandra:document_cleanup')).toBe('Enhanced OCR 6 (Document Cleanup)');
+  expect(p.getVersionDisplayName('ocr:enhanced:google:bg_clahe')).toBe('Enhanced OCR 1 (BG + CLAHE)');
+  expect(p.getVersionDisplayName('ocr:enhanced:dots_ocr:hybrid_binarization')).toBe('Enhanced OCR 12 (Hybrid Binarization)');
+});
+
+test('getOcrEngineName formats masked OCR names correctly for preview modal', () => {
+  const p = Proofer();
+  expect(p.getOcrEngineName('1')).toBe('OCR 1');
+  expect(p.getOcrEngineName('6')).toBe('OCR 6');
+  expect(p.getOcrEngineName('chandra')).toBe('OCR 6');
+  expect(p.getOcrEngineName('google')).toBe('OCR 1');
+  expect(p.getOcrEngineName('dots_ocr')).toBe('OCR 12');
+});
+
+

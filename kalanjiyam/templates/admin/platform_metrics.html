@@ -7,31 +7,45 @@
 {% block content %}
 <div class="space-y-6">
 
-  <!-- Header & Action Bar -->
-  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-    <div>
-      <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
-        <span class="inline-block w-3 h-3 rounded-full bg-royalblue animate-pulse"></span>
-        {{ _('System Metrics & Logs') }}
-      </h1>
-      <p class="text-sm text-slate-500 mt-1">
-        {{ _('Monitor active background queues, service latencies, and system error logs across all users and enterprises.') }}
-      </p>
-    </div>
-    <div class="flex items-center gap-3">
-      <button id="refresh-btn" onclick="refreshCurrentTab()" class="btn-premium flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-xl shadow-sm transition-all" style="background-color: royalblue;">
-        <svg id="refresh-icon" class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
-        <span>{{ _('Refresh') }}</span>
-      </button>
-      <form action="{{ url_for('platform_view.metrics_clear') }}" method="POST" onsubmit="return confirm('Are you sure you want to clear metrics logs?');">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <input type="hidden" name="category" value="ALL">
-        <button type="submit" class="px-3.5 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors">
-          {{ _('Clear Logs') }}
+  <!-- Google Admin Header & Action Bar -->
+  <div class="mb-6">
+    <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200/80">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+              {{ _('System Telemetry & Logs') }}
+            </h1>
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+              {{ _('OpenTelemetry') }}
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 font-medium mt-0.5">
+            {{ _('Monitor active background queues, service latencies, and system error logs across all users and enterprises.') }}
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="refresh-btn" onclick="refreshCurrentTab()" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-royalblue hover:bg-blue-600 text-white font-semibold text-xs transition-all shadow-xs">
+          <svg id="refresh-icon" class="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span>{{ _('Refresh') }}</span>
         </button>
-      </form>
+        {% if not is_master_user and current_user.is_super_admin %}
+        <form action="{{ url_for('platform_view.metrics_clear') }}" method="POST" onsubmit="return confirm('Are you sure you want to clear metrics logs?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="category" value="ALL">
+          <button type="submit" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold transition-all shadow-xs">
+            {{ _('Clear Logs') }}
+          </button>
+        </form>
+        {% endif %}
+      </div>
     </div>
   </div>
 
@@ -460,7 +474,7 @@
 </div>
 
 <script>
-const metricsApiUrl = "{{ url_for('platform_view.metrics_api') }}";
+const metricsApiUrl = "{{ url_for('master_metrics_view.metrics_api') if is_master_user else url_for('platform_view.metrics_api') }}";
 let currentTab = 'queues';
 let searchDebounceTimer = null;
 

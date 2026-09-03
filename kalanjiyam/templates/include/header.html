@@ -12,11 +12,17 @@
   class="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
   <div class="w-full max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
   <div class="flex justify-between items-center">
-    <a class="flex items-center gap-2 pl-2 font-black text-lg text-slate-900 hover:opacity-80 transition-opacity"
-      href="{{ url_for('site.index') }}">
-      <span
-        class="w-8 h-8 rounded-full bg-royalblue flex items-center justify-center text-white text-xs shadow-sm">K</span>
-      <span class="tracking-tighter">{{ _('Kalanjiyam') }}</span>
+    <a class="flex items-center gap-2.5 sm:gap-3 pl-2 font-black text-lg text-slate-900 hover:opacity-80 transition-opacity"
+      href="{{ url_for('site.index') }}" title="Kalanjiyam - Powered by BharatGen">
+      <img src="{{ url_for('static', filename='images/BharatGen-Logo-2-1536x390.webp') }}"
+           alt="BharatGen"
+           class="h-7 sm:h-8 w-auto object-contain shrink-0" />
+      <span class="text-slate-300 font-light text-xl select-none" aria-hidden="true">|</span>
+      <div class="flex items-center gap-2">
+        <span
+          class="w-8 h-8 rounded-full bg-royalblue flex items-center justify-center text-white text-xs shadow-sm">K</span>
+        <span class="tracking-tighter">{{ _('Kalanjiyam') }}</span>
+      </div>
     </a>
     <div class="block p-4 md:hidden">
       <button id="hamburger" type="button" class="text-inherit opacity-70 hover:opacity-100 transition-opacity">{{
@@ -38,14 +44,6 @@
           }
       }" @mouseleave="hideCursor()">
 
-    {% set is_books_active = request.blueprint and request.blueprint.startswith('public') %}
-    <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
-      @mouseenter="moveCursor($el)">
-      <a class="block px-4 py-2 rounded-full {% if is_books_active %}text-white{% else %}text-slate-900{% endif %}" {%
-        if is_books_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
-        href="{{ url_for('public.books.index') }}">{{ _('Library') }}</a>
-    </li>
-
     {% set is_search_active = request.blueprint == 'search' %}
     <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
       @mouseenter="moveCursor($el)">
@@ -58,10 +56,90 @@
     {% set is_proofing_active = request.blueprint and request.blueprint.startswith('proofing') and request.endpoint !=
     'proofing.user.summary' and not is_help_active %}
     <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+      x-data="{ open: false }"
+      @click.outside="open = false"
       @mouseenter="moveCursor($el)">
-      <a class="block px-4 py-2 rounded-full {% if is_proofing_active %}text-white{% else %}text-slate-900{% endif %}"
-        {% if is_proofing_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
-        href="{{ url_for('proofing.index') }}">{{ _('Proofing') }}</a>
+      <button
+        @click="open = !open"
+        type="button"
+        class="inline-flex items-center gap-1 px-4 py-2 rounded-full font-bold text-xs uppercase tracking-widest {% if is_proofing_active %}text-white shadow-sm{% else %}text-slate-900 hover:text-royalblue{% endif %} focus:outline-none transition-all select-none"
+        {% if is_proofing_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
+        <span>{{ _('Proofing') }}</span>
+        <svg class="w-3.5 h-3.5 {% if is_proofing_active %}text-white/90{% else %}text-slate-500{% endif %} transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+      <div
+        x-show="open"
+        x-transition:enter="transition ease-out duration-150"
+        x-transition:enter-start="transform opacity-0 scale-95 -translate-y-1"
+        x-transition:enter-end="transform opacity-100 scale-100 translate-y-0"
+        x-transition:leave="transition ease-in duration-100"
+        x-transition:leave-start="transform opacity-100 scale-100 translate-y-0"
+        x-transition:leave-end="transform opacity-0 scale-95 -translate-y-1"
+        class="absolute left-0 mt-2 w-56 rounded-2xl bg-white border border-slate-200/90 shadow-xl py-2 z-50 text-slate-700 normal-case font-medium text-sm overflow-hidden"
+        x-cloak>
+        <div class="px-4 py-2 border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          {{ _('Proofing Navigation') }}
+        </div>
+        {% if current_user.is_moderator %}
+        {% set is_dash = request.endpoint == 'proofing.dashboard' %}
+        <a href="{{ url_for('proofing.dashboard') }}"
+          class="flex items-center justify-between px-4 py-2.5 text-xs font-semibold {% if is_dash %}text-royalblue bg-blue-50/70 font-bold{% else %}text-slate-700 hover:bg-slate-50 hover:text-royalblue{% endif %} transition-colors">
+          <span class="flex items-center gap-2.5">
+            <svg class="w-4 h-4 {% if is_dash %}text-royalblue{% else %}text-slate-400 group-hover:text-royalblue{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="10" rx="1"/><rect width="7" height="5" x="3" y="14" rx="1"/>
+            </svg>
+            <span>{{ _('Dashboard') }}</span>
+          </span>
+          {% if is_dash %}<span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>{% endif %}
+        </a>
+        {% endif %}
+        {% set is_workspace = request.endpoint == 'proofing.index' %}
+        <a href="{{ url_for('proofing.index') }}"
+          class="flex items-center justify-between px-4 py-2.5 text-xs font-semibold {% if is_workspace %}text-royalblue bg-blue-50/70 font-bold{% else %}text-slate-700 hover:bg-slate-50 hover:text-royalblue{% endif %} transition-colors">
+          <span class="flex items-center gap-2.5">
+            <svg class="w-4 h-4 {% if is_workspace %}text-royalblue{% else %}text-slate-400 group-hover:text-royalblue{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
+            <span>{{ _('Proofing Workspace') }}</span>
+          </span>
+          {% if is_workspace %}<span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>{% endif %}
+        </a>
+        {% set is_create = request.endpoint == 'proofing.create_project' %}
+        <a href="{{ url_for('proofing.create_project') }}"
+          class="flex items-center justify-between px-4 py-2.5 text-xs font-semibold {% if is_create %}text-royalblue bg-blue-50/70 font-bold{% else %}text-slate-700 hover:bg-slate-50 hover:text-royalblue{% endif %} transition-colors">
+          <span class="flex items-center gap-2.5">
+            <svg class="w-4 h-4 {% if is_create %}text-royalblue{% else %}text-slate-400 group-hover:text-royalblue{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>
+            </svg>
+            <span>{{ _('Create project') }}</span>
+          </span>
+          {% if is_create %}<span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>{% endif %}
+        </a>
+        {% set is_changes = request.endpoint == 'proofing.recent_changes' %}
+        <a href="{{ url_for('proofing.recent_changes') }}"
+          class="flex items-center justify-between px-4 py-2.5 text-xs font-semibold {% if is_changes %}text-royalblue bg-blue-50/70 font-bold{% else %}text-slate-700 hover:bg-slate-50 hover:text-royalblue{% endif %} transition-colors">
+          <span class="flex items-center gap-2.5">
+            <svg class="w-4 h-4 {% if is_changes %}text-royalblue{% else %}text-slate-400 group-hover:text-royalblue{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span>{{ _('Recent changes') }}</span>
+          </span>
+          {% if is_changes %}<span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>{% endif %}
+        </a>
+        {% set is_tagging = request.endpoint and request.endpoint.startswith('proofing.tagging') %}
+        <a href="{{ url_for('proofing.tagging.index') }}"
+          class="flex items-center justify-between px-4 py-2.5 text-xs font-semibold {% if is_tagging %}text-royalblue bg-blue-50/70 font-bold{% else %}text-slate-700 hover:bg-slate-50 hover:text-royalblue{% endif %} transition-colors">
+          <span class="flex items-center gap-2.5">
+            <svg class="w-4 h-4 {% if is_tagging %}text-royalblue{% else %}text-slate-400 group-hover:text-royalblue{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l4.58-4.58c.94-.94.94-2.48 0-3.42z"/><path d="M6 6h.01"/>
+            </svg>
+            <span>{{ _('Tagging') }}</span>
+          </span>
+          {% if is_tagging %}<span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>{% endif %}
+        </a>
+      </div>
     </li>
 
     <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
@@ -72,7 +150,7 @@
     </li>
 
     {% set is_admin_active = request.endpoint and ('admin' in request.endpoint or 'platform_view' in request.endpoint or
-    'groups_view' in request.endpoint or 'org_admin_view' in request.endpoint) %}
+    'groups_view' in request.endpoint or 'org_admin_view' in request.endpoint or 'master_metrics_view' in request.endpoint) %}
     {% if current_user.is_super_admin %}
     <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
       @mouseenter="moveCursor($el)">
@@ -87,6 +165,13 @@
         if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
         href="{{ url_for('org_admin_view.index') }}">{{ _('Dashboard') }}</a>
     </li>
+    {% elif current_user.is_master_user %}
+    <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+      @mouseenter="moveCursor($el)">
+      <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
+        if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+        href="{{ url_for('master_metrics_view.cli_batch_ocr') }}">{{ _('Metrics') }}</a>
+    </li>
     {% elif current_user.is_admin %}
     <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
       @mouseenter="moveCursor($el)">
@@ -100,12 +185,12 @@
         x-data="{ open: false }"
         @click.outside="open = false"
         @mouseenter="moveCursor($el)">
-      {% set current_locale_code = get_locale().language %}
-      {% set current_lang = kalanjiyam_locales | selectattr('code', 'equalto', current_locale_code) | list | first %}
+      {% set current_locale_str = (get_locale() | string) if get_locale() else (session.get('locale', 'en')) %}
+      {% set current_lang = kalanjiyam_locales | selectattr('code', 'equalto', current_locale_str) | list | first or kalanjiyam_locales | selectattr('slug', 'equalto', current_locale_str.split('_')[0]) | list | first %}
       <button
         @click="open = !open"
         type="button"
-        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-slate-900 focus:outline-none transition-colors select-none">
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full font-bold text-xs uppercase tracking-widest text-slate-900 focus:outline-none transition-colors select-none">
         <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-.778.099-1.533.284-2.253" />
         </svg>
@@ -231,12 +316,7 @@
                         <div class="flex justify-between items-start gap-2 mb-1">
                             <span class="font-semibold text-slate-900 text-xs truncate max-w-[180px]" x-text="task.project_title"></span>
                             <span class="text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider"
-                                  :class="{
-                                      'bg-blue-50 text-blue-600': task.status === 'running',
-                                      'bg-slate-100 text-slate-500': task.status === 'pending',
-                                      'bg-emerald-50 text-emerald-600': task.status === 'completed',
-                                      'bg-rose-50 text-rose-600': task.status === 'failed' || task.status === 'cancelled'
-                                  }"
+                                  :class="{ 'bg-blue-50 text-blue-600': task.status === 'running', 'bg-slate-100 text-slate-500': task.status === 'pending', 'bg-emerald-50 text-emerald-600': task.status === 'completed', 'bg-rose-50 text-rose-600': task.status === 'failed' || task.status === 'cancelled' }"
                                   x-text="task.status">
                             </span>
                         </div>

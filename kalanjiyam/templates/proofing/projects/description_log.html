@@ -6,14 +6,10 @@
    pages go unread. A failure with no visible error message is the thing that
    makes a partial run impossible to act on, so the message is shown in full
    rather than behind a disclosure. #}
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% import "macros/proofing.html" as m %}
 
-
 {% block title %}{{ _('Extraction log: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
-
-
-{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
 
 
 {% macro ms(value) %}
@@ -71,8 +67,7 @@
     <div class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden">
       {% for r in runs %}
         <a href="{{ url_for('proofing.project.description_log', slug=project.slug, run_id=r.id) }}"
-           class="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 hover:bg-slate-50 transition-colors
-                  {% if run and r.id == run.id %}bg-royalblue/5{% endif %}">
+           class="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 hover:bg-slate-50 transition-colors {% if run and r.id == run.id %}bg-royalblue/5{% endif %}">
           <span class="font-mono text-xs text-slate-400">#{{ r.id }}</span>
           {{ status_pill(r.status) }}
           <span class="text-sm text-slate-700">
@@ -81,6 +76,11 @@
           <span class="text-sm text-slate-500">
             {{ _('%(done)s / %(total)s windows', done=r.windows_completed or 0, total=r.windows_total or 0) }}
           </span>
+          {% if r.duration_sec is not none %}
+            <span class="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded" title="{{ _('Time taken') }}">
+              {{ r.time_taken_display }}
+            </span>
+          {% endif %}
           {% if r.windows_failed %}
             <span class="text-sm text-red-700 font-semibold">{{ _('%(n)s failed', n=r.windows_failed) }}</span>
           {% endif %}
@@ -114,7 +114,15 @@
            figure marked as an average: tokens are spent per call, and windows
            overlap by a page while the taxonomy instruction is charged once per
            window regardless of how many pages it covers. #}
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+        <div class="grid grid-cols-2 md:grid-cols-7 gap-3 text-xs">
+          <div class="bg-slate-800 rounded-xl px-3 py-2">
+            <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ _('Time taken') }}</div>
+            <div class="font-mono text-slate-200">{{ run.time_taken_display }}</div>
+          </div>
+          <div class="bg-slate-800 rounded-xl px-3 py-2">
+            <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ _('Engine time') }}</div>
+            <div class="font-mono text-slate-200">{{ run.engine_latency_display }}</div>
+          </div>
           <div class="bg-slate-800 rounded-xl px-3 py-2">
             <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ _('Tokens in') }}</div>
             <div class="font-mono text-slate-200">{{ num(run.total_prompt_tokens) }}</div>
@@ -124,7 +132,7 @@
             <div class="font-mono text-slate-200">{{ num(run.total_completion_tokens) }}</div>
           </div>
           <div class="bg-slate-800 rounded-xl px-3 py-2">
-            <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ _('Total') }}</div>
+            <div class="text-slate-500 uppercase tracking-wider text-[10px] font-bold">{{ _('Total Tokens') }}</div>
             <div class="font-mono text-slate-200">{{ num(run.total_tokens) }}</div>
           </div>
           <div class="bg-slate-800 rounded-xl px-3 py-2">

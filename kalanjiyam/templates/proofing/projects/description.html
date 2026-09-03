@@ -10,15 +10,84 @@
    * Generated and curated values merge before they reach here, but never merge
      *visually*. Whether a machine wrote a value, and whether its citation checked
      out, stays visible without being in the way. #}
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% import "macros/forms.html" as mf %}
 {% import "macros/proofing.html" as m %}
 
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  .{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
+  }
+</style>
+{% endblock %}
 
 {% block title %}{{ _('Description: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
 
+{% block hero %}
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+  <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+    <div class="flex items-start gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0 mt-0.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="flex flex-wrap items-center gap-2">
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ project.display_title }}
+          </h1>
+          {% if project.condition_tag_list %}
+            <div class="flex flex-wrap items-center gap-1.5">
+              {% for tag in project.condition_tag_list %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200 shadow-xs" title="{{ _('Condition issue: %(tag)s', tag=tag.name) }}{% if tag.pages %} ({{ _('Pages:') }} {{ tag.pages }}){% endif %}">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  <span>{{ tag.name }}</span>
+                  {% if tag.pages %}
+                    <span class="text-[11px] text-amber-700 font-normal">({{ tag.pages }})</span>
+                  {% endif %}
+                </span>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
 
-{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
+        <!-- Meta Info -->
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium mt-1">
+          {% if project.author %}
+          <span class="text-slate-700 font-semibold">{{ project.author }}</span>
+          {% endif %}
+          {% if project.publication_year %}
+          <span class="text-slate-300">•</span>
+          <span>{{ project.publication_year }}</span>
+          {% endif %}
+          {% if project.publisher %}
+          <span class="text-slate-300">•</span>
+          <span>{{ project.publisher }}</span>
+          {% endif %}
+          <span class="text-slate-300">•</span>
+          <span class="text-royalblue font-semibold">{{ project.pages|length }} {{ _('pages') }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Action Button back to Workspace -->
+    <div class="flex items-center gap-2 text-xs shrink-0">
+      <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
+        <span>{{ _('Workspace') }}</span>
+      </a>
+    </div>
+  </div>
+</header>
+{% endblock %}
 
 
 {% macro stat(label, value) %}
@@ -63,13 +132,12 @@
 
 {% macro entity_chip(item, spans, taxonomy) %}
   {% set enriched = item.source == taxonomy.SOURCE_ENRICHMENT %}
-  <span class="inline-flex items-baseline gap-1 px-2 py-1 rounded-lg text-xs
-    {% if enriched %}bg-amber-50 border border-dashed border-amber-300{% else %}bg-slate-100 border border-slate-200{% endif %}"
+  <span class="inline-flex items-baseline gap-1.5 px-2.5 py-1 rounded-xl text-xs {% if enriched %}bg-amber-50/80 border border-dashed border-amber-300 text-amber-900{% else %}bg-royalblue/5 border border-royalblue/20 text-slate-800{% endif %}"
     title="{% if item.variants %}{{ _('also') }}: {{ item.variants|join('; ') }}{% endif %}{% if item.note %} &mdash; {{ item.note }}{% endif %}">
-    <span class="font-medium text-slate-800">{{ item.label }}</span>
+    <span class="font-semibold text-slate-900">{{ item.label }}</span>
     {% if item.dates %}<span class="text-slate-500">({{ item.dates }})</span>{% endif %}
-    {% if item.auth_id %}<span class="font-mono text-[10px] text-royalblue">{{ item.auth_id }}</span>{% endif %}
-    {% if item.kind %}<span class="text-[10px] uppercase tracking-wide text-slate-400">{{ item.kind }}</span>{% endif %}
+    {% if item.auth_id %}<span class="font-mono text-[10px] text-royalblue font-bold">{{ item.auth_id }}</span>{% endif %}
+    {% if item.kind %}<span class="text-[10px] uppercase tracking-wide text-royalblue/80 font-bold">{{ item.kind }}</span>{% endif %}
     {% if enriched %}
       <span class="text-[10px] uppercase tracking-wide text-amber-700 font-semibold"
         title="{{ _('From an authority file, not stated in the record') }}">{{ _('ext') }}</span>
@@ -92,13 +160,13 @@
         {{ tag.label }}
       </label>
       <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
-        <span class="font-mono text-[10px] text-slate-400">{{ tag.code }}</span>
+        <span class="font-mono text-[10px] font-bold text-royalblue bg-royalblue/10 px-1.5 py-0.5 rounded-md">{{ tag.code }}</span>
         <span class="text-[10px] text-slate-400">{{ tag.standard }}</span>
-        <button type="button" class="text-[10px] text-royalblue underline decoration-dotted"
+        <button type="button" class="text-[10px] text-royalblue hover:text-blue-700 font-semibold underline decoration-dotted"
           title="{{ tag.definition }}">{{ _('what is this?') }}</button>
       </div>
       {% if view.is_locked %}
-        <span class="inline-block mt-2 px-2 py-0.5 bg-slate-800 text-white rounded text-[10px] font-bold uppercase tracking-wide"
+        <span class="inline-block mt-2 px-2 py-0.5 bg-slate-800 text-white rounded-md text-[10px] font-bold uppercase tracking-wide"
           title="{{ _('Never sent to the extractor -- it comes from the accession record') }}">
           {{ _('archivist only') }}
         </span>
@@ -110,11 +178,11 @@
       {% if tag.kind in ('text', 'prose') %}
         {% if tag.kind == 'prose' %}
           <textarea id="{{ prefix }}{{ tag.code }}" name="{{ prefix }}{{ tag.code }}" rows="5"
-            class="w-full rounded-xl border-slate-300 text-sm"
+            class="w-full rounded-xl border-slate-300 text-sm focus:border-royalblue focus:ring-2 focus:ring-royalblue/20"
             placeholder="{{ _('Nothing recorded') }}">{{ view.value or '' }}</textarea>
         {% else %}
           <input type="text" id="{{ prefix }}{{ tag.code }}" name="{{ prefix }}{{ tag.code }}"
-            value="{{ view.value or '' }}" class="w-full rounded-xl border-slate-300 text-sm"
+            value="{{ view.value or '' }}" class="w-full rounded-xl border-slate-300 text-sm focus:border-royalblue focus:ring-2 focus:ring-royalblue/20"
             placeholder="{{ _('Nothing recorded') }}">
         {% endif %}
       {% elif view.is_empty %}
@@ -131,8 +199,8 @@
             <tbody class="divide-y divide-slate-100">
               {% for rel in taxonomy.normalize_relations(view.value) %}
                 <tr>
-                  <td class="py-1.5 pr-4 text-slate-800">{{ rel.subject }}</td>
-                  <td class="py-1.5 pr-4"><span class="font-mono text-xs text-royalblue">{{ rel.type }}</span></td>
+                  <td class="py-1.5 pr-4 text-slate-800 font-medium">{{ rel.subject }}</td>
+                  <td class="py-1.5 pr-4"><span class="font-mono text-xs font-bold text-royalblue bg-royalblue/10 px-2 py-0.5 rounded-md">{{ rel.type }}</span></td>
                   <td class="py-1.5 text-slate-800">
                     {{ rel.object }}
                     {% if rel.note %}<span class="block text-xs text-slate-400 italic">{{ rel.note }}</span>{% endif %}
@@ -184,8 +252,10 @@
 
 
 {% block content %}
-{{ m.project_header_nested(_('Description'), project) }}
-{{ m.project_tabs(project=project, active='description', is_mod=current_user.is_moderator) }}
+<div class="w-full">
+  <div class="mb-6">
+    {{ m.project_tabs(project=project, active='description', is_mod=current_user.is_moderator) }}
+  </div>
 
 {# --- Status strip -------------------------------------------------------- #}
 <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 mb-6">
@@ -209,6 +279,7 @@
       {% endif %}
       <span class="text-xs text-slate-500">
         {{ _('read %(read)s of %(total)s pages', read=run.pages_read or 0, total=run.pages_total or 0) }}
+        {%- if run.duration_sec is not none %} &bull; {{ _('took %(time)s', time=run.time_taken_display) }}{% endif -%}
       </span>
     {% endif %}
     {% if attempt %}
@@ -258,11 +329,13 @@
           <span class="font-mono text-slate-500">{{ run.taxonomy_version }}</span>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mb-4">
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 text-xs mb-4">
           {{ stat(_('Pages read'), '%s / %s'|format(run.pages_read or 0, run.pages_total or 0)) }}
           {{ stat(_('Page coverage'), percent(run.extraction_coverage) or None) }}
           {{ stat(_('Tags filled'), '%s / %s'|format(run.fields_filled or 0, run.fields_total or 0)) }}
           {{ stat(_('Windows'), '%s / %s'|format(run.windows_completed or 0, run.windows_total or 0)) }}
+          {{ stat(_('Time taken'), run.time_taken_display if run.duration_sec is not none else None) }}
+          {{ stat(_('Engine time'), run.engine_latency_display if run.total_engine_latency_sec is not none else None) }}
           {{ stat(_('Evidence verified'), percent(run.evidence_verified_rate) or None) }}
           {{ stat(_('Mean confidence'), '%.2f'|format(run.avg_field_confidence) if run.avg_field_confidence is not none else None) }}
           {{ stat(_('Source OCR conf.'), '%.2f'|format(run.avg_source_ocr_confidence) if run.avg_source_ocr_confidence is not none else None) }}
@@ -305,7 +378,7 @@
 {% endif %}
 
 {# --- The description, as a form ------------------------------------------ #}
-<form method="POST" action="{{ url_for('proofing.project.description_save', slug=project.slug) }}">
+<form method="POST" action="{{ url_for('proofing.project.description_save', slug=project.slug) }}" class="mt-8">
   {{ save_form.csrf_token }}
 
   {% for group_name, views in groups %}
@@ -315,7 +388,7 @@
     {% if visible %}
       <section class="mb-6">
         <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{{ group_name }}</h2>
-        <div class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden">
+        <div class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden shadow-sm">
           {% for view in visible %}{{ field_row(view, taxonomy, field_prefix) }}{% endfor %}
         </div>
       </section>
@@ -333,24 +406,27 @@
 
   {% if empties %}
     <details class="mb-6">
-      <summary class="cursor-pointer bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-semibold text-slate-500 hover:text-slate-700">
+      <summary class="cursor-pointer bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-semibold text-slate-500 hover:text-slate-700 transition-colors">
         {{ _('%(n)s tags with nothing in them', n=empties|length) }}
         <span class="font-normal text-slate-400">&mdash; {{ _('open to fill one in by hand') }}</span>
       </summary>
-      <div class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden mt-2">
+      <div class="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden shadow-sm mt-2">
         {% for view in empties %}{{ field_row(view, taxonomy, field_prefix) }}{% endfor %}
       </div>
     </details>
   {% endif %}
 
-  <div class="sticky bottom-0 bg-white/95 backdrop-blur border-t border-slate-200 py-3 flex items-center gap-4">
-    <button type="submit"
-      class="px-6 py-2.5 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 transition-colors">
-      {{ _('Save description') }}
-    </button>
-    <span class="text-xs text-slate-500">
-      {{ _('Only boxes you changed are saved, and a re-run never overwrites them. Emptying a box you filled restores what the extraction found.') }}
-    </span>
+  {# Sticky bottom card that snaps into place at page bottom with smooth animation #}
+  <div class="sticky bottom-4 z-30 mt-8 p-4 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl shadow-lg shadow-slate-900/5 transition-all duration-300 ease-out hover:shadow-xl">
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+      <span class="text-xs text-slate-500 max-w-xl text-center sm:text-left leading-relaxed">
+        {{ _('Only boxes you changed are saved, and a re-run never overwrites them. Emptying a box you filled restores what the extraction found.') }}
+      </span>
+      <button type="submit"
+        class="shrink-0 px-5 py-2.5 bg-royalblue text-white font-bold rounded-xl hover:bg-blue-700 active:scale-95 transition-all duration-200 shadow-md shadow-royalblue/20 hover:shadow-lg hover:shadow-royalblue/30 text-sm">
+        {{ _('Save description') }}
+      </button>
+    </div>
   </div>
 </form>
 
@@ -376,4 +452,5 @@
   })();
 </script>
 {% endif %}
+</div>
 {% endblock %}

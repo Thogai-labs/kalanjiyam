@@ -6,19 +6,15 @@
 
 {% block extra_head %}
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-  .font-serif-title {
-    font-family: 'Cinzel', Georgia, serif;
+  .{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   }
 
-  .catalog-hero {
-    background: #0b1120;
-    background-image: 
-      radial-gradient(circle at 50% 0%, rgba(65, 105, 225, 0.18) 0%, rgba(11, 17, 32, 0.95) 75%),
-      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px),
-      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.015) 23px, rgba(255, 255, 255, 0.015) 24px);
-    background-size: 100% 100%, 24px 24px, 24px 24px;
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
   }
 </style>
 {% endblock %}
@@ -27,7 +23,7 @@
 
 {% block main %}
 <!-- Hero Header Section -->
-<header class="catalog-hero text-slate-100 py-16 px-4 mb-10 border-b border-slate-800">
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
   <div class="max-w-4xl mx-auto text-center">
     <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-royalblue/10 border border-royalblue/30 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-4">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -36,10 +32,10 @@
       <span>{{ _('Legal & Compliance') }}</span>
     </div>
 
-    <h1 class="text-4xl sm:text-5xl font-bold font-serif-title tracking-tight mb-4 text-white">
+    <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
       {{ _('Privacy Policy') }}
     </h1>
-    <p class="text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
+    <p class="text-slate-500 text-[11px] sm:text-xs font-medium">
       {{ _('Learn how Kalanjiyam protects your personal information, data retention, and privacy rights.') }}
     </p>
   </div>
@@ -56,7 +52,7 @@
 
     <hr class="my-8 border-slate-100" />
 
-    <h2 class="text-2xl font-bold text-slate-900 font-serif-title">{{ _('Data we collect and how we use it') }}</h2>
+    <h2 class="text-2xl font-bold text-slate-900">{{ _('Data we collect and how we use it') }}</h2>
 
     <ul class="space-y-4 my-6">
       <li>
@@ -111,7 +107,7 @@
 
     <hr class="my-8 border-slate-100" />
 
-    <h2 class="text-2xl font-bold text-slate-900 font-serif-title">{{ _('Data use and retention') }}</h2>
+    <h2 class="text-2xl font-bold text-slate-900">{{ _('Data use and retention') }}</h2>
 
     <p>
       {{ _('Other than the specific cases mentioned above, and publicly shared proofing contributions, we do not share your data with any third parties. We may also retain and share your data as needed in order to comply with our legal obligations.') }}

@@ -1,49 +1,180 @@
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% from "macros/forms.html" import field %}
 {% import "macros/proofing.html" as m %}
 
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-{% block title %}{{ _('Search: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
+  .{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
 
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
+  }
 
-{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
+  mark {
+    background-color: #fef08a;
+    color: #854d0e;
+    font-weight: 700;
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+  }
+</style>
+{% endblock %}
 
+{% block title %}{{ _('Search:') }} {{ project.display_title }} | Kalanjiyam{% endblock %}
+
+{% block hero %}
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+  <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+    <div class="flex items-start gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0 mt-0.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="flex flex-wrap items-center gap-2">
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ project.display_title }}
+          </h1>
+          {% if project.condition_tag_list %}
+            <div class="flex flex-wrap items-center gap-1.5">
+              {% for tag in project.condition_tag_list %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200 shadow-xs" title="{{ _('Condition issue: %(tag)s', tag=tag.name) }}{% if tag.pages %} ({{ _('Pages:') }} {{ tag.pages }}){% endif %}">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  <span>{{ tag.name }}</span>
+                  {% if tag.pages %}
+                    <span class="text-[11px] text-amber-700 font-normal">({{ tag.pages }})</span>
+                  {% endif %}
+                </span>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- Meta Info -->
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium mt-1">
+          {% if project.author %}
+          <span class="text-slate-700 font-semibold">{{ project.author }}</span>
+          {% endif %}
+          {% if project.publication_year %}
+          <span class="text-slate-300">•</span>
+          <span>{{ project.publication_year }}</span>
+          {% endif %}
+          {% if project.publisher %}
+          <span class="text-slate-300">•</span>
+          <span>{{ project.publisher }}</span>
+          {% endif %}
+          <span class="text-slate-300">•</span>
+          <span class="text-royalblue font-semibold">{{ project.pages|length }} {{ _('pages') }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Action Button back to Workspace -->
+    <div class="flex items-center gap-2 text-xs shrink-0">
+      <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
+        <span>{{ _('Workspace') }}</span>
+      </a>
+    </div>
+  </div>
+</header>
+{% endblock %}
 
 {% block content %}
-{{ m.project_header_nested(_('Search'), project) }}
-{{ m.project_tabs(project=project, active='edit') }}
+<div class="w-full">
+  <div class="mb-6">
+    {{ m.project_tabs(project=project, active='search_operations', is_mod=current_user.is_moderator) }}
+  </div>
 
-<div class="prose">
-  <p>{{ _('Use this simple search form to find typos across this project.') }}</p>
-</div>
-
-<form method="GET" class="bg-slate-100 p-4 my-4">
-  {{ field(form.query) }}
-  <input class="btn btn-submit" type="submit" value="{{ _('Search project') }}">
-</form>
-
-{% if query %}
-<div class="prose">
-
-{% macro sp(s, p, n) %}{% if n == 1 %}{{ s }}{% else %}{{ p }}{% endif %}{% endmacro %}
-
-{% set nr = results|length %}
-<p>{{ ngettext('Found %(count)s page containing', 'Found %(count)s pages containing', nr, count=nr) }} <kbd>{{ query }}</kbd>.</p>
-
-<ul>
-{% for page in results %}
-{% set page_url = url_for("proofing.page.edit", project_slug=project.slug, page_slug=page.slug) %}
-<li>
-    <a href="{{ page_url }}">{{ project.display_title }}/{{ page.slug }}</a>
-    <div class="p-2 border-l my-2">
-    {% for match in page.matches %}
-    <pre class="p-0.5">{{ match.text }}</pre>
-    {%- endfor %}
+  <!-- Search Card -->
+  <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 mb-8">
+    <div class="flex items-center justify-between gap-4 mb-4">
+      <div>
+        <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-royalblue"></span>
+          {{ _('Search Project Text') }}
+        </h2>
+        <p class="text-xs text-slate-500 mt-1">
+          {{ _('Search across latest revisions of all pages to find typos, repeated words, or specific phrases.') }}
+        </p>
+      </div>
+      <a href="{{ url_for('proofing.project.search_operations', slug=project.slug) }}" 
+         class="text-xs font-semibold text-slate-500 hover:text-royalblue flex items-center gap-1 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        {{ _('All Operations') }}
+      </a>
     </div>
-</li>
-{% endfor %}
-</ul>
 
+    <form method="GET" class="mt-4">
+      <div class="flex flex-col sm:flex-row gap-3">
+        <div class="grow relative">
+          <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+          </div>
+          <input type="text" name="query" id="query" value="{{ query or '' }}" 
+                 placeholder="{{ _('Type word or phrase to search...') }}" required
+                 class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all">
+        </div>
+        <button type="submit" 
+                class="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-royalblue hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-royalblue/20 transition-all cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          {{ _('Search Project') }}
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Results Section -->
+  {% if query %}
+    {% set nr = results|length %}
+    <div class="mb-6 flex items-center justify-between">
+      <h3 class="text-sm font-bold text-slate-900">
+        {{ ngettext('Found %(count)s page containing', 'Found %(count)s pages containing', nr, count=nr) }} 
+        <kbd class="px-2 py-0.5 bg-slate-200 text-slate-800 rounded font-mono text-xs font-bold">{{ query }}</kbd>
+      </h3>
+      <span class="text-xs font-semibold text-slate-500">{{ nr }} {{ _('results') }}</span>
+    </div>
+
+    {% if results %}
+      <div class="space-y-4">
+        {% for page in results %}
+          {% set page_url = url_for("proofing.page.edit", project_slug=project.slug, page_slug=page.slug) %}
+          <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 hover:border-royalblue/40 transition-all">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+              <a href="{{ page_url }}" class="inline-flex items-center gap-2 font-bold text-sm text-royalblue hover:underline">
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                <span>{{ project.display_title }} / {{ page.slug }}</span>
+              </a>
+              <span class="px-2.5 py-0.5 rounded-full bg-blue-50 text-royalblue font-bold text-xs">
+                {{ page.matches|length }} {{ _('matches') }}
+              </span>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-3 space-y-1.5 border border-slate-100 font-mono text-xs text-slate-700 overflow-x-auto">
+              {% for match in page.matches %}
+                <div class="py-1 border-b border-slate-200/60 last:border-0 leading-relaxed">{{ match.text }}</div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm">
+        <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </div>
+        <h4 class="text-sm font-bold text-slate-800 mb-1">{{ _('No Matches Found') }}</h4>
+        <p class="text-xs text-slate-500 max-w-sm mx-auto">{{ _('No pages in this project contained the search query. Try checking your spelling or using a substring.') }}</p>
+      </div>
+    {% endif %}
+  {% endif %}
 </div>
-{% endif %}
 {% endblock %}

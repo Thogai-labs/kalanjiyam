@@ -1,84 +1,336 @@
-{% extends 'proofing/base-sidebar.html' %}
+{% extends 'proofing/base.html' %}
 {% import "macros/components.html" as components %}
 {% import "macros/forms.html" as mf %}
 {% import "macros/proofing.html" as m %}
 
+{% block extra_css %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  .{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
+  }
+</style>
+{% endblock %}
 
 {% block title %}{{ _('Edit: %(title)s | Kalanjiyam', title=project.display_title) }}{% endblock %}
 
+{% block hero %}
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+  <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+    <div class="flex items-start gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0 mt-0.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="flex flex-wrap items-center gap-2">
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ project.display_title }}
+          </h1>
+          {% if project.condition_tag_list %}
+            <div class="flex flex-wrap items-center gap-1.5">
+              {% for tag in project.condition_tag_list %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200 shadow-xs" title="{{ _('Condition issue: %(tag)s', tag=tag.name) }}{% if tag.pages %} ({{ _('Pages:') }} {{ tag.pages }}){% endif %}">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  <span>{{ tag.name }}</span>
+                  {% if tag.pages %}
+                    <span class="text-[11px] text-amber-700 font-normal">({{ tag.pages }})</span>
+                  {% endif %}
+                </span>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
 
-{% block sidebar %}{{ m.main_nav('projects', current_user=current_user) }}{% endblock %}
+        <!-- Meta Info -->
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium mt-1">
+          {% if project.author %}
+          <span class="text-slate-700 font-semibold">{{ project.author }}</span>
+          {% endif %}
+          {% if project.publication_year %}
+          <span class="text-slate-300">•</span>
+          <span>{{ project.publication_year }}</span>
+          {% endif %}
+          {% if project.publisher %}
+          <span class="text-slate-300">•</span>
+          <span>{{ project.publisher }}</span>
+          {% endif %}
+          <span class="text-slate-300">•</span>
+          <span class="text-royalblue font-semibold">{{ project.pages|length }} {{ _('pages') }}</span>
+        </div>
+      </div>
+    </div>
 
+    <!-- Right: Action Button back to Workspace -->
+    <div class="flex items-center gap-2 text-xs shrink-0">
+      <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Back to Proofing Workspace') }}">
+        <span>{{ _('Workspace') }}</span>
+      </a>
+    </div>
+  </div>
+</header>
+{% endblock %}
 
 {% block content %}
-{{ m.project_header_nested(_('Edit'), project) }}
-{{ m.project_tabs(project=project, active='edit', is_mod=current_user.is_moderator) }}
+<div class="w-full max-w-4xl">
+  {{ m.project_tabs(project=project, active='edit', is_mod=current_user.is_moderator) }}
 
-{{ mf.show_errors_if_any(form.errors) }}
+  {{ mf.show_errors_if_any(form.errors) }}
 
-<form method="POST">
-  {{ form.csrf_token }}
+  <form method="POST" id="project-edit-form" class="space-y-8">
+    {{ form.csrf_token }}
 
-  <fieldset>
-    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Basic information') }}</legend>
-    <div class="bg-slate-100 p-4">
-      {{ mf.field(form.display_title) }}
-      {{ mf.field(form.genre) }}
-      {{ mf.markdown_field(form.description) }}
-      
-      <div class="my-4 flex items-start gap-3">
-        {{ form.is_publicly_viewable(class_="h-5 w-5 mt-1 rounded border-slate-300 text-royalblue focus:ring-royalblue cursor-pointer") }}
-        <div>
-          {{ form.is_publicly_viewable.label(class_="font-semibold text-slate-700 block cursor-pointer") }}
-          <span class="text-sm text-slate-500">{{ _('When checked, anyone (including guests) can read this book at /books/.') }}</span>
+    <fieldset class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
+      <legend class="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-royalblue"></span>
+        {{ _('Basic information') }}
+      </legend>
+      <div class="space-y-4">
+        {{ mf.field(form.display_title) }}
+        {{ mf.field(form.genre) }}
+        {{ mf.markdown_field(form.description) }}
+        
+        <div class="my-4 flex items-start gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+          {{ form.is_publicly_viewable(class_="h-5 w-5 mt-0.5 rounded border-slate-300 text-royalblue focus:ring-royalblue cursor-pointer") }}
+          <div>
+            {{ form.is_publicly_viewable.label(class_="font-semibold text-slate-800 text-sm block cursor-pointer") }}
+            <span class="text-xs text-slate-500">{{ _('When checked, anyone (including guests) can read this book at /books/.') }}</span>
+          </div>
+        </div>
+
+        {{ mf.field(form.page_numbers) }}
+      </div>
+    </fieldset>
+
+    <script type="application/json" id="initial-condition-tags">
+      {{ (project.condition_tag_list or []) | tojson | safe }}
+    </script>
+
+    <fieldset class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200" x-data="conditionTagsManager()">
+      <legend class="text-base font-bold text-slate-900 mb-2 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+        {{ _('Document Condition & Issues') }}
+      </legend>
+      <p class="text-xs text-slate-500 mb-6 leading-relaxed">
+        {{ _('Tag physical or scan condition issues (such as shmushing / smudging, blurry text, torn pages, etc.) with optional affected page numbers (e.g. "1-3, 5, 8"). These issue tags will be visible on project cards, proofing pages, and will highlight pages with a yellow dot.') }}
+      </p>
+
+      {{ form.condition_tags(id="condition_tags_input", **{":value": "JSON.stringify(tags)"}) }}
+
+      <!-- Quick Add Preset Chips -->
+      <div class="mb-5">
+        <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">{{ _('Quick Add Common Issues:') }}</label>
+        <div class="flex flex-wrap gap-2">
+          <template x-for="preset in presets" :key="preset">
+            <button type="button" 
+                    @click="addTag(preset)"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition-all hover:scale-105 active:scale-95 shadow-sm cursor-pointer">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+              <span x-text="'+ ' + preset"></span>
+            </button>
+          </template>
         </div>
       </div>
 
-      {{ mf.field(form.page_numbers) }}
+      <!-- Add Custom Tag Input -->
+      <div class="flex items-center gap-2 mb-6">
+        <input type="text" 
+               x-model="newTagName" 
+               @keydown.enter.prevent="addCustomTag()"
+               placeholder="{{ _('Or enter custom condition tag (e.g. Shmushing, Water damage, Skewed)...') }}" 
+               class="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none transition-all">
+        <button type="button" 
+                @click="addCustomTag()"
+                class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          <span>{{ _('Add Tag') }}</span>
+        </button>
+      </div>
+
+      <!-- Active Tags List -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <span>{{ _('Assigned Condition Tags') }} (<span x-text="tags.length"></span>)</span>
+        </div>
+
+        <template x-if="tags.length === 0">
+          <div class="p-6 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center text-slate-400 text-xs font-medium">
+            {{ _('No condition tags added yet. Click a preset above or enter a custom tag.') }}
+          </div>
+        </template>
+
+        <template x-for="(tag, index) in tags" :key="index">
+          <div class="p-4 rounded-xl bg-amber-50/70 border border-amber-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all shadow-sm">
+            <div class="flex items-center gap-2.5 min-w-[180px]">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0"></span>
+              <span class="font-bold text-sm text-amber-950" x-text="typeof tag === 'object' && tag ? (tag.name || '') : tag"></span>
+            </div>
+            
+            <div class="flex-1 flex items-center gap-2">
+              <span class="text-xs font-bold text-amber-800 shrink-0">{{ _('Pages:') }}</span>
+              <input type="text" 
+                     x-model="tag.pages"
+                     placeholder="{{ _('All pages (or e.g. 1-3, 5, 8)') }}" 
+                     class="w-full px-3 py-2 rounded-lg border border-amber-300 bg-white text-xs text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:ring-1 focus:ring-amber-400 outline-none">
+            </div>
+
+            <button type="button" 
+                    @click="removeTag(index)" 
+                    class="p-2 text-amber-700 hover:text-red-600 hover:bg-amber-100/80 rounded-lg transition-colors shrink-0 cursor-pointer" 
+                    title="{{ _('Remove tag') }}">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
+          </div>
+        </template>
+      </div>
+
+      <!-- Save Button inside Condition Tags Box -->
+      <div class="pt-4 mt-4 border-t border-amber-200/80 flex flex-wrap items-center justify-between gap-3">
+        <span class="text-xs text-amber-900/80 font-medium">
+          {{ _('Save condition tags and page assignments to this project.') }}
+        </span>
+        <button type="submit" 
+                form="project-edit-form"
+                class="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+          <span>{{ _('Save Condition Tags') }}</span>
+        </button>
+      </div>
+    </fieldset>
+
+    <fieldset class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
+      <legend class="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-royalblue"></span>
+        {{ _('Book metadata') }}
+      </legend>
+      <div class="space-y-4">
+        {{ mf.field(form.print_title) }}
+        {{ mf.field(form.author) }}
+        {{ mf.field(form.editor) }}
+        {{ mf.field(form.publisher) }}
+        {{ mf.field(form.publication_year) }}
+        {{ mf.field(form.worldcat_link) }}
+      </div>
+    </fieldset>
+
+    <fieldset class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
+      <legend class="text-base font-bold text-slate-900 mb-6 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-royalblue"></span>
+        {{ _('Internal notes') }}
+      </legend>
+      <div class="space-y-4">
+        {{ mf.field(form.notes) }}
+      </div>
+    </fieldset>
+
+    <div class="pt-4 pb-2 flex flex-wrap items-center justify-between gap-4 border-t border-slate-200">
+      <button class="inline-flex items-center gap-2.5 px-8 py-3.5 bg-royalblue hover:bg-blue-700 active:scale-95 text-white font-bold text-sm rounded-xl shadow-lg shadow-royalblue/25 hover:shadow-royalblue/35 transition-all cursor-pointer" type="submit">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+        <span>{{ _('Save all changes') }}</span>
+      </button>
+      <a href="{{ url_for('proofing.project.summary', slug=project.slug) }}" class="text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">
+        {{ _('Cancel & Back to Summary') }}
+      </a>
     </div>
-  </fieldset>
-
-  <fieldset>
-    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Book metadata') }}</legend>
-    <div class="bg-slate-100 p-4">
-      {{ mf.field(form.print_title) }}
-      {{ mf.field(form.author) }}
-      {{ mf.field(form.editor) }}
-      {{ mf.field(form.publisher) }}
-      {{ mf.field(form.publication_year) }}
-      {{ mf.field(form.worldcat_link) }}
-    </div>
-  </fieldset>
-
-  <fieldset>
-    <legend class="text-lg font-bold mt-8 mb-4">{{ _('Internal notes') }}</legend>
-    <div class="bg-slate-100 p-4">
-      {{ mf.field(form.notes) }}
-    </div>
-  </fieldset>
-
-  <input class="btn btn-submit mt-4" type="submit" value="{{ _('Save changes') }}">
-</form>
-
-<hr class="my-8 border-slate-200">
-
-<div class="border border-red-500 rounded p-6 my-8 bg-red-50/10">
-  <h3 class="text-red-700 font-bold text-lg mb-2">{{ _('Danger zone') }}</h3>
-  
-  <form method="POST" action="{{ url_for('proofing.project.delete_project', slug=project.slug) }}">
-    {{ delete_form.csrf_token }}
-    <p class="font-bold text-slate-800">{{ _('Delete this project') }}</p>
-    <p class="text-sm text-slate-600 my-2">
-      {{ _('Once you delete a project, there is no going back. This will permanently delete all of its pages, revisions, and discussion threads.') }}
-    </p>
-    <p class="text-sm text-slate-700 font-medium my-2">
-      {{ _('Please type') }} <kbd class="px-2 py-1 bg-slate-200 rounded font-mono text-sm text-slate-800">{{ project.slug }}</kbd> {{ _('to confirm:') }}
-    </p>
-    
-    {{ delete_form.slug(class_="modern-input block w-full my-4", placeholder=project.slug) }}
-    
-    <input class="btn bg-red-700 hover:bg-red-900 transition text-white font-semibold py-2 px-4 rounded cursor-pointer" type="submit" value="{{ _('Permanently delete this project and its data') }}">
   </form>
+
+  <div class="mt-12 bg-white border border-red-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+    <h3 class="text-red-700 font-bold text-base mb-2 flex items-center gap-2">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+      {{ _('Danger zone') }}
+    </h3>
+    
+    <form method="POST" action="{{ url_for('proofing.project.delete_project', slug=project.slug) }}" class="mt-4">
+      {{ delete_form.csrf_token }}
+      <p class="font-bold text-slate-800 text-sm">{{ _('Delete this project') }}</p>
+      <p class="text-xs text-slate-500 my-2 leading-relaxed">
+        {{ _('Once you delete a project, there is no going back. This will permanently delete all of its pages, revisions, and discussion threads.') }}
+      </p>
+      <p class="text-xs text-slate-700 font-medium my-2">
+        {{ _('Please type') }} <kbd class="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded font-mono text-xs text-slate-800 font-bold">{{ project.slug }}</kbd> {{ _('to confirm:') }}
+      </p>
+      
+      <div class="my-4 max-w-md">
+        {{ delete_form.slug(class_="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition-all", placeholder=project.slug) }}
+      </div>
+      
+      <input class="inline-flex items-center justify-center px-5 py-2.5 bg-red-600 hover:bg-red-700 transition-colors text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer" type="submit" value="{{ _('Permanently delete this project and its data') }}">
+    </form>
+  </div>
 </div>
 
+<script>
+function conditionTagsManager() {
+  let parsed = [];
+  const el = document.getElementById('initial-condition-tags');
+  if (el && el.textContent) {
+    try {
+      parsed = JSON.parse(el.textContent.trim());
+    } catch(e) {
+      console.error('Failed to parse initial condition tags:', e);
+      parsed = [];
+    }
+  }
+
+  const normalizedTags = (parsed || []).map(function(item) {
+    if (typeof item === 'string') {
+      return { name: item, pages: '' };
+    }
+    if (item && typeof item === 'object') {
+      return {
+        name: item.name || item.tag || item.title || item.label || '',
+        pages: item.pages || ''
+      };
+    }
+    return null;
+  }).filter(function(item) { return item && item.name; });
+
+  return {
+    tags: normalizedTags,
+    newTagName: '',
+    presets: [
+      'Shmushing',
+      'Smudging',
+      'Blurry',
+      'Torn',
+      'Faded',
+      'Bleed-through',
+      'Binding Cutoff',
+      'Missing Pages',
+      'Stained',
+      'Skewed'
+    ],
+    addTag(name) {
+      if (!name) return;
+      var trimmed = (typeof name === 'string' ? name : '').trim();
+      if (!trimmed) return;
+      var existing = this.tags.find(function(t) {
+        var tName = (t && t.name) ? t.name : (typeof t === 'string' ? t : '');
+        return tName.toLowerCase() === trimmed.toLowerCase();
+      });
+      if (!existing) {
+        this.tags.push({ name: trimmed, pages: '' });
+      }
+    },
+    addCustomTag() {
+      var trimmed = this.newTagName.trim();
+      if (trimmed) {
+        this.addTag(trimmed);
+        this.newTagName = '';
+      }
+    },
+    removeTag(index) {
+      this.tags.splice(index, 1);
+    }
+  };
+}
+</script>
 {% endblock %}
+

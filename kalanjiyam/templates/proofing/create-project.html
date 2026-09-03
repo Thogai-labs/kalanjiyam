@@ -5,429 +5,485 @@
 {% import "macros/talk.html" as m_talk %}
 {% import "macros/forms.html" as mf %}
 
-
-{% macro step(n, text) %}
-<h2 class="text-3xl font-bold text-slate-800 mt-12 mb-6 flex items-center">
-  <span
-    class="flex items-center justify-center w-12 h-12 rounded-2xl bg-premium-subtle text-premium text-xl mr-5 shadow-sm border border-royalblue/10">{{
-    n }}</span>
-  {{ text }}
-</h2>
-{% endmacro %}
-
-{% macro _radio2(field, model) %}
-<div class="flex items-center">
-  {{ field(**{"class_": "w-5 h-5 text-royalblue border-slate-300 focus:ring-royalblue mr-3", "x-model": model}) }}
-  {{ field.label(class_="cursor-pointer text-lg font-medium text-slate-700") }}
-</div>
-{% endmacro %}
-
+{% block extra_css %}
+<style>
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
+  }
+</style>
+{% endblock %}
 
 {% block title %}{{ _('Create Project') }} | Kalanjiyam{% endblock %}
 
+{% block hero %}
+<header class="google-proofing-header py-3 sm:py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs">
+  <div class="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+          {{ _('Create Project') }}
+        </h1>
+        <p class="text-slate-500 text-[11px] sm:text-xs font-medium">
+          {{ _('Upload scans or docs for OCR extraction & proofreading.') }}
+        </p>
+      </div>
+    </div>
 
-{% block sidebar %}{{ m.main_nav('create', current_user=current_user) }}{% endblock %}
+    <div class="flex items-center gap-2 text-xs">
+      <a href="{{ url_for('proofing.help_index') }}" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs" title="{{ _('Guidelines & Preparation') }}">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <span>{{ _('Guidelines & Preparation') }}</span>
+      </a>
+    </div>
+  </div>
+</header>
+{% endblock %}
 
 
 {% block content %}
-<div class="max-w-4xl mx-auto py-8">
-  <div class="mb-12">
-    <h1 class="text-5xl font-black text-slate-900 mb-4 flex items-center">
-      <span class="pulse-indicator"></span>
-      {{ _("Create Project") }}
-    </h1>
-    <p class="text-xl text-slate-500 font-medium">Use our simple uploader to create a new proofing project.</p>
-  <div class="error-box">
-    {{ mf.show_errors_if_any(form.errors) }}
-  </div>
+<div class="w-full max-w-4xl mx-auto" x-data="{
+       source: '{{ form.pdf_source.data or 'local' }}',
+       license: 'public',
+       uploading: false,
+       progress: 0,
+       status: '',
+       isDocx: false,
+       isImage: false,
+       fileName: '',
+       fileCount: 0,
+       imageFileNames: [],
+       totalFileSizeStr: '',
+       docxWorkflow: 'direct',
+       sourceLang: 'sa',
+       targetLang: 'en',
+       allGlossaries: [],
+       selectedGlossaries: [],
+       init() {
+         this.$watch('sourceLang', () => this.selectedGlossaries = []);
+         this.$watch('targetLang', () => this.selectedGlossaries = []);
 
-  <div class="bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-slate-50" x-data="{ 
-         source: '{{ form.pdf_source.data or 'local' }}',
-         license: '{{ form.license.data or 'public' }}',
-         uploading: false,
-         progress: 0,
-         status: '',
-         isDocx: false,
-         fileName: '',
-         docxWorkflow: 'direct',
-         sourceLang: 'sa',
-         targetLang: 'en',
-         allGlossaries: [],
-         selectedGlossaries: [],
-         init() {
-           this.$watch('sourceLang', () => this.selectedGlossaries = []);
-           this.$watch('targetLang', () => this.selectedGlossaries = []);
-           
-           const { pathname } = window.location;
-           const prefixMatch = pathname.match(/^(.*)\/proofing\//);
-           const prefix = prefixMatch ? prefixMatch[1] : '';
-           fetch(`${prefix}/api/glossaries`)
-             .then(response => {
-               if (response.ok) return response.json();
-               return [];
-             })
-             .then(data => {
-               this.allGlossaries = data;
-             })
-             .catch(error => {
-               console.error('Error fetching glossaries:', error);
-             });
-         },
-         get filteredGlossaries() {
-           return this.allGlossaries.filter(g => 
-             g.source_language_code === this.sourceLang && 
-             g.target_language_code === this.targetLang
-           );
-         },
-         get showGlossaryWarning() {
-           return this.selectedGlossaries.includes('all') || this.selectedGlossaries.length > 3;
-         },
-         getGlossaryDisplayName(name) {
-           const lookup = {
-             'agri': 'Agriculture',
-             'mech': 'Mechanical',
-             'bio': 'Biology',
-             'chem': 'Chemistry',
-             'comp': 'Computer Science',
-             'phy': 'Physics',
-             'math': 'Mathematics',
-             'it': 'Information Technology'
-           };
-           if (lookup[name]) {
-             return lookup[name];
+         const { pathname } = window.location;
+         const prefixMatch = pathname.match(/^(.*)\/proofing\//);
+         const prefix = prefixMatch ? prefixMatch[1] : '';
+         fetch(`${prefix}/api/glossaries`)
+           .then(response => {
+             if (response.ok) return response.json();
+             return [];
+           })
+           .then(data => {
+             this.allGlossaries = data;
+           })
+           .catch(error => {
+             console.error('Error fetching glossaries:', error);
+           });
+       },
+       get filteredGlossaries() {
+         return this.allGlossaries.filter(g =>
+           g.source_language_code === this.sourceLang &&
+           g.target_language_code === this.targetLang
+         );
+       },
+       get showGlossaryWarning() {
+         return this.selectedGlossaries.includes('all') || this.selectedGlossaries.length > 3;
+       },
+       getGlossaryDisplayName(name) {
+         const lookup = {
+           'agri': 'Agriculture',
+           'mech': 'Mechanical',
+           'bio': 'Biology',
+           'chem': 'Chemistry',
+           'comp': 'Computer Science',
+           'phy': 'Physics',
+           'math': 'Mathematics',
+           'it': 'Information Technology'
+         };
+         if (lookup[name]) {
+           return lookup[name];
+         }
+         if (!name) return '';
+         return name.charAt(0).toUpperCase() + name.slice(1);
+       },
+       handleFileChange(e) {
+         const files = Array.from(e.target.files || []);
+         this.fileCount = files.length;
+         this.imageFileNames = [];
+         if (files.length === 0) {
+           this.isDocx = false;
+           this.isImage = false;
+           this.fileName = '';
+           this.totalFileSizeStr = '';
+           return;
+         }
+
+         let totalBytes = 0;
+         for (const f of files) {
+           totalBytes += f.size;
+         }
+         this.totalFileSizeStr = totalBytes < 1024 * 1024
+           ? (totalBytes / 1024).toFixed(1) + ' KB'
+           : (totalBytes / (1024 * 1024)).toFixed(1) + ' MB';
+
+         if (files.length === 1) {
+           const name = files[0].name;
+           this.fileName = `${name} (${this.totalFileSizeStr})`;
+           const nameLower = name.toLowerCase();
+           this.isDocx = nameLower.endsWith('.docx') || nameLower.endsWith('.doc');
+           this.isImage = /\.(jpe?g|png|webp)$/i.test(nameLower);
+
+           // Auto-suggest title if empty
+           const titleInput = document.getElementById('local_title');
+           if (titleInput && !titleInput.value.trim()) {
+             const baseTitle = name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim();
+             titleInput.value = baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1);
            }
-           if (!name) return '';
-           return name.charAt(0).toUpperCase() + name.slice(1);
-         },
-         handleFileChange(e) {
-           const files = e.target.files;
-           if (files && files.length > 0) {
-             const name = files[0].name;
-             this.fileName = name;
-             const nameLower = name.toLowerCase();
-             this.isDocx = nameLower.endsWith('.docx') || nameLower.endsWith('.doc');
-           } else {
-             this.isDocx = false;
+         } else {
+           this.isDocx = false;
+           const allImages = files.every(f => /\.(jpe?g|png|webp)$/i.test(f.name.toLowerCase()));
+           if (!allImages) {
+             alert('{{ _("When uploading multiple files, all files must be images (.jpg, .jpeg, .png, .webp).") }}');
+             e.target.value = '';
+             this.fileCount = 0;
              this.fileName = '';
-           }
-         },
-         submitForm() {
-           const form = this.$refs.projectForm;
-           const isDirect = this.isDocx && this.docxWorkflow === 'direct';
-
-           if (isDirect && this.sourceLang === this.targetLang) {
-             alert('{{ _("Source and Target languages must be different.") }}');
+             this.isImage = false;
              return;
            }
+           this.isImage = true;
+           this.fileName = `${files.length} {{ _("image scans selected") }} (${this.totalFileSizeStr})`;
+           this.imageFileNames = files.map(f => f.name).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
-           {% if not current_user.is_authenticated %}
-           const uploadLimitMB = {{ guest_upload_limit | default(10) }};
-           if (this.source === 'local') {
-             const fileInput = document.getElementById('local_file');
-             if (fileInput && fileInput.files && fileInput.files.length > 0) {
-               const file = fileInput.files[0];
-               if (file.size > uploadLimitMB * 1024 * 1024) {
-                 alert(`File size exceeds the allowed limit of ${uploadLimitMB}MB for guest users.`);
-                 return;
-               }
+           // Auto-suggest title from common prefix or first filename
+           const titleInput = document.getElementById('local_title');
+           if (titleInput && !titleInput.value.trim() && this.imageFileNames.length > 0) {
+             let baseTitle = this.imageFileNames[0].replace(/\.[^/.]+$/, '').replace(/[_\-\d]+$/, '').replace(/[_-]+/g, ' ').trim();
+             if (baseTitle.length > 2) {
+               titleInput.value = baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1);
              }
            }
-           {% endif %}
-
-           const formData = new FormData(form);
-           this.uploading = true;
-           const docLabel = this.fileName || (isDirect ? '{{ _("document") }}' : '{{ _("PDF") }}');
-           this.status = `{{ _('Uploading') }} ${docLabel} ...`;
-           
-           const xhr = new XMLHttpRequest();
-           xhr.open('POST', form.action, true);
-           
-           xhr.upload.onprogress = (e) => {
-             if (e.lengthComputable) {
-               this.progress = Math.round((e.loaded / e.total) * 100);
-               if (this.progress > 0) {
-                 this.status = `{{ _('Uploading') }} ${docLabel} (${this.progress}%)...`;
-               }
-             }
-           };
-           
-           xhr.onload = () => {
-             if (xhr.status === 200) {
-               document.documentElement.innerHTML = xhr.responseText;
-               window.scrollTo(0, 0);
-             } else {
-               this.uploading = false;
-               this.status = '{{ _('Upload failed. Please try again.') }}';
-               alert('Upload failed: ' + xhr.statusText);
-             }
-           };
-           
-           xhr.onerror = () => {
-             this.uploading = false;
-             this.status = '{{ _('Upload failed. Network error.') }}';
-           };
-           
-           xhr.send(formData);
          }
-       }">
+       },
+       submitForm() {
+         const form = this.$refs.projectForm;
+         const isDirect = this.isDocx && this.docxWorkflow === 'direct';
 
-    <form x-ref="projectForm" action="" method="POST" enctype="multipart/form-data" @submit.prevent="submitForm()">
-      {{ form.csrf_token }}
+         if (isDirect && this.sourceLang === this.targetLang) {
+           alert('{{ _("Source and Target languages must be different.") }}');
+           return;
+         }
 
-      <div x-show="!uploading" x-transition:enter="transition ease-out duration-300"
-        x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0">
-        <div class="space-y-12">
-          <!-- Step 1 -->
-          <section>
-            {{ step(1, _('Search')) }}
-            <div class="prose prose-slate max-w-none bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
-              <p class="text-slate-600 leading-relaxed font-medium">At Kalanjiyam, we're interested in any book that has
-                some connection to Sanskrit literature. This includes original texts, commentaries, translations,
-                dictionaries, and grammar books.</p>
-              <p class="text-slate-600 leading-relaxed font-medium">To avoid duplicating effort, we suggest that you
-                first check the Internet carefully to see if your book has been digitized elsewhere already.</p>
+         {% if not current_user.is_authenticated %}
+         const uploadLimitMB = {{ guest_upload_limit | default(10) }};
+         if (this.source === 'local') {
+           const fileInput = document.getElementById('local_file');
+           if (fileInput && fileInput.files && fileInput.files.length > 0) {
+             let totalSize = 0;
+             for (let i = 0; i < fileInput.files.length; i++) {
+               totalSize += fileInput.files[i].size;
+             }
+             if (totalSize > uploadLimitMB * 1024 * 1024) {
+               alert(`Total upload size (${(totalSize / (1024 * 1024)).toFixed(1)}MB) exceeds the allowed limit of ${uploadLimitMB}MB for guest users.`);
+               return;
+             }
+           }
+         }
+         {% endif %}
+
+         const formData = new FormData(form);
+         this.uploading = true;
+         const docLabel = this.isImage
+           ? (this.fileCount > 1 ? `${this.fileCount} images` : 'image')
+           : (this.fileName || (isDirect ? '{{ _("document") }}' : '{{ _("PDF") }}'));
+         this.status = `{{ _('Uploading') }} ${docLabel} ...`;
+
+         const xhr = new XMLHttpRequest();
+         xhr.open('POST', form.action, true);
+
+         xhr.upload.onprogress = (e) => {
+           if (e.lengthComputable) {
+             this.progress = Math.round((e.loaded / e.total) * 100);
+             if (this.progress > 0) {
+               this.status = `{{ _('Uploading') }} ${docLabel} (${this.progress}%)...`;
+             }
+           }
+         };
+
+         xhr.onload = () => {
+           if (xhr.status === 200) {
+             document.open();
+             document.write(xhr.responseText);
+             document.close();
+           } else {
+             this.uploading = false;
+             this.status = '{{ _('Upload failed. Please try again.') }}';
+             alert('Upload failed: ' + xhr.statusText);
+           }
+         };
+
+         xhr.onerror = () => {
+           this.uploading = false;
+           this.status = '{{ _('Upload failed. Network error.') }}';
+         };
+
+         xhr.send(formData);
+       }
+     }">
+
+  {% if form.errors %}
+  <div class="mb-5 bg-red-50 border border-red-200 rounded-2xl p-4 text-sm text-red-700">
+    {{ mf.show_errors_if_any(form.errors) }}
+  </div>
+  {% endif %}
+
+  <form x-ref="projectForm" action="" method="POST" enctype="multipart/form-data" @submit.prevent="submitForm()">
+    {{ form.csrf_token }}
+    <input type="hidden" name="pdf_source" value="local">
+    <input type="hidden" name="license" value="public">
+
+    <div x-show="!uploading" x-transition:enter="transition ease-out duration-300"
+      x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0">
+
+      <!-- Single-Page Unified Form Card -->
+      <div class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-200 space-y-5 mt-6">
+
+        <!-- 1. Document Upload -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+              </svg>
+              <span>{{ _('Upload Document or Images') }}</span>
+            </label>
+            <span class="text-[11px] text-slate-400 font-medium">{{ _('PDF, DOCX, JPG, PNG') }}</span>
+          </div>
+
+          <div class="p-4 sm:p-5 rounded-2xl border-2 border-dashed border-slate-200 hover:border-royalblue/50 bg-slate-50/60 hover:bg-blue-50/20 transition-all">
+            {{ form.local_file(accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.webp", multiple="multiple", id="local_file", class_="block w-full text-xs sm:text-sm text-slate-500 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-royalblue file:text-white hover:file:bg-blue-700 cursor-pointer transition-all", **{"@change": "handleFileChange($event)"}) }}
+
+            <div class="mt-2 text-xs text-slate-600 font-medium" x-show="fileName" x-cloak>
+              <span class="text-slate-400" x-text="fileCount > 1 ? '{{ _("Selected files:") }}' : '{{ _("Selected file:") }}'"></span>
+              <span class="font-bold text-slate-800 ml-1" x-text="fileName"></span>
             </div>
-          </section>
 
-          <!-- Step 2 -->
-          <section>
-            {{ step(2, _('Upload')) }}
-            <div class="bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
-              <p class="mb-6 text-slate-500 font-bold uppercase tracking-wider text-xs">{{ _("PDF or Word Documents (.pdf, .docx, .doc)") }}</p>
-
-              <fieldset x-ref="source" class="space-y-4">
-                <div class="flex flex-col space-y-4">
-                  <div class="p-6 rounded-2xl border-2 transition-all cursor-pointer"
-                    :class="source === 'local' ? 'border-royalblue bg-royalblue/5' : 'border-slate-100 hover:border-slate-200 bg-white'"
-                    @click="source = 'local'">
-                    <label class="flex items-center cursor-pointer">
-                      <input type="radio" name="pdf_source" value="local" x-model="source"
-                        class="w-6 h-6 text-royalblue border-slate-300 focus:ring-royalblue">
-                      <span class="ml-4 text-xl font-bold text-slate-800">{{ _("From my computer") }}</span>
-                    </label>
-                    <div class="ml-10 mt-6" x-show="source === 'local'" x-transition>
-                      <div class="p-6 bg-white rounded-xl border border-slate-100 shadow-sm">
-                        {{ form.local_file(accept=".pdf,.docx,.doc", class_="block w-full text-sm text-slate-500 file:mr-4
-                        file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold
-                        file:bg-royalblue file:text-white hover:file:bg-royalblue/90 cursor-pointer transition-all", **{"@change": "handleFileChange($event)"}) }}
-                      </div>
-                    </div>
-                  </div>
+            <!-- Page Sequence for Multi-Images -->
+            <template x-if="imageFileNames.length > 1">
+              <div class="mt-3 text-xs text-slate-600 bg-white border border-slate-200 rounded-xl p-3 max-h-36 overflow-y-auto space-y-1">
+                <div class="font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>{{ _('Page sequence (sorted by filename):') }}</span>
+                  <span class="text-[11px] text-slate-400 font-medium" x-text="`${imageFileNames.length} pages`"></span>
                 </div>
-              </fieldset>
-
-              <!-- Dynamic Settings for Word Documents -->
-              <div class="mt-8 p-6 bg-white rounded-2xl border border-slate-200 shadow-sm" x-show="isDocx" x-cloak x-transition>
-                <h4 class="text-base font-bold text-slate-800 mb-4">{{ _("Choose DOCX Workflow") }}</h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  <!-- Option A: Direct Translation -->
-                  <div class="p-5 rounded-xl border-2 transition-all cursor-pointer text-left"
-                    :class="docxWorkflow === 'direct' ? 'border-royalblue bg-royalblue/5' : 'border-slate-100 hover:border-slate-200 bg-white'"
-                    @click="if (isDocx) { docxWorkflow = 'direct' }">
-                    <label class="flex items-center cursor-pointer">
-                      <input type="radio" name="docx_workflow" value="direct" x-model="docxWorkflow" :disabled="!isDocx"
-                        class="w-5 h-5 text-royalblue border-slate-300 focus:ring-royalblue">
-                      <span class="ml-3 font-bold text-slate-800 text-sm">{{ _("Direct Translation") }}</span>
-                    </label>
-                    <p class="text-xs text-slate-400 mt-2 ml-8">{{ _("Translates your file in-place, keeping all styles, tables, and images intact.") }}</p>
+                <template x-for="(name, idx) in imageFileNames" :key="name">
+                  <div class="flex items-center text-slate-600 font-mono py-0.5 border-b border-slate-50 last:border-0 text-[11px]">
+                    <span class="w-7 text-slate-400 font-semibold" x-text="`${idx + 1}.`"></span>
+                    <span class="truncate" x-text="name"></span>
                   </div>
-                  <!-- Option B: Interactive Project -->
-                  <div class="p-5 rounded-xl border-2 transition-all cursor-pointer text-left"
-                    :class="docxWorkflow === 'project' ? 'border-royalblue bg-royalblue/5' : 'border-slate-100 hover:border-slate-200 bg-white'"
-                    @click="if (isDocx) { docxWorkflow = 'project' }">
-                    <label class="flex items-center cursor-pointer">
-                      <input type="radio" name="docx_workflow" value="project" x-model="docxWorkflow" :disabled="!isDocx"
-                        class="w-5 h-5 text-royalblue border-slate-300 focus:ring-royalblue">
-                      <span class="ml-3 font-bold text-slate-800 text-sm">{{ _("Interactive Proofing Project") }}</span>
-                    </label>
-                    <p class="text-xs text-slate-400 mt-2 ml-8">{{ _("Imports the Word file into the multi-page side-by-side editing interface.") }}</p>
-                  </div>
-                </div>
-
-                <!-- Dynamic Translation Settings -->
-                <div class="p-6 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-6" x-show="docxWorkflow === 'direct'" x-transition>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-                    <div>
-                      <label for="source_lang" class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Source Language") }}</label>
-                      <select id="source_lang" name="source_lang" x-model="sourceLang" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700">
-                        {% for lang in languages %}
-                          <option value="{{ lang.code }}" {% if lang.code == 'sa' %}selected{% endif %}>{{ lang.name }}</option>
-                        {% endfor %}
-                      </select>
-                    </div>
-                    <div>
-                      <label for="target_lang" class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Target Language") }}</label>
-                      <select id="target_lang" name="target_lang" x-model="targetLang" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700">
-                        {% for lang in languages %}
-                          <option value="{{ lang.code }}" {% if lang.code == 'en' %}selected{% endif %}>{{ lang.name }}</option>
-                        {% endfor %}
-                      </select>
-                    </div>
-                  </div>
-                  <div class="text-left">
-                    <label for="engine" class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Translation Engine") }}</label>
-                    <select id="engine" name="engine" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700" {% if not engines %}disabled{% endif %}>
-                      {% for eng in engines %}
-                        <option value="{{ eng.value }}" {% if loop.first %}selected{% endif %}>{{ eng.label }}</option>
-                      {% else %}
-                        <option value="" disabled selected>No translation models available</option>
-                      {% endfor %}
-                    </select>
-                  </div>
-
-                    <!-- Glossary Selection List -->
-                    <div class="text-left" x-show="filteredGlossaries.length > 0" x-cloak>
-                      <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{{ _("Select Glossaries (Optional)") }}</label>
-                      <input type="hidden" name="glossary" :value="selectedGlossaries.includes('all') ? 'all' : selectedGlossaries.join(', ')">
-                      
-                      <div class="relative" x-data="{ open: false }" @click.outside="open = false">
-                        <!-- Selector trigger -->
-                        <div @click.stop="open = !open" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus-within:border-royalblue focus-within:ring-4 focus-within:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[46px] select-none">
-                          <div class="flex flex-wrap gap-1.5 items-center">
-                            <template x-if="selectedGlossaries.length === 0">
-                              <span class="text-slate-400 font-medium">{{ _("Select glossaries...") }}</span>
-                            </template>
-                            <template x-if="selectedGlossaries.includes('all')">
-                              <div class="flex items-center bg-royalblue/10 text-royalblue rounded-lg px-2.5 py-1 text-xs font-bold">
-                                <span>{{ _("All Glossaries") }}</span>
-                                <button type="button" @click.stop="selectedGlossaries = []" class="ml-1.5 hover:text-royalblue/80 focus:outline-none text-sm leading-none">&times;</button>
-                              </div>
-                            </template>
-                            <template x-if="!selectedGlossaries.includes('all')">
-                              <template x-for="name in selectedGlossaries" :key="name">
-                                <div class="flex items-center bg-slate-100 text-slate-700 rounded-lg px-2.5 py-1 text-xs font-bold border border-slate-200">
-                                  <span x-text="getGlossaryDisplayName(name)"></span>
-                                  <button type="button" @click.stop="selectedGlossaries = selectedGlossaries.filter(n => n !== name)" class="ml-1.5 text-slate-400 hover:text-slate-600 focus:outline-none text-sm leading-none">&times;</button>
-                                </div>
-                              </template>
-                            </template>
-                          </div>
-                          <svg class="w-4 h-4 text-slate-400 ml-2 flex-shrink-0 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                          </svg>
-                        </div>
-
-                        <!-- Dropdown menu -->
-                        <div x-show="open" class="absolute z-[100] w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-2 space-y-1 text-left" x-cloak x-transition>
-                          <label class="flex items-center px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer text-sm font-semibold text-slate-700 select-none">
-                            <input type="checkbox" value="all" x-model="selectedGlossaries" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-3 w-4 h-4">
-                            <span>{{ _("All Glossaries") }}</span>
-                          </label>
-                          <div class="h-px bg-slate-100 my-1"></div>
-                          <template x-for="g in filteredGlossaries" :key="g.name">
-                            <label class="flex items-center px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer text-sm font-medium text-slate-600 select-none">
-                              <input type="checkbox" :value="g.name" x-model="selectedGlossaries" :disabled="selectedGlossaries.includes('all')" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-3 w-4 h-4">
-                              <span x-text="getGlossaryDisplayName(g.name)"></span>
-                            </label>
-                          </template>
-                        </div>
-                      </div>
-                      
-                      <!-- Warning Message -->
-                      <div x-show="showGlossaryWarning" x-transition class="mt-2 text-xs text-yellow-600 bg-yellow-50 border border-yellow-100 rounded-xl p-3 font-medium" x-cloak>
-                        {{ _("Adding all / more than 3 glossaries may increase translation time.") }}
-                      </div>
-                    </div>
-
-                  <div class="text-left">
-                    <p class="text-sm text-red-500 font-bold mt-3 flex items-center" x-show="sourceLang === targetLang" x-cloak>
-                      <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-                      </svg>
-                      {{ _("Source and Target languages must be different.") }}
-                    </p>
-                  </div>
-                </div>
+                </template>
               </div>
-            </div>
-          </section>
-
-          <div x-show="!isDocx || docxWorkflow === 'project'" x-transition>
-            <!-- Step 3 -->
-            <section>
-              {{ step(3, _('Describe')) }}
-              <div class="bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
-                <p class="mb-6 text-slate-500 font-bold uppercase tracking-wider text-xs">Book Title</p>
-                <fieldset>
-                  {{ form.local_title(class_="w-full p-5 text-xl border-2 border-slate-100 rounded-2xl
-                  focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all bg-white
-                  font-medium", placeholder="e.g. Raghuvamsha with Mallinatha's commentary") }}
-                </fieldset>
-              </div>
-            </section>
-
-            <!-- Step 4 -->
-            <section>
-              {{ step(4, _('Verify')) }}
-              <div class="bg-slate-50/50 p-8 rounded-2xl border border-slate-100">
-                <p class="mb-6 text-slate-500 font-bold uppercase tracking-wider text-xs">Licensing Information</p>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {% set radios = form.license|list %}
-                  {% for radio in radios %}
-                  <label class="p-5 rounded-2xl border-2 transition-all cursor-pointer flex items-center"
-                    :class="license === '{{ radio.data }}' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 hover:border-slate-200 bg-white'">
-                    <input type="radio" name="license" value="{{ radio.data }}" x-model="license"
-                      class="w-6 h-6 text-emerald-500 border-slate-300 focus:ring-emerald-500">
-                    <span class="ml-4 text-base font-bold text-slate-800">{{ radio.label.text }}</span>
-                  </label>
-                  {% endfor %}
-                </div>
-
-                <div
-                  class="mt-8 p-6 bg-amber-50 rounded-2xl border border-amber-100 prose prose-slate prose-sm max-w-none"
-                  x-show="license === 'public'">
-                  <p class="text-amber-700 font-medium">Public domain books can be used by anyone for any purpose. Books
-                    published in India on or before 1957 are typically in the public domain.</p>
-                </div>
-
-                <div class="mt-6" x-show="license === 'other'" x-transition>
-                  {{ form.custom_license(class_="w-full p-5 border-2 border-slate-100 rounded-2xl focus:border-royalblue
-                  focus:ring-4 focus:ring-royalblue/5 outline-none transition-all h-40 bg-white font-medium",
-                  placeholder="Tell us more about the license...") }}
-                </div>
-              </div>
-            </section>
+            </template>
           </div>
         </div>
 
-        <div class="mt-16 flex justify-center">
-          <button type="submit" class="btn-premium px-20 py-6 text-2xl rounded-2xl">
-            <span class="relative z-10" x-text="isDocx && docxWorkflow === 'direct' ? '{{ _("Translate Document") }}' : '{{ _("Create Project") }}'"></span>
+        <!-- Dynamic Settings for Word Documents -->
+        <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200" x-show="isDocx" x-cloak x-transition>
+          <h4 class="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2.5">{{ _('Choose DOCX Workflow') }}</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3.5">
+            <!-- Option A: Direct Translation -->
+            <div class="p-3 rounded-xl border-2 transition-all cursor-pointer text-left"
+              :class="docxWorkflow === 'direct' ? 'border-royalblue bg-royalblue/5' : 'border-slate-200 bg-white hover:border-slate-300'"
+              @click="if (isDocx) { docxWorkflow = 'direct' }">
+              <label class="flex items-center cursor-pointer">
+                <input type="radio" name="docx_workflow" value="direct" x-model="docxWorkflow" :disabled="!isDocx"
+                  class="w-4 h-4 text-royalblue border-slate-300 focus:ring-royalblue">
+                <span class="ml-2 font-bold text-slate-800 text-xs sm:text-sm">{{ _('Direct Translation') }}</span>
+              </label>
+              <p class="text-[11px] text-slate-500 mt-1 ml-6 leading-relaxed">{{ _('Translates in-place, keeping layout and formatting intact.') }}</p>
+            </div>
+            <!-- Option B: Interactive Project -->
+            <div class="p-3 rounded-xl border-2 transition-all cursor-pointer text-left"
+              :class="docxWorkflow === 'project' ? 'border-royalblue bg-royalblue/5' : 'border-slate-200 bg-white hover:border-slate-300'"
+              @click="if (isDocx) { docxWorkflow = 'project' }">
+              <label class="flex items-center cursor-pointer">
+                <input type="radio" name="docx_workflow" value="project" x-model="docxWorkflow" :disabled="!isDocx"
+                  class="w-4 h-4 text-royalblue border-slate-300 focus:ring-royalblue">
+                <span class="ml-2 font-bold text-slate-800 text-xs sm:text-sm">{{ _('Interactive Project') }}</span>
+              </label>
+              <p class="text-[11px] text-slate-500 mt-1 ml-6 leading-relaxed">{{ _('Imports into multi-page proofing editor.') }}</p>
+            </div>
+          </div>
+
+          <!-- Dynamic Translation Settings -->
+          <div class="p-3.5 bg-white rounded-xl border border-slate-200 space-y-3" x-show="docxWorkflow === 'direct'" x-transition>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+              <div>
+                <label for="source_lang" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">{{ _('Source Language') }}</label>
+                <select id="source_lang" name="source_lang" x-model="sourceLang" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all">
+                  {% for lang in languages %}
+                    <option value="{{ lang.code }}" {% if lang.code == 'sa' %}selected{% endif %}>{{ lang.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label for="target_lang" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">{{ _('Target Language') }}</label>
+                <select id="target_lang" name="target_lang" x-model="targetLang" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all">
+                  {% for lang in languages %}
+                    <option value="{{ lang.code }}" {% if lang.code == 'en' %}selected{% endif %}>{{ lang.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="text-left">
+              <label for="engine" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">{{ _('Translation Engine') }}</label>
+              <select id="engine" name="engine" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all" {% if not engines %}disabled{% endif %}>
+                {% set has_rec = engines|selectattr('is_recommended')|list|length > 0 %}
+                {% set has_def = engines|selectattr('is_default')|list|length > 0 %}
+                {% for eng in engines %}
+                  <option value="{{ eng.value }}" {% if eng.is_recommended or (not has_rec and eng.is_default) or (not has_rec and not has_def and loop.first) %}selected{% endif %}>{{ eng.label }}{% if eng.is_recommended %} ★{% endif %}</option>
+                {% else %}
+                  <option value="" disabled selected>{{ _('No translation models available') }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Glossary Selection List -->
+            <div class="text-left" x-show="filteredGlossaries.length > 0" x-cloak>
+              <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">{{ _('Select Glossaries (Optional)') }}</label>
+              <input type="hidden" name="glossary" :value="selectedGlossaries.includes('all') ? 'all' : selectedGlossaries.join(', ')">
+
+              <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                <div @click.stop="open = !open" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[38px] select-none">
+                  <div class="flex flex-wrap gap-1.5 items-center">
+                    <template x-if="selectedGlossaries.length === 0">
+                      <span class="text-slate-400 font-medium">{{ _('Select glossaries...') }}</span>
+                    </template>
+                    <template x-if="selectedGlossaries.includes('all')">
+                      <div class="flex items-center bg-royalblue/10 text-royalblue rounded-lg px-2.5 py-0.5 text-xs font-bold">
+                        <span>{{ _('All Glossaries') }}</span>
+                        <button type="button" @click.stop="selectedGlossaries = []" class="ml-1.5 hover:text-royalblue/80 focus:outline-none text-sm leading-none">&times;</button>
+                      </div>
+                    </template>
+                    <template x-if="!selectedGlossaries.includes('all')">
+                      <template x-for="name in selectedGlossaries" :key="name">
+                        <div class="flex items-center bg-slate-100 text-slate-700 rounded-lg px-2.5 py-0.5 text-xs font-bold border border-slate-200">
+                          <span x-text="getGlossaryDisplayName(name)"></span>
+                          <button type="button" @click.stop="selectedGlossaries = selectedGlossaries.filter(n => n !== name)" class="ml-1.5 text-slate-400 hover:text-slate-600 focus:outline-none text-sm leading-none">&times;</button>
+                        </div>
+                      </template>
+                    </template>
+                  </div>
+                  <svg class="w-4 h-4 text-slate-400 ml-2 shrink-0 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
+                </div>
+
+                <div x-show="open" class="absolute z-[100] w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-2 space-y-1 text-left" x-cloak x-transition>
+                  <label class="flex items-center px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer text-xs font-semibold text-slate-700 select-none">
+                    <input type="checkbox" value="all" x-model="selectedGlossaries" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-2.5 w-4 h-4">
+                    <span>{{ _('All Glossaries') }}</span>
+                  </label>
+                  <div class="h-px bg-slate-100 my-1"></div>
+                  <template x-for="g in filteredGlossaries" :key="g.name">
+                    <label class="flex items-center px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer text-xs font-medium text-slate-600 select-none">
+                      <input type="checkbox" :value="g.name" x-model="selectedGlossaries" :disabled="selectedGlossaries.includes('all')" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-2.5 w-4 h-4">
+                      <span x-text="getGlossaryDisplayName(g.name)"></span>
+                    </label>
+                  </template>
+                </div>
+              </div>
+
+              <div x-show="showGlossaryWarning" x-transition class="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200/80 rounded-xl p-2.5 font-medium" x-cloak>
+                {{ _('Adding all / more than 3 glossaries may increase translation time.') }}
+              </div>
+            </div>
+
+            <div class="text-left" x-show="sourceLang === targetLang" x-cloak>
+              <p class="text-xs text-red-600 font-bold flex items-center">
+                <svg class="w-4 h-4 mr-1.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                </svg>
+                {{ _('Source and Target languages must be different.') }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Describe: Book / Manuscript Title -->
+        <div x-show="!isDocx || docxWorkflow === 'project'" x-transition>
+          <label for="local_title" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+            </svg>
+            <span>{{ _('Book / Manuscript Title') }}</span>
+          </label>
+          <fieldset>
+            {{ form.local_title(id="local_title", class_="w-full px-3.5 py-2.5 sm:py-3 text-sm sm:text-base border border-slate-200 rounded-xl focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all bg-slate-50 font-semibold text-slate-900 placeholder:text-slate-400", placeholder=_("e.g. Raghuvamsha with Mallinatha's commentary")) }}
+          </fieldset>
+          <p class="text-[11px] text-slate-400 mt-1 font-medium">{{ _('Auto-suggested from file name. You can edit this anytime.') }}</p>
+        </div>
+
+        {% if user_organizations and user_organizations|length > 1 %}
+        <!-- Organization Assignment for Master Users / Multi-Org Users -->
+        <div x-show="!isDocx || docxWorkflow === 'project'" x-transition>
+          <label for="selected_org_slug" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{{ _('Organization') }}</label>
+          <select id="selected_org_slug" name="selected_org_slug" class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all bg-slate-50 font-semibold text-slate-900">
+            {% for org in user_organizations %}
+            <option value="{{ org.slug }}" {% if loop.first %}selected{% endif %}>{{ org.name }} ({{ org.slug }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+
+        <!-- Submit Button & Action Bar -->
+        <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <a href="{{ url_for('proofing.index') }}" class="border border-royalblue p-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-700 order-2 sm:order-1 transition-colors">
+              {{ _('Cancel') }}
+          </a>
+          <button type="submit" class="w-full sm:w-auto px-7 py-2.5 sm:py-3 bg-royalblue hover:bg-blue-700 text-white font-bold rounded-xl text-xs sm:text-sm transition-all shadow-md shadow-royalblue/20 hover:shadow-lg hover:shadow-royalblue/30 active:scale-95 flex items-center justify-center gap-2 order-1 sm:order-2 cursor-pointer">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+            </svg>
+            <span x-text="isDocx && docxWorkflow === 'direct' ? '{{ _("Translate Document") }}' : '{{ _("Create Project") }}'"></span>
           </button>
         </div>
+
+      </div>
+    </div>
+
+    <!-- Uploading Progress State -->
+    <div x-show="uploading" x-cloak x-transition:enter="transition ease-out duration-500"
+      x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+      class="bg-white rounded-2xl p-6 sm:p-10 text-center border border-slate-200 shadow-sm max-w-xl mx-auto">
+      <div class="mb-5">
+        <div class="inline-flex p-4 rounded-2xl bg-royalblue/10 text-royalblue mb-3 animate-pulse">
+          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+          </svg>
+        </div>
+        <h2 class="text-lg sm:text-xl font-bold text-slate-900 mb-1.5" x-text="status"></h2>
+        <p class="text-xs text-slate-500 font-medium max-w-sm mx-auto leading-relaxed">
+          {{ _('We are transmitting your document to our servers. Please keep this page open.') }}
+        </p>
       </div>
 
-      <!-- Uploading State -->
-      <div x-show="uploading" x-transition:enter="transition ease-out duration-500"
-        x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
-        class="py-24 text-center">
-        <div class="mb-12">
-          <div class="inline-block p-8 rounded-full bg-royalblue/5 mb-8">
-            <svg class="w-20 h-20 text-royalblue animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-            </svg>
-          </div>
-          <h2 class="text-4xl font-black text-slate-900 mb-4" x-text="status"></h2>
-          <p class="text-xl text-slate-500 font-medium max-w-md mx-auto">We are safely transmitting your document to our
-            servers. Please keep this page open.</p>
-        </div>
-
-        <div
-          class="max-w-lg mx-auto h-10 bg-slate-100 rounded-full overflow-hidden p-2 shadow-inner border border-slate-200">
-          <div class="h-full bg-royalblue rounded-full transition-all duration-300 ease-out shadow-lg"
-            :style="`width: ${progress}%`" :class="progress === 0 ? 'animate-pulse' : ''">
-          </div>
-        </div>
-
-        <div class="mt-8 text-3xl font-black text-royalblue" x-text="`${progress}%`" x-show="progress > 0"></div>
-
-        <div class="mt-12 text-sm font-bold text-slate-400 uppercase tracking-widest animate-pulse">
-          {{ _('Processing large files may take several minutes...') }}
+      <div class="max-w-md mx-auto h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+        <div class="h-full bg-royalblue rounded-full transition-all duration-300 ease-out shadow-sm"
+          :style="`width: ${progress}%`" :class="progress === 0 ? 'animate-pulse' : ''">
         </div>
       </div>
-    </form>
-  </div>
+
+      <div class="mt-2.5 text-base font-bold text-royalblue" x-text="`${progress}%`" x-show="progress > 0"></div>
+
+      <div class="mt-4 text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider animate-pulse">
+        {{ _('Processing large files may take several minutes...') }}
+      </div>
+    </div>
+  </form>
 </div>
 {% endblock %}

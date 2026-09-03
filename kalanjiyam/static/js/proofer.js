@@ -51,19 +51,46 @@ function initializeImageViewer(imageURL) {
     showHomeControl: false,
     showRotationControl: false,
     showFullPageControl: false,
-    // Zoom buttons are defined in the `Editor` component below.
-    // Custom rotation buttons are defined in the template
+    showNavigator: false,
 
-    // Animations
+    // Navigation constraints to prevent losing image
+    visibilityRatio: 0.8,
+    constrainDuringPan: true,
+    minZoomImageRatio: 0.5,
+    maxZoomPixelRatio: 5.0,
+    defaultZoomLevel: 0,
+
+    // Fast, smooth and responsive animations
+    animationTime: 0.2,
+    springStiffness: 7.0,
+
+    // Mouse, trackpad, and touch gesture settings
     gestureSettingsMouse: {
-      flickEnabled: true,
+      clickToZoom: false,
+      dblClickToZoom: true,
+      pinchToZoom: true,
+      scrollToZoom: false, // Handled custom for trackpad pan and pinch zoom
+      flickEnabled: false,
+      dragToPan: true,
     },
-    animationTime: 0.5,
+    gestureSettingsTouch: {
+      pinchToZoom: true,
+      flickEnabled: false,
+      dragToPan: true,
+    },
+    gestureSettingsPen: {
+      pinchToZoom: true,
+      flickEnabled: false,
+      dragToPan: true,
+    },
+    gestureSettingsUnknown: {
+      pinchToZoom: true,
+      flickEnabled: false,
+      dragToPan: true,
+    },
 
-    // The zoom multiplier to use when using the zoom in/out buttons.
-    zoomPerClick: 1.1,
-    // Max zoom level
-    maxZoomPixelRatio: 2.5,
+    // Zoom multiplier
+    zoomPerClick: 1.2,
   });
 }
 
@@ -97,7 +124,7 @@ export default () => ({
   selectedLanguage: 'sa',
 
   // Translation settings
-  selectedTranslationEngine: 'indictrans2',
+  selectedTranslationEngine: '1',
   sourceLanguage: 'hi',
   targetLanguage: 'en',
   translationDropdownOpen: false,
@@ -107,7 +134,28 @@ export default () => ({
 
   // OCR dropdown state
   ocrDropdownOpen: false,
+  enhancedOcrDropdownOpen: false,
+  selectedEnhancementProfile: 'document_cleanup',
   showOcrEngineInfo: false,
+
+  // Enhancement Preview & Image Replacement state
+  enhancementPreviewModalOpen: false,
+  enhancementPreviewLoading: false,
+  enhancementPreviewUrl: '',
+  enhancementPreviewProfile: 'hybrid_binarization',
+  enhancementPreviewViewMode: 'split', // 'split' | 'preprocessed' | 'original'
+  originalImageUrl: (typeof IMAGE_URL !== 'undefined') ? IMAGE_URL : (typeof window !== 'undefined' && window.IMAGE_URL ? window.IMAGE_URL : ''),
+  isReplacingPageImage: false,
+  isRevertingPageImage: false,
+  pageImageHasMasterBackup: false,
+
+  // Pan & Zoom state for Comparison Modal
+  previewZoom: 1.0,
+  previewPanX: 0,
+  previewPanY: 0,
+  previewIsDragging: false,
+  previewDragStartX: 0,
+  previewDragStartY: 0,
 
   // Confidence review state
   uncertainCount: 0,
@@ -123,6 +171,7 @@ export default () => ({
   // Internal-only
   layoutClasses: CLASSES_SIDE_BY_SIDE,
   isRunningOCR: false,
+  isRunningEnhancedOCR: false,
   isRunningTranslation: false,
   hasUnsavedChanges: false,
   _isProgrammaticUpdate: false,
@@ -540,11 +589,6 @@ export default () => ({
     // Initialize language options
     this.updateLanguageOptions();
     
-    // Add event listeners for rotation buttons
-    if (!this.isDocx) {
-      this.setupRotationButtons();
-    }
-    
     // Initialize translation selector
     this.initTranslationSelector();
     
@@ -555,7 +599,11 @@ export default () => ({
       setTimeout(() => this.ensureFlowEditor(), 0);
     }
     if (!this.isDocx) {
+      this.setupRotationButtons();
       this.setupZoomButtons();
+      this.setupDpadButtons();
+      this.setupTrackpadAndMouseNavigation();
+      this.setupKeyboardNavigation();
     }
   },
 
@@ -567,7 +615,44 @@ export default () => ({
     if (versionKey === 'main') return 'Main Branch';
     if (versionKey === 'role:p1') return 'Legacy Consolidated P1';
     if (versionKey === 'role:p2') return 'Legacy Consolidated P2';
-    if (versionKey === 'role:moderator') return 'Legacy Consolidated Moderator';
+    if (versionKey.startsWith('ocr:enhanced:')) {
+      const parts = versionKey.split(':');
+      const engine = parts[2] || '';
+      const profile = parts[3] || '';
+      const engineMap = {
+        "google": "1",
+        "tesseract": "2",
+        "surya": "3",
+        "nanonets": "4",
+        "deepseek": "5",
+        "chandra": "6",
+        "qwen3": "7",
+        "surya_table": "8",
+        "paddle_table": "9",
+        "glm_ocr": "10",
+        "tesseract_manuscript": "11",
+        "dots_ocr": "12",
+        "gemma_ocr": "13",
+        "gemma_4": "13",
+        "gemma-4-31b": "13",
+        "gemma_4_31b": "13",
+        "llm_gemma": "13",
+        "llm-gemma": "13"
+      };
+      const profileMap = {
+        'document_cleanup': 'Document Cleanup',
+        'bg_clahe': 'BG + CLAHE',
+        'background_clahe': 'BG + CLAHE',
+        'sharpen': 'Sharpen',
+        'text_enhancement': 'Text Enhancement',
+        'hybrid_binarization': 'Hybrid Binarization',
+        'hybrid': 'Hybrid Binarization',
+      };
+      const num = engineMap[engine] || engine;
+      const ocrLabel = /^\d+$/.test(num) ? 'OCR ' + num : (num.charAt(0).toUpperCase() + num.slice(1) + ' OCR');
+      const profileLabel = profileMap[profile] || (profile ? profile.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '');
+      return profileLabel ? `Enhanced ${ocrLabel} (${profileLabel})` : `Enhanced ${ocrLabel}`;
+    }
     if (versionKey.startsWith('ocr:')) {
       const engine = versionKey.split(':')[1];
       const engineMap = {
@@ -582,13 +667,53 @@ export default () => ({
         "paddle_table": "9",
         "glm_ocr": "10",
         "tesseract_manuscript": "11",
-        "dots_ocr": "12"
+        "dots_ocr": "12",
+        "gemma_ocr": "13",
+        "gemma_4": "13",
+        "gemma-4-31b": "13",
+        "gemma_4_31b": "13",
+        "llm_gemma": "13",
+        "llm-gemma": "13"
       };
       const num = engineMap[engine] || engine;
       if (/^\d+$/.test(num)) {
         return 'OCR ' + num;
       }
       return num.charAt(0).toUpperCase() + num.slice(1) + ' OCR';
+    }
+    if (versionKey.startsWith('translation:') || versionKey.startsWith('TR:')) {
+      const parts = versionKey.split(':');
+      const engine = parts[1] || '';
+      const langStr = parts[2] || '';
+      let langDisplay = langStr.toUpperCase();
+      if (langStr.includes('->')) {
+        const [src, target] = langStr.split('->');
+        langDisplay = `${src.toUpperCase()} → ${target.toUpperCase()}`;
+      }
+      const engineMap = {
+        'indictrans2': '1',
+        'indictrans-2': '1',
+        'gemma': '2',
+        'gemma-4': '2',
+        'gemma4': '2',
+        'param_lc_translate_ep4': '3',
+        'param-lc-translate-ep4': '3',
+        'translation_1b_exp_40': '4',
+        'translation-1b-exp-40': '4',
+        'indictrans3': '5',
+        'indictrans-3': '5',
+        'google': '6',
+        'openai': '7',
+        'llm_gemma': '8',
+        'llm-gemma': '8',
+        'gemma_4_31b': '9',
+        'gemma-4-31b': '9',
+        'gemma_31b': '9',
+        'gemma-31b': '9',
+      };
+      const num = engineMap[engine] || engine;
+      const modelLabel = /^\d+$/.test(num) ? 'Translation ' + num : (num.charAt(0).toUpperCase() + num.slice(1));
+      return langDisplay ? `${modelLabel} (${langDisplay})` : modelLabel;
     }
     return versionKey;
   },
@@ -611,6 +736,22 @@ export default () => ({
     const url = new URL(window.location.href);
     url.searchParams.set('version', versionKey);
     window.location.href = url.toString();
+  },
+
+  async fetchAvailableVersions() {
+    try {
+      const pathname = (window.location && window.location.pathname) || '';
+      const url = pathname.replace('/proofing/', '/api/versions/');
+      const response = await fetch(url);
+      if (response && response.ok) {
+        const data = await response.json();
+        if (data.available_versions) {
+          this.availableVersions = data.available_versions;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch available versions:', err);
+    }
   },
 
   ensureFlowEditor() {
@@ -857,8 +998,17 @@ export default () => ({
       }
       if (this.imageViewer) {
         this._bboxOverlay = new OsdBboxOverlay(this.imageViewer, {
-          onBoxClick: ({ block }) => {
-            if (block && this._replicaView) {
+          onBoxClick: ({ block, box }) => {
+            const blockId = block ? block.id : (box ? (box.blockId || box.id) : null);
+            if (blockId && this._bboxOverlay) {
+              this._bboxOverlay.highlightBlockId(blockId);
+            }
+            if (block && this._replicaView && this.editorMode === 'replica') {
+              this._replicaView.focusBlock(block.id);
+            } else if (block && this.editorMode === 'flow') {
+              const el = document.querySelector(`#rich-editor [data-block-id="${block.id}"]`);
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else if (block && this._replicaView) {
               this._replicaView.highlightBlock(block.id);
             }
           },
@@ -963,6 +1113,12 @@ export default () => ({
       });
     }
     this._syncDocumentToForm();
+    if (payload.available_versions) {
+      this.availableVersions = payload.available_versions;
+    }
+    if (payload.version_key) {
+      this.activeVersion = payload.version_key;
+    }
     this.hasUnsavedChanges = false;
   },
 
@@ -1183,6 +1339,13 @@ export default () => ({
 
   // OCR controls
 
+  get showLanguageSelect() {
+    const engine = this.selectedEngine;
+    const engineConfig = this.ocrEngines && this.ocrEngines[engine];
+    if (!engineConfig) return false;
+    return Array.isArray(engineConfig.languages) && engineConfig.languages.length > 0;
+  },
+
   selectOcrEngine(engineValue, save = false) {
     this.selectedEngine = engineValue;
     window._ocrSelectedEngine = engineValue;
@@ -1196,33 +1359,20 @@ export default () => ({
     // Small delay to ensure DOM is updated
     setTimeout(() => {
       const engine = this.selectedEngine;
-      const engineConfig = this.ocrEngines[engine];
+      const engineConfig = this.ocrEngines ? this.ocrEngines[engine] : null;
       const languageSelect = document.getElementById('language-select');
       const additionalLanguageSelect = document.getElementById('additional-language-select');
 
-      if (!languageSelect) {
-        return;
-      }
-
-      const languageContainer = languageSelect.closest('li, div.dropdown-item-no-hover, div');
       const hasLanguages = engineConfig && Array.isArray(engineConfig.languages) && engineConfig.languages.length > 0;
 
       if (!hasLanguages) {
-        // Hide language selection UI if engine detects languages on the fly or provides no language list
-        if (languageContainer) {
-          languageContainer.style.display = 'none';
-        }
-        languageSelect.innerHTML = '';
-        if (additionalLanguageSelect) {
-          const addContainer = additionalLanguageSelect.closest('li, div.dropdown-item-no-hover, div');
-          if (addContainer) addContainer.style.display = 'none';
-        }
+        if (languageSelect) languageSelect.innerHTML = '';
+        if (additionalLanguageSelect) additionalLanguageSelect.innerHTML = '';
         return;
       }
 
-      // Restore visibility when engine has language options
-      if (languageContainer) {
-        languageContainer.style.display = '';
+      if (!languageSelect) {
+        return;
       }
 
       // Clear existing options
@@ -1257,9 +1407,7 @@ export default () => ({
 
       // Update additional language options for bilingual support
       if (additionalLanguageSelect) {
-        const addContainer = additionalLanguageSelect.closest('li, div.dropdown-item-no-hover, div');
         if (engine === '2' || engine === '3') {
-          if (addContainer) addContainer.style.display = '';
           additionalLanguageSelect.innerHTML = '<option value="">None</option>';
           engineConfig.languages.forEach(lang => {
             const option = document.createElement('option');
@@ -1268,7 +1416,7 @@ export default () => ({
             additionalLanguageSelect.appendChild(option);
           });
         } else {
-          if (addContainer) addContainer.style.display = 'none';
+          additionalLanguageSelect.innerHTML = '';
         }
       }
     }, 0);
@@ -1289,14 +1437,60 @@ export default () => ({
       '10': 'glm_ocr',
       '11': 'tesseract_manuscript',
       '12': 'dots_ocr',
+      '13': 'gemma_ocr',
     };
     return engineMap[engineValue] || 'google';
   },
 
+  // Decode numeric translation engine values to actual engine names
+  decodeTranslationEngine(engineValue) {
+    const engineMap = {
+      '1': 'indictrans2',
+      '2': 'gemma',
+      '3': 'param_lc_translate_ep4',
+      '4': 'translation_1b_exp_40',
+      '5': 'indictrans3',
+      '6': 'google',
+      '7': 'openai',
+      '8': 'llm_gemma',
+      '9': 'gemma_4_31b',
+    };
+    return engineMap[engineValue] || engineValue || 'indictrans2';
+  },
+
+  getTranslationDisplayName(engine) {
+    const revMap = {
+      'indictrans2': '1',
+      'indictrans-2': '1',
+      'gemma': '2',
+      'gemma-4': '2',
+      'gemma4': '2',
+      'param_lc_translate_ep4': '3',
+      'param-lc-translate-ep4': '3',
+      'translation_1b_exp_40': '4',
+      'translation-1b-exp-40': '4',
+      'indictrans3': '5',
+      'indictrans-3': '5',
+      'google': '6',
+      'openai': '7',
+      'llm_gemma': '8',
+      'llm-gemma': '8',
+      'gemma_4_31b': '9',
+      'gemma-4-31b': '9',
+      'gemma_31b': '9',
+      'gemma-31b': '9',
+    };
+    const num = revMap[engine] || engine;
+    return /^\d+$/.test(num) ? `Translation ${num}` : (num.charAt(0).toUpperCase() + num.slice(1));
+  },
+
   // Get combined language parameter for bilingual support
   getCombinedLanguage() {
+    if (!this.showLanguageSelect) {
+      return '';
+    }
     const engine = this.selectedEngine;
-    const primaryLanguage = this.selectedLanguage;
+    const primaryLanguage = this.selectedLanguage || 'sa';
     const additionalLanguageSelect = document.getElementById('additional-language-select');
     const additionalLanguage = additionalLanguageSelect ? additionalLanguageSelect.value : '';
     
@@ -1314,24 +1508,39 @@ export default () => ({
     const engineKey = window._ocrSelectedEngine || this.selectedEngine;
     const decodedEngine = this.decodeEngine(engineKey);
     const combinedLanguage = this.getCombinedLanguage();
-    const { pathname } = window.location;
-    const url = pathname.replace('/proofing/', '/api/ocr/') + `?engine=${decodedEngine}&language=${combinedLanguage}`;
+    const pathname = (window.location && window.location.pathname) || '';
+    let url = pathname.replace('/proofing/', '/api/ocr/') + `?engine=${decodedEngine}`;
+    if (combinedLanguage) {
+      url += `&language=${combinedLanguage}`;
+    }
 
     try {
       const response = await fetch(url);
-      if (response.ok) {
-        const contentType = response.headers.get('content-type') || '';
+      if (response && response.ok) {
+        const contentType = (response.headers && response.headers.get && response.headers.get('content-type')) || '';
         if (contentType.includes('application/json')) {
           const payload = await response.json();
           this.applyOcrPayload(payload);
+          if (!payload.available_versions) {
+            await this.fetchAvailableVersions();
+          }
+          if (!payload.version_key) {
+            this.activeVersion = `ocr:${decodedEngine}`;
+          }
         } else {
           const content = await response.text();
-          this.applyOcrPayload({ text: content });
+          this.applyOcrPayload({ text: content, version_key: `ocr:${decodedEngine}` });
+          await this.fetchAvailableVersions();
+          this.activeVersion = `ocr:${decodedEngine}`;
         }
         this.showNotification('OCR completed successfully!', 'success');
       } else {
         const errorText = await this.getErrorMessage(response);
         this.showNotification(`OCR failed: ${errorText}`, 'error');
+        const contentTextarea = document.getElementById('content');
+        if (contentTextarea) {
+          contentTextarea.value = errorText;
+        }
       }
     } catch (error) {
       console.error('OCR error:', error);
@@ -1341,8 +1550,246 @@ export default () => ({
     this.isRunningOCR = false;
   },
 
+  async runEnhancedOCR() {
+    this.isRunningEnhancedOCR = true;
+
+    const engineKey = window._ocrSelectedEngine || this.selectedEngine;
+    const decodedEngine = this.decodeEngine(engineKey);
+    const profile = this.selectedEnhancementProfile || 'document_cleanup';
+    const combinedLanguage = this.getCombinedLanguage();
+    const pathname = (window.location && window.location.pathname) || '';
+    let url = pathname.replace('/proofing/', '/api/enhanced-ocr/') + `?engine=${decodedEngine}&enhancement=${profile}`;
+    if (combinedLanguage) {
+      url += `&language=${combinedLanguage}`;
+    }
+
+    try {
+      const response = await fetch(url);
+      if (response && response.ok) {
+        let versionKey = `ocr:enhanced:${decodedEngine}:${profile}`;
+        const contentType = (response.headers && response.headers.get && response.headers.get('content-type')) || '';
+        if (contentType.includes('application/json')) {
+          const payload = await response.json();
+          if (payload && payload.version_key) {
+            versionKey = payload.version_key;
+          }
+          this.applyOcrPayload(payload);
+          if (!payload.available_versions) {
+            await this.fetchAvailableVersions();
+          }
+          if (!payload.version_key) {
+            this.activeVersion = versionKey;
+          }
+        } else {
+          const content = await response.text();
+          this.applyOcrPayload({ text: content, version_key: versionKey });
+          await this.fetchAvailableVersions();
+          this.activeVersion = versionKey;
+        }
+        this.showNotification('Enhanced OCR completed successfully!', 'success');
+      } else {
+        const errorText = await this.getErrorMessage(response);
+        this.showNotification(`Enhanced OCR failed: ${errorText}`, 'error');
+        const contentTextarea = document.getElementById('content');
+        if (contentTextarea) {
+          contentTextarea.value = errorText;
+        }
+      }
+    } catch (error) {
+      console.error('Enhanced OCR error:', error);
+      this.showNotification('Enhanced OCR failed: Network error', 'error');
+    }
+
+    this.isRunningEnhancedOCR = false;
+  },
+
+  getOcrEngineName(engineValue) {
+    const val = engineValue || window._ocrSelectedEngine || this.selectedEngine;
+    const engineMap = {
+      "google": "1",
+      "tesseract": "2",
+      "surya": "3",
+      "nanonets": "4",
+      "deepseek": "5",
+      "chandra": "6",
+      "qwen3": "7",
+      "surya_table": "8",
+      "paddle_table": "9",
+      "glm_ocr": "10",
+      "tesseract_manuscript": "11",
+      "dots_ocr": "12",
+      "gemma_ocr": "13",
+      "gemma_4": "13",
+      "gemma-4-31b": "13",
+      "gemma_4_31b": "13",
+      "llm_gemma": "13",
+      "llm-gemma": "13"
+    };
+    if (val && /^\d+$/.test(val)) {
+      return 'OCR ' + val;
+    }
+    const num = engineMap[val];
+    if (num) {
+      return 'OCR ' + num;
+    }
+    const decoded = this.decodeEngine(val);
+    const decodedNum = engineMap[decoded] || (/^\d+$/.test(decoded) ? decoded : null);
+    if (decodedNum) {
+      return 'OCR ' + decodedNum;
+    }
+    return decoded ? decoded.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'OCR 1';
+  },
+
+  zoomInPreview(step = 0.25) {
+    this.previewZoom = Math.min(8.0, +(this.previewZoom + step).toFixed(2));
+  },
+
+  zoomOutPreview(step = 0.25) {
+    this.previewZoom = Math.max(0.25, +(this.previewZoom - step).toFixed(2));
+  },
+
+  resetPreviewZoom() {
+    this.previewZoom = 1.0;
+    this.previewPanX = 0;
+    this.previewPanY = 0;
+  },
+
+  handlePreviewWheel(e) {
+    if (!e) return;
+    const factor = e.deltaY < 0 ? 1.15 : 0.87;
+    const newZoom = Math.max(0.25, Math.min(8.0, +(this.previewZoom * factor).toFixed(2)));
+    this.previewZoom = newZoom;
+  },
+
+  startPreviewPan(e) {
+    if (!e) return;
+    this.previewIsDragging = true;
+    this.previewDragStartX = e.clientX - this.previewPanX;
+    this.previewDragStartY = e.clientY - this.previewPanY;
+  },
+
+  onPreviewPan(e) {
+    if (!this.previewIsDragging || !e) return;
+    this.previewPanX = e.clientX - this.previewDragStartX;
+    this.previewPanY = e.clientY - this.previewDragStartY;
+  },
+
+  stopPreviewPan() {
+    this.previewIsDragging = false;
+  },
+
+  async openEnhancementPreview(profile) {
+    this.originalImageUrl = (typeof IMAGE_URL !== 'undefined' && IMAGE_URL) ? IMAGE_URL : (typeof window !== 'undefined' && window.IMAGE_URL ? window.IMAGE_URL : '');
+    this.enhancementPreviewProfile = profile || this.selectedEnhancementProfile || 'hybrid_binarization';
+    this.resetPreviewZoom();
+    this.enhancementPreviewModalOpen = true;
+    this.enhancedOcrDropdownOpen = false;
+    this.checkPageImageBackupStatus();
+    this.loadEnhancementPreview();
+  },
+
+  async checkPageImageBackupStatus() {
+    try {
+      const pathname = (window.location && window.location.pathname) || '';
+      const url = pathname.replace('/proofing/', '/api/replace-page-image/') + '?action=status';
+      const resp = await fetch(url);
+      if (resp.ok) {
+        const data = await resp.json();
+        this.pageImageHasMasterBackup = !!data.has_master_backup;
+      }
+    } catch (e) {
+      console.warn('Failed to check master backup status:', e);
+    }
+  },
+
+  loadEnhancementPreview() {
+    this.enhancementPreviewLoading = true;
+    const pathname = (window.location && window.location.pathname) || '';
+    const profile = this.enhancementPreviewProfile || 'hybrid_binarization';
+    this.enhancementPreviewUrl = pathname.replace('/proofing/', '/api/preview-enhancement/') + `?profile=${profile}&t=${Date.now()}`;
+  },
+
+  async replacePageImageWithPreprocessed() {
+    if (!confirm('Replace the active page image with this preprocessed version? The original master scan will be safely backed up and can be reverted at any time.')) {
+      return;
+    }
+    this.isReplacingPageImage = true;
+    const pathname = (window.location && window.location.pathname) || '';
+    const profile = this.enhancementPreviewProfile || 'hybrid_binarization';
+    const url = pathname.replace('/proofing/', '/api/replace-page-image/');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'replace', profile: profile })
+      });
+      const resData = await response.json();
+      if (response.ok && resData.status === 'ok') {
+        this.showNotification('Active page image replaced successfully!', 'success');
+        this.pageImageHasMasterBackup = true;
+        this.reloadViewerImage();
+        this.enhancementPreviewModalOpen = false;
+      } else {
+        this.showNotification(`Image replacement failed: ${resData.message || 'Error'}`, 'error');
+      }
+    } catch (e) {
+      console.error('Failed to replace page image:', e);
+      this.showNotification('Network error while replacing page image', 'error');
+    } finally {
+      this.isReplacingPageImage = false;
+    }
+  },
+
+  async revertPageImageToMaster() {
+    if (!confirm('Revert the active page image back to the original master scan?')) {
+      return;
+    }
+    this.isRevertingPageImage = true;
+    const pathname = (window.location && window.location.pathname) || '';
+    const url = pathname.replace('/proofing/', '/api/replace-page-image/');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'revert' })
+      });
+      const resData = await response.json();
+      if (response.ok && resData.status === 'ok') {
+        this.showNotification('Reverted to original scan successfully!', 'success');
+        this.pageImageHasMasterBackup = false;
+        this.reloadViewerImage();
+        this.enhancementPreviewModalOpen = false;
+      } else {
+        this.showNotification(`Revert failed: ${resData.message || 'Error'}`, 'error');
+      }
+    } catch (e) {
+      console.error('Failed to revert page image:', e);
+      this.showNotification('Network error while reverting page image', 'error');
+    } finally {
+      this.isRevertingPageImage = false;
+    }
+  },
+
+  reloadViewerImage() {
+    if (this.imageViewer && typeof this.imageViewer.open === 'function') {
+      const base = window.IMAGE_URL || '';
+      const cacheBustUrl = base + (base.includes('?') ? '&' : '?') + 't=' + Date.now();
+      try {
+        this.imageViewer.open({
+          type: 'image',
+          url: cacheBustUrl,
+          buildPyramid: false,
+        });
+      } catch (err) {
+        console.warn('Could not reload OpenSeadragon viewer dynamically:', err);
+      }
+    }
+  },
+
   // Translation controls
-  async runTranslation(engine = 'google', sourceLang = 'sa', targetLang = 'en', glossaries = []) {
+  async runTranslation(engine = '1', sourceLang = 'sa', targetLang = 'en', glossaries = []) {
     console.log('=== TRANSLATION DEBUG START ===');
     
     if (!this.pageDocument) {
@@ -1352,11 +1799,12 @@ export default () => ({
 
     this.isRunningTranslation = true;
 
-    console.log('Starting translation:', { engine, sourceLang, targetLang, glossaries });
+    const decodedEngine = this.decodeTranslationEngine(engine);
+    console.log('Starting translation:', { engine, decodedEngine, sourceLang, targetLang, glossaries });
     console.log('Current pathname:', window.location.pathname);
 
     const { pathname } = window.location;
-    let url = pathname.replace('/proofing/', '/api/translate/') + `?engine=${engine}&source_lang=${sourceLang}&target_lang=${targetLang}`;
+    let url = pathname.replace('/proofing/', '/api/translate/') + `?engine=${decodedEngine}&source_lang=${sourceLang}&target_lang=${targetLang}`;
     if (glossaries && glossaries.length > 0) {
       const glossaryVal = glossaries.includes('all') ? 'all' : glossaries.join(',');
       url += `&glossary=${encodeURIComponent(glossaryVal)}`;
@@ -1406,7 +1854,18 @@ export default () => ({
         this.currentTranslation = translation;
         
         // Trigger translation display in the image box
-        this.showTranslationInImageBox(translation, sourceLang, targetLang, engine);
+        this.showTranslationInImageBox(translation, sourceLang, targetLang, decodedEngine);
+
+        if (translatedDoc && translatedDoc.available_versions) {
+          this.availableVersions = translatedDoc.available_versions;
+        } else {
+          await this.fetchAvailableVersions();
+        }
+        if (translatedDoc && translatedDoc.version_key) {
+          this.activeVersion = translatedDoc.version_key;
+        } else {
+          this.activeVersion = `translation:${decodedEngine}:${sourceLang}->${targetLang}`;
+        }
         
         // Show success feedback
         this.showNotification('Translation completed successfully!', 'success');
@@ -1434,13 +1893,13 @@ export default () => ({
 
   async fetchGlossaries() {
     try {
-      const { pathname } = window.location;
+      const pathname = (window.location && window.location.pathname) || '';
       const prefixMatch = pathname.match(/^(.*)\/proofing\//);
       const prefix = prefixMatch ? prefixMatch[1] : '';
       const response = await fetch(`${prefix}/api/glossaries`);
-      if (response.ok) {
+      if (response && response.ok && typeof response.json === 'function') {
         this.allGlossaries = await response.json();
-      } else {
+      } else if (response && !response.ok) {
         console.warn('Failed to fetch glossaries:', response.status);
       }
     } catch (error) {
@@ -1548,7 +2007,7 @@ export default () => ({
     const translationHTML = `
       <h4 class="text-lg font-semibold text-peacock-primary mb-3">
         Translation (${sourceLang.toUpperCase()} → ${targetLang.toUpperCase()})
-        <span class="text-sm font-normal text-peacock-secondary">via ${engine}</span>
+        <span class="text-sm font-normal text-peacock-secondary">via ${this.getTranslationDisplayName(engine)}</span>
       </h4>
       <div class="text-sm leading-relaxed whitespace-pre-wrap">${translation}</div>
     `;
@@ -1613,28 +2072,32 @@ export default () => ({
   },
 
   async getErrorMessage(response) {
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
+    if (!response) return 'Server error';
+    const contentType = (response.headers && response.headers.get && response.headers.get('content-type')) || '';
+    if (contentType.includes('application/json') && typeof response.json === 'function') {
       try {
         const data = await response.json();
-        return data.message || data.error || `Error ${response.status}`;
+        return data.message || data.error || `Error ${response.status || 500}`;
       } catch (e) {
-        return `Error ${response.status}`;
+        return `Error ${response.status || 500}`;
       }
     }
-    const text = await response.text();
-    if (contentType.includes('text/html') || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-      const match = text.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || text.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-      if (match && match[1]) {
-        const cleanMsg = match[1].replace(/<[^>]*>/g, '').trim();
-        if (cleanMsg.includes(response.status.toString())) {
-          return cleanMsg;
+    if (typeof response.text === 'function') {
+      const text = await response.text();
+      if (contentType.includes('text/html') || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+        const match = text.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || text.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+        if (match && match[1]) {
+          const cleanMsg = match[1].replace(/<[^>]*>/g, '').trim();
+          if (cleanMsg.includes((response.status || '').toString())) {
+            return cleanMsg;
+          }
+          return `${cleanMsg} (${response.status || 500})`;
         }
-        return `${cleanMsg} (${response.status})`;
+        return `Server error (${response.status || 500})`;
       }
-      return `Server error (${response.status})`;
+      return text || `Server error (${response.status || 500})`;
     }
-    return text || `Error ${response.status}`;
+    return `Server error (${response.status || 500})`;
   },
 
   // Simple notification system
@@ -1672,19 +2135,248 @@ export default () => ({
   // Image zoom controls
 
   increaseImageZoom() {
-    this.imageZoom *= 1.2;
+    if (!this.imageViewer || !this.imageViewer.viewport) return;
+    this.imageZoom = (this.imageZoom || (this.imageViewer.viewport.getZoom && this.imageViewer.viewport.getZoom()) || 1.0) * 1.2;
     this.imageViewer.viewport.zoomTo(this.imageZoom);
+    if (this.imageViewer.viewport.applyConstraints) {
+      this.imageViewer.viewport.applyConstraints();
+    }
     this.saveSettings();
   },
   decreaseImageZoom() {
-    this.imageZoom *= 0.8;
+    if (!this.imageViewer || !this.imageViewer.viewport) return;
+    this.imageZoom = (this.imageZoom || (this.imageViewer.viewport.getZoom && this.imageViewer.viewport.getZoom()) || 1.0) * 0.8;
     this.imageViewer.viewport.zoomTo(this.imageZoom);
+    if (this.imageViewer.viewport.applyConstraints) {
+      this.imageViewer.viewport.applyConstraints();
+    }
     this.saveSettings();
   },
   resetImageZoom() {
+    if (!this.imageViewer || !this.imageViewer.viewport) return;
     this.imageZoom = this.imageViewer.viewport.getHomeZoom();
-    this.imageViewer.viewport.zoomTo(this.imageZoom);
+    if (this.imageViewer.viewport.goHome) {
+      this.imageViewer.viewport.goHome();
+    } else {
+      this.imageViewer.viewport.zoomTo(this.imageZoom);
+    }
+    if (this.imageViewer.viewport.applyConstraints) {
+      this.imageViewer.viewport.applyConstraints();
+    }
     this.saveSettings();
+  },
+
+  // Image pan & D-pad navigation controls
+
+  panImage(dxRatio, dyRatio) {
+    if (!this.imageViewer || !this.imageViewer.viewport) return;
+    try {
+      const containerSize = this.imageViewer.viewport.getContainerSize
+        ? this.imageViewer.viewport.getContainerSize()
+        : { x: 800, y: 600 };
+      const px = containerSize.x * dxRatio;
+      const py = containerSize.y * dyRatio;
+      if (this.imageViewer.viewport.deltaPointsFromPixels) {
+        const delta = this.imageViewer.viewport.deltaPointsFromPixels(
+          new OpenSeadragon.Point(px, py),
+        );
+        this.imageViewer.viewport.panBy(delta, false);
+        if (this.imageViewer.viewport.applyConstraints) {
+          this.imageViewer.viewport.applyConstraints();
+        }
+      }
+    } catch (e) {
+      console.warn('panImage failed:', e);
+    }
+  },
+
+  setupDpadButtons() {
+    const dpadBindings = [
+      { id: 'osd-pan-up', dx: 0, dy: -0.15 },
+      { id: 'osd-pan-down', dx: 0, dy: 0.15 },
+      { id: 'osd-pan-left', dx: -0.15, dy: 0 },
+      { id: 'osd-pan-right', dx: 0.15, dy: 0 },
+    ];
+
+    dpadBindings.forEach(({ id, dx, dy }) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+
+      let holdTimer = null;
+      let holdInterval = null;
+
+      const startPan = (e) => {
+        e.preventDefault();
+        this.panImage(dx, dy);
+        // Continuous pan on long press
+        holdTimer = setTimeout(() => {
+          holdInterval = setInterval(() => {
+            this.panImage(dx * 0.4, dy * 0.4);
+          }, 45);
+        }, 220);
+      };
+
+      const stopPan = () => {
+        if (holdTimer) {
+          clearTimeout(holdTimer);
+          holdTimer = null;
+        }
+        if (holdInterval) {
+          clearInterval(holdInterval);
+          holdInterval = null;
+        }
+      };
+
+      btn.addEventListener('mousedown', startPan);
+      btn.addEventListener('touchstart', startPan, { passive: false });
+      btn.addEventListener('mouseup', stopPan);
+      btn.addEventListener('mouseleave', stopPan);
+      btn.addEventListener('touchend', stopPan);
+      btn.addEventListener('touchcancel', stopPan);
+    });
+
+    const centerBtn = document.getElementById('osd-pan-center');
+    if (centerBtn) {
+      centerBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.resetImageZoom();
+      });
+    }
+  },
+
+  setupTrackpadAndMouseNavigation() {
+    if (!this.imageViewer) return;
+    const container = document.getElementById('osd-image');
+    if (!container) return;
+
+    // Trackpad 2-finger panning & pinch-to-zoom / mouse wheel
+    container.addEventListener(
+      'wheel',
+      (e) => {
+        if (!this.imageViewer || !this.imageViewer.viewport) return;
+        if (this.imageViewer.isOpen && !this.imageViewer.isOpen()) return;
+
+        // Prevent browser page scrolling while pointer is in the image viewer
+        e.preventDefault();
+        e.stopPropagation();
+
+        const rect = container.getBoundingClientRect();
+        const mousePixel = new OpenSeadragon.Point(
+          e.clientX - rect.left,
+          e.clientY - rect.top,
+        );
+
+        // 1. Trackpad Pinch-to-zoom OR Ctrl + Mouse Wheel Zoom
+        if (e.ctrlKey || e.metaKey) {
+          const factor = Math.pow(0.993, e.deltaY);
+          const refPoint = this.imageViewer.viewport.pointFromPixel(mousePixel, true);
+          this.imageViewer.viewport.zoomBy(factor, refPoint);
+          if (this.imageViewer.viewport.applyConstraints) {
+            this.imageViewer.viewport.applyConstraints();
+          }
+          if (this.imageViewer.viewport.getZoom) {
+            this.imageZoom = this.imageViewer.viewport.getZoom();
+          }
+          return;
+        }
+
+        // 2. Trackpad 2-finger pan OR Mouse wheel scroll
+        let dx = e.deltaX;
+        let dy = e.deltaY;
+
+        // Normalize deltaMode (DOM_DELTA_LINE or DOM_DELTA_PAGE)
+        if (e.deltaMode === 1) {
+          dx *= 20;
+          dy *= 20;
+        } else if (e.deltaMode === 2) {
+          dx *= 200;
+          dy *= 200;
+        }
+
+        // Support Shift + wheel for horizontal scroll
+        if (e.shiftKey && dx === 0 && dy !== 0) {
+          dx = dy;
+          dy = 0;
+        }
+
+        // Pan viewport by delta pixels
+        if (this.imageViewer.viewport.deltaPointsFromPixels) {
+          const delta = this.imageViewer.viewport.deltaPointsFromPixels(
+            new OpenSeadragon.Point(dx, dy),
+            true,
+          );
+          this.imageViewer.viewport.panBy(delta, false);
+          if (this.imageViewer.viewport.applyConstraints) {
+            this.imageViewer.viewport.applyConstraints();
+          }
+        }
+      },
+      { passive: false },
+    );
+
+    // Visual grabbing cursor feedback during canvas drag
+    if (this.imageViewer.addHandler) {
+      this.imageViewer.addHandler('canvas-drag', () => {
+        container.classList.add('is-grabbing');
+      });
+      this.imageViewer.addHandler('canvas-drag-end', () => {
+        container.classList.remove('is-grabbing');
+      });
+      this.imageViewer.addHandler('canvas-release', () => {
+        container.classList.remove('is-grabbing');
+      });
+    }
+  },
+
+  setupKeyboardNavigation() {
+    window.addEventListener('keydown', (e) => {
+      const active = document.activeElement;
+      if (active) {
+        const tag = active.tagName.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || active.isContentEditable) {
+          return;
+        }
+        if (active.closest('#rich-editor') || active.closest('#ocr-replica-root') || active.closest('.ProseMirror') || active.closest('.replica-block-input')) {
+          return;
+        }
+      }
+
+      if (!this.imageViewer || !this.imageViewer.viewport || this.isDocx) return;
+
+      switch (e.key) {
+        case 'ArrowUp':
+          e.preventDefault();
+          this.panImage(0, -0.15);
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          this.panImage(0, 0.15);
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          this.panImage(-0.15, 0);
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          this.panImage(0.15, 0);
+          break;
+        case '+':
+        case '=':
+          e.preventDefault();
+          this.increaseImageZoom();
+          break;
+        case '-':
+        case '_':
+          e.preventDefault();
+          this.decreaseImageZoom();
+          break;
+        case '0':
+        case 'Home':
+          e.preventDefault();
+          this.resetImageZoom();
+          break;
+      }
+    });
   },
 
   // Image rotation controls
@@ -1781,6 +2473,9 @@ export default () => ({
   transliterateSelection() {
     this.changeSelectedText((s) => Sanscript.t(s, this.fromScript, this.toScript));
     this.saveSettings();
+  },
+  transliterate() {
+    this.transliterateSelection();
   },
 
   // Character controls
@@ -1890,6 +2585,7 @@ export default () => ({
   },
 
   _getStorageKey() {
+    if (!window.location || !window.location.pathname) return null;
     const pathMatch = window.location.pathname.match(/\/proofing\/([^\/]+)\/([^\/]+)/);
     if (pathMatch) {
       const targetKey = (typeof window.TARGET_VERSION_KEY !== 'undefined' && window.TARGET_VERSION_KEY) ? window.TARGET_VERSION_KEY : 'default';

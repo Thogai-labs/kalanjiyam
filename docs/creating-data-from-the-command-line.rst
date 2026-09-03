@@ -73,3 +73,56 @@ the website)::
 Create a fake proofing project::
 
     ./cli.py create-project --title <title> --pdf-path <path-to-your-pdf-file>
+
+
+Batch ingestion & bulk import
+-----------------------------
+
+Bulk ingest PDF or image directories into proofing projects with OCR::
+
+    ./cli.py batch-ocr --s3-uri s3://bucket/folder/ --org example-org --lang eng
+    ./cli.py batch-list
+    ./cli.py batch-status --job-id 1
+    ./cli.py batch-cancel --job-id 1
+    ./cli.py batch-retry --job-id 1
+
+Import external JSONL OCR archives directly with associated PDFs::
+
+    ./cli.py import-jsonl --jsonl-uri s3://bucket/data.jsonl --pdf-uri s3://bucket/scans/ --org example-org
+
+Clean up old uploaded source documents older than N days::
+
+    ./cli.py cleanup-uploads --days 30 --force
+
+
+Archival metadata extraction
+----------------------------
+
+Extract structured archival metadata descriptions across projects::
+
+    ./cli.py metadata-extract --project project-slug --local
+    ./cli.py metadata-extract --all
+    ./cli.py metadata-status --project project-slug
+    ./cli.py metadata-runs --limit 20
+
+
+OpenSearch full-text indexing
+-----------------------------
+
+Manage OpenSearch search indices for proofing and library texts::
+
+    ./cli.py search-index init
+    ./cli.py search-index status
+    ./cli.py search-index sync --incremental
+    ./cli.py search-index rebuild --yes
+    ./cli.py search-index drop --yes
+
+
+Storage migration & reconciliation
+----------------------------------
+
+Migrate filesystem uploads to S3 or reconcile storage state with PostgreSQL::
+
+    ./cli.py storage-stats
+    ./cli.py migrate-to-s3 --batch-size 50
+    ./cli.py reconcile-storage

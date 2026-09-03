@@ -3,111 +3,87 @@
 {% import "macros/components.html" as mc %}
 {% import "macros/admin.html" as admin %}
 
-
 {% block extra_head %}
 {{ super() }}
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
   :root {
     --primary-color: royalblue;
-    --primary-hover: #3f51b5;
-    --premium-shadow-hover: 0 15px 40px rgba(65, 105, 225, 0.15);
+    --primary-hover: #3553ce;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f8fafc;
   }
 
   .premium-card {
     background: white;
-    border-radius: 20px;
-    border: 1px solid #f1f5f9;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   }
   .premium-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--premium-shadow-hover);
-    border-color: var(--primary-color);
-  }
-
-  .pulse-indicator {
-    width: 12px;
-    height: 12px;
-    background: var(--primary-color);
-    border-radius: 50%;
-    position: relative;
-    display: inline-block;
-    margin-right: 12px;
-    flex-shrink: 0;
-  }
-  .pulse-indicator::after {
-    content: '';
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background: inherit;
-    border-radius: inherit;
-    animation: admin-pulse-ring 1.5s cubic-bezier(0.24, 0, 0.38, 1) infinite;
-  }
-  @keyframes admin-pulse-ring {
-    0% { transform: scale(0.9); opacity: 0.8; }
-    100% { transform: scale(2.5); opacity: 0; }
+    box-shadow: 0 4px 12px rgba(65, 105, 225, 0.08);
+    border-color: #cbd5e1;
   }
 
   .btn-premium {
-    background: var(--primary-color);
+    background: royalblue;
     color: white !important;
-    padding: 10px 24px;
-    border-radius: 12px;
+    padding: 8px 20px;
+    border-radius: 9999px;
     font-weight: 600;
-    transition: all 0.2s;
+    font-size: 13px;
+    transition: all 0.15s ease;
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    box-shadow: 0 4px 12px rgba(65, 105, 225, 0.2);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     border: none;
     cursor: pointer;
     text-decoration: none;
   }
   .btn-premium:hover {
     background: var(--primary-hover);
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(65, 105, 225, 0.3);
-  }
-
-  .admin-section-title {
-    font-size: 0.7rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #94a3b8;
-    margin-bottom: 0.75rem;
+    box-shadow: 0 4px 12px rgba(65, 105, 225, 0.25);
   }
 </style>
 {% endblock %}
-
 
 {% block header %}
 {% include "include/header.html" %}
 {% endblock %}
 
-
 {% block main %}
-<article class="p-4 xl:p-0 max-w-6xl mx-auto mb-24">
+<div class="bg-slate-50/50 min-h-screen py-6 sm:py-8">
+  <article class="px-4 sm:px-6 max-w-7xl mx-auto mb-16">
 
-{{ mc.flash_messages() }}
+    {{ mc.flash_messages() }}
 
-<div class="md:flex md:mt-4 gap-8">
-  <aside class="md:w-56 shrink-0">
-    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-50 md:sticky md:top-6">
-      <p class="text-xs font-bold text-slate-400 uppercase tracking-widest px-2 mb-4">{{ _('Admin') }}</p>
-      {% block admin_sidebar %}
-      {{ admin.nav('platform', current_user) }}
-      {% endblock %}
+    <div class="md:flex gap-6 lg:gap-8">
+      <!-- Google Admin Left Sidebar Navigation -->
+      <aside class="md:w-60 lg:w-64 shrink-0 mb-6 md:mb-0">
+        <div class="bg-white p-4 rounded-2xl shadow-xs border border-slate-200 md:sticky md:top-6 space-y-4">
+          <div class="flex items-center gap-2.5 px-3 py-1.5 border-b border-slate-100">
+            <span class="w-6 h-6 rounded-lg bg-royalblue text-white flex items-center justify-center text-[10px] font-black">A</span>
+            <span class="text-xs font-bold text-slate-900 uppercase tracking-wider">{{ _('Admin Console') }}</span>
+          </div>
+          {% block admin_sidebar %}
+          {{ admin.nav('platform', current_user) }}
+          {% endblock %}
+        </div>
+      </aside>
+
+      <!-- Main Admin Content Area -->
+      <div class="grow min-w-0">
+        {% block content %}{% endblock %}
+      </div>
     </div>
-  </aside>
 
-  <div class="grow min-w-0 mt-6 md:mt-0">
-    {% block content %}{% endblock %}
-  </div>
+  </article>
 </div>
-
-</article>
+{% block tail %}{% endblock %}
 {% endblock %}
-

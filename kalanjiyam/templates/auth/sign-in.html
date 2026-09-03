@@ -5,32 +5,45 @@
 {% block title %}{{ components.title(_('Sign in')) }}{% endblock %}
 
 {% block body %}
-<form method="POST" class="form">
+<form method="POST" class="space-y-4">
     {{ form.csrf_token }}
-    <p class="title">{{ _('Sign In') }}</p>
-    <p class="message">{{ _('Welcome back to Kalanjiyam.') }}</p>
     
-    <label>
-      {{ form.username(class_="input", placeholder=" ") }}
-      <span>{{ _('Username') }}</span>
-    </label> 
+    <div class="mb-5 text-left">
+      <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+        {{ _('Sign In') }}
+      </h1>
+      <p class="text-xs sm:text-sm text-slate-500 font-medium mt-1">
+        {{ _('Welcome back to Kalanjiyam.') }}
+      </p>
+    </div>
+    
+    <div class="google-input-group text-left">
+      <label for="username">{{ _('Username') }}</label>
+      {{ form.username(class_="google-auth-input", id="username", placeholder=_('Enter your username'), autocomplete="username") }}
+    </div> 
         
-    <label>
-      {{ form.password(class_="input", placeholder=" ") }}
-      <span>{{ _('Password') }}</span>
-    </label>
-
-    <div class="options" style="text-align: right; margin-top: 0;">
-      <a href="{{ url_for('auth.get_reset_password_token') }}">{{ _('Forgot password?') }}</a>
+    <div class="google-input-group text-left">
+      <div class="flex items-center justify-between mb-1.5">
+        <label for="password" class="!mb-0">{{ _('Password') }}</label>
+        <a href="{{ url_for('auth.get_reset_password_token') }}" class="text-xs font-semibold text-royalblue hover:underline">
+          {{ _('Forgot password?') }}
+        </a>
+      </div>
+      {{ form.password(class_="google-auth-input", id="password", placeholder=_('Enter your password'), autocomplete="current-password") }}
     </div>
 
-    <button type="submit" class="submit">{{ _('Sign In') }}</button>
-    
-    {% if config.ENABLE_REGISTERED_ACCESS %}
-    <p class="signin">
-      {{ _("Don't have an account?") }} 
-      <a href="{{ url_for('auth.register') }}">{{ _('Register') }}</a>
-    </p>
-    {% endif %}
+    <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+      {% if config.ENABLE_REGISTERED_ACCESS %}
+      <a href="{{ url_for('auth.register') }}" class="text-xs sm:text-sm font-semibold text-royalblue hover:underline order-2 sm:order-1">
+        {{ _('Create account') }}
+      </a>
+      {% else %}
+      <div></div>
+      {% endif %}
+
+      <button type="submit" class="google-auth-btn w-full sm:w-auto order-1 sm:order-2">
+        {{ _('Sign In') }}
+      </button>
+    </div>
 </form>
 {% endblock %}

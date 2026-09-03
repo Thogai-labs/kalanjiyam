@@ -9,9 +9,31 @@
 {% endblock %}
 
 {% block content %}
-{{ admin.page_header(_('Platform Settings'), _('Manage global rate limits and parameters across the platform.')) }}
+<!-- Google Admin Header -->
+<div class="mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+        {{ admin.icon('settings', class='w-5 h-5') }}
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ _('Platform Governance & Settings') }}
+          </h1>
+          <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+            {{ _('Global Parameters') }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">
+          {{ _('Manage guest limits, default AI models, OCR engines, and automated source cleanup.') }}
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
 
-<div class="max-w-3xl bg-white rounded-2xl p-8 shadow-sm border border-slate-50 mb-8">
+<div class="max-w-3xl bg-white rounded-2xl p-6 sm:p-8 shadow-xs border border-slate-200 mb-8">
   <form method="POST" action="" class="space-y-8">
     {{ form.csrf_token }}
 
@@ -25,9 +47,7 @@
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
           {{ mf.label(form.unregistered_user_ocr_limit.label) }}
-          {{ form.unregistered_user_ocr_limit(class="w-full px-4 py-3 rounded-xl border border-slate-200
-          focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900
-          bg-white", placeholder="e.g. 10") }}
+          {{ form.unregistered_user_ocr_limit(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white", placeholder="e.g. 10") }}
           {% if form.unregistered_user_ocr_limit.description %}
           <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.unregistered_user_ocr_limit.description }}</p>
           {% endif %}
@@ -38,9 +58,7 @@
 
         <div>
           {{ mf.label(form.unregistered_user_project_limit.label) }}
-          {{ form.unregistered_user_project_limit(class="w-full px-4 py-3 rounded-xl border border-slate-200
-          focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900
-          bg-white", placeholder="e.g. 5") }}
+          {{ form.unregistered_user_project_limit(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white", placeholder="e.g. 5") }}
           {% if form.unregistered_user_project_limit.description %}
           <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.unregistered_user_project_limit.description }}
           </p>
@@ -52,9 +70,7 @@
 
         <div>
           {{ mf.label(form.unregistered_user_upload_limit.label) }}
-          {{ form.unregistered_user_upload_limit(class="w-full px-4 py-3 rounded-xl border border-slate-200
-          focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900
-          bg-white", placeholder="e.g. 10") }}
+          {{ form.unregistered_user_upload_limit(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white", placeholder="e.g. 10") }}
           {% if form.unregistered_user_upload_limit.description %}
           <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.unregistered_user_upload_limit.description }}</p>
           {% endif %}
@@ -84,8 +100,7 @@
         {% if config.ENABLE_REGISTERED_ACCESS %}
         <div>
           {{ mf.label(form.default_ocr_engine.label) }}
-          {{ form.default_ocr_engine(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue
-          focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white") }}
+          {{ form.default_ocr_engine(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white") }}
           {% if form.default_ocr_engine.description %}
           <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.default_ocr_engine.description }}</p>
           {% endif %}
@@ -106,13 +121,41 @@
 
         <div>
           {{ mf.label(form.recommended_ocr_engine.label) }}
-          {{ form.recommended_ocr_engine(class="w-full px-4 py-3 rounded-xl border border-slate-200
-          focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900
-          bg-white") }}
+          {{ form.recommended_ocr_engine(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white") }}
           {% if form.recommended_ocr_engine.description %}
           <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.recommended_ocr_engine.description }}</p>
           {% endif %}
           {% for error in form.recommended_ocr_engine.errors %}
+          <p class="text-xs text-red-600 mt-1 font-semibold">{{ error }}</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Translation Settings -->
+    <div class="pb-4 border-t border-slate-100 pt-6">
+      <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('Translation Configuration') }}</h3>
+      <p class="text-sm font-medium text-slate-500 mb-4">{{ _('Configure platform-wide default and best translation model selection.') }}</p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          {{ mf.label(form.default_translation_engine.label) }}
+          {{ form.default_translation_engine(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white") }}
+          {% if form.default_translation_engine.description %}
+          <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.default_translation_engine.description }}</p>
+          {% endif %}
+          {% for error in form.default_translation_engine.errors %}
+          <p class="text-xs text-red-600 mt-1 font-semibold">{{ error }}</p>
+          {% endfor %}
+        </div>
+
+        <div>
+          {{ mf.label(form.recommended_translation_engine.label) }}
+          {{ form.recommended_translation_engine(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white") }}
+          {% if form.recommended_translation_engine.description %}
+          <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.recommended_translation_engine.description }}</p>
+          {% endif %}
+          {% for error in form.recommended_translation_engine.errors %}
           <p class="text-xs text-red-600 mt-1 font-semibold">{{ error }}</p>
           {% endfor %}
         </div>
@@ -129,8 +172,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           {{ mf.label(form.auto_cleanup_days.label) }}
-          {{ form.auto_cleanup_days(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue
-          focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white") }}
+          {{ form.auto_cleanup_days(class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all text-slate-900 bg-white") }}
           {% if form.auto_cleanup_days.description %}
           <p class="text-xs text-slate-500 mt-1.5 font-medium">{{ form.auto_cleanup_days.description }}</p>
           {% endif %}

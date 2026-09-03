@@ -235,8 +235,38 @@ class BaseConfig:
     #: Timeout in seconds for translation service HTTP requests.
     TRANSLATION_SERVICE_TIMEOUT = int(_env("TRANSLATION_SERVICE_TIMEOUT", "300") or "300")
 
+    #: Base URL for BharatGen translation chat completions API.
+    BHARATGEN_TRANSLATION_API_URL = _env(
+        "BHARATGEN_TRANSLATION_API_URL", "https://api.bharatgen.dev/v1/chat/completions"
+    )
+
+    #: API key / Bearer token for BharatGen translation requests.
+    BHARATGEN_TRANSLATION_API_KEY = _env(
+        "BHARATGEN_TRANSLATION_API_KEY",
+        _env("BHARATGEN_API_KEY", ""),
+    )
+
+    #: Timeout in seconds for BharatGen translation HTTP requests.
+    BHARATGEN_TRANSLATION_TIMEOUT = int(
+        _env("BHARATGEN_TRANSLATION_TIMEOUT", "300") or "300"
+    )
+
+    #: Optional URL override for llm-gemma translation API (defaults to {OCR_SERVICE_URL}/v1/chat/completions with automatic fallback if /v1/ocr is given).
+    LLM_GEMMA_TRANSLATION_API_URL = _env("LLM_GEMMA_TRANSLATION_API_URL", "")
+
+    #: Optional API key override for llm-gemma translation (defaults to OCR_SERVICE_API_KEY).
+    LLM_GEMMA_TRANSLATION_API_KEY = _env("LLM_GEMMA_TRANSLATION_API_KEY", "")
+
+    #: Timeout in seconds for llm-gemma translation HTTP requests.
+    LLM_GEMMA_TRANSLATION_TIMEOUT = int(
+        _env("LLM_GEMMA_TRANSLATION_TIMEOUT", "300") or "300"
+    )
+
     #: Default OCR engine/model.
     DEFAULT_OCR_ENGINE = _env("DEFAULT_OCR_ENGINE", "tesseract")
+
+    #: Default Translation engine/model.
+    DEFAULT_TRANSLATION_ENGINE = _env("DEFAULT_TRANSLATION_ENGINE", "indictrans2")
 
     # Full-text search (OpenSearch)
     # ----------------------------

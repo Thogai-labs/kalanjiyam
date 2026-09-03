@@ -171,6 +171,98 @@ class MetadataExtractionRun(Base):
         total = self.total_tokens
         return (total / self.windows_completed) if total is not None else None
 
+    @property
+    def duration_sec(self) -> float | None:
+        """Total time taken to complete the request in seconds.
+
+        Computed from total_extraction_latency_ms if recorded, or (completed_at - created_at).
+        """
+        if self.total_extraction_latency_ms is not None:
+            return self.total_extraction_latency_ms / 1000.0
+        if self.completed_at and self.created_at:
+            return max(0.0, (self.completed_at - self.created_at).total_seconds())
+        return None
+
+    @property
+    def total_engine_latency_sec(self) -> float | None:
+        """Total engine (model) processing latency in seconds across all windows."""
+        if self.total_engine_latency_ms is not None:
+            return self.total_engine_latency_ms / 1000.0
+        return None
+
+    @property
+    def avg_engine_latency_sec(self) -> float | None:
+        """Average engine processing latency per completed window in seconds."""
+        windows = self.windows_completed or 0
+        if windows > 0 and self.total_engine_latency_ms is not None:
+            return (self.total_engine_latency_ms / 1000.0) / windows
+        return None
+
+    @property
+    def avg_extraction_latency_sec(self) -> float | None:
+        """Average extraction latency per completed window in seconds."""
+        windows = self.windows_completed or 0
+        if windows > 0 and self.total_extraction_latency_ms is not None:
+            return (self.total_extraction_latency_ms / 1000.0) / windows
+        return None
+
+    @property
+    def avg_time_per_window_sec(self) -> float | None:
+        """Average wall-clock time taken per completed window in seconds."""
+        windows = self.windows_completed or 0
+        sec = self.duration_sec
+        if windows > 0 and sec is not None:
+            return sec / windows
+        return None
+
+    @property
+    def time_taken_display(self) -> str:
+        """Formatted string for time taken (e.g. '12.4s', '2m 15s')."""
+        sec = self.duration_sec
+        if sec is None:
+            return "—"
+        if sec < 60:
+            return f"{sec:.1f}s"
+        mins = int(sec // 60)
+        rem_sec = int(sec % 60)
+        return f"{mins}m {rem_sec}s"
+
+    @property
+    def avg_time_per_window_display(self) -> str:
+        """Formatted string for average time taken per window (e.g. '4.2s', '1m 10s')."""
+        sec = self.avg_time_per_window_sec
+        if sec is None:
+            return "—"
+        if sec < 60:
+            return f"{sec:.1f}s"
+        mins = int(sec // 60)
+        rem_sec = int(sec % 60)
+        return f"{mins}m {rem_sec}s"
+
+    @property
+    def engine_latency_display(self) -> str:
+        """Formatted string for engine (model) latency (e.g. '8.2s', '1m 12s')."""
+        sec = self.total_engine_latency_sec
+        if sec is None:
+            return "—"
+        if sec < 60:
+            return f"{sec:.1f}s"
+        mins = int(sec // 60)
+        rem_sec = int(sec % 60)
+        return f"{mins}m {rem_sec}s"
+
+    @property
+    def avg_engine_latency_display(self) -> str:
+        """Formatted string for average engine latency per window (e.g. '3.1s', '1m 05s')."""
+        sec = self.avg_engine_latency_sec
+        if sec is None:
+            return "—"
+        if sec < 60:
+            return f"{sec:.1f}s"
+        mins = int(sec // 60)
+        rem_sec = int(sec % 60)
+        return f"{mins}m {rem_sec}s"
+
 
 class MetadataWindow(Base):
     """One model call over one window of pages."""

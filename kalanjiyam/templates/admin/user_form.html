@@ -31,12 +31,28 @@
   </span>
 </nav>
 
+{% set master_role_ids = [] %}
+{% for cid, clabel in form.role_ids.choices %}
+  {% if 'master' in (clabel|string)|lower %}
+    {% set _ = master_role_ids.append(cid|string) %}
+  {% endif %}
+{% endfor %}
+
+{% set is_initial_master = false %}
+{% if form.role_ids.data %}
+  {% for r_val in form.role_ids.data %}
+    {% if r_val|string in master_role_ids %}
+      {% set is_initial_master = true %}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
 <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 max-w-2xl mb-8">
   <form method="POST" action="" class="space-y-1">
     {{ form.csrf_token }}
     {% for field in form %}
       {% if field.name != 'csrf_token' %}
-      <div class="my-4">
+      <div class="my-4" id="field-container-{{ field.name }}" {% if field.name == 'organization_ids' and not is_initial_master %}style="display: none;"{% elif field.name == 'organization_pick' and is_initial_master %}style="display: none;"{% endif %}>
         {{ mf.label(field.label) }}
         {% if field.type == 'SelectMultipleField' %}
         {{ field(class_='w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-royalblue focus:ring-4 focus:ring-royalblue/5 outline-none transition-all bg-white text-slate-900', size=5) }}
@@ -85,9 +101,77 @@
   </form>
 </div>
 {% endif %}
-{% endblock %}
 
-{% block tail %}
-{{ super() }}
-{{ lib.form_js() }}
+<script>
+(function() {
+  const masterRoleIds = {{ master_role_ids|tojson }};
+  let lastState = null;
+
+  function checkIsMasterUser() {
+    const roleSelect = document.getElementById('role_ids');
+    if (roleSelect && roleSelect.options) {
+      for (let i = 0; i < roleSelect.options.length; i++) {
+        const opt = roleSelect.options[i];
+        if (opt.selected) {
+          const text = (opt.text || '').toLowerCase();
+          const val = String(opt.value || '');
+          if (masterRoleIds.includes(val) || text.includes('master') || val.includes('master')) {
+            return true;
+          }
+        }
+      }
+    }
+    const checkedRoles = document.querySelectorAll('input[name="role_ids"]:checked');
+    for (let i = 0; i < checkedRoles.length; i++) {
+      const val = String(checkedRoles[i].value || '');
+      const parent = checkedRoles[i].closest('label') || checkedRoles[i].parentElement;
+      const text = (parent ? parent.textContent : '').toLowerCase();
+      if (masterRoleIds.includes(val) || text.includes('master') || val.includes('master')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function updateOrgVisibility() {
+    const isMaster = checkIsMasterUser();
+    if (lastState === isMaster) return;
+    lastState = isMaster;
+
+    const singleOrg = document.getElementById('field-container-organization_pick');
+    const multiOrg = document.getElementById('field-container-organization_ids');
+
+    if (singleOrg) {
+      singleOrg.style.display = isMaster ? 'none' : '';
+    }
+    if (multiOrg) {
+      multiOrg.style.display = isMaster ? '' : 'none';
+    }
+  }
+
+  function initListeners() {
+    const roleSelect = document.getElementById('role_ids');
+    if (roleSelect) {
+      roleSelect.addEventListener('change', updateOrgVisibility);
+      roleSelect.addEventListener('input', updateOrgVisibility);
+    }
+    document.addEventListener('change', function(e) {
+      if (e.target && (e.target.id === 'role_ids' || e.target.name === 'role_ids')) {
+        updateOrgVisibility();
+      }
+    });
+
+    if (window.jQuery) {
+      window.jQuery(document).on('change select2:select select2:unselect', '#role_ids', updateOrgVisibility);
+    }
+    updateOrgVisibility();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initListeners);
+  } else {
+    initListeners();
+  }
+})();
+</script>
 {% endblock %}

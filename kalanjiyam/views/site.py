@@ -123,14 +123,17 @@ def internal_server_error(e):
 
 @bp.route("/language/<slug>")
 def set_language(slug):
-    locale = next((L for L in LOCALES if L.slug == slug), None)
+    locale = next((L for L in LOCALES if L.slug == slug or L.code == slug), None)
 
     if locale:
         session["locale"] = locale.code
+        session.modified = True
 
     next_url = request.args.get("next")
-
-    if next_url:
+    if next_url and not next_url.startswith("/language/"):
         return redirect(next_url)
+
+    if request.referrer and not "/language/" in request.referrer:
+        return redirect(request.referrer)
 
     return redirect(url_for("site.index"))

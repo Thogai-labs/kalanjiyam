@@ -13,11 +13,12 @@ def p2_required(func: Callable):
         from kalanjiyam import queries as q
         from flask import request
 
-        # 1. Allow P2 and admins
+        # 1. Allow P2, Master Users, and admins
         is_p2_or_admin = (
             getattr(current_user, "is_p1", False)
             or getattr(current_user, "is_p2", False)
             or getattr(current_user, "is_moderator", False)
+            or getattr(current_user, "is_master_user", False)
             or getattr(current_user, "is_org_admin", False)
             or getattr(current_user, "is_super_admin", False)
         )

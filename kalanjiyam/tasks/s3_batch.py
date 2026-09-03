@@ -17,6 +17,7 @@ from PIL import Image
 from sqlalchemy import and_, or_, update
 
 from kalanjiyam.tasks import app
+from kalanjiyam.tasks.projects import process_page_image_for_storage
 from kalanjiyam.models.batch import BatchItem, BatchJob, BatchOcrChunk, BatchOcrPage
 from kalanjiyam.models.group import Group, ProjectGroups
 from kalanjiyam.utils.storage import get_storage, page_image_key
@@ -194,6 +195,19 @@ def _finalize_batch_item_status(session, batch_item_id: int):
     session.commit()
     LOG.info(f"Finalized BatchItem #{batch_item_id} status: {item.status}")
 
+    # Trigger metadata extraction if requested on the batch job and book OCR completed
+    if item.status == 'COMPLETED' and item.project_id and item.job and getattr(item.job, 'extract_metadata', False):
+        try:
+            from kalanjiyam.tasks.archival_extract import extract_archival_metadata
+            extract_archival_metadata.apply_async(
+                args=[item.project_id],
+                kwargs={"force": False},
+                queue='metadata'
+            )
+            LOG.info(f"Dispatched archival metadata extraction for project #{item.project_id} (BatchItem #{batch_item_id})")
+        except Exception as e:
+            LOG.warning(f"Could not dispatch metadata extraction for project #{item.project_id}: {e}")
+
     if item.job_id:
         _finalize_batch_job_status(session, item.job_id)
 
@@ -345,7 +359,8 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
                             total_bytes += img_path.stat().st_size
                             tmp_jpg = tmp_dir_path / f"{n}.jpg"
                             with Image.open(img_path) as im:
-                                im.convert("RGB").save(tmp_jpg, "JPEG", quality=90, optimize=True)
+                                im = process_page_image_for_storage(im)
+                                im.save(tmp_jpg, "JPEG", quality=90, optimize=True, dpi=(200, 200))
                             
                             extracted_img_bytes += tmp_jpg.stat().st_size
                             storage.save(page_image_key(project.slug, str(n)), tmp_jpg)
@@ -397,11 +412,17 @@ def process_s3_batch_item(self, batch_item_id: int, org_slug: str = None, langua
             # MUST commit DB transaction before dispatching tasks to Celery!
             session.commit()
             
-            # Dispatch pending/failed chunk tasks
+            # Dispatch pending/failed chunk tasks (or all chunks when force=True)
             for chunk in dispatched_chunks:
-                if chunk.status in ('PENDING', 'FAILED'):
+                if kwargs.get("force") or chunk.status in ('PENDING', 'FAILED'):
+                    dispatch_kwargs = {}
+                    if kwargs.get("engine"):
+                        dispatch_kwargs["engine"] = kwargs["engine"]
+                    if kwargs.get("force"):
+                        dispatch_kwargs["force"] = True
                     process_s3_batch_chunk.apply_async(
                         args=[chunk.id, org_slug, language],
+                        kwargs=dispatch_kwargs,
                         queue='s3_batch'
                     )
             LOG.info(f"Preparation complete for BatchItem #{batch_item_id}: dispatched {len(dispatched_chunks)} chunk tasks.")
@@ -447,12 +468,13 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
             LOG.info(f"BatchOcrChunk #{chunk_id} belongs to a cancelled job. Skipping.")
             return
 
-        # Atomically claim pending/failed work, or reclaim only an expired lease.
+        # Atomically claim pending/failed work, or reclaim only an expired lease (unconditional if force=True).
         now = datetime.utcnow()
         stale_before = now - CHUNK_LEASE_TIMEOUT
-        claim = session.execute(
-            update(BatchOcrChunk)
-            .where(
+        if kwargs.get("force"):
+            claim_filter = (BatchOcrChunk.id == chunk_id)
+        else:
+            claim_filter = and_(
                 BatchOcrChunk.id == chunk_id,
                 or_(
                     BatchOcrChunk.status.in_(('PENDING', 'FAILED')),
@@ -462,13 +484,16 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                     ),
                 ),
             )
+        claim = session.execute(
+            update(BatchOcrChunk)
+            .where(claim_filter)
             .values(
                 status='IN_PROGRESS', started_at=now, heartbeat_at=now,
                 attempt_count=BatchOcrChunk.attempt_count + 1,
             )
         )
         session.commit()
-        if not claim.rowcount:
+        if not claim.rowcount and not kwargs.get("force"):
             session.expire_all()
             chunk = session.query(BatchOcrChunk).get(chunk_id)
             if chunk and chunk.status == 'COMPLETED':
@@ -843,18 +868,28 @@ def process_s3_batch_chunk(self, chunk_id: int, org_slug: str = None, language: 
                         chunk.heartbeat_at = datetime.utcnow()
                         session.commit()
 
+            # Check if any pages in this chunk failed
+            has_failed_page = session.query(BatchOcrPage).filter_by(chunk_id=chunk_id, status='FAILED').first() is not None
+            chunk_final_status = 'FAILED' if has_failed_page else 'COMPLETED'
+            chunk_err_msg = 'One or more pages in chunk failed OCR' if has_failed_page else None
+
             # Do not overwrite a concurrent cancellation or stale-worker reclaim.
             completed = session.execute(
                 update(BatchOcrChunk)
                 .where(BatchOcrChunk.id == chunk_id, BatchOcrChunk.status == 'IN_PROGRESS')
-                .values(total_ocr_latency_ms=chunk_ocr_latency, status='COMPLETED', completed_at=datetime.utcnow())
+                .values(
+                    total_ocr_latency_ms=chunk_ocr_latency,
+                    status=chunk_final_status,
+                    error_message=chunk_err_msg,
+                    completed_at=datetime.utcnow()
+                )
             )
             session.commit()
             if not completed.rowcount:
                 LOG.info(f"Chunk #{chunk_id} was cancelled or reclaimed before finalization.")
                 return
 
-            LOG.info(f"BatchOcrChunk #{chunk_id} ({chunk.start_page}-{chunk.end_page}) COMPLETED in {chunk_ocr_latency:.2f}ms.")
+            LOG.info(f"BatchOcrChunk #{chunk_id} ({chunk.start_page}-{chunk.end_page}) {chunk_final_status} in {chunk_ocr_latency:.2f}ms.")
             _finalize_batch_item_status(session, chunk.batch_item_id)
 
         except Exception as e:

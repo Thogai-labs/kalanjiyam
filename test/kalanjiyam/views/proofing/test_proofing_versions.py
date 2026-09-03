@@ -234,6 +234,16 @@ def test_get_version_display_name(flask_app):
             # OCR engine formatting
             name_ocr = get_version_display_name("ocr:chandra")
             assert "OCR 6" in str(name_ocr)
+
+            # Enhanced OCR masked display names
+            name_enh = get_version_display_name("ocr:enhanced:chandra:document_cleanup")
+            assert "Enhanced OCR 6 (Document Cleanup)" in str(name_enh)
+
+            name_enh_bg = get_version_display_name("ocr:enhanced:google:bg_clahe")
+            assert "Enhanced OCR 1 (BG + CLAHE)" in str(name_enh_bg)
+
+            name_enh_dots = get_version_display_name("ocr:enhanced:dots_ocr:hybrid_binarization")
+            assert "Enhanced OCR 12 (Hybrid Binarization)" in str(name_enh_dots)
             
             # Legacy display names
             name_legacy = get_version_display_name("role:p1")
@@ -241,9 +251,9 @@ def test_get_version_display_name(flask_app):
 
             # Translation display names
             name_tr = get_version_display_name("translation:google:sa->en")
-            assert "Google" in str(name_tr)
+            assert "Translation 6" in str(name_tr)
             assert "SA → EN" in str(name_tr)
 
             name_tr_legacy = get_version_display_name("TR:google:sa->en")
-            assert "Google" in str(name_tr_legacy)
+            assert "Translation 6" in str(name_tr_legacy)
             assert "SA → EN" in str(name_tr_legacy)

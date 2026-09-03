@@ -14,6 +14,11 @@ def test_public_books_index(client, flask_app):
     assert resp.status_code == 200
     assert b"Test Project" in resp.data
 
+    # Test with pagination query params
+    resp_paged = client.get(f"{endpoint}?page=2&per_page=18")
+    assert resp_paged.status_code == 200
+    assert b"booksCatalog" in resp_paged.data
+
 
 def test_public_book_detail(client, flask_app):
     flask_app.config["MULTI_TENANT_MODE"] = True

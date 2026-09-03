@@ -1,203 +1,206 @@
 {% extends 'header-main-footer.html' %}
 
-{% set mailing_url = 'https://groups.google.com/g/siddhasagaram-announce' %}
-{% set code_url = 'https://github.com/siddhasagaram/kalanjiyam' %}
+{% set mailing_url = 'https://groups.google.com/g/kalanjiyam-announce' %}
+{% set code_url = 'https://github.com/kalanjiyam-org/kalanjiyam' %}
 {% set contact_url = url_for('about.contact') %}
 
-{% block title %}{{ _('Kalanjiyam - Siddha Knowledge Digital Library') }}{% endblock %}
+{% block title %}{{ _('Kalanjiyam - Digital Heritage Library & Proofing') }}{% endblock %}
 
 {% block extra_head %}
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
   :root {
     --brand-royalblue: royalblue;
     --brand-royalblue-dark: #3f51b5;
     --brand-royalblue-hover: #2c3892;
-    --brand-bg-dark: #0b1120;
-    --brand-card-bg: rgba(15, 23, 42, 0.75);
   }
 
   body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   }
 
-  .font-serif-title {
-    font-family: 'Cinzel', Georgia, serif;
+  .google-home-search {
+    background-color: #ffffff;
+    border: 1px solid #dfe1e5;
+    border-radius: 9999px;
+    box-shadow: 0 1px 6px rgba(32, 33, 36, 0.12);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  /* Royal Blue Academic Hero Header */
-  .academic-hero {
-    background-color: var(--brand-bg-dark);
-    background-image: 
-      radial-gradient(circle at 50% 10%, rgba(65, 105, 225, 0.22) 0%, rgba(11, 17, 32, 0.95) 70%),
-      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255, 255, 255, 0.02) 23px, rgba(255, 255, 255, 0.02) 24px),
-      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255, 255, 255, 0.02) 23px, rgba(255, 255, 255, 0.02) 24px);
-    background-size: 100% 100%, 24px 24px, 24px 24px;
-    position: relative;
-    border-bottom: 1px solid rgba(65, 105, 225, 0.2);
+  .google-home-search:hover {
+    border-color: rgba(223, 225, 229, 0);
+    box-shadow: 0 2px 10px rgba(32, 33, 36, 0.2);
   }
 
-  /* Formal Card Design with Royalblue Accents */
-  .formal-card {
-    background: var(--brand-card-bg);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(8px);
-    transition: all 0.25s ease-in-out;
+  .google-home-search:focus-within {
+    border-color: rgba(223, 225, 229, 0);
+    box-shadow: 0 2px 12px rgba(65, 105, 225, 0.25);
   }
 
-  .formal-card:hover {
-    border-color: rgba(65, 105, 225, 0.6);
-    box-shadow: 0 12px 35px rgba(65, 105, 225, 0.15);
-    transform: translateY(-2px);
-    background: rgba(15, 23, 42, 0.9);
+  .feature-pill-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 2px 6px -1px rgba(0, 0, 0, 0.03);
   }
 
-  /* Active Royalblue Button */
-  .btn-royal-active {
-    background: royalblue;
-    color: #ffffff !important;
-    padding: 14px 28px;
-    border-radius: 10px;
-    font-weight: 600;
-    font-size: 0.95rem;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 4px 14px rgba(65, 105, 225, 0.4);
-  }
-
-  .btn-royal-active:hover {
-    background: #3b52d4;
-    box-shadow: 0 6px 20px rgba(65, 105, 225, 0.55);
-    transform: translateY(-1px);
-  }
-
-  .btn-royal-outline {
-    background: rgba(255, 255, 255, 0.05);
-    color: #e2e8f0 !important;
-    padding: 14px 28px;
-    border-radius: 10px;
-    font-weight: 600;
-    font-size: 0.95rem;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .btn-royal-outline:hover {
-    background: rgba(65, 105, 225, 0.15);
-    border-color: royalblue;
-    color: #ffffff !important;
-  }
-
-  /* Search Input */
-  .academic-search-input {
-    width: 100%;
-    background: rgba(11, 17, 32, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    padding: 16px 20px 16px 52px;
-    color: #ffffff;
-    font-size: 0.975rem;
-    outline: none;
-    transition: all 0.2s ease;
-  }
-
-  .academic-search-input:focus {
-    border-color: royalblue;
-    box-shadow: 0 0 0 3px rgba(65, 105, 225, 0.3);
+  .feature-pill-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(65, 105, 225, 0.35);
+    box-shadow: 0 12px 24px -4px rgba(15, 23, 42, 0.08), 0 4px 6px -2px rgba(65, 105, 225, 0.04);
   }
 </style>
 {% endblock %}
 
+{% block main %}
+<div class="w-full bg-slate-50 flex-1">
 
-{% block header %}
-<header class="academic-hero text-slate-100 shrink-0 overflow-hidden min-h-screen flex flex-col justify-between">
-  
-  <!-- Navigation Header -->
-  <div class="relative z-10 border-b border-slate-800/80">
-    {% include("include/header.html") %}
-  </div>
+  <!-- Main Hero Section (Google Clean White) -->
+  <section class="bg-white border-b border-slate-200 py-12 sm:py-16 px-4">
+    <div class="max-w-4xl mx-auto text-center space-y-6">
 
-  <!-- Hero Content Section -->
-  <div class="relative z-5 text-center px-6 max-w-5xl mx-auto my-auto pt-8 pb-12">
-    
-    <!-- Page Title -->
-    <h1 class="text-4xl sm:text-6xl font-bold font-serif-title tracking-tight mb-6 text-white leading-tight">
-      {{ _('Digital Library') }}
-    </h1>
-
-    <!-- Subtitle -->
-    <p class="mx-auto text-lg sm:text-xl text-slate-300 max-w-3xl font-normal leading-relaxed mb-10">
-      {{ _('A formal digital archive dedicated to the preservation, scholarly transcription, and public access of traditional Siddha medical literature and palm-leaf manuscripts.') }}
-    </p>
-
-    <!-- Search Box -->
-    <form action="{{ url_for('search.index') }}" method="GET" class="max-w-2xl mx-auto mb-10 relative">
-      <div class="relative flex items-center">
-        <svg class="w-5 h-5 absolute left-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-        </svg>
-        <input type="text" name="q" class="academic-search-input" placeholder="{{ _('Search manuscript text, titles, and authors...') }}" />
-        <button type="submit" class="absolute right-2 px-5 py-2.5 bg-royalblue hover:bg-blue-600 text-white font-semibold rounded-md text-sm transition-all shadow-md">
-          {{ _('Search Archive') }}
-        </button>
+      <!-- Badge / Organization Brand -->
+      <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-royalblue text-xs font-semibold uppercase tracking-wider shadow-xs">
+        <span class="w-2 h-2 rounded-full bg-royalblue animate-pulse"></span>
+        <span>{{ _('Powered by BharatGen • Archival Management Platform') }}</span>
       </div>
-    </form>
 
-    <!-- Action Links -->
-    <div class="flex flex-wrap items-center justify-center gap-4 mb-16">
-      <a class="btn-royal-active" href="{{ url_for('public.books.index') }}">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.246 18.477 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-        </svg>
-        <span>{{ _('Browse Catalog') }}</span>
+      <!-- Main Headline -->
+      <div class="space-y-3">
+        <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 leading-tight">
+          {{ _('Preserving Ancient Manuscripts & Heritage Knowledge') }}
+        </h1>
+        <p class="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto font-medium leading-relaxed">
+          {{ _('An open scholarly archive and collaborative proofreading platform for Sanskrit literature, palm-leaf manuscripts, and classical heritage texts.') }}
+        </p>
+      </div>
+
+      <!-- Google-Style Omni Search Box -->
+      <div class="pt-2 max-w-2xl mx-auto">
+        <form action="{{ url_for('search.index') }}" method="GET" class="w-full">
+          <div class="google-home-search flex items-center px-4 py-2.5 sm:py-3">
+            <svg class="w-5 h-5 text-slate-400 shrink-0 mr-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+            <input type="text"
+                   name="q"
+                   class="w-full bg-transparent border-none text-slate-900 placeholder-slate-400 text-sm sm:text-base outline-none font-medium"
+                   placeholder="{{ _('Search manuscript texts, titles, authors, or topics...') }}"
+                   autocomplete="off" />
+            <button type="submit"
+                    class="px-5 py-2 bg-royalblue hover:bg-blue-600 text-white font-semibold rounded-full text-xs sm:text-sm transition-all shadow-sm shrink-0 flex items-center gap-1.5 ml-2">
+              <span>{{ _('Search') }}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Quick Action Pills -->
+      <div class="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+        <a href="{{ url_for('proofing.index') }}"
+           class="inline-flex items-center px-4 py-2 rounded-full bg-royalblue hover:bg-blue-600 text-white text-xs sm:text-sm font-semibold transition-all shadow-sm">
+        <span>{{ _('Proofreading Workspace') }}</span>
       </a>
 
-      <a class="btn-royal-outline" href="{{ url_for('proofing.index') }}">
-        <svg class="w-5 h-5 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-        </svg>
-        <span>{{ _('Proofreading Dashboard') }}</span>
-      </a>
+        <a href="{{ url_for('proofing.create_project') }}"
+           class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue text-xs sm:text-sm font-semibold transition-all shadow-xs">
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+          </svg>
+          <span>{{ _('Upload Scans / PDF') }}</span>
+        </a>
+
+        <a href="{{ url_for('proofing.help_index') }}"
+           class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue text-xs sm:text-sm font-semibold transition-all shadow-xs">
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <span>{{ _('Guidelines & Help') }}</span>
+        </a>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 3-Pillar Foundation Section -->
+  <section class="max-w-6xl mx-auto px-4 py-12 sm:py-16">
+    <div class="text-center mb-10">
+      <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{{ _('Our Core Mission') }}</h2>
+      <p class="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">{{ _('Preserving Heritage with Modern Technology') }}</p>
     </div>
 
-    <!-- Formal 3-Column Pillars -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-left border-t border-slate-800/80 pt-10">
-      <!-- Pillar 1 -->
-      <div class="formal-card p-6">
-        <div class="text-blue-400 font-semibold text-xs tracking-wider uppercase mb-2">{{ _('Collection') }}</div>
-        <h3 class="text-lg font-bold text-white mb-2">{{ _('Palm-leaf & Heritage Manuscripts') }}</h3>
-        <p class="text-sm text-slate-300 leading-relaxed">{{ _('High-fidelity digital preservation of ancient medical texts, alchemy treatises, and historical documents.') }}</p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+      <!-- Pillar 1: Palm-Leaf & Heritage Scans -->
+      <div class="feature-pill-card p-6 sm:p-7 flex flex-col justify-between">
+        <div>
+          <div class="w-10 h-10 rounded-xl bg-blue-50 text-royalblue flex items-center justify-center mb-4 font-bold">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19.5v-15A2.5 2.5 0 016.5 2H20v20H6.5a2.5 2.5 0 01-2.5-2.5Z"></path>
+            </svg>
+          </div>
+          <div class="text-royalblue font-bold text-xs uppercase tracking-wider mb-1.5">{{ _('Preservation') }}</div>
+          <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('Palm-Leaf & Rare Scans') }}</h3>
+          <p class="text-slate-600 text-xs sm:text-sm leading-relaxed">
+            {{ _('High-fidelity digital preservation and AI OCR processing of ancient palm-leaf manuscripts and historical medical literature.') }}
+          </p>
+        </div>
+        <div class="mt-6 pt-4 border-t border-slate-100 flex items-center text-xs font-semibold text-slate-500 gap-1.5">
+          <svg class="w-4 h-4 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          <span>{{ _('High-Resolution Scan Support') }}</span>
+        </div>
       </div>
 
-      <!-- Pillar 2 -->
-      <div class="formal-card p-6">
-        <div class="text-blue-400 font-semibold text-xs tracking-wider uppercase mb-2">{{ _('Scholarship') }}</div>
-        <h3 class="text-lg font-bold text-white mb-2">{{ _('Collaborative Proofing') }}</h3>
-        <p class="text-sm text-slate-300 leading-relaxed">{{ _('Peer-reviewed transcription and multi-stage verification by scholars and domain experts.') }}</p>
+      <!-- Pillar 2: Scholar Proofreading -->
+      <div class="feature-pill-card p-6 sm:p-7 flex flex-col justify-between">
+        <div>
+          <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4 font-bold">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+            </svg>
+          </div>
+          <div class="text-indigo-600 font-bold text-xs uppercase tracking-wider mb-1.5">{{ _('Scholarship') }}</div>
+          <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('Collaborative Proofing') }}</h3>
+          <p class="text-slate-600 text-xs sm:text-sm leading-relaxed">
+            {{ _('Side-by-side verification with image overlays, keyboard shortcuts, and peer-reviewed multi-stage proofreading rounds.') }}
+          </p>
+        </div>
+        <div class="mt-6 pt-4 border-t border-slate-100 flex items-center text-xs font-semibold text-slate-500 gap-1.5">
+          <svg class="w-4 h-4 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          <span>{{ _('Dual-Layer Review Pipeline') }}</span>
+        </div>
       </div>
 
-      <!-- Pillar 3 -->
-      <div class="formal-card p-6">
-        <div class="text-blue-400 font-semibold text-xs tracking-wider uppercase mb-2">{{ _('Access') }}</div>
-        <h3 class="text-lg font-bold text-white mb-2">{{ _('Open Knowledge Engine') }}</h3>
-        <p class="text-sm text-slate-300 leading-relaxed">{{ _('Structured metadata index, full-text search capability, and transliterated text access.') }}</p>
+      <!-- Pillar 3: Open Knowledge Engine -->
+      <div class="feature-pill-card p-6 sm:p-7 flex flex-col justify-between">
+        <div>
+          <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4 font-bold">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+          </div>
+          <div class="text-amber-600 font-bold text-xs uppercase tracking-wider mb-1.5">{{ _('Open Access') }}</div>
+          <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('Open Knowledge Engine') }}</h3>
+          <p class="text-slate-600 text-xs sm:text-sm leading-relaxed">
+            {{ _('Full-text search, word-level grammatical tagging, cross-lingual translations, and clean e-book & text downloads.') }}
+          </p>
+        </div>
+        <div class="mt-6 pt-4 border-t border-slate-100 flex items-center text-xs font-semibold text-slate-500 gap-1.5">
+          <svg class="w-4 h-4 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          <span>{{ _('Free Public Domain Downloads') }}</span>
+        </div>
       </div>
+
     </div>
+  </section>
 
-  </div>
-</header>
+</div>
 {% endblock %}
-
-{% block main %}{% endblock %}
-
-
-

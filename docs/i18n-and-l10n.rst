@@ -1,129 +1,225 @@
-Internationalization and Localization
-=====================================
+Internationalization and Localization (i18n & l10n)
+===================================================
 
-.. note::
-    This doc is for software engineers who want to add new translation files to
-    the Kalanjiyam application. If you want to help translate but aren't interested
-    in the technical details, join our translation effort here:
+Internationalization and localization (**i18n and l10n**) allow Kalanjiyam to present its entire user interface in multiple Indian languages as well as English.
 
-    https://www.transifex.com/kalanjiyam/kalanjiyam
-
-
-Internationalization and localization, or **i18n and l10n** for short, are how
-we prepare a website for multiple regions and languages. We use i18n and l10n
-to present Kalanjiyam's interface in multiple languages. 
-
-This doc describes our i18n and l10n process so that you can maintain existing
-i18n/l10n logic and add a new locale to the site.
-
-Roughly, our process has five steps:
-
-1. Annotate all translatable text in the app.
-2. Create translation files for each locale we care about.
-3. Translate text from English to the locale of interest. 
-4. Add these translations to the app.
-5. Update the app UI.
-
-
-1. Annotate translatable text
------------------------------
-
-We manage i18n and l10n through the `Flask-Babel`_ extension, which we
-initialize
-when creating our Flask app::
-
-    # kalanjiyam/__init__.py:create_app
-    babel = Babel(app)
-
-Once we load this extension, we then annotate all of the text we wish to
-translate with the `_` function, which Flask-Babel injects into the `Jinja`_
-template context. For example::
-
-    # some-file.html
-    {{ _('Texts') }}
-
-If a translation varies based on some number, you can use `ngettext`::
-
-    # texts.html
-    {{ ngettext('%(num)d page', '%(num)d pages', count) }}
-
-If a translation depends on some specific context, you can use `pgettext`
-instead::
-
-    # texts.html
-    {{ pgettext('texts', 'About') }}
-
-    # project.html
-    {{ pgettext('projects', 'About') }}
-
-    # user.html
-    {{ pgettext('users', 'About') }}
-
-
-.. _`Flask-Babel`: https://python-babel.github.io/flask-babel/
-.. _Jinja: https://jinja.palletsprojects.com/en/3.1.x/
-
-
-2. Create translation files
----------------------------
-
-All of our translations are stored in `.po` (portable object) files, a simple
-plain-text file format that is the standard for translation files.
-
-To create these `.po` files, we first create a `.pot` (portable object
-template) file that extracts all translatable text in the application. This
-file is a template for our locale-specific translation data, and we can
-regenerate it directly from the application code at any time::
-
-    # Generates a `.pot` file.
-    make babel-extract
-
-From this `.pot` file, we then create one `.po` file for each locale we care
-about. These files contain locale-specific translation data, and we can save
-them in version control::
-
-    # Create a new locale file from `messages.pot`.
-    make babel-init locale=sa
-
-    # Update existing locale files.
-    make babel-update
-
-
-3. Translate text
+Supported Locales
 -----------------
 
-We do our translation work through `Transifex`_, a user-friendly UI for
-managing translation projects. You can find our translation project `here`_.
+Kalanjiyam natively supports 14 major Indian languages as well as English in ``kalanjiyam.consts.LOCALES``:
 
-.. _`Transifex`: https://www.transifex.com/
-.. _`here`: https://www.transifex.com/kalanjiyam/kalanjiyam
++------------+-----------+----------------------+-----------------------------+
+| Locale     | Slug      | Native Display Name  | Language                    |
++============+===========+======================+=============================+
+| ``en``     | ``en``    | English              | English (Default Source)    |
++------------+-----------+----------------------+-----------------------------+
+| ``ta``     | ``ta``    | தமிழ்                | Tamil                       |
++------------+-----------+----------------------+-----------------------------+
+| ``hi_IN``  | ``hi``    | हिन्दी               | Hindi                       |
++------------+-----------+----------------------+-----------------------------+
+| ``sa``     | ``sa``    | संस्कृतम्             | Sanskrit                    |
++------------+-----------+----------------------+-----------------------------+
+| ``te_IN``  | ``te``    | తెలుగు               | Telugu                      |
++------------+-----------+----------------------+-----------------------------+
+| ``kn_IN``  | ``kn``    | ಕನ್ನಡ                | Kannada                     |
++------------+-----------+----------------------+-----------------------------+
+| ``ml_IN``  | ``ml``    | മലയാളം               | Malayalam                   |
++------------+-----------+----------------------+-----------------------------+
+| ``mr_IN``  | ``mr``    | मराठी                | Marathi                     |
++------------+-----------+----------------------+-----------------------------+
+| ``bn_IN``  | ``bn``    | বাংলা                | Bengali                     |
++------------+-----------+----------------------+-----------------------------+
+| ``gu_IN``  | ``gu``    | ગુજરાતી              | Gujarati                    |
++------------+-----------+----------------------+-----------------------------+
+| ``or_IN``  | ``or``    | ଓଡ଼ିଆ                | Odia                        |
++------------+-----------+----------------------+-----------------------------+
+| ``pa_IN``  | ``pa``    | ਪੰਜਾਬੀ               | Punjabi                     |
++------------+-----------+----------------------+-----------------------------+
+| ``as_IN``  | ``as``    | অসমীয়া              | Assamese                    |
++------------+-----------+----------------------+-----------------------------+
+| ``ur_IN``  | ``ur``    | اردو                 | Urdu                        |
++------------+-----------+----------------------+-----------------------------+
 
+Catalogs are stored under ``kalanjiyam/translations/<locale>/LC_MESSAGES/``:
+* ``messages.po``: Human-readable translation catalogs.
+* ``messages.mo``: Compiled binary catalogs loaded by Flask-Babel and Gettext.
 
-On Transifex, you can upload a `.pot` file as a template for the entire
-project, and you can also upload `.po` files per locale.
+-------------------------------------------------------------------------------
 
+1. Annotating Translatable Strings in Code
+------------------------------------------
 
-4. Add translations to the app
-------------------------------
+We manage i18n through `Flask-Babel`_. Strings are marked in Python and Jinja templates using standard Gettext functions:
 
-Next, we download the `.po` files created by Transifex, add them to the
-`kalanjiyam` repo, and compile them into the `.mo` files that Flask-Babel uses.
+In Jinja Templates:
+~~~~~~~~~~~~~~~~~~~
+.. code-block:: jinja
 
-We can do all of this with the following command::
+    <!-- Simple string -->
+    {{ _('Proofreading') }}
 
-    # NOTE: you must run this command within a virtual environment.
-    make install-i18n
+    <!-- Pluralized string -->
+    {{ ngettext('%(num)d page', '%(num)d pages', count) }}
 
-The command clones ``AnaadiAI/kalanjiyam-i18n`` from GitHub. If that repository is
-private or the clone prompts for credentials, you can skip ``make install-i18n`` for
-local English-only development, or clone the repo manually into
-``data/kalanjiyam-i18n`` and run ``make babel-compile``. Production deploy notes are
-in :doc:`production-deploy`.
+    <!-- Context-specific string -->
+    {{ pgettext('proofing_page', 'Save Revision') }}
 
+In Python Code:
+~~~~~~~~~~~~~~~
+.. code-block:: python
 
-5. Update the app UI
---------------------
+    from flask_babel import _, _l, pgettext
 
-Finally, we update the app UI so that our new locale is available to the end
-user. To do so, just update the list in `kalanjiyam.consts.LOCALES` then verify
-that everything works on your dev server.
+    # Lazy string for forms / model definitions
+    label = _l("Project Name")
+
+    # Runtime translation
+    flash(_("Your changes have been saved successfully."))
+
+.. _Flask-Babel: https://python-babel.github.io/flask-babel/
+
+-------------------------------------------------------------------------------
+
+2. Extracting & Initializing Catalogs
+-------------------------------------
+
+To extract all translatable strings from the codebase and initialize/update the catalog files:
+
+.. code-block:: bash
+
+    # Run via Makefile
+    make init-i18n
+
+    # Or run the script directly
+    python -m kalanjiyam.scripts.fetch_i18n_files
+
+What this script does:
+1. **Extracts** translatable strings from all ``.py`` and ``.html`` files into ``messages.pot`` using ``babel.cfg``.
+2. **Initializes** missing locale directories and catalogs (``ta``, ``hi_IN``, ``sa``, ``te_IN``, ``en``).
+3. **Updates** existing ``messages.po`` files with newly added strings without overwriting existing translations.
+4. **Compiles** all catalogs to ``messages.mo``.
+
+-------------------------------------------------------------------------------
+
+3. Machine Translation via LLM Backends
+----------------------------------------
+
+Kalanjiyam includes an automated translation pipeline ([`kalanjiyam/scripts/translate_catalogs.py`](file:///home/mrportable/Documents/kalanjiyam/kalanjiyam/scripts/translate_catalogs.py)) powered by LLM translation engines.
+
+Translation Engines:
+~~~~~~~~~~~~~~~~~~~~
+* **``llm_gemma``** (*Default*): Uses the 26B instruction-tuned ``llm-gemma`` model hosted on the OCR backend (``OCR_SERVICE_URL`` / ``/v1/ocr`` or ``/v1/chat/completions``).
+* **``gemma``**: Uses the multilingual ``google/gemma-4-12b-it`` model hosted on ``TRANSLATION_SERVICE_URL``.
+* **``indictrans2``**: Uses the 1B IndicTrans2 models.
+* **``bharatgen``**: Connects to the BharatGen API.
+
+Basic Translation Command:
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. code-block:: bash
+
+    # Translate with llm-gemma (default)
+    python -m kalanjiyam.scripts.translate_catalogs --engine llm_gemma
+
+    # Or translate with gemma 12B
+    python -m kalanjiyam.scripts.translate_catalogs --engine gemma
+
+Incremental & Resume Behavior (Default):
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+By default, the script **only translates missing, empty, or failed strings**.
+* If a string already has a translated ``msgstr``, it is automatically skipped.
+* If a translation process is cancelled (Ctrl+C) or interrupted by a network glitch, running the command again will safely resume from where it left off.
+* The script features graceful interruption handling: pressing **Ctrl+C** automatically saves all translated entries and compiles ``messages.mo`` before exiting.
+
+Forcing Full Re-Translation (``--force``):
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+To overwrite and re-translate all strings from scratch:
+
+.. code-block:: bash
+
+    python -m kalanjiyam.scripts.translate_catalogs --engine llm_gemma --force
+
+Command-Line Options:
+~~~~~~~~~~~~~~~~~~~~~
+.. code-block:: text
+
+    --engine ENGINE        Translation backend (llm_gemma, gemma, bharatgen, google, openai, generic)
+    --locales LOC ...      Locales to translate (default: ta hi_IN sa te_IN)
+    --batch-size N         Batch size for translation requests (default: 20)
+    --force, -f            Force re-translation of all strings (overwrites existing msgstr)
+    --dry-run              Scan and report untranslated strings without translating
+    --api-url URL          Override backend API endpoint
+    --api-key KEY          Override API authorization key
+    --no-compile           Skip automatic .mo compilation after translation
+
+-------------------------------------------------------------------------------
+
+4. Docker & Remote Server Execution
+-----------------------------------
+
+When running on staging or production containers (e.g. ``kalanjiyam-web-staging``):
+
+Running the Translation in Container:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. code-block:: bash
+
+    # Run translation inside container with proxy bypass
+    NO_PROXY="*" docker exec -it kalanjiyam-web-staging python -m kalanjiyam.scripts.translate_catalogs --engine llm_gemma
+
+Syncing Translated Catalogs to Host:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+To extract the translated catalogs from the container to your host repository without needing ``sudo`` permissions:
+
+.. code-block:: bash
+
+    cd ~/kalanjiyam-dev/kalanjiyam
+    docker exec kalanjiyam-web-staging tar -C /app/kalanjiyam -cf - translations | tar -xf -
+
+Compiling & Reloading Translations in Web App:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Flask-Babel and Gunicorn cache compiled ``.mo`` files in memory. After updating catalogs:
+
+.. code-block:: bash
+
+    # 1. Compile .po to .mo
+    docker exec -it kalanjiyam-web-staging pybabel compile -d kalanjiyam/translations
+
+    # 2. Restart web container to reload memory cache
+    docker restart kalanjiyam-web-staging
+
+-------------------------------------------------------------------------------
+
+5. Adding a New Locale
+----------------------
+
+To add a new language to Kalanjiyam:
+
+1. Add the locale to ``LOCALES`` in ``kalanjiyam/consts.py``:
+
+   .. code-block:: python
+
+       LOCALES = [
+           Locale(code="ta", slug="ta", text="தமிழ்"),
+           Locale(code="en", slug="en", text="English"),
+           Locale(code="hi_IN", slug="hi", text="हिन्दी"),
+           Locale(code="sa", slug="sa", text="संस्कृतम्"),
+           Locale(code="te_IN", slug="te", text="తెలుగు"),
+           Locale(code="bn_IN", slug="bn", text="বাংলা"),  # New locale
+       ]
+
+2. Initialize the catalog for the new locale:
+
+   .. code-block:: bash
+
+       pybabel init -i messages.pot -d kalanjiyam/translations -l bn_IN
+
+3. Translate the new catalog using the translation engine:
+
+   .. code-block:: bash
+
+       python -m kalanjiyam.scripts.translate_catalogs --locales bn_IN --engine llm_gemma
+
+4. Compile the catalogs:
+
+   .. code-block:: bash
+
+       pybabel compile -d kalanjiyam/translations

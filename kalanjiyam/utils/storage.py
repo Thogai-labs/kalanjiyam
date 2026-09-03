@@ -50,7 +50,9 @@ def resolve_org_slug(project_slug: str, org_slug: str = None) -> str:
     if org_slug and org_slug != "open-tenant":
         return org_slug
     try:
-        from kalanjiyam import queries as q, database as db
+        from kalanjiyam import database as db
+        from kalanjiyam import queries as q
+
         session = q.get_session()
         project = session.query(db.Project).filter_by(slug=project_slug).first()
         if project:
@@ -80,10 +82,26 @@ def page_image_key(project_slug: str, page_slug: str, org_slug: str = None) -> s
     return f"projects/{org}/{project_slug}/pages/{page_slug}.jpg"
 
 
+def page_master_image_key(
+    project_slug: str, page_slug: str, org_slug: str = None
+) -> str:
+    """Key of the backup raw master scan for a page before enhancement replacement."""
+    org = resolve_org_slug(project_slug, org_slug)
+    return f"projects/{org}/{project_slug}/pages/master_{page_slug}.jpg"
+
+
 def editor_image_key(project_slug: str, filename: str, org_slug: str = None) -> str:
     """Key of an image uploaded through the rich-text editor or extracted from OCR."""
     org = resolve_org_slug(project_slug, org_slug)
     return f"projects/{org}/{project_slug}/images/{filename}"
+
+
+def project_raw_image_key(
+    project_slug: str, filename: str, org_slug: str = None
+) -> str:
+    """Key of a raw uploaded image before it is processed into a page image."""
+    org = resolve_org_slug(project_slug, org_slug)
+    return f"projects/{org}/{project_slug}/raw_images/{filename}"
 
 
 def project_docx_key(project_slug: str, org_slug: str = None) -> str:
@@ -114,7 +132,11 @@ def page_ocr_key(project_slug: str, page_slug: str, org_slug: str = None) -> str
 
 
 def revision_document_key(
-    project_slug: str, page_slug: str, version_num: int = 1, tag: str = "", org_slug: str = None
+    project_slug: str,
+    page_slug: str,
+    version_num: int = 1,
+    tag: str = "",
+    org_slug: str = None,
 ) -> str:
     """Key for a revision's structured block document snapshot (gzipped JSON)."""
     org = resolve_org_slug(project_slug, org_slug)
@@ -123,11 +145,30 @@ def revision_document_key(
     return f"projects/{org}/{project_slug}/revisions/{page_slug}/v{version_num}.json.gz"
 
 
-def comparison_result_key(project_slug: str, comparison_id: int, org_slug: str = None) -> str:
+def comparison_result_key(
+    project_slug: str, comparison_id: int, org_slug: str = None
+) -> str:
     """Key for detailed per-page OCR comparison results (gzipped JSON)."""
     org = resolve_org_slug(project_slug, org_slug)
     return f"projects/{org}/{project_slug}/comparisons/{comparison_id}.json.gz"
 
+
+def page_enhanced_ocr_key(
+    project_slug: str,
+    page_slug: str,
+    engine: str,
+    profile: str,
+    org_slug: str = None,
+) -> str:
+    """Key for a page's Enhanced OCR payload (gzipped JSON).
+
+    Separates enhanced OCR results by engine and enhancement profile so normal
+    and enhanced OCR results never overwrite each other.
+    """
+    org = resolve_org_slug(project_slug, org_slug)
+    engine_tag = (engine or "model").lower().strip().replace("_", "-")
+    profile_tag = (profile or "default").lower().strip()
+    return f"projects/{org}/{project_slug}/ocr/enhanced/{engine_tag}/{profile_tag}/{page_slug}.json.gz"
 
 
 # Storage interface
@@ -162,7 +203,9 @@ class Storage(ABC):
         """Yield ``(key, size_in_bytes)`` for every object under `prefix`."""
 
     @abstractmethod
-    def list_keys_with_mtime(self, prefix: str = "") -> Iterator[tuple[str, int, float]]:
+    def list_keys_with_mtime(
+        self, prefix: str = ""
+    ) -> Iterator[tuple[str, int, float]]:
         """Yield ``(key, size_in_bytes, mtime_timestamp)`` for objects under `prefix`."""
 
     @abstractmethod
@@ -281,7 +324,9 @@ class LocalStorage(Storage):
             if path.is_file():
                 yield path.relative_to(self.root).as_posix(), path.stat().st_size
 
-    def list_keys_with_mtime(self, prefix: str = "") -> Iterator[tuple[str, int, float]]:
+    def list_keys_with_mtime(
+        self, prefix: str = ""
+    ) -> Iterator[tuple[str, int, float]]:
         base = self._path(prefix) if prefix else self.root
         if not base.is_dir():
             return
@@ -385,7 +430,7 @@ class S3Storage(Storage):
         try:
             response = self.client.get_object(Bucket=self.bucket, Key=key)
         except self.client.exceptions.NoSuchKey:
-            raise FileNotFoundError(f"s3://{self.bucket}/{key}")
+            raise FileNotFoundError(f"s3://{self.bucket}/{key}") from None
         return response["Body"].read()
 
     def exists(self, key: str) -> bool:
@@ -416,7 +461,9 @@ class S3Storage(Storage):
             for obj in page.get("Contents", []):
                 yield obj["Key"], obj["Size"]
 
-    def list_keys_with_mtime(self, prefix: str = "") -> Iterator[tuple[str, int, float]]:
+    def list_keys_with_mtime(
+        self, prefix: str = ""
+    ) -> Iterator[tuple[str, int, float]]:
         paginator = self.client.get_paginator("list_objects_v2")
         for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
             for obj in page.get("Contents", []):
@@ -468,6 +515,8 @@ class S3Storage(Storage):
         if self.public_endpoint_url:
             return redirect(self.presigned_url(key))
         return send_file(self.local_copy(key), **send_file_kwargs)
+
+
 class MemoryStorage(Storage):
     """In-memory storage backend for testing."""
 
@@ -475,7 +524,12 @@ class MemoryStorage(Storage):
         self.files = {}
         self.mtimes = {}
 
-    def save(self, key: str, source: Path | str | bytes | BinaryIO, mtime: float | None = None) -> None:
+    def save(
+        self,
+        key: str,
+        source: Path | str | bytes | BinaryIO,
+        mtime: float | None = None,
+    ) -> None:
         if isinstance(source, (Path, str)):
             self.files[key] = Path(source).read_bytes()
         elif isinstance(source, bytes):
@@ -509,7 +563,9 @@ class MemoryStorage(Storage):
             if key.startswith(prefix):
                 yield key, len(data)
 
-    def list_keys_with_mtime(self, prefix: str = "") -> Iterator[tuple[str, int, float]]:
+    def list_keys_with_mtime(
+        self, prefix: str = ""
+    ) -> Iterator[tuple[str, int, float]]:
         for key, data in list(self.files.items()):
             if key.startswith(prefix):
                 yield key, len(data), self.mtimes.get(key, time.time())
@@ -532,6 +588,7 @@ class MemoryStorage(Storage):
 
     def serve(self, key: str, **send_file_kwargs):
         import io
+
         return send_file(io.BytesIO(self.read_bytes(key)), **send_file_kwargs)
 
 

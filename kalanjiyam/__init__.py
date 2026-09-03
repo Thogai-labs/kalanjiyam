@@ -11,11 +11,11 @@ import sys
 import sentry_sdk
 from dotenv import load_dotenv
 from flask import Flask, render_template, session
-from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_babel import Babel, pgettext
 from flask_wtf.csrf import generate_csrf
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sqlalchemy import exc
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import config
 from kalanjiyam import admin as admin_manager
@@ -144,11 +144,13 @@ def create_app(config_env: str):
     with app.app_context():
         _ = admin_manager.create_admin_manager(app)
 
-    # Initialize OpenTelemetry instrumentation & metrics middleware
-    from kalanjiyam.utils.otel import init_opentelemetry
+    # Initialize OpenTelemetry instrumentation, metrics middleware, and Prometheus exporter
     from kalanjiyam.utils.metrics import init_metrics_middleware
+    from kalanjiyam.utils.otel import init_opentelemetry
+    from kalanjiyam.utils.prometheus import init_prometheus
     init_opentelemetry(app)
     init_metrics_middleware(app)
+    init_prometheus(app)
 
     # Route extensions
     app.url_map.converters["list"] = ListConverter
@@ -164,7 +166,7 @@ def create_app(config_env: str):
     app.register_blueprint(public, url_prefix=f"{url_prefix}/books")
     app.register_blueprint(search, url_prefix=f"{url_prefix}/search")
     app.register_blueprint(site, url_prefix=url_prefix)
-    
+
     # Admin functionality is now integrated into the main Flask-Admin interface
 
     # Debug-only routes for local development.

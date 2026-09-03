@@ -2,7 +2,7 @@
 {% import 'macros/admin.html' as admin %}
 
 {% block title %}
-  {% if is_job_list %}{{ _('Batch Jobs') }}{% else %}{{ _('Job #') }}{{ selected_job.id }} {{ _('Metrics') }}{% endif %} | {{ _('Admin') }}
+  {% if is_job_list %}{{ _('Batch Jobs') }}{% else %}{{ _('Job #') }}{{ selected_job.id }} {{ _('Metrics') }}{% endif %} | {{ _('Admin Console') }}
 {% endblock %}
 
 {% block admin_sidebar %}
@@ -10,68 +10,101 @@
 {% endblock %}
 
 {% block content %}
-{% set view_endpoint = 'org_admin_view.cli_batch_ocr' if is_org_admin else 'platform_view.cli_batch_ocr' %}
+{% set view_endpoint = 'master_metrics_view.cli_batch_ocr' if is_master_user else ('org_admin_view.cli_batch_ocr' if is_org_admin else 'platform_view.cli_batch_ocr') %}
 
 {% if is_job_list %}
-<!-- PAGE 1: STANDALONE BATCH JOBS LIST -->
-{{ admin.page_header(_('OCR & Translation Metrics'), _('Filter, search, and inspect batch OCR, translation, and proofer jobs.')) }}
+<!-- PAGE 1: STANDALONE BATCH JOBS LIST (Google Cloud Compute Style) -->
+<div class="mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+        {{ admin.icon('gauge', class='w-5 h-5') }}
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ _('OCR & Translation Metrics') }}
+          </h1>
+          <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+            {{ _('AI Compute Engine') }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">
+          {{ _('Filter, search, and inspect batch OCR, translation, and proofer jobs.') }}
+        </p>
+      </div>
+    </div>
 
-{# Archival extraction is not a batch job, so it has no row in the table below:
-   a run belongs to a project, a BatchItem belongs to a job, and there is no
-   honest single row for both. Its metrics are their own export, linked here
-   because this is where anyone looking for extraction metrics will look. #}
-{% if not is_org_admin %}
-<div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 mb-6 flex flex-wrap items-center justify-between gap-4">
-  <div>
-    <h2 class="text-sm font-bold text-slate-900">{{ _('Archival metadata extraction') }}</h2>
-    <p class="text-xs text-slate-500 mt-0.5 max-w-2xl">
-      {{ _('Per-document runs of the description extractor: page coverage, field coverage, evidence-verified rate, token cost. Tracked per project rather than per batch job, so it is not in the table below.') }}
-    </p>
+    {% if not is_org_admin %}
+    <div>
+      <a href="{{ url_for('master_metrics_view.metadata_metrics_export_csv' if is_master_user else 'platform_view.metadata_metrics_export_csv') }}"
+         class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-all shadow-xs shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        <span>{{ _('Export Extraction Metrics CSV') }}</span>
+      </a>
+    </div>
+    {% endif %}
   </div>
-  <a href="{{ url_for('platform_view.metadata_metrics_export_csv') }}"
-     class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors shadow-sm shrink-0">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-    </svg>
-    {{ _('Export Extraction Metrics CSV') }}
-  </a>
+</div>
+
+<!-- KPI Summary Cards -->
+{% if summary %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{{ _('Total OCR Time') }}</span>
+    <div class="text-2xl font-bold text-slate-900">{{ summary.total_ocr_time_formatted }}</div>
+  </div>
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{{ _('Total Extraction + OCR Time') }}</span>
+    <div class="text-2xl font-bold text-slate-900">{{ summary.total_extract_ocr_time_formatted }}</div>
+  </div>
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{{ _('Total Pages') }}</span>
+    <div class="text-2xl font-bold text-slate-900">{{ summary.total_pages_formatted }}</div>
+  </div>
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{{ _('Total Source Size') }}</span>
+    <div class="text-2xl font-bold text-slate-900">{{ summary.total_source_size_formatted }}</div>
+  </div>
 </div>
 {% endif %}
 
-<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-8 space-y-6">
+<div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 mb-8 space-y-5">
   <!-- Sub-Nav Category Tabs & Task Type / Search Controls -->
   <div class="space-y-4 border-b border-slate-100 pb-5">
-    <!-- Row 1: Full-Width Category Tabs Navigation -->
-    <nav class="flex items-center space-x-2 bg-slate-100/80 p-1.5 rounded-xl text-xs font-semibold text-slate-600 w-full overflow-x-auto">
+    <!-- Full-Width Category Tabs Navigation -->
+    <nav class="flex items-center space-x-1.5 bg-slate-100/80 p-1.5 rounded-xl text-xs font-semibold text-slate-600 w-full overflow-x-auto">
       <a href="{{ url_for(view_endpoint, category='all', task_type=current_task_type, q=search_query) }}"
-         class="flex-1 text-center px-4 py-2 rounded-lg transition-all {% if current_category == 'all' %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
+         class="flex-1 text-center px-4 py-2 rounded-lg transition-all {% if current_category == 'all' %}bg-white text-royalblue shadow-xs font-bold{% else %}hover:text-slate-900{% endif %}">
         All Jobs
       </a>
       <a href="{{ url_for(view_endpoint, category='proofer', task_type=current_task_type, q=search_query) }}"
-         class="flex-1 text-center px-4 py-2 rounded-lg transition-all {% if current_category == 'proofer' %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
+         class="flex-1 text-center px-4 py-2 rounded-lg transition-all {% if current_category == 'proofer' %}bg-white text-royalblue shadow-xs font-bold{% else %}hover:text-slate-900{% endif %}">
         Proofer Single Page
       </a>
       <a href="{{ url_for(view_endpoint, category='ui_batch', task_type=current_task_type, q=search_query) }}"
-         class="flex-1 text-center px-4 py-2 rounded-lg transition-all {% if current_category == 'ui_batch' %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
+         class="flex-1 text-center px-4 py-2 rounded-lg transition-all {% if current_category == 'ui_batch' %}bg-white text-royalblue shadow-xs font-bold{% else %}hover:text-slate-900{% endif %}">
         UI Batch
       </a>
       <a href="{{ url_for(view_endpoint, category='cli_batch', task_type=current_task_type, q=search_query) }}"
-         class="flex-1 text-center px-4 py-2 rounded-lg transition-all {% if current_category == 'cli_batch' %}bg-white text-indigo-900 shadow-sm font-bold{% else %}hover:text-slate-900{% endif %}">
+         class="flex-1 text-center px-4 py-2 rounded-lg transition-all {% if current_category == 'cli_batch' %}bg-white text-royalblue shadow-xs font-bold{% else %}hover:text-slate-900{% endif %}">
         CLI Batch
       </a>
     </nav>
 
-    <!-- Row 2: Select Filter & Search Form -->
+    <!-- Filter & Search Toolbar -->
     <form method="GET" action="{{ url_for(view_endpoint) }}" class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
       <input type="hidden" name="category" value="{{ current_category }}">
 
       <!-- OCR vs Translation Filter Dropdown -->
       <div class="relative min-w-[220px]">
         <select name="task_type" onchange="this.form.submit()"
-                class="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3.5 py-2.5 pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
-          <option value="all" {% if current_task_type == 'all' %}selected{% endif %}>All Types (OCR & Translation)</option>
-          <option value="ocr" {% if current_task_type == 'ocr' %}selected{% endif %}>OCR Only</option>
-          <option value="translation" {% if current_task_type == 'translation' %}selected{% endif %}>Translation Only</option>
+                class="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3.5 py-2.5 pr-8 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-xs">
+          <option value="all" {% if current_task_type == 'all' %}selected{% endif %}>{{ _('All Types (OCR & Translation)') }}</option>
+          <option value="ocr" {% if current_task_type == 'ocr' %}selected{% endif %}>{{ _('OCR Only') }}</option>
+          <option value="translation" {% if current_task_type == 'translation' %}selected{% endif %}>{{ _('Translation Only') }}</option>
         </select>
         <svg class="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
@@ -80,8 +113,8 @@
 
       <!-- Search Input -->
       <div class="relative flex-1">
-        <input type="text" name="q" value="{{ search_query }}" placeholder="Search by URI, document name, or job type..."
-               class="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-xs rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
+        <input type="text" name="q" value="{{ search_query }}" placeholder="{{ _('Search by URI, document name, or job type...') }}"
+               class="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-xs rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-xs">
         <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
         </svg>
@@ -96,59 +129,64 @@
   </div>
 
   <div class="flex items-center justify-between">
-    <h2 class="text-base font-bold text-slate-900">{{ _('Jobs List') }} ({{ jobs_list | length }})</h2>
+    <h2 class="text-sm font-bold text-slate-900">{{ _('Jobs List') }} ({{ total if total is not none else jobs_list | length }})</h2>
+    {% if total and total > 0 and num_pages and num_pages > 1 %}
+    <span class="text-xs text-slate-500 font-medium">
+      Showing {{ ((page - 1) * per_page) + 1 }}–{{ [page * per_page, total]|min }} of {{ total }}
+    </span>
+    {% endif %}
   </div>
 
   {% if jobs_list %}
   <div class="overflow-x-auto rounded-xl border border-slate-100">
-    <table class="min-w-full text-sm">
-      <thead class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-        <tr class="text-left font-semibold text-slate-600 border-b border-slate-100 bg-slate-50/50">
-          <th class="px-4 py-3 font-mono text-xs"># Job ID</th>
-          <th class="px-4 py-3">{{ _('Job Type') }}</th>
-          <th class="px-4 py-3 text-right">{{ _('Files') }}</th>
-          <th class="px-4 py-3 text-right">{{ _('Total Pages') }}</th>
-          <th class="px-4 py-3 text-center">{{ _('Status') }}</th>
-          <th class="px-4 py-3 text-right">{{ _('Created At') }}</th>
-          <th class="px-4 py-3 text-center">{{ _('Action') }}</th>
+    <table class="min-w-full text-xs sm:text-sm">
+      <thead class="bg-slate-50/80 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+        <tr class="border-b border-slate-100">
+          <th class="px-4 py-3.5 font-mono text-xs"># Job ID</th>
+          <th class="px-4 py-3.5">{{ _('Job Type') }}</th>
+          <th class="px-4 py-3.5 text-right">{{ _('Files') }}</th>
+          <th class="px-4 py-3.5 text-right">{{ _('Total Pages') }}</th>
+          <th class="px-4 py-3.5 text-center">{{ _('Status') }}</th>
+          <th class="px-4 py-3.5 text-right">{{ _('Created At') }}</th>
+          <th class="px-4 py-3.5 text-center">{{ _('Action') }}</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-slate-100">
+      <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
         {% for j in jobs_list %}
-        <tr class="hover:bg-slate-50/80 transition-colors">
-          <td class="px-4 py-3 font-bold text-slate-900 font-mono">Job #{{ j.id }}</td>
-          <td class="px-4 py-3">
-            <span class="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold border border-slate-200">
+        <tr class="hover:bg-slate-50/70 transition-colors">
+          <td class="px-4 py-3.5 font-bold text-slate-900 font-mono">Job #{{ j.id }}</td>
+          <td class="px-4 py-3.5">
+            <span class="text-xs font-mono px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold border border-slate-200">
               {{ j.job_type }}
             </span>
           </td>
-          <td class="px-4 py-3 text-right font-mono text-xs text-slate-700 font-semibold">
+          <td class="px-4 py-3.5 text-right font-mono text-xs text-slate-700 font-semibold">
             {{ j.item_count }}
           </td>
-          <td class="px-4 py-3 text-right font-mono text-xs text-slate-700 font-semibold">
+          <td class="px-4 py-3.5 text-right font-mono text-xs text-slate-700 font-semibold">
             {{ j.total_pages or '-' }}
           </td>
-          <td class="px-4 py-3 text-center">
+          <td class="px-4 py-3.5 text-center">
             {% if j.status == 'COMPLETED' %}
-            <span class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+            <span class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
               Completed
             </span>
             {% elif j.status == 'FAILED' %}
-            <span class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-100">
+            <span class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
               Failed
             </span>
             {% else %}
-            <span class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-100">
+            <span class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
               {{ j.status }}
             </span>
             {% endif %}
           </td>
-          <td class="px-4 py-3 text-right text-xs text-slate-500 font-mono">
+          <td class="px-4 py-3.5 text-right text-xs text-slate-500 font-mono">
             {{ j.created_at.strftime('%Y-%m-%d %H:%M') if j.created_at else '' }}
           </td>
-          <td class="px-4 py-3 text-center">
+          <td class="px-4 py-3.5 text-center">
             <a href="{{ url_for(view_endpoint, job_id=j.id) }}"
-               class="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-colors">
+               class="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-royalblue text-xs font-bold transition-colors">
               <span>View Metrics</span>
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -160,375 +198,168 @@
       </tbody>
     </table>
   </div>
+
+  {% if num_pages and num_pages > 1 %}
+  <div class="flex items-center justify-between text-xs text-slate-500 pt-4 border-t border-slate-100">
+    <span class="font-medium">
+      Page {{ page }} of {{ num_pages }} ({{ total }} {{ _('jobs') }})
+    </span>
+    <div class="flex items-center gap-2">
+      {% if page > 1 %}
+      <a href="{{ url_for(view_endpoint, category=current_category, task_type=current_task_type, q=search_query, page=page-1, per_page=per_page) }}"
+         class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 font-semibold text-slate-700 transition-colors shadow-xs">
+        <span>Previous</span>
+      </a>
+      {% endif %}
+      {% if page < num_pages %}
+      <a href="{{ url_for(view_endpoint, category=current_category, task_type=current_task_type, q=search_query, page=page+1, per_page=per_page) }}"
+         class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 font-semibold text-slate-700 transition-colors shadow-xs">
+        <span>Next</span>
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
   {% else %}
-  <div class="py-12 text-center text-slate-400">
-    <svg class="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-    </svg>
-    <p class="text-sm font-semibold text-slate-600">{{ _('No batch jobs found matching your filters.') }}</p>
+  <div class="text-center py-12 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+    <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
+      {{ admin.icon('gauge', class='w-5 h-5') }}
+    </div>
+    <h3 class="text-slate-800 font-bold text-xs">{{ _('No batch jobs found matching your criteria.') }}</h3>
   </div>
   {% endif %}
 </div>
 
 {% else %}
-
-<!-- PAGE 2: STANDALONE JOB METRICS & DETAILS -->
-{% set export_summary_endpoint = 'org_admin_view.cli_batch_ocr_export_summary_csv' if is_org_admin else 'platform_view.cli_batch_ocr_export_summary_csv' %}
-{% set export_pages_endpoint = 'org_admin_view.cli_batch_ocr_export_pages_csv' if is_org_admin else 'platform_view.cli_batch_ocr_export_pages_csv' %}
-
+<!-- PAGE 2: DEDICATED SINGLE JOB INSPECTION -->
 <div class="mb-6">
-  <a href="{{ url_for(view_endpoint) }}" class="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-    </svg>
-    <span>Back to All Batch Jobs</span>
-  </a>
+  <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+        {{ admin.icon('gauge', class='w-5 h-5') }}
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ _('Job #') }}{{ selected_job.id }} {{ _('Metrics') }}
+          </h1>
+          <span class="font-mono text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold">
+            {{ selected_job.job_type }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">
+          {{ _('Detailed telemetry and per-item performance metrics for batch run.') }}
+        </p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <a href="{{ url_for(view_endpoint) }}"
+         class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-royalblue text-xs font-semibold transition-all shadow-xs">
+        <span>&larr; {{ _('All Jobs') }}</span>
+      </a>
+    </div>
+  </div>
 </div>
 
-{{ admin.page_header(_('Job #') ~ selected_job.id ~ _(' Metrics Details'), _('Comprehensive file metrics, page breakdowns, latencies, and CSV downloads.')) }}
+<!-- Job KPI Metrics Summary -->
+{% if summary %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{{ _('Total OCR Time') }}</span>
+    <div class="text-2xl font-bold text-slate-900">{{ summary.total_ocr_time_formatted }}</div>
+  </div>
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{{ _('Total Extraction + OCR Time') }}</span>
+    <div class="text-2xl font-bold text-slate-900">{{ summary.total_extract_ocr_time_formatted }}</div>
+  </div>
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{{ _('Total Pages') }}</span>
+    <div class="text-2xl font-bold text-slate-900">{{ summary.total_pages_formatted }}</div>
+  </div>
+  <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
+    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{{ _('Total Source Size') }}</span>
+    <div class="text-2xl font-bold text-slate-900">{{ summary.total_source_size_formatted }}</div>
+  </div>
+</div>
+{% endif %}
 
-<div class="space-y-6 mb-8">
-  <!-- Job Header Summary Card -->
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-wrap items-center justify-between gap-4">
-    <div>
-      <div class="flex items-center gap-3 mb-1">
-        <h2 class="text-xl font-bold text-slate-900">Job #{{ selected_job.id }} Metrics</h2>
-        <span class="text-xs font-mono px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
-          {{ selected_job.job_type }}
-        </span>
-      </div>
-      <p class="text-xs text-slate-500 font-mono" title="{{ selected_job.target_uri }}">
-        Target: {{ selected_job.target_uri }}
-      </p>
-    </div>
-
-    <div class="flex flex-wrap items-center gap-3">
-      <a href="{{ url_for(export_summary_endpoint, job_id=selected_job.id) }}"
-         class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors shadow-sm">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-        </svg>
-        Export Document Summary CSV
-      </a>
-      <a href="{{ url_for(export_pages_endpoint, job_id=selected_job.id) }}"
-         class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors shadow-sm">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-        </svg>
-        Export Per-Page Metrics CSV
-      </a>
-    </div>
+<!-- Job Items Table -->
+<div class="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden mb-8">
+  <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">{{ _('Processed Files & Documents') }}</h2>
+    {% if total and total > 0 and num_pages and num_pages > 1 %}
+    <span class="text-xs text-slate-500 font-medium">
+      Showing {{ ((page - 1) * per_page) + 1 }}–{{ [page * per_page, total]|min }} of {{ total }}
+    </span>
+    {% else %}
+    <span class="text-xs text-slate-500 font-medium">{{ (item_metrics or items)|length }} {{ _('files') }}</span>
+    {% endif %}
   </div>
 
-  <!-- Metrics Table Card -->
-  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-base font-bold text-slate-900">{{ _('Document & File Metrics') }} ({{ item_metrics | length }})</h3>
-    </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-xs sm:text-sm text-left">
+      <thead class="bg-slate-50/80 text-slate-500 uppercase tracking-wider font-bold text-[10px] border-b border-slate-100">
+        <tr>
+          <th class="px-5 py-3.5">{{ _('File / Document') }}</th>
+          <th class="px-4 py-3.5">{{ _('Status') }}</th>
+          <th class="px-4 py-3.5 text-right">{{ _('Pages') }}</th>
+          <th class="px-4 py-3.5 text-right">{{ _('Latency') }}</th>
+          <th class="px-4 py-3.5">{{ _('Error / Message') }}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+        {% for it in (item_metrics or items) %}
+        <tr class="hover:bg-slate-50/70 transition-colors">
+          <td class="px-5 py-3.5 font-mono text-xs font-semibold text-slate-900 truncate max-w-xs">
+            {{ it.name or it.file_path or it.input_uri or ('Item #' ~ it.id) }}
+          </td>
+          <td class="px-4 py-3.5">
+            {% if it.status == 'COMPLETED' %}
+            <span class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Completed</span>
+            {% elif it.status == 'FAILED' %}
+            <span class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">Failed</span>
+            {% else %}
+            <span class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600">{{ it.status }}</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3.5 text-right font-mono text-xs text-slate-800 font-semibold">
+            {{ it.pages or it.page_count or it.total_pages or '-' }}
+          </td>
+          <td class="px-4 py-3.5 text-right font-mono text-xs text-slate-800">
+            {{ ('%.2fs'|format(it.time_took_sec or it.processing_time_sec)) if (it.time_took_sec or it.processing_time_sec) is not none else '-' }}
+          </td>
+          <td class="px-4 py-3.5 text-xs text-slate-500 truncate max-w-sm">
+            {{ it.error_message or '-' }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
-    <div class="overflow-x-auto rounded-xl border border-slate-100">
-      <table class="min-w-full text-sm">
-        <thead class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-          <tr class="text-left font-semibold text-slate-600 border-b border-slate-100 bg-slate-50/50">
-            <th class="px-4 py-3 font-mono text-xs">#</th>
-            <th class="px-4 py-3">{{ _('Name / File Path') }}</th>
-            <th class="px-4 py-3 text-center">{{ _('Engine') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('Pages') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('Avg Conf.') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('Min Conf.') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('Pages <0.7') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('Avg p05') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('Blocks') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('Chars') }}</th>
-
-            <th class="px-4 py-3 text-right">{{ _('Source Size') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('PDF -> JPG Size') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('Cropped Images') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('OCR Data') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('Trans Data') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('OCR / Trans Time') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('Avg Engine Latency') }}</th>
-            <th class="px-4 py-3 text-right">{{ _('Avg / Page') }}</th>
-            <th class="px-4 py-3 text-center">{{ _('Status') }}</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          {% for item in item_metrics %}
-          <tr class="hover:bg-slate-50/80 transition-colors">
-            <td class="px-4 py-3 font-mono text-xs text-slate-400">{{ item.id }}</td>
-            <td class="px-4 py-3 max-w-xs">
-              <div class="font-semibold text-slate-900 truncate" title="{{ item.name }}">
-                {{ item.name }}
-              </div>
-              {% if item.error_message %}
-              <div class="text-[11px] text-rose-600 truncate mt-0.5" title="{{ item.error_message }}">
-                ⚠️ {{ item.error_message }}
-              </div>
-              {% endif %}
-            </td>
-
-            <td class="px-4 py-3 text-center">
-              {% if item.engine %}
-                <span class="inline-flex px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                  {{ item.engine }}
-                </span>
-              {% else %}-{% endif %}
-            </td>
-            <td class="px-4 py-3 text-right font-bold text-slate-800">
-              {{ item.pages }}
-            </td>
-            <td class="px-4 py-3 text-right font-mono text-xs text-emerald-600 font-semibold">
-              {% if item.avg_confidence is not none %}{{ item.avg_confidence }}%{% else %}-{% endif %}
-            </td>
-            <td class="px-4 py-3 text-right font-mono text-xs text-rose-600 font-semibold">
-              {% if item.min_confidence is not none %}{{ item.min_confidence }}%{% else %}-{% endif %}
-            </td>
-            <td class="px-4 py-3 text-right font-mono text-xs font-semibold">
-              {% if item.low_conf_page_count %}
-                <span class="inline-flex px-1.5 py-0.5 rounded text-[11px] bg-rose-50 text-rose-700 border border-rose-200 font-bold">
-                  {{ item.low_conf_page_count }}
-                </span>
-              {% else %}
-                <span class="text-slate-400">0</span>
-              {% endif %}
-            </td>
-            <td class="px-4 py-3 text-right font-mono text-xs text-amber-600 font-semibold">
-              {% if item.avg_p05 is not none %}{{ item.avg_p05 }}%{% else %}-{% endif %}
-            </td>
-            <td class="px-4 py-3 text-right font-mono text-xs text-slate-700 font-semibold">
-              {% if item.total_blocks is not none %}{{ item.total_blocks }}{% else %}-{% endif %}
-            </td>
-            <td class="px-4 py-3 text-right font-mono text-xs text-slate-700 font-semibold">
-              {% if item.total_chars is not none %}{{ item.total_chars }}{% else %}-{% endif %}
-            </td>
-
-            <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
-              {% if item.size_bytes %}
-                {% if item.size_bytes >= 1048576 %}
-                  {{ (item.size_bytes / (1024*1024)) | round(2) }} MB
-                {% else %}
-                  {{ (item.size_bytes / 1024) | round(1) }} KB
-                {% endif %}
-              {% else %}
-                -
-              {% endif %}
-            </td>
-            <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
-              {% if item.extracted_images_size_bytes %}
-                {% if item.extracted_images_size_bytes >= 1048576 %}
-                  {{ (item.extracted_images_size_bytes / (1024*1024)) | round(2) }} MB
-                {% else %}
-                  {{ (item.extracted_images_size_bytes / 1024) | round(1) }} KB
-                {% endif %}
-              {% else %}
-                -
-              {% endif %}
-            </td>
-            <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
-              {% if item.cropped_images_size_bytes %}
-                {% if item.cropped_images_size_bytes >= 1048576 %}
-                  {{ (item.cropped_images_size_bytes / (1024*1024)) | round(2) }} MB
-                {% else %}
-                  {{ (item.cropped_images_size_bytes / 1024) | round(1) }} KB
-                {% endif %}
-              {% else %}
-                -
-              {% endif %}
-            </td>
-            <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
-              {% if item.ocr_data_size_bytes %}
-                {% if item.ocr_data_size_bytes >= 1048576 %}
-                  {{ (item.ocr_data_size_bytes / (1024*1024)) | round(2) }} MB
-                {% else %}
-                  {{ (item.ocr_data_size_bytes / 1024) | round(2) }} KB
-                {% endif %}
-              {% else %}
-                -
-              {% endif %}
-            </td>
-            <td class="px-4 py-3 text-right text-slate-600 font-mono text-xs">
-              {% if item.translation_data_size_bytes %}
-                {% if item.translation_data_size_bytes >= 1048576 %}
-                  {{ (item.translation_data_size_bytes / (1024*1024)) | round(2) }} MB
-                {% else %}
-                  {{ (item.translation_data_size_bytes / 1024) | round(2) }} KB
-                {% endif %}
-              {% else %}
-                -
-              {% endif %}
-            </td>
-            <td class="px-4 py-3 text-right font-mono text-xs text-slate-700">
-              {% if item.time_took_sec is not none and item.translation_time_took_sec is not none %}
-                <div>{{ item.time_took_sec }}s <span class="text-[10px] text-slate-400">(OCR)</span></div>
-                <div>{{ item.translation_time_took_sec }}s <span class="text-[10px] text-indigo-500">(Trans)</span></div>
-              {% elif item.time_took_sec is not none %}
-                {{ item.time_took_sec }}s <span class="text-[10px] text-slate-400">(OCR)</span>
-              {% elif item.translation_time_took_sec is not none %}
-                {{ item.translation_time_took_sec }}s <span class="text-[10px] text-indigo-500">(Trans)</span>
-              {% else %}
-                -
-              {% endif %}
-            </td>
-            <td class="px-4 py-3 text-right font-mono text-xs text-cyan-700 font-semibold">
-              {% if item.avg_engine_latency_sec is not none %}
-                {{ item.avg_engine_latency_sec }}s/p
-              {% else %}-{% endif %}
-            </td>
-            <td class="px-4 py-3 text-right font-mono text-xs text-indigo-600 font-semibold">
-              {% if item.avg_per_page_sec is not none and item.avg_trans_per_page_sec is not none %}
-                <div>{{ item.avg_per_page_sec }}s/p <span class="text-[10px] text-slate-400">(OCR)</span></div>
-                <div>{{ item.avg_trans_per_page_sec }}s/p <span class="text-[10px] text-indigo-500">(Trans)</span></div>
-              {% elif item.avg_per_page_sec is not none %}
-                {{ item.avg_per_page_sec }}s/p
-              {% elif item.avg_trans_per_page_sec is not none %}
-                {{ item.avg_trans_per_page_sec }}s/p
-              {% else %}
-                -
-              {% endif %}
-            </td>
-            <td class="px-4 py-3 text-center">
-              {% if item.status == 'COMPLETED' %}
-              <span class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                Completed
-              </span>
-              {% elif item.status == 'FAILED' %}
-              <span class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-100">
-                Failed
-              </span>
-              {% else %}
-              <span class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-100">
-                {{ item.status }}
-              </span>
-              {% endif %}
-            </td>
-          </tr>
-
-          <!-- Expandable Per-Page Metrics Details -->
-          {% if item.page_metrics %}
-          <tr class="bg-slate-50/40">
-            <td colspan="19" class="px-6 py-3">
-              <details class="group">
-                <summary class="cursor-pointer text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 select-none py-1">
-                  <svg class="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                  </svg>
-                  <span>View Per-Page Breakdown ({{ item.page_metrics | length }} Pages)</span>
-                </summary>
-
-                <div class="mt-2 mb-2 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-inner">
-                  <table class="min-w-full text-xs">
-                    <thead class="bg-slate-100/70 text-left text-[11px] font-bold text-slate-600 uppercase">
-                      <tr>
-                        <th class="px-3 py-2">Page #</th>
-                        <th class="px-3 py-2 text-center">Engine</th>
-                        <th class="px-3 py-2 text-right">Conf.</th>
-                        <th class="px-3 py-2 text-right">p05</th>
-                        <th class="px-3 py-2 text-right">Blocks</th>
-                        <th class="px-3 py-2 text-right">Chars</th>
-
-                        <th class="px-3 py-2 text-right">PDF -> JPG Size</th>
-                        <th class="px-3 py-2 text-right">Cropped Images</th>
-                        <th class="px-3 py-2 text-right">OCR Data</th>
-                        <th class="px-3 py-2 text-right">Trans Data</th>
-                        <th class="px-3 py-2 text-right">OCR Time</th>
-                        <th class="px-3 py-2 text-right">Engine Latency</th>
-                        <th class="px-3 py-2 text-right">Trans Time</th>
-                        <th class="px-3 py-2 text-center">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                      {% for pm in item.page_metrics %}
-                      <tr class="hover:bg-slate-50">
-                        <td class="px-3 py-2 font-bold text-slate-800">Page {{ pm.page_number }}</td>
-
-                        <td class="px-3 py-2 text-center font-mono text-slate-600">
-                          {% if pm.engine %}{{ pm.engine }}{% else %}-{% endif %}
-                        </td>
-                        <td class="px-3 py-2 text-right font-mono text-emerald-700 font-semibold">
-                          {% if pm.confidence is not none %}{{ pm.confidence }}%{% else %}-{% endif %}
-                        </td>
-                        <td class="px-3 py-2 text-right font-mono text-amber-700 font-semibold">
-                          {% if pm.p05 is not none %}{{ pm.p05 }}%{% else %}-{% endif %}
-                        </td>
-                        <td class="px-3 py-2 text-right font-mono text-slate-700">
-                          {% if pm.blocks is not none %}{{ pm.blocks }}{% else %}-{% endif %}
-                        </td>
-                        <td class="px-3 py-2 text-right font-mono text-slate-700">
-                          {% if pm.chars is not none %}{{ pm.chars }}{% else %}-{% endif %}
-                        </td>
-
-                        <td class="px-3 py-2 text-right font-mono text-slate-600">
-                          {% if pm.extracted_image_size_bytes %}
-                            {{ (pm.extracted_image_size_bytes / 1024) | round(1) }} KB
-                          {% else %}-{% endif %}
-                        </td>
-                        <td class="px-3 py-2 text-right font-mono text-slate-600">
-                          {% if pm.cropped_image_size_bytes %}
-                            {{ (pm.cropped_image_size_bytes / 1024) | round(1) }} KB
-                          {% else %}-{% endif %}
-                        </td>
-                        <td class="px-3 py-2 text-right font-mono text-slate-600">
-                          {% if pm.ocr_data_size_bytes %}
-                            {% if pm.ocr_data_size_bytes >= 1048576 %}
-                              {{ (pm.ocr_data_size_bytes / 1048576) | round(2) }} MB
-                            {% else %}
-                              {{ (pm.ocr_data_size_bytes / 1024) | round(1) }} KB
-                            {% endif %}
-                          {% else %}-{% endif %}
-                        </td>
-                        <td class="px-3 py-2 text-right font-mono text-slate-600">
-                          {% if pm.translation_data_size_bytes %}
-                            {% if pm.translation_data_size_bytes >= 1048576 %}
-                              {{ (pm.translation_data_size_bytes / 1048576) | round(2) }} MB
-                            {% else %}
-                              {{ (pm.translation_data_size_bytes / 1024) | round(1) }} KB
-                            {% endif %}
-                          {% else %}-{% endif %}
-                        </td>
-                        <td class="px-3 py-2 text-right font-mono text-indigo-700 font-semibold">
-                          {% if pm.time_took_sec is not none %}
-                            {{ pm.time_took_sec }}s
-                          {% else %}-{% endif %}
-                        </td>
-                        <td class="px-3 py-2 text-right font-mono text-cyan-700 font-semibold">
-                          {% if pm.engine_latency_sec is not none %}
-                            {{ pm.engine_latency_sec }}s
-                          {% else %}-{% endif %}
-                        </td>
-                        <td class="px-3 py-2 text-right font-mono text-emerald-700 font-semibold">
-                          {% if pm.translation_time_took_sec is not none %}
-                            {{ pm.translation_time_took_sec }}s
-                          {% else %}-{% endif %}
-                        </td>
-                        <td class="px-3 py-2 text-center">
-                          {% if pm.status == 'COMPLETED' %}
-                          <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">Completed</span>
-                          {% elif pm.status == 'FAILED' %}
-                          <span class="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200" title="{{ pm.error_message }}">Failed</span>
-                          {% else %}
-                          <span class="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">{{ pm.status }}</span>
-                          {% endif %}
-                        </td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              </details>
-            </td>
-          </tr>
-          {% endif %}
-          {% else %}
-          <tr>
-            <td colspan="12" class="px-4 py-8 text-center text-slate-400">
-              {{ _('No items in this batch job.') }}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  {% if num_pages and num_pages > 1 %}
+  <div class="flex items-center justify-between text-xs text-slate-500 p-4 border-t border-slate-100">
+    <span class="font-medium">
+      Page {{ page }} of {{ num_pages }} ({{ total }} {{ _('files') }})
+    </span>
+    <div class="flex items-center gap-2">
+      {% if page > 1 %}
+      <a href="{{ url_for(view_endpoint, job_id=selected_job.id, page=page - 1) }}"
+         class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 font-semibold text-slate-700 transition-colors shadow-xs">
+        <span>Previous</span>
+      </a>
+      {% endif %}
+      {% if page < num_pages %}
+      <a href="{{ url_for(view_endpoint, job_id=selected_job.id, page=page + 1) }}"
+         class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 font-semibold text-slate-700 transition-colors shadow-xs">
+        <span>Next</span>
+      </a>
+      {% endif %}
     </div>
   </div>
+  {% endif %}
 </div>
 {% endif %}
 {% endblock %}

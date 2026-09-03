@@ -1,35 +1,72 @@
 {% extends 'admin/master.html' %}
 {% import 'macros/admin.html' as admin %}
 
-{% block title %}{{ _('Import all projects') }} | {{ _('Admin') }}{% endblock %}
+{% block title %}{{ _('Import All Projects') }} | {{ _('Admin Console') }}{% endblock %}
 
 {% block admin_sidebar %}
 {{ admin.nav('export', current_user) }}
 {% endblock %}
 
 {% block content %}
-{{ admin.page_header(_('Import all projects')) }}
+<div class="mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3.5">
+      <div class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+        {{ admin.icon('upload', class='w-5 h-5') }}
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ _('Import All Projects') }}
+          </h1>
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+            {{ _('Bulk Archive') }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">
+          {{ _('Restore multiple project archives simultaneously from a bulk export ZIP.') }}
+        </p>
+      </div>
+    </div>
 
-<div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 max-w-xl">
+    <a href="{{ url_for('admin.export_import_dashboard') }}"
+       class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-xs transition-all">
+      <span>&larr; {{ _('Export / Import Hub') }}</span>
+    </a>
+  </div>
+</div>
+
+<div class="max-w-xl bg-white rounded-2xl p-6 shadow-xs border border-slate-200 mb-8 space-y-6">
   <form method="POST" enctype="multipart/form-data" class="space-y-4">
     {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
     <div>
-      <label for="projects_file" class="{{ admin.label_class() }}">{{ _('Bulk projects ZIP') }}</label>
+      <label for="projects_file" class="block text-xs font-semibold text-slate-700 mb-1.5">{{ _('Bulk Projects ZIP Archive') }}</label>
       <input type="file" id="projects_file" name="projects_file" accept=".zip"
-             class="{{ admin.input_class() }} file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-royalblue/10 file:text-royalblue file:font-semibold" required>
-      <p class="text-sm text-slate-400 mt-2">{{ _('ZIP containing multiple exported projects.') }}</p>
+             class="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-xl file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-royalblue/10 file:text-royalblue file:font-semibold focus:outline-none shadow-xs" required>
+      <p class="text-xs text-slate-400 mt-2">{{ _('ZIP file containing multiple exported project archives.') }}</p>
     </div>
-    {{ admin.btn_primary(_('Import all projects'), type='submit') }}
+    <button type="submit"
+            class="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors shadow-xs">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12"></path>
+      </svg>
+      <span>{{ _('Import All Projects') }}</span>
+    </button>
   </form>
 
-  {% call admin.callout_warning() %}
-  <p class="font-bold">{{ _('High-risk operation') }}</p>
-  <ul class="list-disc list-inside space-y-0.5">
-    <li>{{ _('Imports every project in the archive.') }}</li>
-    <li>{{ _('May take several minutes on large archives.') }}</li>
-    <li>{{ _('Creates many users; duplicate slugs are skipped.') }}</li>
-    <li>{{ _('Back up your database before continuing.') }}</li>
-  </ul>
-  {% endcall %}
+  <div class="p-4 rounded-xl bg-rose-50/70 border border-rose-200 text-xs text-slate-700">
+    <div class="flex items-center gap-2 mb-1.5 font-bold text-rose-800">
+      <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+      </svg>
+      <span>{{ _('High-risk Operation') }}</span>
+    </div>
+    <ul class="list-disc list-inside space-y-0.5 text-[11px] text-slate-600 font-medium">
+      <li>{{ _('Imports every single project found in the archive.') }}</li>
+      <li>{{ _('May take several minutes on large archives.') }}</li>
+      <li>{{ _('Creates many users; duplicate slugs will be skipped.') }}</li>
+      <li>{{ _('Back up your database before continuing.') }}</li>
+    </ul>
+  </div>
 </div>
 {% endblock %}

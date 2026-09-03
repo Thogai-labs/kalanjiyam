@@ -143,6 +143,24 @@ def test_pagination_appears_only_when_there_is_more(client, with_results):
     assert "Previous" in body
 
 
+def test_numbered_pagination_appears_when_multiple_pages_exist(client, with_results):
+    """When a search returns hits equal to per_page, numbered pagination buttons appear."""
+    many_hits = [_hit(str(i), is_public=True) for i in range(1, 21)]
+    results = search_query.SearchResults(
+        total_pages=45,
+        total_books=5,
+        hits=many_hits,
+    )
+    with_results(results=results)
+
+    body = client.get("/search/?q=நோய்&view=flat").data.decode()
+    assert "page=2" in body
+    assert "Next" in body
+    assert "google-page-btn" in body
+    assert 'aria-current="page"' in body
+
+
+
 def test_error_from_the_engine_shows_the_banner(client, with_results):
     with_results(results=search_query.SearchResults(error="Search is temporarily unavailable."))
     resp = client.get("/search/?q=நோய்")
