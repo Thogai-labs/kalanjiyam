@@ -61,7 +61,7 @@ services:
       celery -A kalanjiyam.tasks worker
       -Q default,search_index
       --loglevel=INFO
-      --concurrency=1
+      --autoscale=4,1
       --prefetch-multiplier=1
     env_file:
       - ../../.env
@@ -101,7 +101,7 @@ services:
       celery -A kalanjiyam.tasks worker
       -Q pdf_processing
       --loglevel=INFO
-      --concurrency=1
+      --autoscale=4,1
       --prefetch-multiplier=1
     env_file:
       - ../../.env
@@ -136,7 +136,7 @@ services:
       celery -A kalanjiyam.tasks worker
       -Q ocr,low_priority
       --loglevel=INFO
-      --concurrency=2
+      --autoscale=8,2
       --prefetch-multiplier=1
     env_file:
       - ../../.env
@@ -170,7 +170,7 @@ services:
       celery -A kalanjiyam.tasks worker
       -Q translation
       --loglevel=INFO
-      --concurrency=2
+      --autoscale=8,2
       --prefetch-multiplier=1
     env_file:
       - ../../.env

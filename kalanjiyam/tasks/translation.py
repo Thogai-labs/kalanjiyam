@@ -416,6 +416,9 @@ def run_translation_for_project(
             session.commit()
 
     if pages_with_revisions:
+        from kalanjiyam.tasks import PRIORITY_BATCH, PRIORITY_LOW
+
+        priority = PRIORITY_LOW if queue == "low_priority" else PRIORITY_BATCH
         tasks = group(
             run_translation_for_page.s(
                 app_env=app_env,
@@ -426,13 +429,13 @@ def run_translation_for_project(
                 engine=engine,
                 revision_id=revision_id,
                 glossary=glossary,
-            )
+            ).set(priority=priority)
             for p in pages_with_revisions
         )
         if queue:
-            ret = tasks.apply_async(queue=queue)
+            ret = tasks.apply_async(queue=queue, priority=priority)
         else:
-            ret = tasks.apply_async()
+            ret = tasks.apply_async(priority=priority)
         # Save the result so that we can poll for it later
         ret.save()
         return ret

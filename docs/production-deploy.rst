@@ -152,9 +152,9 @@ Kalanjiyam processes background tasks across dedicated queues:
 * `search_index`: Incremental OpenSearch indexing and sync jobs
 * `low_priority`: Throttled guest OCR/translation and non-urgent maintenance
 
-In Docker Compose, these are split across dedicated worker containers (`kalanjiyam-celery`, `kalanjiyam-celery-pdf`, `kalanjiyam-celery-ocr`, `kalanjiyam-celery-translation`, `kalanjiyam-celery-batch`, `kalanjiyam-celery-metadata`). For bare-metal single-worker deployments::
+Tasks use priority levels (`0..9`, where `9` is interactive single-page proofreading and `3` is bulk project batch jobs) to prevent starvation. In Docker Compose, workers use autoscaled concurrency (`--autoscale=8,2` for I/O-bound workers, `--autoscale=4,1` for CPU-bound workers). For bare-metal single-worker deployments::
 
-   celery -A kalanjiyam.tasks worker -Q default,pdf_processing,ocr,translation,low_priority,s3_batch,search_index,metadata --loglevel=INFO --concurrency=2
+   celery -A kalanjiyam.tasks worker -Q default,pdf_processing,ocr,translation,low_priority,s3_batch,search_index,metadata --loglevel=INFO --autoscale=8,2 --prefetch-multiplier=1
 
 .. _Celery daemonizing guide: https://docs.celeryq.dev/en/stable/userguide/daemonizing.html
 

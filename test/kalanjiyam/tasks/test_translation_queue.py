@@ -148,3 +148,27 @@ def test_celery_task_routes_mapping():
     assert routes.get("kalanjiyam.tasks.search_index.*", {}).get("queue") == "search_index"
     assert routes.get("kalanjiyam.tasks.archival_extract.*", {}).get("queue") == "metadata"
 
+
+def test_celery_task_priority_configuration():
+    from kalanjiyam.tasks import (
+        PRIORITY_BACKGROUND,
+        PRIORITY_BATCH,
+        PRIORITY_DEFAULT,
+        PRIORITY_HIGH,
+        PRIORITY_INTERACTIVE,
+        PRIORITY_LOW,
+        app,
+    )
+
+    assert PRIORITY_INTERACTIVE == 9
+    assert PRIORITY_HIGH == 7
+    assert PRIORITY_DEFAULT == 5
+    assert PRIORITY_BATCH == 3
+    assert PRIORITY_BACKGROUND == 2
+    assert PRIORITY_LOW == 1
+
+    transport_opts = app.conf.broker_transport_options
+    assert transport_opts.get("queue_order_strategy") == "priority"
+    assert transport_opts.get("priority_steps") == list(range(10))
+    assert app.conf.task_default_priority == 5
+

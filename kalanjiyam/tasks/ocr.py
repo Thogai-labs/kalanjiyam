@@ -540,6 +540,9 @@ def run_ocr_for_project(
             session.commit()
 
     if unedited_pages:
+        from kalanjiyam.tasks import PRIORITY_BATCH, PRIORITY_LOW
+
+        priority = PRIORITY_LOW if queue == "low_priority" else PRIORITY_BATCH
         tasks = group(
             run_ocr_for_page.s(
                 app_env=app_env,
@@ -547,13 +550,13 @@ def run_ocr_for_project(
                 page_slug=p.slug,
                 engine=engine,
                 language=language,
-            )
+            ).set(priority=priority)
             for p in unedited_pages
         )
         if queue:
-            ret = tasks.apply_async(queue=queue)
+            ret = tasks.apply_async(queue=queue, priority=priority)
         else:
-            ret = tasks.apply_async()
+            ret = tasks.apply_async(priority=priority)
         ret.save()
         return ret
     else:
@@ -860,6 +863,9 @@ def run_enhanced_ocr_for_project(
             session.commit()
 
     if unedited_pages:
+        from kalanjiyam.tasks import PRIORITY_BATCH, PRIORITY_LOW
+
+        priority = PRIORITY_LOW if queue == "low_priority" else PRIORITY_BATCH
         tasks = group(
             run_enhanced_ocr_for_page.s(
                 app_env=app_env,
@@ -869,13 +875,13 @@ def run_enhanced_ocr_for_project(
                 profile=profile,
                 language=language,
                 save_enhanced_images=save_enhanced_images,
-            )
+            ).set(priority=priority)
             for p in unedited_pages
         )
         if queue:
-            ret = tasks.apply_async(queue=queue)
+            ret = tasks.apply_async(queue=queue, priority=priority)
         else:
-            ret = tasks.apply_async()
+            ret = tasks.apply_async(priority=priority)
         ret.save()
         return ret
     else:
