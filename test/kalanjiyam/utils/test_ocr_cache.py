@@ -1,26 +1,37 @@
+import concurrent.futures
 import json
+import time
 from unittest.mock import MagicMock, patch
 import pytest
 
 from kalanjiyam.utils.ocr_cache import (
+    acquire_stampede_lock,
+    coalesce_cache_fetch,
     get_cached_ocr_document,
-    set_cached_ocr_document,
     get_cached_page_bboxes,
-    set_cached_page_bboxes,
     get_cached_revision_document,
-    set_cached_revision_document,
     invalidate_page_ocr_cache,
     invalidate_project_ocr_cache,
+    release_stampede_lock,
+    set_cached_ocr_document,
+    set_cached_page_bboxes,
+    set_cached_revision_document,
 )
 
 
 class MockRedis:
-    """In-memory Redis mock for unit testing cache behavior."""
+    """In-memory Redis mock for unit testing cache behavior and stampede locking."""
     def __init__(self):
         self.store = {}
 
     def get(self, key):
         return self.store.get(key)
+
+    def set(self, key, value, nx=False, ex=None):
+        if nx and key in self.store:
+            return False
+        self.store[key] = value
+        return True
 
     def setex(self, key, ttl, value):
         self.store[key] = value
@@ -32,6 +43,12 @@ class MockRedis:
                 del self.store[k]
                 count += 1
         return count
+
+    def eval(self, script, numkeys, key, token):
+        if self.store.get(key) == token:
+            del self.store[key]
+            return 1
+        return 0
 
     def scan_iter(self, match="*", count=100):
         import fnmatch
@@ -153,8 +170,10 @@ def test_cache_invalidation_page_and_project():
 def test_cache_handles_redis_exceptions_gracefully():
     failing_client = MagicMock()
     failing_client.get.side_effect = Exception("Redis connection refused")
+    failing_client.set.side_effect = Exception("Redis connection refused")
     failing_client.setex.side_effect = Exception("Redis connection refused")
     failing_client.delete.side_effect = Exception("Redis connection refused")
+    failing_client.eval.side_effect = Exception("Redis connection refused")
 
     with patch("kalanjiyam.utils.ocr_cache.get_redis_client", return_value=failing_client):
         # Should not raise exception and return None / False
@@ -164,6 +183,108 @@ def test_cache_handles_redis_exceptions_gracefully():
         assert set_cached_page_bboxes("proj", "1", "ocr:google", "[]") is False
         assert invalidate_page_ocr_cache("proj", "1") == 0
         assert invalidate_project_ocr_cache("proj") == 0
+
+        # Coalesce should fall back safely to fetch_fn
+        called = False
+        def _fetch():
+            nonlocal called
+            called = True
+            return "direct_val"
+
+        result = coalesce_cache_fetch("key", _fetch, lambda: None)
+        assert result == "direct_val"
+        assert called is True
+
+
+def test_stampede_locking_acquire_and_release():
+    mock_redis = MockRedis()
+    with patch("kalanjiyam.utils.ocr_cache.get_redis_client", return_value=mock_redis):
+        # 1. First acquisition succeeds (Leader)
+        acquired1, token1 = acquire_stampede_lock("resource-123")
+        assert acquired1 is True
+        assert token1 is not None
+
+        # 2. Second acquisition for same resource fails (Follower)
+        acquired2, token2 = acquire_stampede_lock("resource-123")
+        assert acquired2 is False
+        assert token2 is None
+
+        # 3. Wrong token release fails
+        released_wrong = release_stampede_lock("resource-123", "wrong-token")
+        assert released_wrong is False
+
+        # 4. Correct token release succeeds
+        released_correct = release_stampede_lock("resource-123", token1)
+        assert released_correct is True
+
+        # 5. Lock can now be acquired again
+        acquired3, token3 = acquire_stampede_lock("resource-123")
+        assert acquired3 is True
+        assert token3 is not None
+
+
+def test_coalesce_cache_fetch_concurrent_stampede_prevention():
+    mock_redis = MockRedis()
+    with patch("kalanjiyam.utils.ocr_cache.get_redis_client", return_value=mock_redis):
+        fetch_call_count = 0
+        cache_data = {}
+
+        def _get_cached():
+            return cache_data.get("heavy_page")
+
+        def _fetch_from_s3():
+            nonlocal fetch_call_count
+            fetch_call_count += 1
+            # Simulate S3 latency
+            time.sleep(0.05)
+            result = {"blocks": ["line 1", "line 2"]}
+            cache_data["heavy_page"] = result
+            return result
+
+        # Simulate 10 simultaneous requests arriving at the same millisecond for a cold cache key
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [
+                executor.submit(
+                    coalesce_cache_fetch,
+                    "heavy_page",
+                    _fetch_from_s3,
+                    _get_cached,
+                    poll_interval=0.01,
+                )
+                for _ in range(10)
+            ]
+            results = [f.result() for f in futures]
+
+        # ALL 10 requests must receive the correct data
+        for res in results:
+            assert res == {"blocks": ["line 1", "line 2"]}
+
+        # CRITICAL: S3 fetch MUST be called ONLY ONCE, not 10 times!
+        assert fetch_call_count == 1
+
+
+def test_coalesce_cache_fetch_timeout_fallback():
+    mock_redis = MockRedis()
+    with patch("kalanjiyam.utils.ocr_cache.get_redis_client", return_value=mock_redis):
+        # Simulate a dead leader that acquired the lock but crashed without populating cache
+        acquire_stampede_lock("crashed_resource")
+
+        called_fallback = False
+        def _fetch_fallback():
+            nonlocal called_fallback
+            called_fallback = True
+            return "recovered_data"
+
+        # Wait timeout of 0.05s should expire and safely trigger fallback fetch
+        res = coalesce_cache_fetch(
+            "crashed_resource",
+            _fetch_fallback,
+            lambda: None,
+            wait_timeout=0.05,
+            poll_interval=0.01,
+        )
+        assert res == "recovered_data"
+        assert called_fallback is True
 
 
 def test_load_page_ocr_and_revision_invalidation_integration(flask_app):
