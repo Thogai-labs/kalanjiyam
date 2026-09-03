@@ -106,8 +106,10 @@ def save_page_enhanced_ocr(
 ) -> bool:
     """Persist Enhanced OCR JSON payload to object storage as .json.gz.
 
+    Also updates Redis cache and invalidates stale entries.
     Returns True if successfully written to storage, False otherwise.
     """
+    from kalanjiyam.utils.ocr_cache import invalidate_page_ocr_cache, set_cached_ocr_document
     from kalanjiyam.utils.storage import get_project_org_slug, get_storage, page_enhanced_ocr_key
 
     try:
@@ -117,6 +119,11 @@ def save_page_enhanced_ocr(
         page_slug = getattr(page, "slug", str(page))
         key = page_enhanced_ocr_key(project_slug, page_slug, engine, profile, org_slug=org_slug)
         get_storage().save_json_gz(key, payload)
+
+        version_key = f"ocr:enhanced:{engine}:{profile}"
+        if isinstance(payload, dict):
+            set_cached_ocr_document(project_slug, page_slug, version_key, payload)
+        invalidate_page_ocr_cache(project_slug, page_slug, version_key=version_key)
         return True
     except Exception as err:
         LOG.warning(
@@ -134,27 +141,48 @@ def load_page_enhanced_ocr(
     engine: str,
     profile: str,
 ) -> dict | list | str | None:
-    """Load Enhanced OCR payload for a page from object storage."""
+    """Load Enhanced OCR payload for a page from object storage or Redis cache.
+
+    Uses request coalescing to prevent cache stampedes on storage.
+    """
+    from kalanjiyam.utils.ocr_cache import (
+        coalesce_cache_fetch,
+        get_cached_ocr_document,
+        set_cached_ocr_document,
+    )
     from kalanjiyam.utils.storage import get_project_org_slug, get_storage, page_enhanced_ocr_key
 
     project = getattr(page, "project", None)
     if project is None:
         return None
-    try:
-        project_slug = getattr(project, "slug", str(project))
-        org_slug = get_project_org_slug(project)
-        page_slug = getattr(page, "slug", str(page))
-        key = page_enhanced_ocr_key(project_slug, page_slug, engine, profile, org_slug=org_slug)
-        return get_storage().load_json_gz(key)
-    except Exception as err:
-        LOG.warning(
-            "Failed to fetch page %s Enhanced OCR (%s/%s) from storage: %s",
-            getattr(page, "slug", page),
-            engine,
-            profile,
-            err,
-        )
-        return None
+
+    project_slug = getattr(project, "slug", str(project))
+    page_slug = getattr(page, "slug", str(page))
+    version_key = f"ocr:enhanced:{engine}:{profile}"
+
+    def _get_cached():
+        return get_cached_ocr_document(project_slug, page_slug, version_key)
+
+    def _fetch_from_storage():
+        try:
+            org_slug = get_project_org_slug(project)
+            key = page_enhanced_ocr_key(project_slug, page_slug, engine, profile, org_slug=org_slug)
+            data = get_storage().load_json_gz(key)
+            if data is not None and isinstance(data, dict):
+                set_cached_ocr_document(project_slug, page_slug, version_key, data)
+            return data
+        except Exception as err:
+            LOG.warning(
+                "Failed to fetch page %s Enhanced OCR (%s/%s) from storage: %s",
+                getattr(page, "slug", page),
+                engine,
+                profile,
+                err,
+            )
+            return None
+
+    resource_key = f"enhanced_ocr:{project_slug}:{page_slug}:{engine}:{profile}"
+    return coalesce_cache_fetch(resource_key, _fetch_from_storage, _get_cached)
 
 
 def load_page_ocr(page: Any) -> str | None:
@@ -164,78 +192,160 @@ def load_page_ocr(page: Any) -> str | None:
     the page's latest revision document (`load_revision_document(latest_rev)`)
     and dynamically derive bounding box JSON from `PageDocument.blocks`.
 
-    If missing or no revision exists, it falls back to reading the legacy S3/VersityGW
-    `/ocr/{page_slug}.json.gz` key or legacy PostgreSQL column.
+    Checks Redis cache with version and revision validation first.
+    Uses request coalescing to prevent cache stampedes on S3/DB.
 
     Returns ``None`` when no OCR data exists in any location.
     """
-    # Strategy 1: Prefer revisions from explicit OCR tracks (ocr:google, etc.)
+    from kalanjiyam.utils.ocr_cache import (
+        coalesce_cache_fetch,
+        get_cached_page_bboxes,
+        set_cached_page_bboxes,
+    )
+
+    project = getattr(page, "project", None)
+    project_slug = getattr(project, "slug", str(project)) if project else ""
+    page_slug = getattr(page, "slug", str(page))
     versions = getattr(page, "versions", None)
-    if versions:
+
+    def _get_cached():
+        if not (project_slug and page_slug and versions):
+            return None
         from datetime import datetime as _dt
+
         ocr_tracks = sorted(
             [v for v in versions if v.version_key.startswith("ocr:") and v.revisions],
             key=lambda v: v.updated_at or _dt.min,
             reverse=True,
         )
         for track in ocr_tracks:
-            try:
-                latest_rev = track.revisions[-1]
-                doc_dict = load_revision_document(latest_rev)
-                derived = _derive_bounding_boxes_from_document(doc_dict)
-                if derived is not None:
-                    return derived
-            except Exception as err:
-                LOG.warning(
-                    "Failed to derive bounding boxes from OCR track %s for page %s: %s",
-                    track.version_key, getattr(page, "slug", page), err,
-                )
+            latest_rev = track.revisions[-1]
+            cached = get_cached_page_bboxes(
+                project_slug,
+                page_slug,
+                track.version_key,
+                expected_version=getattr(track, "version", None),
+                expected_revision_id=getattr(latest_rev, "id", None),
+            )
+            if cached is not None:
+                return cached
 
-        # Strategy 2: Fall back to main track
         main_tracks = [v for v in versions if v.version_key == "main" and v.revisions]
         for track in main_tracks:
+            latest_rev = track.revisions[-1]
+            cached = get_cached_page_bboxes(
+                project_slug,
+                page_slug,
+                "main",
+                expected_version=getattr(track, "version", None),
+                expected_revision_id=getattr(latest_rev, "id", None),
+            )
+            if cached is not None:
+                return cached
+        return None
+
+    def _fetch_from_source():
+        # Strategy 1: Prefer revisions from explicit OCR tracks (ocr:google, etc.)
+        if versions:
+            from datetime import datetime as _dt
+
+            ocr_tracks = sorted(
+                [v for v in versions if v.version_key.startswith("ocr:") and v.revisions],
+                key=lambda v: v.updated_at or _dt.min,
+                reverse=True,
+            )
+            for track in ocr_tracks:
+                try:
+                    latest_rev = track.revisions[-1]
+                    doc_dict = load_revision_document(latest_rev)
+                    derived = _derive_bounding_boxes_from_document(doc_dict)
+                    if derived is not None:
+                        if project_slug and page_slug:
+                            set_cached_page_bboxes(
+                                project_slug,
+                                page_slug,
+                                track.version_key,
+                                derived,
+                                version=getattr(track, "version", 1) or 1,
+                                revision_id=getattr(latest_rev, "id", None),
+                            )
+                        return derived
+                except Exception as err:
+                    LOG.warning(
+                        "Failed to derive bounding boxes from OCR track %s for page %s: %s",
+                        track.version_key,
+                        getattr(page, "slug", page),
+                        err,
+                    )
+
+            # Strategy 2: Fall back to main track
+            main_tracks = [v for v in versions if v.version_key == "main" and v.revisions]
+            for track in main_tracks:
+                try:
+                    latest_rev = track.revisions[-1]
+                    doc_dict = load_revision_document(latest_rev)
+                    derived = _derive_bounding_boxes_from_document(doc_dict)
+                    if derived is not None:
+                        if project_slug and page_slug:
+                            set_cached_page_bboxes(
+                                project_slug,
+                                page_slug,
+                                "main",
+                                derived,
+                                version=getattr(track, "version", 1) or 1,
+                                revision_id=getattr(latest_rev, "id", None),
+                            )
+                        return derived
+                except Exception as err:
+                    LOG.warning(
+                        "Failed to derive bounding boxes from main track for page %s: %s",
+                        getattr(page, "slug", page),
+                        err,
+                    )
+
+        # Strategy 3: Legacy flat revision list fallback
+        revisions = getattr(page, "revisions", None)
+        if revisions:
             try:
-                latest_rev = track.revisions[-1]
+                latest_rev = (
+                    revisions[-1]
+                    if isinstance(revisions, (list, tuple))
+                    else list(revisions)[-1]
+                )
                 doc_dict = load_revision_document(latest_rev)
                 derived = _derive_bounding_boxes_from_document(doc_dict)
                 if derived is not None:
                     return derived
             except Exception as err:
                 LOG.warning(
-                    "Failed to derive bounding boxes from main track for page %s: %s",
-                    getattr(page, "slug", page), err,
+                    "Failed to derive bounding boxes from page %s revision: %s",
+                    getattr(page, "slug", page),
+                    err,
                 )
 
-    # Strategy 3: Legacy flat revision list fallback
-    revisions = getattr(page, "revisions", None)
-    if revisions:
-        try:
-            latest_rev = revisions[-1] if isinstance(revisions, (list, tuple)) else list(revisions)[-1]
-            doc_dict = load_revision_document(latest_rev)
-            derived = _derive_bounding_boxes_from_document(doc_dict)
-            if derived is not None:
-                return derived
-        except Exception as err:
-            LOG.warning(
-                "Failed to derive bounding boxes from page %s revision: %s",
-                getattr(page, "slug", page), err,
-            )
+        # Legacy dual-read fallback: S3 / VersityGW payload
+        if project is not None:
+            try:
+                from kalanjiyam.utils.storage import get_storage, page_ocr_key
 
-    # Legacy dual-read fallback: S3 / VersityGW payload
-    project = getattr(page, "project", None)
-    if project is not None:
-        try:
-            from kalanjiyam.utils.storage import get_storage, page_ocr_key
+                key = page_ocr_key(project.slug, page.slug)
+                data = get_storage().load_json_gz(key)
+                if data is not None:
+                    return data
+            except Exception as err:
+                LOG.warning(
+                    "Failed to fetch page %s OCR from S3: %s",
+                    getattr(page, "slug", page),
+                    err,
+                )
 
-            key = page_ocr_key(project.slug, page.slug)
-            data = get_storage().load_json_gz(key)
-            if data is not None:
-                return data
-        except Exception as err:
-            LOG.warning("Failed to fetch page %s OCR from S3: %s", getattr(page, "slug", page), err)
+        # Fallback: legacy PostgreSQL column
+        return getattr(page, "ocr_bounding_boxes", None)
 
-    # Fallback: legacy PostgreSQL column
-    return getattr(page, "ocr_bounding_boxes", None)
+    if project_slug and page_slug:
+        resource_key = f"bboxes:{project_slug}:{page_slug}"
+        return coalesce_cache_fetch(resource_key, _fetch_from_source, _get_cached)
+    return _fetch_from_source()
 
 
 # ---------------------------------------------------------------------------
@@ -345,13 +455,14 @@ def derive_revision_tag(revision: Any) -> str:
 
 
 def save_revision_document(revision: Any, document: dict) -> bool:
-    """Persist a revision's structured block document to object storage.
+    """Persist a revision's structured block document to object storage and Redis cache.
 
     Ensures timestamp is embedded inside user/model document JSON payload.
     If S3/VersityGW write fails, falls back to saving in DB column `document`.
     Returns True if written to S3, False if fell back to DB.
     """
     from datetime import datetime
+    from kalanjiyam.utils.ocr_cache import invalidate_page_ocr_cache, set_cached_revision_document
     from kalanjiyam.utils.storage import get_project_org_slug, get_storage, revision_document_key
 
     try:
@@ -372,6 +483,14 @@ def save_revision_document(revision: Any, document: dict) -> bool:
                     document["timestamp"] = datetime.utcnow().isoformat()
 
         get_storage().save_json_gz(key, document)
+
+        # Cache in Redis and invalidate composite page OCR cache
+        rev_id = getattr(revision, "id", None)
+        if rev_id:
+            set_cached_revision_document(rev_id, document)
+        if project and page:
+            invalidate_page_ocr_cache(project.slug, page.slug)
+
         return True
     except Exception as err:
         LOG.warning(
@@ -384,59 +503,93 @@ def save_revision_document(revision: Any, document: dict) -> bool:
 
 
 def load_revision_document(revision: Any) -> dict | None:
-    """Load revision document, trying S3/VersityGW first, then DB.
+    """Load revision document, trying Redis cache, then S3/VersityGW, then DB.
 
+    Uses request coalescing to prevent stampedes on S3/VersityGW during cache misses.
     Returns ``None`` when no document exists in either location.
     """
+    from kalanjiyam.utils.ocr_cache import (
+        coalesce_cache_fetch,
+        get_cached_revision_document,
+        set_cached_revision_document,
+    )
     from kalanjiyam.utils.storage import get_project_org_slug, get_storage, revision_document_key
 
-    page = getattr(revision, "page", None)
-    project = getattr(revision, "project", None)
-    if page is not None and project is not None:
-        storage = get_storage()
-        org_slug = get_project_org_slug(project)
-        v_num = get_page_revision_index(revision)
-        tag = derive_revision_tag(revision)
+    rev_id = getattr(revision, "id", None)
+    if not rev_id:
+        return getattr(revision, "document", None)
 
-        # 1. Try canonical 1-file-per-track tagged key (e.g. ocr-dots-ocr.json.gz, user-admin01.json.gz, translation-nayan_sa-en.json.gz)
-        try:
-            key = revision_document_key(project.slug, page.slug, v_num, tag=tag, org_slug=org_slug)
-            data = storage.load_json_gz(key)
-            if data is not None:
-                return data
-        except Exception as err:
-            LOG.warning("Failed to fetch revision %s document from S3: %s", getattr(revision, "id", revision), err)
+    def _get_cached():
+        return get_cached_revision_document(rev_id)
 
-        # 2. Try legacy version-suffixed & open-tenant fallback keys (ocr-dots-ocr_v1.json.gz, user-admin01_v4.json.gz, etc.)
-        fallback_tags = []
-        if tag.startswith("ocr-"):
-            fallback_tags.append("ocr")
-        if tag.startswith("translation-"):
-            fallback_tags.append("trans")
+    def _fetch_from_storage():
+        page = getattr(revision, "page", None)
+        project = getattr(revision, "project", None)
+        if page is not None and project is not None:
+            storage = get_storage()
+            org_slug = get_project_org_slug(project)
+            v_num = get_page_revision_index(revision)
+            tag = derive_revision_tag(revision)
 
-        fallback_keys = []
-        for ftag in fallback_tags:
-            fallback_keys.append(revision_document_key(project.slug, page.slug, v_num, tag=ftag, org_slug=org_slug))
-
-        fallback_keys.extend([
-            f"projects/{org_slug}/{project.slug}/revisions/{page.slug}/{tag}_v{v_num}.json.gz",
-            f"projects/open-tenant/{project.slug}/revisions/{page.slug}/{tag}_v{v_num}.json.gz",
-            f"projects/{org_slug}/{project.slug}/revisions/{page.slug}/v{v_num}.json.gz",
-            f"projects/open-tenant/{project.slug}/revisions/{page.slug}/v{v_num}.json.gz",
-            f"projects/{project.slug}/revisions/{page.slug}/{tag}_rev{getattr(revision, 'id', '')}.json.gz",
-            f"projects/{project.slug}/revisions/{page.slug}/rev{getattr(revision, 'id', '')}.json.gz",
-            f"projects/{project.slug}/revisions/{page.slug}/{getattr(revision, 'id', '')}.json.gz",
-        ])
-        for fkey in fallback_keys:
+            # 1. Try canonical 1-file-per-track tagged key
             try:
-                data = storage.load_json_gz(fkey)
+                key = revision_document_key(
+                    project.slug, page.slug, v_num, tag=tag, org_slug=org_slug
+                )
+                data = storage.load_json_gz(key)
                 if data is not None:
+                    if isinstance(data, dict):
+                        set_cached_revision_document(rev_id, data)
                     return data
-            except Exception:
-                pass
+            except Exception as err:
+                LOG.warning(
+                    "Failed to fetch revision %s document from S3: %s",
+                    getattr(revision, "id", revision),
+                    err,
+                )
 
-    # Fallback: legacy PostgreSQL column
-    return getattr(revision, "document", None)
+            # 2. Try legacy version-suffixed & open-tenant fallback keys
+            fallback_tags = []
+            if tag.startswith("ocr-"):
+                fallback_tags.append("ocr")
+            if tag.startswith("translation-"):
+                fallback_tags.append("trans")
+
+            fallback_keys = []
+            for ftag in fallback_tags:
+                fallback_keys.append(
+                    revision_document_key(
+                        project.slug, page.slug, v_num, tag=ftag, org_slug=org_slug
+                    )
+                )
+
+            fallback_keys.extend([
+                f"projects/{org_slug}/{project.slug}/revisions/{page.slug}/{tag}_v{v_num}.json.gz",
+                f"projects/open-tenant/{project.slug}/revisions/{page.slug}/{tag}_v{v_num}.json.gz",
+                f"projects/{org_slug}/{project.slug}/revisions/{page.slug}/v{v_num}.json.gz",
+                f"projects/open-tenant/{project.slug}/revisions/{page.slug}/v{v_num}.json.gz",
+                f"projects/{project.slug}/revisions/{page.slug}/{tag}_rev{getattr(revision, 'id', '')}.json.gz",
+                f"projects/{project.slug}/revisions/{page.slug}/rev{getattr(revision, 'id', '')}.json.gz",
+                f"projects/{project.slug}/revisions/{page.slug}/{getattr(revision, 'id', '')}.json.gz",
+            ])
+            for fkey in fallback_keys:
+                try:
+                    data = storage.load_json_gz(fkey)
+                    if data is not None:
+                        if isinstance(data, dict):
+                            set_cached_revision_document(rev_id, data)
+                        return data
+                except Exception:
+                    pass
+
+        # Fallback: legacy PostgreSQL column
+        doc = getattr(revision, "document", None)
+        if doc and isinstance(doc, dict):
+            set_cached_revision_document(rev_id, doc)
+        return doc
+
+    resource_key = f"rev_doc:{rev_id}"
+    return coalesce_cache_fetch(resource_key, _fetch_from_storage, _get_cached)
 
 
 # ---------------------------------------------------------------------------

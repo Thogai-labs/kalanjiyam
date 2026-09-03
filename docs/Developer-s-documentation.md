@@ -1275,17 +1275,34 @@ All eight main containers in the Docker Compose stack have explicit environment-
     * *Troubleshooting:* Modify the `.env` file to use absolute paths and restart the service.
 
 #### 2. `kalanjiyam-celery` (`kalanjiyam-celery-dev` / `kalanjiyam-celery-prod`)
-* **Role:** Core Celery worker processing `default`, `ocr`, `low_priority`, and `search_index` task queues.
+* **Role:** Core Celery worker processing `default` and `search_index` task queues with autoscaling (`--autoscale=4,1`).
 * **Logs Command:**
   ```bash
   docker logs -f kalanjiyam-celery-dev
   ```
-* **Common Issues:**
-  * **OCR / indexing tasks remain in "Pending" or fail instantly:**
-    * *Cause:* The Celery container is either not running, cannot reach Redis, or cannot communicate with the external OCR service.
-    * *Troubleshooting:* Verify the container is running with `docker ps`. Check the logs for connection timeout or host lookup failures (e.g. if `OCR_SERVICE_URL` is misconfigured).
 
-#### 3. `kalanjiyam-celery-batch` (`kalanjiyam-celery-batch-dev` / `kalanjiyam-celery-batch-prod`)
+#### 3. `kalanjiyam-celery-pdf` (`kalanjiyam-celery-pdf-dev` / `kalanjiyam-celery-pdf-prod`)
+* **Role:** Dedicated CPU-isolated worker for the `pdf_processing` queue, handling PyMuPDF page rasterization, DOCX segmentation, and book creation (`--autoscale=4,1`).
+* **Logs Command:**
+  ```bash
+  docker logs -f kalanjiyam-celery-pdf-dev
+  ```
+
+#### 4. `kalanjiyam-celery-ocr` (`kalanjiyam-celery-ocr-dev` / `kalanjiyam-celery-ocr-prod`)
+* **Role:** Dedicated worker for the `ocr` and `low_priority` queues. Scaled with high concurrency (`--autoscale=8,2`) for I/O-bound external OCR model API calls (Google Vision, Dots OCR, Tesseract).
+* **Logs Command:**
+  ```bash
+  docker logs -f kalanjiyam-celery-ocr-dev
+  ```
+
+#### 5. `kalanjiyam-celery-translation` (`kalanjiyam-celery-translation-dev` / `kalanjiyam-celery-translation-prod`)
+* **Role:** Dedicated worker for the `translation` queue. Scaled with high concurrency (`--autoscale=8,2`) for machine translation APIs (IndicTrans2, Nayan, LLMs).
+* **Logs Command:**
+  ```bash
+  docker logs -f kalanjiyam-celery-translation-dev
+  ```
+
+#### 6. `kalanjiyam-celery-batch` (`kalanjiyam-celery-batch-dev` / `kalanjiyam-celery-batch-prod`)
 * **Role:** Dedicated Celery worker for the `s3_batch` queue, managing large PDF splitting, S3 folder discovery, and parallel batch ingestion.
 * **Logs Command:**
   ```bash
@@ -1295,7 +1312,7 @@ All eight main containers in the Docker Compose stack have explicit environment-
   * **Batch OCR tasks stuck:**
     * *Cause:* Worker disconnected from Redis or S3 gateway unreachable. Check `python cli.py batch-status --job-id <ID>` for failed item traces.
 
-#### 4. `kalanjiyam-celery-metadata` (`kalanjiyam-celery-metadata-dev` / `kalanjiyam-celery-metadata-prod`)
+#### 7. `kalanjiyam-celery-metadata` (`kalanjiyam-celery-metadata-dev` / `kalanjiyam-celery-metadata-prod`)
 * **Role:** Dedicated Celery worker for the `metadata` queue, performing token-budgeted whole-document archival metadata extraction.
 * **Logs Command:**
   ```bash
@@ -1305,7 +1322,7 @@ All eight main containers in the Docker Compose stack have explicit environment-
   * **Metadata extractions unqueued:**
     * *Cause:* Ensure worker is listening on `-Q metadata`. Check with `python cli.py metadata-runs`.
 
-#### 5. `kalanjiyam-search` (`kalanjiyam-search-dev` / `kalanjiyam-search-prod`)
+#### 8. `kalanjiyam-search` (`kalanjiyam-search-dev` / `kalanjiyam-search-prod`)
 * **Role:** OpenSearch cluster with the ICU analysis plugin for multilingual tokenization and full-text search across library books and proofing projects.
 * **Logs Command:**
   ```bash
@@ -1315,7 +1332,7 @@ All eight main containers in the Docker Compose stack have explicit environment-
   * **Search queries failing with 503 or yellow/red cluster health:**
     * *Cause:* OpenSearch heap exhaustion or uninitialized indices. Re-run `python cli.py search-index init` or `python cli.py search-index status`.
 
-#### 6. `kalanjiyam-versitygw` (`kalanjiyam-versitygw-dev` / `kalanjiyam-versitygw-prod`)
+#### 9. `kalanjiyam-versitygw` (`kalanjiyam-versitygw-dev` / `kalanjiyam-versitygw-prod`)
 * **Role:** Versity Gateway S3 adapter. It exposes the application's local filesystem upload storage through an S3-compatible API.
 * **Logs Command:**
   ```bash
@@ -1326,14 +1343,14 @@ All eight main containers in the Docker Compose stack have explicit environment-
     * *Cause:* The gateway failed to initialize POSIX storage or credentials mismatch between `.env` and Compose environment.
     * *Troubleshooting:* Inspect logs to verify VersityGW is listening on port `7070` and storage path permissions are correct.
 
-#### 7. `kalanjiyam-redis` (`kalanjiyam-redis-dev` / `kalanjiyam-redis-prod`)
-* **Role:** Redis container serving as the message broker and backend for Celery task queues and distributed locks.
+#### 10. `kalanjiyam-redis` (`kalanjiyam-redis-dev` / `kalanjiyam-redis-prod`)
+* **Role:** Redis container serving as the message broker, priority task scheduler, OCR cache, and distributed lock manager.
 * **Logs Command:**
   ```bash
   docker logs -f kalanjiyam-redis-dev
   ```
 
-#### 8. `kalanjiyam-db` (`kalanjiyam-db-dev` / `kalanjiyam-db-prod`)
+#### 11. `kalanjiyam-db` (`kalanjiyam-db-dev` / `kalanjiyam-db-prod`)
 * **Role:** PostgreSQL 15 database container storing platform metadata, users, organizations, proofing logs, and books.
 * **Logs Command:**
   ```bash
@@ -1484,3 +1501,51 @@ docker exec -it kalanjiyam-web-staging pybabel compile -d kalanjiyam/translation
 # 2. Restart container to reload memory cache
 docker restart kalanjiyam-web-staging
 ```
+
+---
+
+## Celery Background Tasks & Performance Architecture
+
+To scale background operations (PDF processing, OCR, machine translation, metadata extraction, search indexing) without blocking user interactions, Kalanjiyam uses a multi-queue, priority-scheduled, autoscaled architecture.
+
+### 1. Partitioned Queues & Routing
+
+Tasks are routed strictly to dedicated queues configured in `kalanjiyam/tasks/__init__.py`:
+
+| Queue | Routing Pattern | Concurrency Profile | Purpose |
+| :--- | :--- | :--- | :--- |
+| **`pdf_processing`** | `kalanjiyam.tasks.projects.*` | CPU-Bound (`--autoscale=4,1`) | PDF page splitting, DOCX unpacking, image rasterization. |
+| **`ocr`** | `kalanjiyam.tasks.ocr.*`, `comparison.*` | I/O-Bound (`--autoscale=8,2`) | Interactive and batch OCR, enhanced image preprocessing. |
+| **`translation`** | `kalanjiyam.tasks.translation.*` | I/O-Bound (`--autoscale=8,2`) | IndicTrans2, Nayan, and LLM page/revision translations. |
+| **`s3_batch`** | `kalanjiyam.tasks.s3_batch.*` | I/O & CPU (`--concurrency=2`) | Bulk S3 folder ingestion, PDF extraction, lease recovery. |
+| **`metadata`** | `kalanjiyam.tasks.archival_extract.*` | LLM-Bound (`--concurrency=2`) | Token-budgeted full-document archival metadata extraction. |
+| **`search_index`** | `kalanjiyam.tasks.search_index.*` | I/O-Bound (`--autoscale=4,1`) | OpenSearch document and page index synchronization. |
+| **`low_priority`** | Direct queue override | Throttled | Guest/unauthenticated requests and non-urgent maintenance. |
+| **`default`** | General fallback | Balanced | User notifications, email delivery, housekeeping. |
+
+### 2. Priority Scheduling & Starvation Prevention
+
+Celery uses Redis priority queue transport (`priority_steps`: 0–9). Tasks are dispatched with specific priority tiers:
+
+* **`PRIORITY_INTERACTIVE = 9`**: Single-page editor OCR and translations initiated by an active user proofreader.
+* **`PRIORITY_HIGH = 7`**: Single-document user uploads and project creations.
+* **`PRIORITY_DEFAULT = 5`**: General background tasks.
+* **`PRIORITY_BATCH = 3`**: Whole-book UI batch OCR and project translation jobs.
+* **`PRIORITY_BACKGROUND = 2`**: S3 batch folder ingestion, archival metadata, and search indexing.
+* **`PRIORITY_LOW = 1`**: Unauthenticated / guest requests.
+
+> [!TIP]
+> Even if a 500-page batch OCR job is actively executing at Priority 3, any user in the live editor clicking "Run OCR" (Priority 9) **jumps straight to the front of the queue** and is picked up by the next available worker thread.
+
+### 3. Redis Version-Validated Caching & Stampede Prevention
+
+Located in `kalanjiyam/utils/ocr_cache.py`:
+
+* **Version-Validated Envelopes**: Cached OCR documents and bounding boxes store metadata envelopes (`version`, `revision_id`, `version_key`, `timestamp`, `data`). When a revision changes, reads detect version mismatches and immediately evict stale keys.
+* **Revision Commit Invalidation**: Any revision committed via `add_revision(...)` automatically triggers `invalidate_page_ocr_cache(project_slug, page_slug)`.
+* **Distributed Stampede Locking**: During cold cache misses, `acquire_stampede_lock` / `release_stampede_lock` (using atomic Redis Lua scripts) elects a single leader thread to fetch from S3/VersityGW while follower threads wait and receive the populated cached result via `coalesce_cache_fetch`.
+
+### 4. OCR Engine-Skipping & Version Tracks
+
+* **Engine Skipping**: When batch OCR runs, `_run_ocr_for_page_inner` checks for existing bot revisions on the same engine (e.g. `ocr:google` or `ocr:enhanced:dots_ocr:document_cleanup`). If found and not forced, external OCR API execution and quota usage are bypassed.
+* **Multi-Engine Tracks**: Running a different engine creates a new isolated version track without overwriting existing transcriptions.

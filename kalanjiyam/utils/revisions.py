@@ -130,6 +130,16 @@ def add_revision(
                 exc_info=True,
             )
 
+    # Invalidate Redis OCR cache for this page so stale versions are never served
+    try:
+        from kalanjiyam.utils.ocr_cache import invalidate_page_ocr_cache
+
+        project_slug = page.project.slug if getattr(page, "project", None) else ""
+        if project_slug and getattr(page, "slug", None):
+            invalidate_page_ocr_cache(project_slug, page.slug, version_key=version_key)
+    except Exception:
+        pass
+
     # Keep the search index current. This is the single choke point for
     # proofing page edits. The revision is already committed above, so this
     # is strictly best-effort: nothing about search -- not a dead broker, not

@@ -130,9 +130,9 @@ db-seed-all: py-venv-check
 devserver: py-venv-check
 	./node_modules/.bin/concurrently "flask run -h 0.0.0.0 -p 5000" "npx tailwindcss -i kalanjiyam/static/css/style.css -o kalanjiyam/static/gen/style.css --watch" "npx esbuild kalanjiyam/static/js/main.js --outfile=kalanjiyam/static/gen/main.js --bundle --watch --loader:.woff2=file --loader:.woff=file --loader:.ttf=file --asset-names=[name]-[hash]"
 	
-# Run a local Celery instance for background tasks.
+# Run a local Celery instance for background tasks with autoscaling.
 celery: 
-	celery -A kalanjiyam.tasks worker --loglevel=INFO --concurrency=1 --prefetch-multiplier=1 -Q default,ocr,low_priority,s3_batch,search_index,metadata
+	celery -A kalanjiyam.tasks worker --loglevel=INFO --autoscale=8,2 --prefetch-multiplier=1 -Q default,pdf_processing,ocr,translation,low_priority,s3_batch,search_index,metadata
 
 # Start Redis server for Celery backend and broker.
 redis:
