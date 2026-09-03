@@ -141,18 +141,20 @@ Redis is the Celery broker and result backend::
 Celery
 ------
 
-Kalanjiyam processes background tasks across 6 queues:
+Kalanjiyam processes background tasks across dedicated queues:
 
-* `default`: General tasks and emails
-* `ocr`: Interactive single-page OCR and comparison jobs
+* `default`: General tasks, notifications, and emails
+* `pdf_processing`: CPU/memory-intensive PDF splitting, DOCX segmentation, and book creation
+* `ocr`: Interactive single-page OCR, enhanced OCR, and comparison jobs
+* `translation`: Page, revision, and batch translation jobs
 * `s3_batch`: Bulk PDF/image folder batch OCR ingestion
 * `metadata`: Token-budgeted full-document archival metadata extraction
 * `search_index`: Incremental OpenSearch indexing and sync jobs
-* `low_priority`: Heavy background exports and non-urgent maintenance
+* `low_priority`: Throttled guest OCR/translation and non-urgent maintenance
 
-In Docker Compose, these are split across three worker containers (`kalanjiyam-celery`, `kalanjiyam-celery-batch`, `kalanjiyam-celery-metadata`). For bare-metal workers::
+In Docker Compose, these are split across dedicated worker containers (`kalanjiyam-celery`, `kalanjiyam-celery-pdf`, `kalanjiyam-celery-ocr`, `kalanjiyam-celery-translation`, `kalanjiyam-celery-batch`, `kalanjiyam-celery-metadata`). For bare-metal single-worker deployments::
 
-   celery -A kalanjiyam.tasks worker -Q default,ocr,low_priority,s3_batch,search_index,metadata --loglevel=INFO --concurrency=2
+   celery -A kalanjiyam.tasks worker -Q default,pdf_processing,ocr,translation,low_priority,s3_batch,search_index,metadata --loglevel=INFO --concurrency=2
 
 .. _Celery daemonizing guide: https://docs.celeryq.dev/en/stable/userguide/daemonizing.html
 

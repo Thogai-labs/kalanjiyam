@@ -61,14 +61,16 @@ We avoid complex frontend frameworks to keep the codebase simple and maintainabl
 Background Tasks
 ---------------
 
-We use Celery for background processing across 6 dedicated queues:
+We use Celery for background processing across dedicated queues:
 
-- `default`: General asynchronous tasks and emails
-- `ocr`: Interactive single-page OCR and comparison jobs
+- `default`: General asynchronous tasks, notifications, and emails
+- `pdf_processing`: CPU/memory-intensive PDF splitting, DOCX segmentation, and book creation
+- `ocr`: Interactive single-page OCR, enhanced OCR, and comparison jobs
+- `translation`: Page, revision, and batch translation jobs
 - `s3_batch`: Bulk PDF/image folder batch OCR ingestion
 - `metadata`: Token-budgeted full-document archival metadata extraction
 - `search_index`: Incremental OpenSearch indexing and sync jobs
-- `low_priority`: Heavy background exports and non-urgent maintenance
+- `low_priority`: Throttled guest OCR/translation and non-urgent maintenance
 
 Deployment
 ----------

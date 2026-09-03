@@ -52,13 +52,14 @@ services:
     container_name: kalanjiyam-redis-prod
     restart: unless-stopped
 
+  # Core Celery worker for housekeeping and search indexing
   kalanjiyam-celery:
     image: ${KALANJIYAM_IMAGE}
     container_name: kalanjiyam-celery-prod
     restart: unless-stopped
     command: >
       celery -A kalanjiyam.tasks worker
-      -Q default,ocr,low_priority,search_index
+      -Q default,search_index
       --loglevel=INFO
       --concurrency=1
       --prefetch-multiplier=1
@@ -88,6 +89,111 @@ services:
       - kalanjiyam-redis
       - kalanjiyam-versitygw
       - kalanjiyam-search
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # PDF and document pre-processing worker (CPU/Memory intensive, isolated)
+  kalanjiyam-celery-pdf:
+    image: ${KALANJIYAM_IMAGE}
+    container_name: kalanjiyam-celery-pdf-prod
+    restart: unless-stopped
+    command: >
+      celery -A kalanjiyam.tasks worker
+      -Q pdf_processing
+      --loglevel=INFO
+      --concurrency=1
+      --prefetch-multiplier=1
+    env_file:
+      - ../../.env
+    environment:
+      - FLASK_ENV=production
+      - REDIS_URL=redis://kalanjiyam-redis:6379/0
+      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam
+      - OCR_BACKEND=remote
+      - FLASK_UPLOAD_FOLDER=/data/uploads
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
+      - S3_ENDPOINT_URL=http://kalanjiyam-versitygw:7070
+      - S3_BUCKET=${S3_BUCKET:-uploads}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-kalanjiyam}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-kalanjiyam}
+      - OPENSEARCH_URL=http://kalanjiyam-search:9200
+    volumes:
+      - ${KALANJIYAM_DATA_DIR:-${HOME}/kalanjiyam-data}/uploads:/data/uploads
+    depends_on:
+      - kalanjiyam-db
+      - kalanjiyam-redis
+      - kalanjiyam-versitygw
+      - kalanjiyam-search
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # OCR worker (live editor OCR, enhanced OCR, comparisons)
+  kalanjiyam-celery-ocr:
+    image: ${KALANJIYAM_IMAGE}
+    container_name: kalanjiyam-celery-ocr-prod
+    restart: unless-stopped
+    command: >
+      celery -A kalanjiyam.tasks worker
+      -Q ocr,low_priority
+      --loglevel=INFO
+      --concurrency=2
+      --prefetch-multiplier=1
+    env_file:
+      - ../../.env
+    environment:
+      - FLASK_ENV=production
+      - REDIS_URL=redis://kalanjiyam-redis:6379/0
+      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam
+      - OCR_BACKEND=remote
+      - OCR_SERVICE_URL=${OCR_SERVICE_URL}
+      - FLASK_UPLOAD_FOLDER=/data/uploads
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
+      - S3_ENDPOINT_URL=http://kalanjiyam-versitygw:7070
+      - S3_BUCKET=${S3_BUCKET:-uploads}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-kalanjiyam}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-kalanjiyam}
+    volumes:
+      - ${KALANJIYAM_DATA_DIR:-${HOME}/kalanjiyam-data}/uploads:/data/uploads
+    depends_on:
+      - kalanjiyam-db
+      - kalanjiyam-redis
+      - kalanjiyam-versitygw
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Translation worker (page, revision, and UI batch translation)
+  kalanjiyam-celery-translation:
+    image: ${KALANJIYAM_IMAGE}
+    container_name: kalanjiyam-celery-translation-prod
+    restart: unless-stopped
+    command: >
+      celery -A kalanjiyam.tasks worker
+      -Q translation
+      --loglevel=INFO
+      --concurrency=2
+      --prefetch-multiplier=1
+    env_file:
+      - ../../.env
+    environment:
+      - FLASK_ENV=production
+      - REDIS_URL=redis://kalanjiyam-redis:6379/0
+      - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam
+      - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
+      - TRANSLATION_SERVICE_API_KEY=${TRANSLATION_SERVICE_API_KEY}
+      - BHARATGEN_TRANSLATION_API_URL=${BHARATGEN_TRANSLATION_API_URL}
+      - BHARATGEN_TRANSLATION_API_KEY=${BHARATGEN_TRANSLATION_API_KEY}
+      - FLASK_UPLOAD_FOLDER=/data/uploads
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
+      - S3_ENDPOINT_URL=http://kalanjiyam-versitygw:7070
+      - S3_BUCKET=${S3_BUCKET:-uploads}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-kalanjiyam}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-kalanjiyam}
+    volumes:
+      - ${KALANJIYAM_DATA_DIR:-${HOME}/kalanjiyam-data}/uploads:/data/uploads
+    depends_on:
+      - kalanjiyam-db
+      - kalanjiyam-redis
+      - kalanjiyam-versitygw
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

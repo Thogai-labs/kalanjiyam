@@ -132,7 +132,7 @@ devserver: py-venv-check
 	
 # Run a local Celery instance for background tasks.
 celery: 
-	celery -A kalanjiyam.tasks worker --loglevel=INFO --concurrency=1 --prefetch-multiplier=1 -Q default,ocr,low_priority,s3_batch,search_index,metadata
+	celery -A kalanjiyam.tasks worker --loglevel=INFO --concurrency=1 --prefetch-multiplier=1 -Q default,pdf_processing,ocr,translation,low_priority,s3_batch,search_index,metadata
 
 # Start Redis server for Celery backend and broker.
 redis:

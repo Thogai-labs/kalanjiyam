@@ -34,7 +34,7 @@ cp .env.example .env   # fill in all required values
 ./deploy/local/deploy.sh stop     # tear down
 ```
 
-Celery processes tasks across 6 queues (`default`, `ocr`, `low_priority`, `s3_batch`, `search_index`, `metadata`) partitioned across 3 worker containers (`kalanjiyam-celery`, `kalanjiyam-celery-batch`, `kalanjiyam-celery-metadata`). OpenSearch (`kalanjiyam-search`) handles full-text search indexing. OCR runs as a separate microservice; set `OCR_SERVICE_URL` to a host reachable from inside containers.
+Celery processes tasks across dedicated queues (`default`, `pdf_processing`, `ocr`, `translation`, `low_priority`, `s3_batch`, `search_index`, `metadata`) partitioned across worker containers (`kalanjiyam-celery`, `kalanjiyam-celery-pdf`, `kalanjiyam-celery-ocr`, `kalanjiyam-celery-translation`, `kalanjiyam-celery-batch`, `kalanjiyam-celery-metadata`). OpenSearch (`kalanjiyam-search`) handles full-text search indexing. OCR runs as a separate microservice; set `OCR_SERVICE_URL` to a host reachable from inside containers.
 
 Full guide: `docs/production-deploy.rst`.
 

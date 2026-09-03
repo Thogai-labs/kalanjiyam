@@ -134,3 +134,17 @@ def test_batch_translate_view_queue_routing(rama_client, client):
             project.fingerprint_id = None
             session.add(project)
             session.commit()
+
+
+def test_celery_task_routes_mapping():
+    from kalanjiyam.tasks import app
+
+    routes = app.conf.task_routes
+    assert routes.get("kalanjiyam.tasks.projects.*", {}).get("queue") == "pdf_processing"
+    assert routes.get("kalanjiyam.tasks.ocr.*", {}).get("queue") == "ocr"
+    assert routes.get("kalanjiyam.tasks.translation.*", {}).get("queue") == "translation"
+    assert routes.get("kalanjiyam.tasks.comparison.*", {}).get("queue") == "ocr"
+    assert routes.get("kalanjiyam.tasks.s3_batch.*", {}).get("queue") == "s3_batch"
+    assert routes.get("kalanjiyam.tasks.search_index.*", {}).get("queue") == "search_index"
+    assert routes.get("kalanjiyam.tasks.archival_extract.*", {}).get("queue") == "metadata"
+

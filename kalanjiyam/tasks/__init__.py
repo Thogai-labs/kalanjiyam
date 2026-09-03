@@ -59,9 +59,11 @@ app.conf.update(
     task_acks_late=True,  # Only acknowledge tasks after completion
     worker_max_tasks_per_child=50,  # Restart workers after 50 tasks to prevent memory leaks
     worker_max_memory_per_child=1000000,  # Restart workers if they exceed 1GB memory
-    # Task routing for OCR tasks to prevent overwhelming the system
+    # Task routing to isolate long-running operations and prevent starvation
     task_routes={
+        'kalanjiyam.tasks.projects.*': {'queue': 'pdf_processing', 'routing_key': 'pdf_processing'},
         'kalanjiyam.tasks.ocr.*': {'queue': 'ocr', 'routing_key': 'ocr'},
+        'kalanjiyam.tasks.translation.*': {'queue': 'translation', 'routing_key': 'translation'},
         'kalanjiyam.tasks.comparison.*': {'queue': 'ocr', 'routing_key': 'ocr'},
         'kalanjiyam.tasks.s3_batch.*': {'queue': 's3_batch', 'routing_key': 's3_batch'},
         'kalanjiyam.tasks.search_index.*': {'queue': 'search_index', 'routing_key': 'search_index'},
