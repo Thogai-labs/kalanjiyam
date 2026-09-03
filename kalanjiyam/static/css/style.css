@@ -741,6 +741,148 @@
     background: #faf8f5;
   }
 
+  /* ---- Voice console -------------------------------------------------
+     Docked below the workspace as a shrink-0 sibling, like .book-editor-meta,
+     so it steals height from the panes instead of covering them. Capped at
+     38vh with an internally scrolling log, so a long session never pushes the
+     scan off screen. */
+
+  .book-editor-voice {
+    @apply border-t border-slate-200 bg-white shrink-0 flex flex-col;
+    max-height: 38vh;
+  }
+
+  .book-editor-voice-bar {
+    @apply flex items-center justify-between gap-2 px-3 py-1.5
+      border-b border-slate-100 bg-slate-50/80 shrink-0;
+  }
+
+  .book-editor-voice-log {
+    @apply flex-1 overflow-y-auto px-3 py-2 space-y-1.5 min-h-0;
+  }
+
+  .voice-empty {
+    @apply text-xs text-slate-400 py-3 text-center;
+  }
+
+  .voice-row { @apply flex flex-col; }
+
+  /* Three colour roles the user has to tell apart at a glance:
+     what they SAID (slate), the text BEFORE (rose), the text AFTER (emerald). */
+
+  .voice-said {
+    @apply self-end max-w-[85%] flex items-start gap-1.5 rounded-xl rounded-br-sm
+      bg-slate-700 text-white px-2.5 py-1.5 text-xs leading-snug;
+  }
+
+  .voice-said-icon { @apply mt-px opacity-60 shrink-0; }
+
+  .voice-change {
+    @apply self-start w-full text-left rounded-xl border border-slate-200
+      bg-white overflow-hidden hover:border-violet-300 transition-colors;
+  }
+
+  .voice-change--bad { @apply border-rose-200 bg-rose-50/40 cursor-default; }
+
+  .voice-change-head {
+    @apply flex items-center gap-1.5 px-2.5 pt-1.5 pb-1;
+  }
+
+  .voice-change-label { @apply text-[11px] text-slate-500 truncate; }
+
+  .voice-tag {
+    @apply text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0;
+  }
+  .voice-tag--ok  { @apply bg-violet-100 text-violet-700; }
+  .voice-tag--bad { @apply bg-rose-100 text-rose-700; }
+
+  .voice-diff { @apply px-2.5 pb-2 space-y-0.5; }
+
+  .voice-before,
+  .voice-after {
+    @apply flex items-start gap-1.5 text-xs rounded px-1.5 py-1 font-mono leading-snug;
+  }
+
+  .voice-before {
+    @apply bg-rose-50 text-rose-900 line-through decoration-rose-400/70;
+  }
+
+  .voice-after {
+    @apply bg-emerald-50 text-emerald-900;
+  }
+
+  .voice-diff-key {
+    @apply text-[9px] font-sans font-bold uppercase tracking-wider
+      opacity-60 shrink-0 w-10 pt-0.5 no-underline;
+  }
+
+  .voice-diff-text { @apply break-words min-w-0; }
+
+  .voice-reason { @apply px-2.5 pb-2 text-[11px] text-rose-700; }
+
+  .voice-answer {
+    @apply self-start max-w-[85%] rounded-xl rounded-bl-sm bg-slate-100
+      text-slate-700 px-2.5 py-1.5 text-xs leading-snug;
+  }
+
+  .voice-note { @apply text-[11px] text-slate-400 py-0.5 text-center; }
+  .voice-note--undo  { @apply text-amber-600; }
+  .voice-note--error { @apply text-rose-600; }
+
+  /* Bar controls */
+
+  .voice-dot { @apply w-2 h-2 rounded-full shrink-0; }
+  .voice-dot--live { @apply bg-rose-500 animate-pulse; }
+  .voice-dot--idle { @apply bg-slate-300; }
+
+  .voice-lang {
+    @apply text-xs rounded-md border border-slate-200 bg-white px-1.5 py-0.5
+      text-slate-700 disabled:opacity-60 disabled:cursor-not-allowed shrink-0;
+  }
+
+  .voice-meter {
+    @apply h-1 w-16 bg-slate-200 rounded-full overflow-hidden shrink-0 hidden sm:block;
+  }
+  .voice-meter-fill {
+    @apply h-full bg-emerald-500;
+    transition: width 80ms linear;
+  }
+
+  .voice-btn {
+    @apply text-xs px-2 py-1 rounded-md border border-slate-200 bg-white
+      text-slate-600 hover:bg-slate-50 disabled:opacity-40
+      disabled:cursor-not-allowed transition-colors;
+  }
+
+  .voice-btn-primary {
+    @apply text-xs px-3 py-1 rounded-md bg-slate-800 text-white
+      hover:bg-slate-700 transition-colors;
+  }
+
+  .voice-btn-stop { @apply bg-rose-600 hover:bg-rose-700; }
+
+  .voice-btn-icon {
+    @apply p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors;
+  }
+
+  /* Clarification: pinned under the log, never in it -- it blocks progress
+     until answered, so it must not scroll out of view. */
+
+  .voice-clarify {
+    @apply border-t border-amber-200 bg-amber-50 px-3 py-2 shrink-0;
+  }
+  .voice-clarify-q { @apply text-xs font-semibold text-amber-900 mb-1.5; }
+  .voice-clarify-opts { @apply flex flex-wrap gap-1.5; }
+  .voice-clarify-opt {
+    @apply flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border
+      border-amber-300 bg-white hover:bg-amber-100 transition-colors text-left;
+  }
+  .voice-clarify-num {
+    @apply w-4 h-4 rounded-full bg-amber-200 text-amber-800
+      text-[10px] font-bold flex items-center justify-center shrink-0;
+  }
+  .voice-clarify-skip { @apply mt-1 text-[11px] text-amber-700 hover:text-amber-900; }
+
   .book-editor-meta {
     @apply border-t border-slate-200 bg-white shrink-0;
   }
@@ -787,6 +929,20 @@
 
   .ocr-block-edited {
     @apply border-l-2 border-l-sky-400;
+  }
+
+  /* A block just changed by voice. Violet, deliberately unlike the amber
+     selection ring and the red/amber confidence tints -- the user has to be
+     able to tell "the model changed this" from "this is selected". */
+  .ocr-replica-block.voice-edited,
+  .voice-edited {
+    @apply ring-2 ring-violet-500 bg-violet-50;
+    animation: voiceEditFlash 0.5s ease-out;
+  }
+
+  @keyframes voiceEditFlash {
+    from { background-color: rgb(196 181 253); }
+    to   { background-color: rgb(245 243 255); }
   }
 
   .ocr-review-chip {

@@ -698,6 +698,7 @@ def _editor_template_kwargs(
         "default_translation_engine": default_trans_engine,
         "is_docx": is_docx,
         "original_html": original_html,
+        "voice_edit_enabled": bool(current_app.config.get("VOICE_EDIT_ENABLED")),
     }
 
 
@@ -2880,3 +2881,151 @@ def page_versions(project_slug, page_slug):
         }
     )
 
+
+@api.route("/voice-edit/<project_slug>/<page_slug>/", methods=["POST"])
+@p2_required
+def voice_edit(project_slug, page_slug):
+    """Interpret one spoken utterance against the page the user is editing.
+
+    Takes an audio clip plus the *client's live document* -- which may contain
+    unpublished edits -- and returns validated edit operations for the frontend
+    to apply. See ``docs/voice-edit-service-contract.rst``.
+
+    Two deliberate non-behaviours:
+
+    - The audio is forwarded and dropped. Nothing is written to object storage,
+      so there is no quota impact and no voice-recording retention obligation.
+    - No revision is written. Operations are applied client-side and land
+      through the normal ``edit_post`` path when the user publishes, which keeps
+      one save path and one optimistic-locking story.
+    """
+    import json
+    import time
+
+    from kalanjiyam.utils import voice_client
+
+    if not current_app.config.get("VOICE_EDIT_ENABLED"):
+        abort(404)
+
+    if current_user.is_authenticated and current_user.is_super_admin:
+        abort(403, description=_l("Superadmins are not allowed to access project data."))
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+    if not q.user_can_view_proofing_project(current_user, project_):
+        abort(403)
+    page_ = q.page(project_.id, page_slug)
+    if not page_:
+        abort(404)
+
+    # An always-on microphone makes this essential rather than a nicety: a
+    # forgotten open mic would otherwise bill a request every few seconds.
+    if not current_user.is_authenticated:
+        from kalanjiyam.utils.rate_limit import is_rate_limited
+
+        settings = q.get_system_settings()
+        limit = (getattr(settings, "unregistered_user_ocr_limit", 0) or 5) * 10
+        if is_rate_limited(
+            "voice_edit",
+            request.remote_addr,
+            request.cookies.get("device_fingerprint"),
+            limit=limit,
+        ):
+            abort(
+                429,
+                description=_l(
+                    "Rate limit exceeded. Guests can only use voice editing "
+                    "%(limit)s times per 24 hours.",
+                    limit=limit,
+                ),
+            )
+
+    audio = request.files.get("audio")
+    if audio is None or not audio.filename:
+        abort(400, description=_l("No audio was uploaded."))
+
+    content_type = (audio.mimetype or "").split(";")[0].strip().lower()
+    if content_type not in voice_client.ALLOWED_AUDIO_TYPES:
+        abort(400, description=_l("Unsupported audio format: %(kind)s", kind=content_type))
+
+    audio.stream.seek(0, 2)
+    size = audio.stream.tell()
+    audio.stream.seek(0)
+    if size > voice_client.MAX_AUDIO_BYTES:
+        abort(413, description=_l("Audio clip is too large."))
+    if size == 0:
+        abort(400, description=_l("Audio clip is empty."))
+
+    try:
+        raw_context = json.loads(request.form.get("context") or "{}")
+    except ValueError:
+        abort(400, description=_l("Malformed context."))
+    if not isinstance(raw_context, dict):
+        abort(400, description=_l("Malformed context."))
+
+    blocks = raw_context.get("blocks")
+    if not isinstance(blocks, list):
+        blocks = []
+
+    pending = raw_context.get("pending_clarification")
+    context = voice_client.build_context(
+        blocks,
+        selected_block_id=raw_context.get("selected_block_id"),
+        pending_clarification=pending if isinstance(pending, dict) else None,
+    )
+
+    language = (request.form.get("language") or "ta").strip()[:16]
+
+    started = time.monotonic()
+    try:
+        result = voice_client.transcribe_and_interpret(
+            audio.read(),
+            filename=secure_filename(audio.filename) or "utterance",
+            content_type=content_type,
+            language=language,
+            context=context,
+        )
+    except voice_client.VoiceError as e:
+        _record_voice_metric(
+            language, status="FAILED", latency_ms=(time.monotonic() - started) * 1000, error=e
+        )
+        logging.warning("voice-edit call failed: %s", e)
+        # 502, not 500: the fault is upstream. The editor shows a quiet status
+        # and keeps listening rather than tearing down the session.
+        abort(502, description=_l("The voice service is unavailable."))
+
+    _record_voice_metric(
+        language,
+        status="SUCCESS",
+        latency_ms=(time.monotonic() - started) * 1000,
+        result=result,
+    )
+    return jsonify(result.to_api_dict())
+
+
+def _record_voice_metric(language, *, status, latency_ms, result=None, error=None):
+    """Best-effort metrics for a voice turn; never breaks the response."""
+    try:
+        from kalanjiyam.utils.metrics import record_metric
+
+        details = {"language": language}
+        if result is not None:
+            details.update(
+                {
+                    "intent": result.intent,
+                    "ops": len(result.ops),
+                    "dropped": len(result.dropped),
+                    "model": result.model,
+                }
+            )
+        record_metric(
+            category="voice",
+            name="voice.edit",
+            status=status,
+            latency_ms=latency_ms,
+            error_level="ERROR" if error is not None else None,
+            error_message=str(error) if error is not None else None,
+            details=details,
+        )
+    except Exception:
+        pass

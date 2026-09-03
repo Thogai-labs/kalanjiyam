@@ -44,6 +44,7 @@
   window.PAGE_VERSION = {{ page_version|default(0) }};
   window.TARGET_VERSION_KEY = {{ (target_version_key|default('')) | tojson }};
   window.ACTIVE_VERSION_KEY = {{ (active_version_key|default('')) | tojson }};
+  window.VOICE_EDIT_ENABLED = {{ 'true' if voice_edit_enabled else 'false' }};
   {% if conflict %}
   window.CONFLICT_CONTENT = {{ (conflict.content|default('')) | tojson }};
   window.YOUR_CONTENT = {{ (your_content|default('')) | tojson }};
@@ -275,7 +276,7 @@
       </div>
     </div>
 
-    {{ editor.book_toolbar(page_context, page_number, image_number, num_images, ocr_status=ocr_status, engine_choices=engine_choices, can_save=can_save, cur_page_issues=cur_page_issues, translation_engines=translation_engines, default_translation_value=default_translation_value) }}
+    {{ editor.book_toolbar(page_context, page_number, image_number, num_images, ocr_status=ocr_status, engine_choices=engine_choices, can_save=can_save, cur_page_issues=cur_page_issues, translation_engines=translation_engines, default_translation_value=default_translation_value, voice_edit_enabled=voice_edit_enabled) }}
 
     {% if cur_page_issues %}
     <div class="px-4 py-2 text-xs font-semibold border-b border-amber-200 bg-amber-50/90 text-amber-900 flex flex-wrap items-center justify-between gap-2 shadow-xs">
@@ -375,6 +376,10 @@
         </div>
       </section>
     </div>
+
+    {% if voice_edit_enabled %}
+    {{ editor.voice_console() }}
+    {% endif %}
 
     <div class="book-editor-meta" x-show="showMetaPanel" x-cloak
          x-transition:enter="transition ease-out duration-300"

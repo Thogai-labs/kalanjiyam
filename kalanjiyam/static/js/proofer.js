@@ -26,6 +26,8 @@ import {
 } from './page-document.js';
 import { OsdBboxOverlay, scaleBoxesToImage } from './osd-overlay.js';
 import { ReplicaView } from './replica-view.js';
+import VoiceSession, { isVoiceCaptureSupported } from './voice-session.js';
+import { applyOps, UndoStack, describeOp } from './voice-edit.js';
 
 const CONFIG_KEY = 'proofing-editor';
 
@@ -167,6 +169,26 @@ export default () => ({
   conflictContent: (typeof window.CONFLICT_CONTENT !== 'undefined') ? window.CONFLICT_CONTENT : '',
   yourContent: (typeof window.YOUR_CONTENT !== 'undefined') ? window.YOUR_CONTENT : '',
   conflictDiff: (typeof window.CONFLICT_DIFF !== 'undefined') ? window.CONFLICT_DIFF : '',
+
+  // Handsfree voice editing. See voice-session.js / voice-edit.js and
+  // docs/voice-edit-service-contract.rst.
+  voiceSupported: isVoiceCaptureSupported(),
+  voiceEnabled: (typeof window.VOICE_EDIT_ENABLED !== 'undefined') && window.VOICE_EDIT_ENABLED,
+  voiceActive: false,
+  voicePanelOpen: false,
+  voiceLanguage: 'ta',
+  voiceStatus: 'idle', // idle | listening | speaking | thinking | clarifying | error
+  voiceMessage: '',
+  voiceLevel: 0,
+  // One chronological conversation, oldest first -- it renders as a chat log,
+  // so the two parallel newest-first lists this replaced would have read
+  // backwards and interleaved wrongly.
+  voiceLog: [],          // {kind: said|edit|rejected|answer|info|undo, ...}
+  voiceClarification: null,
+  voiceAnswer: '',
+  _voiceSession: null,
+  _voiceUndo: null,
+  _voiceBusy: false,
 
   // Internal-only
   layoutClasses: CLASSES_SIDE_BY_SIDE,
@@ -585,6 +607,18 @@ export default () => ({
     // Use `.bind(this)` so that `this` in the function refers to this app and
     // not `window`.
     window.onbeforeunload = this.onBeforeUnload.bind(this);
+    window.addEventListener('pagehide', () => this.stopVoice());
+
+    // Alt+M toggles the mic. Registered here rather than in
+    // setupKeyboardNavigation, which deliberately ignores keys while focus is
+    // inside a block -- exactly where a proofreader's cursor lives.
+    window.addEventListener('keydown', (e) => {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'm' || e.key === 'M')) {
+        if (!this.voiceEnabled) return;
+        e.preventDefault();
+        this.toggleVoice();
+      }
+    });
     
     // Initialize language options
     this.updateLanguageOptions();
@@ -1296,6 +1330,9 @@ export default () => ({
         this.selectedTranslationEngine = settings.selectedTranslationEngine || this.selectedTranslationEngine;
         this.sourceLanguage = settings.sourceLanguage || this.sourceLanguage;
         this.targetLanguage = settings.targetLanguage || this.targetLanguage;
+
+        // Voice settings
+        this.voiceLanguage = settings.voiceLanguage || this.voiceLanguage;
       } catch (error) {
         // Old settings are invalid -- rewrite with valid values.
         this.saveSettings();
@@ -1315,9 +1352,345 @@ export default () => ({
       selectedTranslationEngine: this.selectedTranslationEngine,
       sourceLanguage: this.sourceLanguage,
       targetLanguage: this.targetLanguage,
+      voiceLanguage: this.voiceLanguage,
     };
     localStorage.setItem(CONFIG_KEY, JSON.stringify(settings));
   },
+  // ==========================================================================
+  // Handsfree voice editing
+  //
+  // The mic stays open; voice-session.js cuts an utterance on silence and hands
+  // us a blob. We POST it with the *live* document -- unpublished edits and all
+  // -- and apply whatever operations come back, highlighting each one.
+  //
+  // Nothing here writes a revision. Voice edits land through the normal Publish
+  // path like typed ones, so there is one save path and one conflict story.
+  // ==========================================================================
+
+  toggleVoicePanel() {
+    this.voicePanelOpen = !this.voicePanelOpen;
+    if (this.voicePanelOpen) this._voiceScrollToEnd();
+  },
+
+  /** Append one entry to the conversation and keep the view pinned to the end.
+   *
+   *  Capped at 200: a long proofing session would otherwise grow the log
+   *  without bound, and nobody scrolls back that far. */
+  _voiceLog(entry) {
+    this.voiceLog.push({ ...entry, at: Date.now() });
+    if (this.voiceLog.length > 200) this.voiceLog = this.voiceLog.slice(-200);
+    this._voiceScrollToEnd();
+  },
+
+  /** Chat convention: newest at the bottom, so follow it there. Deferred a
+   *  frame so the new node exists before we measure scrollHeight. */
+  _voiceScrollToEnd() {
+    setTimeout(() => {
+      const el = document.getElementById('voice-log');
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 0);
+  },
+
+  clearVoiceLog() {
+    this.voiceLog = [];
+    this.voiceAnswer = '';
+    this.voiceMessage = '';
+  },
+
+  async toggleVoice() {
+    if (this.voiceActive) {
+      this.stopVoice();
+    } else {
+      await this.startVoice();
+    }
+  },
+
+  async startVoice() {
+    if (this.voiceActive) return;
+    if (!this.voiceSupported) {
+      this.showNotification('This browser cannot record audio.', 'error');
+      return;
+    }
+    // Replica mode is the only surface wired for block-anchored edits.
+    if (this.editorMode !== 'replica' || this.isDocx) {
+      this.showNotification('Voice editing works in replica mode.', 'warning');
+      return;
+    }
+
+    if (!this._voiceUndo) this._voiceUndo = new UndoStack(20);
+
+    this._voiceSession = new VoiceSession({
+      onSegment: (blob) => this.sendVoiceSegment(blob),
+      onLevel: (level) => { this.voiceLevel = Math.min(1, level * 6); },
+      onState: (state) => {
+        // Never let a mic state overwrite a pending question or an in-flight
+        // request -- those are what the user is actually waiting on.
+        if (this.voiceStatus === 'thinking' || this.voiceStatus === 'clarifying') return;
+        this.voiceStatus = state;
+      },
+      onError: (err) => {
+        console.error('voice capture error:', err);
+        this.voiceStatus = 'error';
+        this.voiceMessage = 'Microphone error.';
+      },
+    });
+
+    try {
+      await this._voiceSession.start();
+      this.voiceActive = true;
+      this.voicePanelOpen = true;
+      this.voiceMessage = '';
+      this.voiceStatus = 'calibrating';
+      this._voiceLog({ kind: 'info', text: 'Listening. Just speak — pause when you are done.' });
+    } catch (err) {
+      console.error('microphone unavailable:', err);
+      this._voiceSession = null;
+      this.voiceStatus = 'error';
+      this.voiceMessage = (err && err.name === 'NotAllowedError')
+        ? 'Microphone permission denied.'
+        : 'Could not start the microphone.';
+      this.showNotification(this.voiceMessage, 'error');
+    }
+  },
+
+  stopVoice() {
+    if (this._voiceSession) {
+      this._voiceSession.destroy();
+      this._voiceSession = null;
+    }
+    this.voiceActive = false;
+    this.voiceStatus = 'idle';
+    this.voiceLevel = 0;
+  },
+
+  /** Blocks trimmed to what the service needs. Geometry is deliberately omitted. */
+  _voiceContextBlocks() {
+    const blocks = (this.pageDocument && this.pageDocument.blocks) || [];
+    return blocks.map((b) => ({
+      id: b.id,
+      reading_order: b.reading_order,
+      content: b.content || '',
+      language: b.language || null,
+    }));
+  },
+
+  async sendVoiceSegment(blob) {
+    // One turn at a time. Two concurrent applies against the same document
+    // would race, and the second would be reasoning about stale text anyway.
+    if (this._voiceBusy) return;
+    this._voiceBusy = true;
+    this.voiceStatus = 'thinking';
+
+    const form = new FormData();
+    const ext = (blob.type || '').includes('mp4') ? 'mp4' : 'webm';
+    form.append('audio', blob, `utterance.${ext}`);
+    form.append('language', this.voiceLanguage);
+    form.append('context', JSON.stringify({
+      blocks: this._voiceContextBlocks(),
+      selected_block_id: (this._replicaView && this._replicaView.selectedId) || null,
+      pending_clarification: this.voiceClarification,
+    }));
+
+    const { pathname } = window.location;
+    const url = pathname.replace('/proofing/', '/api/voice-edit/');
+    const csrf = document.querySelector('input[name="csrf_token"]');
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        body: form,
+        headers: csrf ? { 'X-CSRFToken': csrf.value } : {},
+      });
+      if (!response.ok) {
+        // Stay listening: a failed turn is not a reason to close the mic on
+        // someone mid-sentence.
+        this.voiceStatus = this.voiceActive ? 'listening' : 'idle';
+        this.voiceMessage = response.status === 429
+          ? 'Voice editing rate limit reached.'
+          : 'The voice service is unavailable.';
+        this._voiceLog({ kind: 'info', text: this.voiceMessage, error: true });
+        return;
+      }
+      this.handleVoiceResponse(await response.json());
+    } catch (err) {
+      console.error('voice-edit request failed:', err);
+      this.voiceStatus = this.voiceActive ? 'listening' : 'idle';
+      this.voiceMessage = 'Could not reach the voice service.';
+      this._voiceLog({ kind: 'info', text: this.voiceMessage, error: true });
+    } finally {
+      this._voiceBusy = false;
+      if (this.voiceStatus === 'thinking') {
+        this.voiceStatus = this.voiceActive ? 'listening' : 'idle';
+      }
+    }
+  },
+
+  handleVoiceResponse(payload) {
+    const intent = (payload && payload.intent) || 'noise';
+    this.voiceMessage = '';
+
+    // Noise is the steady state of an open mic. Say nothing, change nothing.
+    if (intent === 'noise') {
+      this.voiceClarification = null;
+      return;
+    }
+
+    if (payload.transcript) {
+      this._voiceLog({ kind: 'said', text: payload.transcript });
+    }
+
+    if (intent === 'clarify' && payload.clarification) {
+      this.voiceClarification = payload.clarification;
+      this.voiceStatus = 'clarifying';
+      return;
+    }
+    this.voiceClarification = null;
+
+    if (intent === 'question') {
+      this.voiceAnswer = payload.answer || '';
+      if (this.voiceAnswer) this._voiceLog({ kind: 'answer', text: this.voiceAnswer });
+      return;
+    }
+
+    if (intent === 'navigate' && payload.command) {
+      this.runVoiceCommand(payload.command);
+      return;
+    }
+
+    if (payload.ops && payload.ops.length) {
+      this.applyVoiceOps(payload.ops);
+    }
+  },
+
+  /** Apply an operation batch to the live document and highlight the result. */
+  applyVoiceOps(ops) {
+    if (!this.pageDocument) return;
+
+    this._voiceUndo = this._voiceUndo || new UndoStack(20);
+    this._voiceUndo.push(this.pageDocument);
+
+    const { doc, applied, rejected } = applyOps(this.pageDocument, ops);
+
+    // Rejections are shown, never swallowed: a correction the user believes
+    // landed is worse than one they can see failed.
+    rejected.forEach((r) => {
+      this._voiceLog({
+        kind: 'rejected',
+        blockId: (r.op && r.op.block_id) || '',
+        label: describeOp(r.op),
+        reason: r.reason,
+      });
+    });
+
+    if (!applied.length) {
+      this._voiceUndo.pop(); // nothing changed; do not leave a dead snapshot
+      if (rejected.length) this.voiceMessage = rejected[0].reason;
+      return;
+    }
+
+    this.pageDocument = doc;
+    if (this._replicaView) this._replicaView.setDocument(this.pageDocument);
+    this._syncDocumentToForm();
+    this.hasUnsavedChanges = true;
+
+    applied.forEach((a) => {
+      this._voiceLog({
+        kind: 'edit',
+        blockId: a.block_id,
+        label: describeOp(a.op),
+        before: a.before,
+        after: a.after,
+        created: !!a.created,
+        deleted: !!a.deleted,
+      });
+    });
+
+    const last = applied[applied.length - 1];
+    if (last) this.markVoiceEdited(last.block_id);
+  },
+
+  /** Tint a block so the user can see what the model touched, distinct from
+   *  the ordinary selection highlight. */
+  markVoiceEdited(blockId) {
+    if (!blockId) return;
+    if (this._replicaView && typeof this._replicaView.focusBlock === 'function') {
+      this._replicaView.focusBlock(blockId);
+    }
+    // Wait a frame: focusBlock re-renders, which would discard the class.
+    setTimeout(() => {
+      const el = document.querySelector(`[data-block-id="${blockId}"]`);
+      if (!el) return;
+      el.classList.add('voice-edited');
+      setTimeout(() => el.classList.remove('voice-edited'), 8000);
+    }, 0);
+  },
+
+  /** Resolve a clarification with the option the user picked. */
+  chooseVoiceOption(option) {
+    this.voiceClarification = null;
+    this.voiceStatus = this.voiceActive ? 'listening' : 'idle';
+    if (option && option.ops && option.ops.length) this.applyVoiceOps(option.ops);
+  },
+
+  dismissVoiceClarification() {
+    this.voiceClarification = null;
+    this.voiceStatus = this.voiceActive ? 'listening' : 'idle';
+  },
+
+  undoVoiceEdit() {
+    if (!this._voiceUndo || !this._voiceUndo.canUndo) return;
+    const previous = this._voiceUndo.pop();
+    if (!previous) return;
+    this.pageDocument = previous;
+    if (this._replicaView) this._replicaView.setDocument(this.pageDocument);
+    this._syncDocumentToForm();
+    this.hasUnsavedChanges = true;
+    this._voiceLog({ kind: 'undo', text: 'Undid the last voice edit.' });
+  },
+
+  get canUndoVoice() {
+    return !!(this._voiceUndo && this._voiceUndo.canUndo);
+  },
+
+  runVoiceCommand(command) {
+    const action = command && command.action;
+    const args = (command && command.args) || {};
+    switch (action) {
+      case 'save':
+        this.syncContentBeforeSubmit(new Event('submit'));
+        break;
+      case 'next_page':
+      case 'prev_page': {
+        // data-nav, not the title text: titles are translated into 14 locales.
+        const link = document.querySelector(
+          `a[data-nav="${action === 'next_page' ? 'next' : 'prev'}"]`,
+        );
+        if (link) link.click();
+        break;
+      }
+      case 'undo':
+        this.undoVoiceEdit();
+        break;
+      case 'stop_listening':
+        this.stopVoice();
+        break;
+      case 'zoom_in':
+        this.increaseImageZoom();
+        break;
+      case 'zoom_out':
+        this.decreaseImageZoom();
+        break;
+      case 'reset_zoom':
+        this.resetImageZoom();
+        break;
+      case 'select_block':
+        if (args.block_id && this._replicaView) this._replicaView.focusBlock(args.block_id);
+        break;
+      default:
+        break;
+    }
+  },
+
   getLayoutClasses() {
     if (this.layout === LAYOUT_TOP_AND_BOTTOM) {
       return CLASSES_TOP_AND_BOTTOM;

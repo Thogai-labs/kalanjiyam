@@ -63,7 +63,7 @@ these components in our help text and documentation.
 
 
 {# Compact toolbar for book editing: navigation + OCR/tools + publish. #}
-{% macro book_toolbar(ctx, page_number, image_number, num_images, ocr_status="unavailable", engine_choices=[], can_save=false, translation_engines=[], cur_page_issues=[], default_translation_value="1") %}
+{% macro book_toolbar(ctx, page_number, image_number, num_images, ocr_status="unavailable", engine_choices=[], can_save=false, translation_engines=[], cur_page_issues=[], default_translation_value="1", voice_edit_enabled=false) %}
 {% set project = ctx.project %}
 {% set button_css = "p-2 rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors" %}
 <header class="book-editor-toolbar">
@@ -123,10 +123,10 @@ these components in our help text and documentation.
     <a class="{{ button_css }}" href="{{ history_url }}" title="{{ _('History') }}">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
     </a>
-    <a class="{{ button_css }}" href="{{ prev_url }}" title="{{ _('Previous') }}">
+    <a class="{{ button_css }}" data-nav="prev" href="{{ prev_url }}" title="{{ _('Previous') }}">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
     </a>
-    <a class="{{ button_css }}" href="{{ next_url }}" title="{{ _('Next') }}">
+    <a class="{{ button_css }}" data-nav="next" href="{{ next_url }}" title="{{ _('Next') }}">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
     </a>
 
@@ -146,6 +146,13 @@ these components in our help text and documentation.
 
     {# Translation #}
     {{ _book_translation_controls(button_css, translation_engines, default_translation_value) }}
+
+    {# Voice editing -- replica mode only, so hidden for DOCX projects. #}
+    {% if voice_edit_enabled %}
+    <div x-show="!isDocx" x-cloak class="flex items-center">
+      {{ _book_voice_controls(button_css) }}
+    </div>
+    {% endif %}
 
     <span class="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></span>
 
@@ -878,6 +885,177 @@ these components in our help text and documentation.
     </ul>
   </div>
 </div>
+{% endmacro %}
+
+
+{# Handsfree voice editing -- toolbar button only. The conversation itself
+   lives in `voice_console()`, docked below the workspace, so it never covers
+   the scan or the text. See docs/voice-edit-service-contract.rst. #}
+{% macro _book_voice_controls(button_css) %}
+<button type="button"
+        class="{{ button_css }} relative"
+        :class="voicePanelOpen ? 'bg-violet-50 text-violet-700' : (voiceActive ? 'text-rose-600' : '')"
+        @click.prevent="toggleVoicePanel()"
+        :title="voiceActive ? '{{ _('Voice editing is on') }}' : '{{ _('Voice editing (Alt+M)') }}'">
+  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M19 11a7 7 0 01-14 0m7 7v3m0-3a4 4 0 004-4V6a4 4 0 10-8 0v5a4 4 0 004 4z"></path>
+  </svg>
+  {# The only always-visible sign the mic is open, wherever the user is looking. #}
+  <span x-show="voiceActive" x-cloak
+        class="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+</button>
+{% endmacro %}
+
+
+{# The voice conversation, docked under the workspace.
+
+   Rendered as a sibling of .book-editor-workspace (which is flex-1 min-h-0),
+   so opening it *shrinks* the image and text panes rather than overlaying
+   them -- the same trick .book-editor-meta already uses. #}
+{% macro voice_console() %}
+<section class="book-editor-voice" x-show="voicePanelOpen" x-cloak
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="transform translate-y-4 opacity-0"
+         x-transition:enter-end="transform translate-y-0 opacity-100">
+
+  <header class="book-editor-voice-bar">
+    <div class="flex items-center gap-2 min-w-0">
+      <span class="voice-dot" :class="voiceActive ? 'voice-dot--live' : 'voice-dot--idle'"></span>
+      <span class="text-xs font-semibold text-slate-700 shrink-0">{{ _('Voice') }}</span>
+
+      <select class="voice-lang" x-model="voiceLanguage" @change="saveSettings()" :disabled="voiceActive"
+              aria-label="{{ _('Voice language') }}">
+        {{ language_options(['ta', 'sa', 'hi', 'te', 'kn', 'ml', 'mr', 'bn', 'gu', 'pa', 'or', 'ur', 'en']) }}
+      </select>
+
+      <span class="text-xs text-slate-500 truncate hidden sm:inline">
+        <span x-show="!voiceMessage" x-text="{
+          calibrating: '{{ _('Listening for the room…') }}',
+          listening:   '{{ _('Listening — just speak.') }}',
+          speaking:    '{{ _('Hearing you…') }}',
+          thinking:    '{{ _('Working…') }}',
+          clarifying:  '{{ _('Waiting for your answer.') }}',
+          idle: '', error: ''
+        }[voiceStatus] || ''"></span>
+        <span x-show="voiceMessage" class="text-rose-600 font-medium" x-text="voiceMessage"></span>
+      </span>
+
+      {# Level meter: the fastest way to tell "it cannot hear me" from
+         "it heard me and disagreed". #}
+      <div x-show="voiceActive" class="voice-meter" aria-hidden="true">
+        <div class="voice-meter-fill" :style="`width: ${Math.round(voiceLevel * 100)}%`"></div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-1.5 shrink-0">
+      <button type="button" class="voice-btn" @click.prevent="undoVoiceEdit()"
+              :disabled="!canUndoVoice" title="{{ _('Undo the last voice edit') }}">{{ _('Undo') }}</button>
+      <button type="button" class="voice-btn" @click.prevent="clearVoiceLog()"
+              x-show="voiceLog.length" title="{{ _('Clear the conversation') }}">{{ _('Clear') }}</button>
+      <button type="button"
+              class="voice-btn-primary"
+              :class="voiceActive ? 'voice-btn-stop' : ''"
+              @click.prevent="toggleVoice()"
+              x-text="voiceActive ? '{{ _('Stop') }}' : '{{ _('Start') }}'"></button>
+      <button type="button" class="voice-btn-icon" @click.prevent="voicePanelOpen=false"
+              title="{{ _('Close') }}" aria-label="{{ _('Close') }}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  {# Scrolls internally; the panel itself never grows past its max height. #}
+  <div id="voice-log" class="book-editor-voice-log">
+    <template x-if="!voiceLog.length">
+      <p class="voice-empty">
+        <span x-show="!voiceSupported">{{ _('This browser cannot record audio. Open the page over HTTPS or localhost.') }}</span>
+        <span x-show="voiceSupported">{{ _('Press Start, then speak a correction — for example, “change rama to raama in the second line”.') }}</span>
+      </p>
+    </template>
+
+    <template x-for="(item, i) in voiceLog" :key="i">
+      <div class="voice-row">
+
+        {# What you said #}
+        <template x-if="item.kind === 'said'">
+          <div class="voice-said">
+            <span class="voice-said-icon" aria-hidden="true">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M19 11a7 7 0 01-14 0m7 7v3m0-3a4 4 0 004-4V6a4 4 0 10-8 0v5a4 4 0 004 4z"></path>
+              </svg>
+            </span>
+            <span x-text="item.text"></span>
+          </div>
+        </template>
+
+        {# An applied change: before in rose, after in emerald #}
+        <template x-if="item.kind === 'edit'">
+          <button type="button" class="voice-change" @click.prevent="markVoiceEdited(item.blockId)"
+                  :title="'{{ _('Show this block') }}'">
+            <div class="voice-change-head">
+              <span class="voice-tag voice-tag--ok">{{ _('changed') }}</span>
+              <span class="voice-change-label" x-text="item.label"></span>
+            </div>
+            <div class="voice-diff">
+              <div class="voice-before" x-show="item.before !== null">
+                <span class="voice-diff-key">{{ _('before') }}</span>
+                <span class="voice-diff-text" x-text="item.before"></span>
+              </div>
+              <div class="voice-after" x-show="item.after !== null">
+                <span class="voice-diff-key">{{ _('after') }}</span>
+                <span class="voice-diff-text" x-text="item.after"></span>
+              </div>
+            </div>
+          </button>
+        </template>
+
+        {# A change that could not be applied -- shown, never swallowed #}
+        <template x-if="item.kind === 'rejected'">
+          <div class="voice-change voice-change--bad">
+            <div class="voice-change-head">
+              <span class="voice-tag voice-tag--bad">{{ _('not applied') }}</span>
+              <span class="voice-change-label" x-text="item.label"></span>
+            </div>
+            <p class="voice-reason" x-text="item.reason"></p>
+          </div>
+        </template>
+
+        <template x-if="item.kind === 'answer'">
+          <div class="voice-answer" x-text="item.text"></div>
+        </template>
+
+        <template x-if="item.kind === 'undo'">
+          <div class="voice-note voice-note--undo" x-text="item.text"></div>
+        </template>
+
+        <template x-if="item.kind === 'info'">
+          <div class="voice-note" :class="item.error ? 'voice-note--error' : ''" x-text="item.text"></div>
+        </template>
+      </div>
+    </template>
+  </div>
+
+  {# Pinned, not in the scroll log: it needs an answer before anything applies. #}
+  <template x-if="voiceClarification">
+    <div class="voice-clarify">
+      <p class="voice-clarify-q" x-text="voiceClarification.question"></p>
+      <div class="voice-clarify-opts">
+        <template x-for="(opt, i) in voiceClarification.options" :key="opt.id">
+          <button type="button" class="voice-clarify-opt" @click.prevent="chooseVoiceOption(opt)">
+            <span class="voice-clarify-num" x-text="i + 1"></span>
+            <span x-text="opt.label"></span>
+          </button>
+        </template>
+      </div>
+      <button type="button" class="voice-clarify-skip"
+              @click.prevent="dismissVoiceClarification()">{{ _('Never mind') }}</button>
+    </div>
+  </template>
+</section>
 {% endmacro %}
 
 

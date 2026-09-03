@@ -262,6 +262,16 @@ class BaseConfig:
         _env("LLM_GEMMA_TRANSLATION_TIMEOUT", "300") or "300"
     )
 
+    #: Master switch for handsfree voice editing on the proofing page. Off by
+    #: default: the feature needs the ``/v1/voice-edit`` agents deployed on the
+    #: OCR service host, so it ships dark and is enabled per environment.
+    VOICE_EDIT_ENABLED = _env("VOICE_EDIT_ENABLED", "False").lower() in ("true", "1", "yes")
+
+    #: Timeout in seconds for voice-edit HTTP requests. Much shorter than the
+    #: OCR/translation timeouts on purpose -- a user is speaking and waiting, so
+    #: a late answer applies to an utterance they have already moved past.
+    VOICE_SERVICE_TIMEOUT = int(_env("VOICE_SERVICE_TIMEOUT", "30") or "30")
+
     #: Default OCR engine/model.
     DEFAULT_OCR_ENGINE = _env("DEFAULT_OCR_ENGINE", "tesseract")
 
