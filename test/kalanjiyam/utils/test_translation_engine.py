@@ -791,3 +791,30 @@ class TestLlmGemmaTranslateEngine:
             engine = LlmGemmaTranslateEngine()
             response = engine.translate("Direct text.", "hi", "en")
             assert response.translated_text == "Direct text."
+
+    @patch("httpx.Client")
+    def test_translate_llm_gemma_with_v1_base_url(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value.__enter__.return_value = mock_client
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "choices": [{"message": {"content": "Translated with v1"}}]
+        }
+        mock_client.post.return_value = mock_response
+
+        from flask import Flask
+        from kalanjiyam.utils.translation_engine import LlmGemmaTranslateEngine
+
+        app = Flask("test_app")
+        app.config["TRANSLATION_SERVICE_URL"] = "http://10.195.100.51:4000/v1"
+        app.config["TRANSLATION_SERVICE_API_KEY"] = "sk-test"
+
+        with app.app_context():
+            engine = LlmGemmaTranslateEngine()
+            response = engine.translate("Hello", "en", "ta")
+            assert response.translated_text == "Translated with v1"
+            call_url = mock_client.post.call_args[0][0]
+            assert call_url == "http://10.195.100.51:4000/v1/chat/completions"
+            assert mock_client.post.call_args[1]["headers"]["X-API-Key"] == "sk-test"
+            assert mock_client.post.call_args[1]["headers"]["Authorization"] == "Bearer sk-test"

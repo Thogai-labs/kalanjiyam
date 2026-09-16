@@ -12,9 +12,11 @@ from flask import current_app
 
 from kalanjiyam.utils.ocr_types import (
     OcrResponse,
+    SUPPORTED_ENGINES,
     calculate_p05_confidence,
     engine_for_service,
     normalize_service_engine,
+    post_process,
 )
 from kalanjiyam.utils.text_utils import normalize_unicode_text
 
@@ -130,6 +132,14 @@ def _sanitize_block(block: dict) -> dict:
     return item
 
 
+def _normalize_base_url(url: str) -> str:
+    """Normalize OCR base URL by stripping trailing slash and /v1 suffix."""
+    u = (url or "").rstrip("/")
+    if u.endswith("/v1"):
+        return u[:-3]
+    return u
+
+
 def _get_ocr_service_targets() -> list[tuple[str, str]]:
     """Returns list of (base_url, api_key) pairs for primary and fallback OCR services."""
     import os
@@ -162,16 +172,33 @@ def get_available_engines() -> dict:
         return {"status": "unavailable", "engines": []}
 
     for base_url, api_key in targets:
-        headers = {"X-API-Key": api_key} if api_key else {}
+        clean_base = _normalize_base_url(base_url)
+        headers = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+            headers["X-API-Key"] = api_key
         try:
             with httpx.Client(timeout=5.0) as client:
-                response = client.get(f"{base_url}/v1/engines", headers=headers)
-            if response.status_code == 200:
-                raw = response.json().get("engines", [])
-                engines = [normalize_service_engine(e) for e in raw]
-                status = "ok" if engines else "no_engines"
-                return {"status": status, "engines": engines}
-            else:
+                response = client.get(f"{clean_base}/v1/engines", headers=headers)
+                if response.status_code == 200:
+                    raw = response.json().get("engines", [])
+                    engines = [normalize_service_engine(e) for e in raw]
+                    status = "ok" if engines else "no_engines"
+                    return {"status": status, "engines": engines}
+
+                if response.status_code in (404, 405):
+                    models_resp = client.get(f"{clean_base}/v1/models", headers=headers)
+                    if models_resp.status_code == 200:
+                        data = models_resp.json().get("data", [])
+                        raw_ids = [m.get("id", "") for m in data if isinstance(m, dict)]
+                        engines = []
+                        for mid in raw_ids:
+                            norm = normalize_service_engine(mid)
+                            if norm in SUPPORTED_ENGINES and norm not in engines:
+                                engines.append(norm)
+                        if engines:
+                            return {"status": "ok", "engines": engines}
+
                 logger.warning("OCR service at %s returned status %s for engines ping. Falling back...", base_url, response.status_code)
                 continue
         except Exception as ex:
@@ -179,6 +206,124 @@ def get_available_engines() -> dict:
             continue
 
     return {"status": "unavailable", "engines": []}
+
+
+def _run_ocr_chat_completions(
+    clean_base: str,
+    headers: dict,
+    file_path: Path,
+    engine_name: str,
+    language: str,
+    timeout: float,
+    start_time: float,
+) -> OcrResponse:
+    """Fallback runner for vision LLMs (e.g. llm-gemma) via /v1/chat/completions."""
+    import base64
+    from PIL import Image
+
+    mime = "image/jpeg"
+    page_width = None
+    page_height = None
+    try:
+        with Image.open(file_path) as img:
+            page_width, page_height = img.size
+            if img.format and img.format.lower() in ("png", "jpeg", "webp"):
+                mime = f"image/{img.format.lower()}"
+    except Exception as e:
+        logger.warning("Could not read image dimensions for %s: %s", file_path, e)
+
+    img_bytes = file_path.read_bytes()
+    b64_img = base64.b64encode(img_bytes).decode("utf-8")
+    data_url = f"data:{mime};base64,{b64_img}"
+
+    norm = normalize_service_engine(engine_name)
+    if norm == "chandra":
+        model_id = "chandra"
+    elif norm == "gemma_ocr":
+        model_id = "llm-gemma"
+    else:
+        model_id = engine_name.replace("_", "-")
+
+    ocr_prompt = (
+        "Perform optical character recognition (OCR) on this image. "
+        "Extract all text verbatim, preserving original layout, headings, and line breaks. "
+        "Output ONLY the extracted text. Do not add explanations, conversational comments, or formatting notes."
+    )
+
+    chat_url = f"{clean_base}/v1/chat/completions"
+    chat_headers = dict(headers)
+    chat_headers["Content-Type"] = "application/json"
+
+    chat_payload = {
+        "model": model_id,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": ocr_prompt},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            }
+        ],
+        "max_tokens": 4096,
+        "temperature": 0.0,
+    }
+
+    with httpx.Client(timeout=timeout) as client:
+        res = client.post(chat_url, headers=chat_headers, json=chat_payload)
+
+    latency_ms = round((time.time() - start_time) * 1000, 2)
+    if res.status_code >= 400:
+        detail = res.text
+        try:
+            res_json = res.json()
+            detail = res_json.get("detail") or res_json.get("error", {}).get("message") or detail
+        except Exception:
+            pass
+        raise RuntimeError(f"OCR chat completion error ({res.status_code}): {detail}")
+
+    res_json = res.json()
+    choices = res_json.get("choices") or []
+    extracted_text = ""
+    if choices and isinstance(choices, list):
+        msg = choices[0].get("message") or {}
+        extracted_text = msg.get("content") or ""
+
+    from kalanjiyam.utils.translation_engine import clean_translation_preambles
+    extracted_text = clean_translation_preambles(extracted_text) if extracted_text else ""
+    extracted_text = post_process(extracted_text)
+
+    try:
+        from kalanjiyam.utils.metrics import record_metric
+        record_metric(
+            category="ocr",
+            name=f"ocr.{engine_name}",
+            latency_ms=latency_ms,
+            status="SUCCESS",
+            details={"engine": engine_name, "language": language, "url": clean_base, "mode": "chat_completions"},
+        )
+    except Exception:
+        pass
+
+    return OcrResponse(
+        text_content=extracted_text,
+        bounding_boxes=[],
+        blocks=None,
+        content_format="plain",
+        page_width=page_width,
+        page_height=page_height,
+        pipeline="standard",
+        source_type="scan",
+        coordinate_space="pixel",
+        model={"name": model_id, "version": "vllm"},
+        page_confidence=None,
+        contract_version="2.2",
+        engine=engine_name,
+        p05=None,
+        blocks_count=0,
+        chars_count=len(extracted_text),
+        engine_latency_ms=latency_ms,
+    )
 
 
 def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrResponse:
@@ -191,8 +336,12 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
     last_exception: Exception | None = None
 
     for idx, (base_url, api_key) in enumerate(targets):
-        url = f"{base_url}/v1/ocr"
-        headers = {"X-API-Key": api_key} if api_key else {}
+        clean_base = _normalize_base_url(base_url)
+        url = f"{clean_base}/v1/ocr"
+        headers = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+            headers["X-API-Key"] = api_key
 
         logger.info("Calling OCR service engine=%s language=%s url=%s (target %d/%d)", engine_name, language, url, idx + 1, len(targets))
         start_time = time.time()
@@ -204,6 +353,37 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
                 with httpx.Client(timeout=timeout) as client:
                     response = client.post(url, files=files, data=data, headers=headers)
             latency_ms = round((time.time() - start_time) * 1000, 2)
+
+            is_chat_fallback_needed = (
+                response.status_code in (404, 405)
+                or (
+                    response.status_code >= 400
+                    and (
+                        "not supported for provider" in response.text
+                        or "Multipart OCR request" in response.text
+                        or "Method Not Allowed" in response.text
+                        or "litellm" in response.text.lower()
+                    )
+                )
+            )
+            if is_chat_fallback_needed:
+                logger.info("OCR service at %s does not support /v1/ocr multipart (%s). Falling back to /v1/chat/completions prompt-based OCR...", clean_base, response.status_code)
+                try:
+                    return _run_ocr_chat_completions(
+                        clean_base=clean_base,
+                        headers=headers,
+                        file_path=file_path,
+                        engine_name=engine_name,
+                        language=language,
+                        timeout=timeout,
+                        start_time=start_time,
+                    )
+                except Exception as chat_ex:
+                    logger.warning("Prompt-based OCR via chat/completions failed at %s: %s", clean_base, chat_ex)
+                    if idx < len(targets) - 1:
+                        last_exception = chat_ex
+                        continue
+                    raise chat_ex
 
             if response.status_code >= 400:
                 detail = response.text

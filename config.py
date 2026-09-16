@@ -228,7 +228,7 @@ class BaseConfig:
     OCR_BACKEND = _env("OCR_BACKEND", "remote")
 
     #: Base URL of the standalone OCR service.
-    OCR_SERVICE_URL = _env("OCR_SERVICE_URL", "http://localhost:8000")
+    OCR_SERVICE_URL = _env("OCR_SERVICE_URL", "http://10.195.100.51:4000/v1")
 
     #: Fallback URL of the standalone OCR service if OCR_SERVICE_URL is unreachable.
     OCR_SERVICE_URL_2 = _env("OCR_SERVICE_URL_2", "")
@@ -243,7 +243,7 @@ class BaseConfig:
     OCR_SERVICE_TIMEOUT = int(_env("OCR_SERVICE_TIMEOUT", "300") or "300")
 
     #: Base URL of the standalone translation service.
-    TRANSLATION_SERVICE_URL = _env("TRANSLATION_SERVICE_URL", "http://localhost:8888")
+    TRANSLATION_SERVICE_URL = _env("TRANSLATION_SERVICE_URL", "http://10.195.100.51:4000/v1")
 
     #: API key for service-to-service translation requests.
     TRANSLATION_SERVICE_API_KEY = _env("TRANSLATION_SERVICE_API_KEY", "")
@@ -268,7 +268,7 @@ class BaseConfig:
     )
 
     #: Optional URL override for llm-gemma translation API (defaults to {OCR_SERVICE_URL}/v1/chat/completions with automatic fallback if /v1/ocr is given).
-    LLM_GEMMA_TRANSLATION_API_URL = _env("LLM_GEMMA_TRANSLATION_API_URL", "")
+    LLM_GEMMA_TRANSLATION_API_URL = _env("LLM_GEMMA_TRANSLATION_API_URL", "http://10.195.100.51:4000/v1/chat/completions")
 
     #: Optional API key override for llm-gemma translation (defaults to OCR_SERVICE_API_KEY).
     LLM_GEMMA_TRANSLATION_API_KEY = _env("LLM_GEMMA_TRANSLATION_API_KEY", "")
@@ -292,7 +292,7 @@ class BaseConfig:
     DEFAULT_OCR_ENGINE = _env("DEFAULT_OCR_ENGINE", "gemma_ocr")
 
     #: Default Translation engine/model.
-    DEFAULT_TRANSLATION_ENGINE = _env("DEFAULT_TRANSLATION_ENGINE", "indictrans3")
+    DEFAULT_TRANSLATION_ENGINE = _env("DEFAULT_TRANSLATION_ENGINE", "llm_gemma")
 
     # Full-text search (OpenSearch)
     # ----------------------------

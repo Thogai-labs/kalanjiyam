@@ -302,3 +302,84 @@ def test_run_ocr_remote_fallback_to_secondary_url(flask_app, tmp_path):
         second_call = client.post.call_args_list[1]
         assert first_call[0][0] == "http://primary-ocr.test/v1/ocr"
         assert second_call[0][0] == "http://fallback-ocr.test/v1/ocr"
+
+
+def test_get_available_engines_from_models_endpoint(flask_app):
+    """When /v1/engines returns 404, get_available_engines should discover models from /v1/models."""
+    with flask_app.app_context():
+        flask_app.config.update(
+            OCR_SERVICE_URL="http://10.195.100.51:4000/v1",
+            OCR_SERVICE_API_KEY="test-key",
+        )
+
+        mock_engines_resp = MagicMock()
+        mock_engines_resp.status_code = 404
+
+        mock_models_resp = MagicMock()
+        mock_models_resp.status_code = 200
+        mock_models_resp.json.return_value = {
+            "data": [
+                {"id": "llm-gemma"},
+                {"id": "chandra"},
+                {"id": "asr-large"},
+            ]
+        }
+
+        with patch("kalanjiyam.utils.ocr_client.httpx.Client") as client_cls:
+            client = client_cls.return_value.__enter__.return_value
+            client.get.side_effect = [mock_engines_resp, mock_models_resp]
+
+            from kalanjiyam.utils.ocr_client import get_available_engines
+
+            res = get_available_engines()
+
+        assert res["status"] == "ok"
+        assert "gemma_ocr" in res["engines"]
+        assert "chandra" in res["engines"]
+        # Verify /v1 was not duplicated
+        assert client.get.call_args_list[0][0][0] == "http://10.195.100.51:4000/v1/engines"
+        assert client.get.call_args_list[1][0][0] == "http://10.195.100.51:4000/v1/models"
+
+
+def test_run_ocr_remote_fallback_to_chat_completions(flask_app, tmp_path):
+    """When /v1/ocr fails with LiteLLM provider error, fallback to prompt-based /v1/chat/completions."""
+    img = tmp_path / "page.jpg"
+    img.write_bytes(b"dummy")
+    with flask_app.app_context():
+        flask_app.config.update(
+            OCR_SERVICE_URL="http://10.195.100.51:4000/v1",
+            OCR_SERVICE_API_KEY="test-key",
+            OCR_SERVICE_TIMEOUT=30,
+        )
+
+        mock_ocr_resp = MagicMock()
+        mock_ocr_resp.status_code = 500
+        mock_ocr_resp.text = '{"error":{"message":"OCR is not supported for provider: openai. Received Model Group=llm-gemma"}}'
+
+        mock_chat_resp = MagicMock()
+        mock_chat_resp.status_code = 200
+        mock_chat_resp.json.return_value = {
+            "choices": [
+                {"message": {"role": "assistant", "content": "Extracted text from image"}}
+            ]
+        }
+
+        with patch("kalanjiyam.utils.ocr_client.httpx.Client") as client_cls:
+            client = client_cls.return_value.__enter__.return_value
+            client.post.side_effect = [mock_ocr_resp, mock_chat_resp]
+
+            from kalanjiyam.utils.ocr_client import run_ocr_remote
+
+            res = run_ocr_remote(img, "gemma_ocr", "sa")
+
+        assert res.text_content == "Extracted text from image"
+        assert res.engine == "gemma_ocr"
+        assert client.post.call_count == 2
+        # Verify first call was to /v1/ocr (no duplicate /v1/v1)
+        assert client.post.call_args_list[0][0][0] == "http://10.195.100.51:4000/v1/ocr"
+        # Verify second call was to /v1/chat/completions
+        assert client.post.call_args_list[1][0][0] == "http://10.195.100.51:4000/v1/chat/completions"
+        chat_payload = client.post.call_args_list[1][1]["json"]
+        assert chat_payload["model"] == "llm-gemma"
+        assert "Perform optical character recognition" in chat_payload["messages"][0]["content"][0]["text"]
+
