@@ -345,7 +345,11 @@ def transcribe_and_interpret(
     if timeout is None:
         timeout = float(current_app.config.get("VOICE_SERVICE_TIMEOUT") or REQUEST_TIMEOUT)
 
-    url = f"{base_url}/v1/voice-edit"
+    clean_base = base_url.rstrip("/")
+    if clean_base.endswith("/v1"):
+        url = f"{clean_base}/voice-edit"
+    else:
+        url = f"{clean_base}/v1/voice-edit"
     headers = {"X-API-Key": current_app.config.get("OCR_SERVICE_API_KEY", "")}
     files = {"audio": (filename, audio_bytes, content_type)}
     data = {"language": language, "context": json.dumps(context, ensure_ascii=False)}
@@ -361,6 +365,21 @@ def transcribe_and_interpret(
         # No retry: by the time a second attempt returned, the user would have
         # said something else and this answer would apply to stale text.
         raise VoiceError(f"voice service unreachable: {e}") from e
+
+    if response.status_code == 404:
+        logger.info(
+            "Voice edit endpoint %s returned 404; falling back to server-side ASR + LLM pipeline.",
+            url,
+        )
+        return _interpret_via_asr_pipeline(
+            audio_bytes,
+            filename=filename,
+            content_type=content_type,
+            language=language,
+            context=context,
+            known_block_ids=known_block_ids,
+            timeout=timeout,
+        )
 
     if response.status_code >= 400:
         try:
@@ -379,3 +398,178 @@ def transcribe_and_interpret(
         raise VoiceError("voice service returned a non-object body")
 
     return _build_result(payload, known_block_ids)
+
+
+def _interpret_via_asr_pipeline(
+    audio_bytes: bytes,
+    *,
+    filename: str,
+    content_type: str,
+    language: str,
+    context: dict[str, Any],
+    known_block_ids: set[str],
+    timeout: float | None = None,
+) -> VoiceResult:
+    """Server-side pipeline combining ASR (/v1/audio/transcriptions) and LLM (/v1/chat/completions)."""
+    from kalanjiyam.utils import asr_client
+
+    try:
+        asr_res = asr_client.transcribe_audio(
+            audio_bytes,
+            filename=filename,
+            content_type=content_type,
+            language=language,
+            timeout=timeout,
+        )
+    except asr_client.AsrError as e:
+        raise VoiceError(f"ASR transcription failed: {e}", status=e.status, code=e.code) from e
+
+    transcript = str(asr_res.get("text") or "").strip()
+    detected_lang = str(asr_res.get("language") or language or "")
+
+    # Silence or Whisper hallucination phrases on silence -> noise
+    if asr_client.is_silence_or_noise(transcript):
+        return VoiceResult(
+            transcript=transcript,
+            language=detected_lang,
+            intent="noise",
+            model=str(asr_res.get("model") or "asr"),
+        )
+
+    return _interpret_transcript_with_llm(
+        transcript=transcript,
+        language=detected_lang,
+        context=context,
+        known_block_ids=known_block_ids,
+        timeout=timeout,
+    )
+
+
+def _interpret_transcript_with_llm(
+    transcript: str,
+    *,
+    language: str,
+    context: dict[str, Any],
+    known_block_ids: set[str],
+    timeout: float | None = None,
+) -> VoiceResult:
+    """Use server LLM (/v1/chat/completions) to classify intent and generate edit ops."""
+    import re
+
+    base_url = (current_app.config.get("OCR_SERVICE_URL") or "").rstrip("/")
+    llm_url = current_app.config.get("LLM_GEMMA_TRANSLATION_API_URL")
+    if not llm_url:
+        if base_url.endswith("/v1"):
+            llm_url = f"{base_url}/chat/completions"
+        else:
+            llm_url = f"{base_url}/v1/chat/completions"
+    elif not llm_url.endswith("/chat/completions"):
+        clean = llm_url.rstrip("/")
+        if clean.endswith("/v1"):
+            llm_url = f"{clean}/chat/completions"
+        else:
+            llm_url = f"{clean}/v1/chat/completions"
+
+    api_key = (
+        current_app.config.get("LLM_GEMMA_TRANSLATION_API_KEY")
+        or current_app.config.get("OCR_SERVICE_API_KEY")
+        or ""
+    )
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+        headers["X-API-Key"] = api_key
+
+    system_prompt = (
+        "You are an expert voice editing assistant for the Kalanjiyam ancient document proofing editor.\n"
+        "Given the user's spoken utterance and the live document context, determine the intent and output ONLY a JSON object.\n\n"
+        "Intents:\n"
+        "- \"edit\": user wants to edit/change specific text in a block (e.g. 'change X to Y in line 2', 'replace X with Y').\n"
+        "- \"dictate\": user speaks new text to append to or set in the active/selected block.\n"
+        "- \"navigate\": user wants to issue a UI command ('save', 'next_page', 'prev_page', 'undo', 'zoom_in', 'zoom_out', 'reset_zoom', 'stop_listening', 'select_block').\n"
+        "- \"question\": user asks a question about the page content or translation.\n"
+        "- \"noise\": silence, background noise, or irrelevant chat.\n\n"
+        "Valid ops in \"ops\" list:\n"
+        "- {\"op\": \"replace\", \"block_id\": \"<valid-id>\", \"find\": \"<exact-old-text>\", \"replace\": \"<new-text>\", \"occurrence\": 1}\n"
+        "- {\"op\": \"replace_block\", \"block_id\": \"<valid-id>\", \"content\": \"<new-full-text>\"}\n"
+        "- {\"op\": \"append\", \"block_id\": \"<valid-id>\", \"content\": \"<appended-text>\"}\n"
+        "- {\"op\": \"insert_after\", \"block_id\": \"<valid-id>\", \"content\": \"<inserted-text>\"}\n"
+        "- {\"op\": \"insert_before\", \"block_id\": \"<valid-id>\", \"content\": \"<inserted-text>\"}\n"
+        "- {\"op\": \"delete_block\", \"block_id\": \"<valid-id>\"}\n\n"
+        "Valid command for \"command\":\n"
+        "{\"action\": \"save\" | \"next_page\" | \"prev_page\" | \"undo\" | \"zoom_in\" | \"zoom_out\" | \"reset_zoom\" | \"stop_listening\", \"args\": {}}\n\n"
+        "Output JSON Schema:\n"
+        "{\n"
+        '  "transcript": "<verbatim-transcript>",\n'
+        '  "language": "<language-code>",\n'
+        '  "intent": "edit" | "dictate" | "navigate" | "question" | "noise",\n'
+        '  "ops": [...],\n'
+        '  "command": {...} or null,\n'
+        '  "answer": "<answer text>" or ""\n'
+        "}"
+    )
+
+    user_prompt = (
+        f"Utterance: {transcript}\n"
+        f"Language: {language}\n"
+        f"Context: {json.dumps(context, ensure_ascii=False)}"
+    )
+
+    req_body = {
+        "model": "llm-gemma",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.1,
+    }
+
+    raw_resp = ""
+    try:
+        with httpx.Client(timeout=timeout or REQUEST_TIMEOUT, trust_env=False) as client:
+            resp = client.post(llm_url, json=req_body, headers=headers)
+        if resp.status_code == 200:
+            data = resp.json()
+            raw_resp = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    except Exception as e:
+        logger.warning("LLM call for voice interpretation failed at %s: %s", llm_url, e)
+
+    payload: dict[str, Any] = {}
+    if raw_resp:
+        cleaned = raw_resp.strip()
+        fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+        if fence_match:
+            cleaned = fence_match.group(1).strip()
+        try:
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, dict):
+                payload = parsed
+        except Exception:
+            logger.warning("Failed to parse JSON from LLM voice interpretation: %s", raw_resp[:200])
+
+    # If payload parsed successfully, build result
+    if payload:
+        if not payload.get("transcript"):
+            payload["transcript"] = transcript
+        if not payload.get("language"):
+            payload["language"] = language
+        return _build_result(payload, known_block_ids)
+
+    # Fallback: if user spoke text and a block is currently selected, treat as dictate/append
+    sel_id = context.get("selected_block_id")
+    if sel_id and sel_id in known_block_ids and len(transcript.strip()) > 0:
+        return VoiceResult(
+            transcript=transcript,
+            language=language,
+            intent="dictate",
+            ops=[{"op": "append", "block_id": sel_id, "content": " " + transcript}],
+            model="llm-gemma-fallback",
+        )
+
+    return VoiceResult(
+        transcript=transcript,
+        language=language,
+        intent="noise",
+        model="llm-gemma-fallback",
+    )
+

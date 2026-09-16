@@ -288,6 +288,18 @@ class BaseConfig:
     #: a late answer applies to an utterance they have already moved past.
     VOICE_SERVICE_TIMEOUT = int(_env("VOICE_SERVICE_TIMEOUT", "30") or "30")
 
+    #: Base URL for ASR (speech recognition) service (e.g. http://10.195.100.51:4000/v1).
+    ASR_SERVICE_URL = _env("ASR_SERVICE_URL", "http://10.195.100.51:4000/v1")
+
+    #: API key for ASR service. Defaults to OCR_SERVICE_API_KEY when empty.
+    ASR_SERVICE_API_KEY = _env("ASR_SERVICE_API_KEY", "")
+
+    #: Default ASR model (e.g. asr-large, asr-sanskrit).
+    DEFAULT_ASR_MODEL = _env("DEFAULT_ASR_MODEL", "asr-large")
+
+    #: Timeout in seconds for ASR HTTP requests.
+    ASR_SERVICE_TIMEOUT = int(_env("ASR_SERVICE_TIMEOUT", "30") or "30")
+
     #: Default OCR engine/model.
     DEFAULT_OCR_ENGINE = _env("DEFAULT_OCR_ENGINE", "gemma_ocr")
 
