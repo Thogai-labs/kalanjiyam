@@ -2795,6 +2795,54 @@ class OrgAdminView(AdminBaseView):
             csrf_token=generate_csrf(),
         )
 
+    @expose("/user/create", methods=["GET", "POST"])
+    def create_user(self):
+        org_id = require_org_admin()
+        org = q.group(org_id)
+        if org is None:
+            abort(404)
+
+        if request.method == "POST":
+            username = (request.form.get("username") or "").strip()
+            email = (request.form.get("email") or "").strip()
+            password = (request.form.get("password") or "").strip()
+            role_name = (request.form.get("role_name") or db.SiteRole.P1.value).strip()
+
+            allowed_roles = {db.SiteRole.P1.value, db.SiteRole.P2.value, db.SiteRole.MODERATOR.value}
+            if role_name not in allowed_roles:
+                role_name = db.SiteRole.P1.value
+
+            if not username or not email or not password:
+                flash("Username, email, and password are required.", "error")
+            else:
+                session = q.get_session()
+                existing_user = session.query(db.User).filter(
+                    (db.User.username == username) | (db.User.email == email)
+                ).first()
+                if existing_user:
+                    if existing_user.username == username:
+                        flash(f'Username "{username}" already exists.', "error")
+                    else:
+                        flash(f'Email "{email}" is already registered.', "error")
+                else:
+                    user = db.User(username=username, email=email, organization_id=org.id)
+                    user.set_password(password)
+                    role = session.query(db.Role).filter_by(name=role_name).first()
+                    if role:
+                        user.roles.append(role)
+                    session.add(user)
+                    session.flush()
+                    session.add(db.UserGroups(user_id=user.id, group_id=org.id))
+                    session.commit()
+                    flash(f'User "{username}" created successfully.', "success")
+                    return redirect(url_for("org_admin_view.index"))
+
+        return render_template(
+            "admin/org_user_create.html",
+            org=org,
+            csrf_token=generate_csrf(),
+        )
+
     @expose("/analytics")
     def user_analytics(self):
         org_id = require_org_admin()
