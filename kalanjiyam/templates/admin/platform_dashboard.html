@@ -109,6 +109,11 @@
     <span>{{ _('Manage Organizations') }}</span>
   </a>
 
+  <a href="{{ url_for('meta_analytics_view.index') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 hover:text-indigo-900 font-semibold text-xs transition-all shadow-xs">
+    {{ admin.icon('bar-chart-3', class='w-3.5 h-3.5 text-indigo-600') }}
+    <span>{{ _('Meta-Analytics') }}</span>
+  </a>
+
   <a href="{{ url_for('platform_view.user_analytics') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold text-xs transition-all shadow-xs">
     {{ admin.icon('bar-chart-3', class='w-3.5 h-3.5 text-slate-500') }}
     <span>{{ _('Global Analytics') }}</span>

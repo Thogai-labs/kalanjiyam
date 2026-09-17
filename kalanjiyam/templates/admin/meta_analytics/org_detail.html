@@ -1,0 +1,285 @@
+{% extends 'admin/base.html' %}
+{% import 'macros/admin.html' as admin %}
+
+{% block title %}{{ profile.org.name }} - {{ _('Meta-Analytics Inspection') }} | {{ _('Admin Console') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('meta_analytics', current_user) }}
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-base shrink-0 shadow-xs border border-indigo-100">
+        {{ profile.org.name[:1]|upper }}
+      </div>
+      <div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ profile.org.name }}
+          </h1>
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-slate-100 text-slate-700">
+            /{{ profile.org.slug }}
+          </span>
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            {{ _('Zero-Content Mode') }}
+          </span>
+          {% if profile.org.is_active %}
+          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            {{ _('Active Tenant') }}
+          </span>
+          {% else %}
+          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+            {{ _('Inactive Tenant') }}
+          </span>
+          {% endif %}
+        </div>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">
+          {{ _('Designated Org Admin') }}: <strong class="text-slate-700">{{ profile.org.admin_username }}</strong> • {{ _('Registered') }}: {{ profile.org.created_at }}
+          {% if profile.org.description %} • <span class="text-slate-400">{{ profile.org.description }}</span>{% endif %}
+        </p>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div>
+      <a href="{{ url_for('meta_analytics_view.index') }}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold transition-all shadow-xs">
+        {{ admin.icon('arrow-left', class='w-3.5 h-3.5 text-slate-500') }}
+        <span>{{ _('Back to Meta-Analytics') }}</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Key Metrics Row -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <!-- Members -->
+    <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs">
+      <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{{ _('Members') }}</span>
+      <div class="text-2xl font-bold text-slate-900">{{ profile.summary.members_count }}</div>
+      <p class="text-[11px] text-emerald-600 font-semibold mt-0.5">
+        {{ profile.summary.active_contributors_30d }} active proofers (30d)
+      </p>
+    </div>
+
+    <!-- Projects & Pages -->
+    <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs">
+      <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{{ _('Proofing Portfolio') }}</span>
+      <div class="text-2xl font-bold text-slate-900">{{ profile.summary.projects_count }} <span class="text-xs text-slate-400 font-semibold">books</span></div>
+      <p class="text-[11px] text-slate-500 font-medium mt-0.5">
+        {{ profile.summary.total_pages }} {{ _('total pages') }}
+      </p>
+    </div>
+
+    <!-- Review Completion -->
+    <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs">
+      <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{{ _('Approved Velocity') }}</span>
+      <div class="text-2xl font-bold text-slate-900">{{ profile.summary.completion_pct }}%</div>
+      <p class="text-[11px] text-slate-500 font-medium mt-0.5">
+        {{ profile.summary.r2_count }} {{ _('pages in R2 state') }}
+      </p>
+    </div>
+
+    <!-- Storage Quota -->
+    <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs">
+      <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{{ _('Disk Storage') }}</span>
+      <div class="text-2xl font-bold text-slate-900">{{ (profile.summary.storage_used_bytes // (1024 * 1024)) }} <span class="text-xs font-semibold text-slate-400">MB</span></div>
+      <p class="text-[11px] text-slate-500 font-medium mt-0.5">
+        {% if profile.summary.storage_quota_bytes %}
+          {{ profile.summary.storage_pct }}% of {{ (profile.summary.storage_quota_bytes // (1024 * 1024)) }} MB limit
+        {% else %}
+          {{ _('Unlimited disk quota') }}
+        {% endif %}
+      </p>
+    </div>
+
+    <!-- AI Compute Credits -->
+    <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs">
+      <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{{ _('AI Compute Used') }}</span>
+      <div class="text-2xl font-bold text-slate-900">{{ profile.summary.ocr_credits_used }} <span class="text-xs font-semibold text-slate-400">OCR</span></div>
+      <p class="text-[11px] text-slate-500 font-medium mt-0.5">
+        {{ profile.summary.translation_credits_used }} translation credits
+      </p>
+    </div>
+  </div>
+
+  <!-- Project Portfolio Metadata Table (Strictly Zero Content) -->
+  <div class="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden">
+    <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+      <div>
+        <h2 class="text-sm font-bold text-slate-900">{{ _('Assigned Book Projects (Structural Metadata Only)') }}</h2>
+        <p class="text-xs text-slate-500 font-medium">{{ _('Tracking project milestones and pipeline progress without content, text, or scan access.') }}</p>
+      </div>
+      <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
+        {{ profile.projects|length }} {{ _('books assigned') }}
+      </span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-xs text-left">
+        <thead class="bg-slate-50/80 text-slate-500 uppercase tracking-wider font-bold text-[10px] border-b border-slate-100">
+          <tr>
+            <th class="px-5 py-3.5">{{ _('Title & Slug') }}</th>
+            <th class="px-4 py-3.5">{{ _('Genre') }}</th>
+            <th class="px-4 py-3.5">{{ _('Total Pages') }}</th>
+            <th class="px-4 py-3.5">{{ _('R0 (Work)') }}</th>
+            <th class="px-4 py-3.5">{{ _('R1 (1x)') }}</th>
+            <th class="px-4 py-3.5">{{ _('R2 (Done)') }}</th>
+            <th class="px-4 py-3.5">{{ _('Skipped') }}</th>
+            <th class="px-4 py-3.5">{{ _('Progress') }}</th>
+            <th class="px-5 py-3.5 text-right">{{ _('Created') }}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+          {% for p in profile.projects %}
+          <tr class="hover:bg-slate-50/70 transition-colors">
+            <!-- Project Title & Slug -->
+            <td class="px-5 py-3.5">
+              <span class="font-bold text-slate-900 block text-xs">{{ p.display_title }}</span>
+              <span class="text-[10px] font-mono text-slate-400">/{{ p.slug }}</span>
+            </td>
+
+            <!-- Genre -->
+            <td class="px-4 py-3.5">
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-600">
+                {{ p.genre_name }}
+              </span>
+            </td>
+
+            <!-- Total Pages -->
+            <td class="px-4 py-3.5 font-bold text-slate-900">
+              {{ p.total_pages }}
+            </td>
+
+            <!-- R0 -->
+            <td class="px-4 py-3.5 font-semibold text-blue-700">
+              {{ p.r0_count }}
+            </td>
+
+            <!-- R1 -->
+            <td class="px-4 py-3.5 font-semibold text-amber-700">
+              {{ p.r1_count }}
+            </td>
+
+            <!-- R2 -->
+            <td class="px-4 py-3.5 font-bold text-emerald-700">
+              {{ p.r2_count }}
+            </td>
+
+            <!-- Skip -->
+            <td class="px-4 py-3.5 text-slate-400">
+              {{ p.skip_count }}
+            </td>
+
+            <!-- Progress Bar -->
+            <td class="px-4 py-3.5">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-slate-800 text-xs">{{ p.completion_pct }}%</span>
+                <div class="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div class="h-full bg-emerald-500 rounded-full" style="width: {{ [p.completion_pct, 100]|min }}%"></div>
+                </div>
+              </div>
+            </td>
+
+            <!-- Created Date -->
+            <td class="px-5 py-3.5 text-right text-slate-400 text-[11px]">
+              {{ p.created_at }}
+            </td>
+          </tr>
+          {% endfor %}
+
+          {% if not profile.projects %}
+          <tr>
+            <td colspan="9" class="px-5 py-8 text-center text-slate-400 text-xs font-medium">
+              {{ _('No book projects have been assigned to this organization yet.') }}
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Members Activity Distribution (Aggregated Telemetry Only) -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- Members Activity -->
+    <div class="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden">
+      <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+        <h2 class="text-sm font-bold text-slate-900">{{ _('Member Contribution Velocity') }}</h2>
+        <span class="text-xs text-slate-500 font-medium">{{ profile.members|length }} {{ _('members') }}</span>
+      </div>
+
+      <div class="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+        {% for m in profile.members %}
+        <div class="p-3.5 px-5 flex items-center justify-between hover:bg-slate-50/70 transition-colors">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-[10px] shrink-0 uppercase">
+              {{ m.username[:1] }}
+            </div>
+            <div>
+              <span class="font-bold text-slate-900 block text-xs">{{ m.username }}</span>
+              <div class="flex items-center gap-1 mt-0.5">
+                {% for r in m.roles %}
+                <span class="text-[9px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 font-semibold">{{ r }}</span>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+
+          <div class="text-right">
+            <span class="font-bold text-slate-900 text-xs">{{ m.revisions_count }}</span>
+            <span class="text-[10px] text-slate-400 block">{{ _('revisions submitted') }}</span>
+          </div>
+        </div>
+        {% endfor %}
+
+        {% if not profile.members %}
+        <div class="p-8 text-center text-xs text-slate-400">
+          {{ _('No members currently joined to this tenant organization.') }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Org Meta-Events Stream -->
+    <div class="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden">
+      <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+        <h2 class="text-sm font-bold text-slate-900">{{ _('Tenant Meta-Events') }}</h2>
+        <span class="text-xs text-slate-500 font-medium">{{ profile.events|length }} {{ _('recent') }}</span>
+      </div>
+
+      <div class="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+        {% for ev in profile.events %}
+        <div class="p-3.5 px-5 hover:bg-slate-50/70 transition-colors flex items-start gap-2.5">
+          <div class="w-2 h-2 rounded-full mt-1.5 shrink-0
+            {% if ev.severity == 'success' %}bg-emerald-500
+            {% elif ev.severity == 'warning' %}bg-amber-500
+            {% elif ev.severity == 'error' %}bg-rose-500
+            {% else %}bg-blue-500{% endif %}"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between gap-1">
+              <span class="font-bold text-slate-900 text-xs">{{ ev.title }}</span>
+              <span class="text-[10px] font-mono text-slate-400">{{ ev.timestamp[:19] }}</span>
+            </div>
+            <p class="text-xs text-slate-600 font-medium mt-0.5">{{ ev.description }}</p>
+          </div>
+        </div>
+        {% endfor %}
+
+        {% if not profile.events %}
+        <div class="p-8 text-center text-xs text-slate-400">
+          {{ _('No operational events recorded for this organization.') }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

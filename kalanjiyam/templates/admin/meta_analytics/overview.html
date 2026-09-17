@@ -1,0 +1,494 @@
+{% extends 'admin/base.html' %}
+{% import 'macros/admin.html' as admin %}
+
+{% block title %}{{ _('Cross-Organization Meta-Analytics') }} | {{ _('Admin Console') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('meta_analytics', current_user) }}
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header & Global Governance Bar -->
+  <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 shadow-xs border border-indigo-100">
+        {{ admin.icon('bar-chart-3', class='w-5 h-5') }}
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ _('Cross-Organization Meta-Analytics') }}
+          </h1>
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+            {{ _('Super Admin Only') }}
+          </span>
+          <span class="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            {{ _('Zero-Content Privacy Guaranteed') }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">
+          {{ _('Global tenant observability, proofing velocity, AI compute, and capacity without document or text exposure.') }}
+        </p>
+      </div>
+    </div>
+
+    <!-- Controls: Time Range & Export -->
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- Time Range Pills -->
+      <div class="inline-flex items-center p-1 bg-slate-100 rounded-full border border-slate-200 text-xs font-semibold">
+        <a href="{{ url_for('meta_analytics_view.index', window=1) }}" class="px-3 py-1 rounded-full transition-colors {{ 'bg-white text-royalblue shadow-xs font-bold' if current_window == 1 else 'text-slate-600 hover:text-slate-900' }}">24h</a>
+        <a href="{{ url_for('meta_analytics_view.index', window=7) }}" class="px-3 py-1 rounded-full transition-colors {{ 'bg-white text-royalblue shadow-xs font-bold' if current_window == 7 else 'text-slate-600 hover:text-slate-900' }}">7d</a>
+        <a href="{{ url_for('meta_analytics_view.index', window=30) }}" class="px-3 py-1 rounded-full transition-colors {{ 'bg-white text-royalblue shadow-xs font-bold' if current_window == 30 else 'text-slate-600 hover:text-slate-900' }}">30d</a>
+        <a href="{{ url_for('meta_analytics_view.index', window=90) }}" class="px-3 py-1 rounded-full transition-colors {{ 'bg-white text-royalblue shadow-xs font-bold' if current_window == 90 else 'text-slate-600 hover:text-slate-900' }}">90d</a>
+      </div>
+
+      <!-- Export CSV -->
+      <a href="{{ url_for('meta_analytics_view.export_csv', window=current_window) }}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold transition-all shadow-xs" title="{{ _('Export metadata telemetry as CSV') }}">
+        {{ admin.icon('upload', class='w-3.5 h-3.5 rotate-180 text-slate-500') }}
+        <span>{{ _('Export CSV') }}</span>
+      </a>
+
+      <!-- Refresh -->
+      <button onclick="window.location.reload();" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-royalblue hover:bg-blue-600 text-white text-xs font-semibold transition-all shadow-xs">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        <span>{{ _('Refresh') }}</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Key Metrics Row (5 High-Level KPI Cards) -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <!-- Organizations -->
+    <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('Tenant Orgs') }}</span>
+        <div class="w-6 h-6 rounded-lg bg-blue-50 text-royalblue flex items-center justify-center">
+          {{ admin.icon('building-2', class='w-3.5 h-3.5') }}
+        </div>
+      </div>
+      <div class="text-2xl font-bold text-slate-900">{{ summary.total_orgs }}</div>
+      <p class="text-[11px] text-slate-500 font-medium mt-0.5">
+        <span class="text-emerald-600 font-semibold">{{ summary.active_orgs }} active</span> tenants
+      </p>
+    </div>
+
+    <!-- Total Pages & Progress -->
+    <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('Pages Throughput') }}</span>
+        <div class="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+          {{ admin.icon('check-square', class='w-3.5 h-3.5') }}
+        </div>
+      </div>
+      <div class="text-2xl font-bold text-slate-900">{{ summary.total_pages }}</div>
+      <p class="text-[11px] text-slate-500 font-medium mt-0.5">
+        <span class="text-emerald-600 font-bold">{{ summary.completion_pct }}%</span> {{ _('in R2 status') }}
+      </p>
+    </div>
+
+    <!-- Active Contributors -->
+    <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('Active Proofers') }}</span>
+        <div class="w-6 h-6 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+          {{ admin.icon('users', class='w-3.5 h-3.5') }}
+        </div>
+      </div>
+      <div class="text-2xl font-bold text-slate-900">{{ summary.active_proofers_30d }}</div>
+      <p class="text-[11px] text-slate-500 font-medium mt-0.5">
+        {{ summary.revisions_30d }} {{ _('revisions in 30d') }}
+      </p>
+    </div>
+
+    <!-- Global Storage Quota -->
+    <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('Storage Consumed') }}</span>
+        <div class="w-6 h-6 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+          {{ admin.icon('book', class='w-3.5 h-3.5') }}
+        </div>
+      </div>
+      <div class="text-2xl font-bold text-slate-900">
+        {{ (summary.storage_used_bytes // (1024 * 1024)) }} <span class="text-xs font-semibold text-slate-500">MB</span>
+      </div>
+      <p class="text-[11px] text-slate-500 font-medium mt-0.5">
+        {% if summary.storage_quota_bytes %}
+          {{ ((summary.storage_used_bytes * 100) // summary.storage_quota_bytes) }}% {{ _('of cluster limit') }}
+        {% else %}
+          {{ _('Dynamic allocation') }}
+        {% endif %}
+      </p>
+    </div>
+
+    <!-- AI Compute (OCR + TR) -->
+    <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{{ _('AI Compute Used') }}</span>
+        <div class="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+          {{ admin.icon('gauge', class='w-3.5 h-3.5') }}
+        </div>
+      </div>
+      <div class="text-2xl font-bold text-slate-900">{{ summary.ocr_credits_used + summary.translation_credits_used }}</div>
+      <p class="text-[11px] text-slate-500 font-medium mt-0.5">
+        {{ summary.ocr_credits_used }} {{ _('OCR') }} / {{ summary.translation_credits_used }} {{ _('Translation') }}
+      </p>
+    </div>
+  </div>
+
+  <!-- Workflow Pipeline Funnel & Velocity Sparkline -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- Status Funnel Breakdown (1 Col) -->
+    <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">{{ _('Cluster Review Pipeline') }}</h2>
+        <span class="text-xs font-bold text-slate-700">{{ summary.total_pages }} {{ _('pages') }}</span>
+      </div>
+
+      <!-- Segmented Status Bar -->
+      {% set total_p = summary.total_pages if summary.total_pages > 0 else 1 %}
+      {% set r0_pct = (summary.status_counts.r0 * 100) // total_p %}
+      {% set r1_pct = (summary.status_counts.r1 * 100) // total_p %}
+      {% set r2_pct = (summary.status_counts.r2 * 100) // total_p %}
+      {% set skip_pct = (summary.status_counts.skip * 100) // total_p %}
+
+      <div class="w-full h-3 rounded-full overflow-hidden flex bg-slate-100 mb-4">
+        <div style="width: {{ r2_pct }}%" class="bg-emerald-500 transition-all" title="R2 Approved: {{ summary.status_counts.r2 }}"></div>
+        <div style="width: {{ r1_pct }}%" class="bg-amber-400 transition-all" title="R1 First Pass: {{ summary.status_counts.r1 }}"></div>
+        <div style="width: {{ r0_pct }}%" class="bg-blue-400 transition-all" title="R0 Needs Work: {{ summary.status_counts.r0 }}"></div>
+        <div style="width: {{ skip_pct }}%" class="bg-slate-300 transition-all" title="Skip: {{ summary.status_counts.skip }}"></div>
+      </div>
+
+      <!-- Status Legend & Numbers -->
+      <div class="space-y-2 text-xs">
+        <div class="flex items-center justify-between p-2 rounded-xl bg-emerald-50/60 border border-emerald-100">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+            <span class="font-bold text-emerald-900">{{ _('R2: Fully Approved') }}</span>
+          </div>
+          <span class="font-bold text-emerald-800">{{ summary.status_counts.r2 }} ({{ r2_pct }}%)</span>
+        </div>
+
+        <div class="flex items-center justify-between p-2 rounded-xl bg-amber-50/60 border border-amber-100">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+            <span class="font-bold text-amber-900">{{ _('R1: Proofread 1x') }}</span>
+          </div>
+          <span class="font-bold text-amber-800">{{ summary.status_counts.r1 }} ({{ r1_pct }}%)</span>
+        </div>
+
+        <div class="flex items-center justify-between p-2 rounded-xl bg-blue-50/60 border border-blue-100">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-blue-400"></span>
+            <span class="font-bold text-blue-900">{{ _('R0: Needs Work') }}</span>
+          </div>
+          <span class="font-bold text-blue-800">{{ summary.status_counts.r0 }} ({{ r0_pct }}%)</span>
+        </div>
+
+        <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+            <span class="font-semibold text-slate-700">{{ _('Skip / Non-Book') }}</span>
+          </div>
+          <span class="font-semibold text-slate-600">{{ summary.status_counts.skip }} ({{ skip_pct }}%)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Daily Velocity & Trendlines (2 Cols) -->
+    <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs lg:col-span-2 flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">{{ _('Proofing Velocity Trend') }}</h2>
+            <p class="text-xs text-slate-500 font-medium">{{ _('Daily revision commits across all tenant organizations.') }}</p>
+          </div>
+          <div class="text-right">
+            <span class="text-base font-bold text-slate-900">{{ trends.total_revisions_in_period }}</span>
+            <span class="text-xs text-slate-400 block">{{ _('total in window') }}</span>
+          </div>
+        </div>
+
+        <!-- CSS/SVG Bar Chart of Revisions -->
+        {% set max_rev = trends.revisions|max if trends.revisions|max > 0 else 1 %}
+        <div class="mt-4 pt-4 border-t border-slate-100">
+          <div class="h-32 flex items-end gap-1 sm:gap-1.5 px-1">
+            {% for cnt in trends.revisions %}
+            {% set h_pct = [((cnt * 100) // max_rev), 5]|max %}
+            <div class="flex-1 flex flex-col items-center group relative">
+              <!-- Tooltip -->
+              <div class="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-8 bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow pointer-events-none whitespace-nowrap z-10">
+                {{ trends.dates[loop.index0] }}: {{ cnt }} revs
+              </div>
+              <div style="height: {{ h_pct }}%" class="w-full rounded-t-sm transition-all {{ 'bg-royalblue' if cnt > 0 else 'bg-slate-100' }} group-hover:bg-blue-600"></div>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono mt-2 pt-1 border-t border-slate-100">
+            <span>{{ trends.dates[0] }}</span>
+            <span>{{ trends.dates[trends.dates|length // 2] }}</span>
+            <span>{{ trends.dates[-1] }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100 mt-2">
+        <span>{{ _('Cumulative Work') }}: <strong class="text-slate-800">{{ trends.cumulative_revisions[-1] if trends.cumulative_revisions else 0 }}</strong> {{ _('total revisions') }}</span>
+        <span>{{ _('System Errors (Window)') }}: <strong class="{{ 'text-rose-600 font-bold' if trends.total_errors_in_period > 0 else 'text-slate-800' }}">{{ trends.total_errors_in_period }}</strong></span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Multi-Tenant Organization Activity Matrix -->
+  <div class="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden">
+    <div class="p-4 sm:p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-sm font-bold text-slate-900">{{ _('Enterprise Activity & Health Matrix') }}</h2>
+        <p class="text-xs text-slate-500 font-medium">{{ _('Cross-tenant proofing throughput, compute allocation, and quota saturation (Zero Content).') }}</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="text" id="matrix-search" onkeyup="filterMatrix()" placeholder="{{ _('Filter organizations...') }}" class="px-3 py-1.5 rounded-full border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-royalblue w-44 sm:w-56">
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-xs text-left" id="matrix-table">
+        <thead class="bg-slate-50/80 text-slate-500 uppercase tracking-wider font-bold text-[10px] border-b border-slate-100">
+          <tr>
+            <th class="px-5 py-3.5">{{ _('Organization') }}</th>
+            <th class="px-4 py-3.5">{{ _('Status') }}</th>
+            <th class="px-4 py-3.5">{{ _('Members / Active') }}</th>
+            <th class="px-4 py-3.5">{{ _('Projects & Pages') }}</th>
+            <th class="px-4 py-3.5">{{ _('R0 / R1 / R2') }}</th>
+            <th class="px-4 py-3.5">{{ _('Completion') }}</th>
+            <th class="px-4 py-3.5">{{ _('Storage Quota') }}</th>
+            <th class="px-4 py-3.5">{{ _('AI Compute') }}</th>
+            <th class="px-4 py-3.5">{{ _('Health') }}</th>
+            <th class="px-5 py-3.5 text-right">{{ _('Actions') }}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+          {% for row in matrix %}
+          <tr class="hover:bg-slate-50/70 transition-colors matrix-row">
+            <!-- Org Name & Slug -->
+            <td class="px-5 py-3.5">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-xs shrink-0">
+                  {{ row.name[:1]|upper }}
+                </div>
+                <div>
+                  <span class="font-bold text-slate-900 block text-xs org-name">{{ row.name }}</span>
+                  <span class="text-[10px] font-mono text-slate-400">/{{ row.slug }}</span>
+                </div>
+              </div>
+            </td>
+
+            <!-- Active Status -->
+            <td class="px-4 py-3.5">
+              {% if row.is_active %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                {{ _('Active') }}
+              </span>
+              {% else %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                {{ _('Inactive') }}
+              </span>
+              {% endif %}
+            </td>
+
+            <!-- Members & Active Proofers -->
+            <td class="px-4 py-3.5">
+              <div class="text-xs">
+                <span class="font-bold text-slate-900">{{ row.members_count }}</span>
+                <span class="text-slate-400">members</span>
+              </div>
+              <span class="text-[11px] text-emerald-600 font-semibold block">
+                {{ row.active_contributors }} active in {{ current_window }}d
+              </span>
+            </td>
+
+            <!-- Projects & Pages -->
+            <td class="px-4 py-3.5">
+              <div class="text-xs font-semibold text-slate-900">
+                {{ row.projects_count }} {{ _('books') }}
+              </div>
+              <span class="text-[11px] text-slate-400 font-medium">
+                {{ row.total_pages }} {{ _('total pages') }}
+              </span>
+            </td>
+
+            <!-- R0 / R1 / R2 Counts -->
+            <td class="px-4 py-3.5">
+              <div class="flex items-center gap-1 font-mono text-[11px]">
+                <span class="text-blue-600 font-bold" title="R0 Needs Work">{{ row.r0_count }}</span>
+                <span class="text-slate-300">/</span>
+                <span class="text-amber-600 font-bold" title="R1 First Pass">{{ row.r1_count }}</span>
+                <span class="text-slate-300">/</span>
+                <span class="text-emerald-600 font-bold" title="R2 Approved">{{ row.r2_count }}</span>
+              </div>
+              <span class="text-[10px] text-slate-400">R0 / R1 / R2</span>
+            </td>
+
+            <!-- Completion Rate -->
+            <td class="px-4 py-3.5">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-slate-900 text-xs">{{ row.completion_rate }}%</span>
+                <div class="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div class="h-full bg-emerald-500 rounded-full" style="width: {{ [row.completion_rate, 100]|min }}%"></div>
+                </div>
+              </div>
+            </td>
+
+            <!-- Storage Quota -->
+            <td class="px-4 py-3.5">
+              <div class="text-xs">
+                <span class="font-bold text-slate-900">{{ (row.storage_used_bytes // (1024 * 1024)) }} MB</span>
+                <span class="text-slate-400 text-[11px]">/ {{ (row.storage_quota_bytes // (1024 * 1024)) if row.storage_quota_bytes else '∞' }}</span>
+              </div>
+              {% if row.storage_quota_bytes %}
+              <div class="w-16 h-1 bg-slate-100 rounded-full overflow-hidden mt-1">
+                <div class="h-full {{ 'bg-red-500' if row.storage_pct > 90 else ('bg-amber-500' if row.storage_pct > 75 else 'bg-royalblue') }}" style="width: {{ row.storage_pct }}%"></div>
+              </div>
+              {% endif %}
+            </td>
+
+            <!-- AI Compute (OCR / TR) -->
+            <td class="px-4 py-3.5">
+              <div class="text-xs font-semibold text-slate-800">
+                <span>{{ row.ocr_credits_used }} OCR</span>
+              </div>
+              <span class="text-[11px] text-slate-500 block">
+                {{ row.translation_credits_used }} TR
+              </span>
+            </td>
+
+            <!-- Health Indicator -->
+            <td class="px-4 py-3.5">
+              {% if row.health == 'HEALTHY' %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                ● {{ _('Healthy') }}
+              </span>
+              {% elif row.health == 'WARNING' %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                ▲ {{ _('Warning') }}
+              </span>
+              {% elif row.health == 'CRITICAL' %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                ✖ {{ _('Critical') }}
+              </span>
+              {% else %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                ○ {{ _('Inactive') }}
+              </span>
+              {% endif %}
+            </td>
+
+            <!-- Actions -->
+            <td class="px-5 py-3.5 text-right whitespace-nowrap">
+              <a href="{{ url_for('meta_analytics_view.org_detail', org_id=row.org_id) }}" class="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs transition-colors" title="{{ _('Inspect organization telemetry') }}">
+                {{ admin.icon('eye', class='w-3 h-3 text-indigo-600') }}
+                <span>{{ _('Inspect Meta') }}</span>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Real-Time Cross-Tenant Meta-Events Stream -->
+  <div class="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden">
+    <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+      <div>
+        <div class="flex items-center gap-2">
+          <h2 class="text-sm font-bold text-slate-900">{{ _('Cross-Tenant Meta-Events Stream') }}</h2>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-royalblue border border-blue-100">
+            <span class="w-1.5 h-1.5 rounded-full bg-royalblue animate-ping"></span>
+            {{ _('Live Pulse') }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 font-medium">{{ _('Operational and pipeline milestones across organizations (strictly metadata, zero text).') }}</p>
+      </div>
+
+      <div class="flex items-center gap-2 text-xs">
+        <select id="event-type-filter" onchange="filterEvents()" class="px-3 py-1 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none">
+          <option value="ALL">{{ _('All Events') }}</option>
+          <option value="BATCH">{{ _('Batch & OCR') }}</option>
+          <option value="QUOTA">{{ _('Quota Alerts') }}</option>
+          <option value="ERROR">{{ _('System Errors') }}</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="divide-y divide-slate-100 max-h-96 overflow-y-auto" id="events-stream-list">
+      {% for ev in events %}
+      <div class="p-4 hover:bg-slate-50/70 transition-colors flex items-start gap-3 event-item" data-type="{{ ev.event_type }}">
+        <!-- Severity Icon Pill -->
+        <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold
+          {% if ev.severity == 'success' %}bg-emerald-50 text-emerald-600 border border-emerald-100
+          {% elif ev.severity == 'warning' %}bg-amber-50 text-amber-600 border border-amber-100
+          {% elif ev.severity == 'error' %}bg-rose-50 text-rose-600 border border-rose-100
+          {% else %}bg-blue-50 text-royalblue border border-blue-100{% endif %}">
+          {% if ev.event_type == 'BATCH' %}{{ admin.icon('gauge', class='w-3.5 h-3.5') }}
+          {% elif ev.event_type == 'QUOTA' %}{{ admin.icon('building-2', class='w-3.5 h-3.5') }}
+          {% elif ev.event_type == 'ERROR' %}{{ admin.icon('help-circle', class='w-3.5 h-3.5') }}
+          {% else %}{{ admin.icon('activity', class='w-3.5 h-3.5') }}{% endif %}
+        </div>
+
+        <!-- Event Body -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-bold text-slate-900 text-xs">{{ ev.title }}</span>
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-600">{{ ev.org_name }}</span>
+            </div>
+            <span class="text-[10px] font-mono text-slate-400 whitespace-nowrap">{{ ev.timestamp[:19] }}</span>
+          </div>
+          <p class="text-xs text-slate-600 font-medium mt-0.5">
+            {{ ev.description }}
+          </p>
+        </div>
+      </div>
+      {% endfor %}
+
+      {% if not events %}
+      <div class="p-8 text-center text-xs text-slate-400 font-medium">
+        {{ _('No operational meta-events recorded in the recent window.') }}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<script>
+function filterMatrix() {
+  const query = document.getElementById('matrix-search').value.toLowerCase();
+  const rows = document.querySelectorAll('.matrix-row');
+  rows.forEach(row => {
+    const text = row.innerText.toLowerCase();
+    row.style.display = text.includes(query) ? '' : 'none';
+  });
+}
+
+function filterEvents() {
+  const selectedType = document.getElementById('event-type-filter').value;
+  const items = document.querySelectorAll('.event-item');
+  items.forEach(item => {
+    const evType = item.getAttribute('data-type');
+    if (selectedType === 'ALL' || evType === selectedType) {
+      item.style.display = '';
+    } else {
+      item.style.display = 'none';
+    }
+  });
+}
+</script>
+{% endblock %}
