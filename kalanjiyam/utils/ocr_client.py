@@ -178,7 +178,7 @@ def get_available_engines() -> dict:
             headers["Authorization"] = f"Bearer {api_key}"
             headers["X-API-Key"] = api_key
         try:
-            with httpx.Client(timeout=5.0) as client:
+            with httpx.Client(timeout=5.0, trust_env=False) as client:
                 response = client.get(f"{clean_base}/v1/engines", headers=headers)
                 if response.status_code == 200:
                     raw = response.json().get("engines", [])
@@ -241,6 +241,8 @@ def _run_ocr_chat_completions(
         model_id = "chandra"
     elif norm == "gemma_ocr":
         model_id = "llm-gemma"
+    elif norm == "dots_ocr":
+        model_id = "dots-ocr"
     else:
         model_id = engine_name.replace("_", "-")
 
@@ -269,7 +271,7 @@ def _run_ocr_chat_completions(
         "temperature": 0.0,
     }
 
-    with httpx.Client(timeout=timeout) as client:
+    with httpx.Client(timeout=timeout, trust_env=False) as client:
         res = client.post(chat_url, headers=chat_headers, json=chat_payload)
 
     latency_ms = round((time.time() - start_time) * 1000, 2)
@@ -280,7 +282,24 @@ def _run_ocr_chat_completions(
             detail = res_json.get("detail") or res_json.get("error", {}).get("message") or detail
         except Exception:
             pass
-        raise RuntimeError(f"OCR chat completion error ({res.status_code}): {detail}")
+
+        # If the requested model is not permitted on this virtual key, fall back to llm-gemma
+        if res.status_code == 403 and "key not allowed to access model" in str(detail).lower() and model_id != "llm-gemma":
+            logger.warning(
+                "OCR model %s is not permitted on this API key (%s). Falling back to llm-gemma...",
+                model_id,
+                detail,
+            )
+            chat_payload["model"] = "llm-gemma"
+            with httpx.Client(timeout=timeout, trust_env=False) as client:
+                res = client.post(chat_url, headers=chat_headers, json=chat_payload)
+            if res.status_code < 400:
+                engine_name = "gemma_ocr"
+                model_id = "llm-gemma"
+            else:
+                raise RuntimeError(f"OCR chat completion error ({res.status_code}): {detail}")
+        else:
+            raise RuntimeError(f"OCR chat completion error ({res.status_code}): {detail}")
 
     res_json = res.json()
     choices = res_json.get("choices") or []
@@ -288,6 +307,37 @@ def _run_ocr_chat_completions(
     if choices and isinstance(choices, list):
         msg = choices[0].get("message") or {}
         extracted_text = msg.get("content") or ""
+
+    import re
+    # Unpack <extract>[{"text": "..."}]</extract> if model (e.g. Chandra) outputs XML wrapper
+    if "<extract>" in extracted_text:
+        match = re.search(r"<extract>([\s\S]*?)</extract>", extracted_text)
+        if match:
+            inner = match.group(1).strip()
+            try:
+                parsed_inner = json.loads(inner)
+                if isinstance(parsed_inner, list):
+                    extracted_text = "\n".join(
+                        str(item.get("text") or item.get("text_content") or item)
+                        for item in parsed_inner
+                        if isinstance(item, dict)
+                    )
+                else:
+                    extracted_text = inner
+            except Exception:
+                extracted_text = inner
+
+    # Unpack JSON array of blocks [{"text_content": ...}] or [{"text": ...}] if returned as JSON
+    trimmed = extracted_text.strip()
+    if trimmed.startswith("[") and trimmed.endswith("]"):
+        try:
+            parsed_arr = json.loads(trimmed)
+            if isinstance(parsed_arr, list) and all(isinstance(x, dict) for x in parsed_arr):
+                lines = [str(x.get("text_content") or x.get("text") or "") for x in parsed_arr]
+                if any(lines):
+                    extracted_text = "\n".join(l for l in lines if l)
+        except Exception:
+            pass
 
     from kalanjiyam.utils.translation_engine import clean_translation_preambles
     extracted_text = clean_translation_preambles(extracted_text) if extracted_text else ""
@@ -350,7 +400,7 @@ def run_ocr_remote(file_path: Path, engine_name: str, language: str) -> OcrRespo
             with file_path.open("rb") as image_file:
                 files = {"image": (file_path.name, image_file, "image/jpeg")}
                 data = {"engine": service_engine, "language": language}
-                with httpx.Client(timeout=timeout) as client:
+                with httpx.Client(timeout=timeout, trust_env=False) as client:
                     response = client.post(url, files=files, data=data, headers=headers)
             latency_ms = round((time.time() - start_time) * 1000, 2)
 

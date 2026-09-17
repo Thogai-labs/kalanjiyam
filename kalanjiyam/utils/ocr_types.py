@@ -108,6 +108,7 @@ SUPPORTED_ENGINES = [
     "indic_ocr",
     "chandra",
     "tesseract_manuscript",
+    "dots_ocr",
 ]
 
 # OCR service ids (hyphenated) ↔ Kalanjiyam internal ids (underscored).
@@ -119,6 +120,8 @@ SERVICE_ENGINE_ALIASES = {
     "gemma-31b": "gemma_ocr",
     "llm-gemma": "gemma_ocr",
     "llm_gemma": "gemma_ocr",
+    "dots-ocr": "dots_ocr",
+    "dots_ocr": "dots_ocr",
     "indic-ocr": "indic_ocr",
     "bodhan-ocr": "indic_ocr",
     "bodhan": "indic_ocr",
@@ -131,11 +134,13 @@ ENGINE_MAP = {
     "2": "indic_ocr",
     "3": "chandra",
     "4": "tesseract_manuscript",
+    "5": "dots_ocr",
 }
 
 LEGACY_ENGINE_MAP = {
     "6": "chandra",
     "11": "tesseract_manuscript",
+    "12": "dots_ocr",
     "13": "gemma_ocr",
     "14": "indic_ocr",
 }
@@ -148,6 +153,8 @@ REVERSE_ENGINE_MAP["llm_gemma"] = "1"
 REVERSE_ENGINE_MAP["indic-ocr"] = "2"
 REVERSE_ENGINE_MAP["sanskrit-manuscript"] = "4"
 REVERSE_ENGINE_MAP["sanskrit_manuscript"] = "4"
+REVERSE_ENGINE_MAP["dots_ocr"] = "5"
+REVERSE_ENGINE_MAP["dots-ocr"] = "5"
 
 
 def normalize_engine(engine: str) -> str:
@@ -178,6 +185,7 @@ ENGINE_LABELS = {
     "indic_ocr": "Indic OCR",
     "chandra": "Chandra",
     "tesseract_manuscript": "Sanskrit Manuscript OCR",
+    "dots_ocr": "Dots OCR",
 }
 
 # Engines that return HTML (not plain text or Markdown)

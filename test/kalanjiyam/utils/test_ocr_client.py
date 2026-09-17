@@ -195,19 +195,25 @@ def test_engine_aliases_map_service_ids():
     assert engine_for_service("indic_ocr") == "indic-ocr"
     assert engine_for_service("chandra") == "chandra"
     assert engine_for_service("tesseract_manuscript") == "sanskrit-manuscript"
+    assert engine_for_service("dots_ocr") == "dots-ocr"
     assert normalize_engine("1") == "gemma_ocr"
     assert normalize_engine("2") == "indic_ocr"
     assert normalize_engine("3") == "chandra"
     assert normalize_engine("4") == "tesseract_manuscript"
+    assert normalize_engine("5") == "dots_ocr"
+    assert normalize_engine("12") == "dots_ocr"
+    assert normalize_engine("dots_ocr") == "dots_ocr"
+    assert normalize_engine("dots-ocr") == "dots_ocr"
     assert normalize_engine("13") == "gemma_ocr"
     assert normalize_engine("14") == "indic_ocr"
     assert ENGINE_MAP["1"] == "gemma_ocr"
     assert ENGINE_MAP["2"] == "indic_ocr"
     assert ENGINE_MAP["3"] == "chandra"
     assert ENGINE_MAP["4"] == "tesseract_manuscript"
+    assert ENGINE_MAP["5"] == "dots_ocr"
 
     choices = build_engine_choices(
-        ["chandra", "gemma-ocr", "indic-ocr", "sanskrit-manuscript"],
+        ["chandra", "gemma-ocr", "indic-ocr", "sanskrit-manuscript", "dots-ocr"],
         is_super_admin=True,
     )
     labels = {c["label"] for c in choices}
@@ -215,6 +221,15 @@ def test_engine_aliases_map_service_ids():
     assert "LLM Gemma OCR" in labels
     assert "Indic OCR" in labels
     assert "Sanskrit Manuscript OCR" in labels
+    assert "Dots OCR" in labels
+
+    # For regular users, verify stable numeric values
+    reg_choices = build_engine_choices(
+        ["dots-ocr"],
+        is_super_admin=False,
+    )
+    assert reg_choices[0]["value"] == "5"
+    assert reg_choices[0]["label"] == "OCR 5"
 
 
 def test_run_ocr_remote_parses_v2_contract_fields(flask_app, tmp_path):

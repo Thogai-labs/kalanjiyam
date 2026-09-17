@@ -182,6 +182,29 @@ def test_enhanced_ocr_runs_with_indic(test_image, mock_ocr_response):
 
 
 # ---------------------------------------------------------------------------
+# 3b. Enhanced OCR can run with Dots OCR
+# ---------------------------------------------------------------------------
+def test_enhanced_ocr_runs_with_dots(test_image, mock_ocr_response):
+    with patch(
+        "kalanjiyam.utils.ocr_runner.run_ocr_remote", return_value=mock_ocr_response
+    ) as mock_remote:
+        resp = run_enhanced_ocr(
+            test_image,
+            engine_name="dots_ocr",
+            profile="document_cleanup",
+            language="sa",
+        )
+        assert resp.ocr_mode == "enhanced"
+        assert resp.engine == "dots_ocr"
+        assert resp.enhancement_profile == "document_cleanup"
+        assert resp.enhancement_version == "1.0"
+        mock_remote.assert_called_once()
+        args, _ = mock_remote.call_args
+        assert args[1] == "dots_ocr"
+        assert args[2] == "sa"
+
+
+# ---------------------------------------------------------------------------
 # 4. Each supported preprocessing profile works
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("profile", SUPPORTED_ENHANCEMENT_PROFILES)
