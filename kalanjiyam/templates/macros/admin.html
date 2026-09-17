@@ -59,6 +59,7 @@
   <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Platform') }}</h2>
   <ul class="space-y-1">
     {{ _nav_link('platform_view.index', 'platform', _('Overview'), active == 'platform', icon_name='layout-dashboard') }}
+    {{ _nav_link('meta_analytics_view.index', 'meta_analytics', _('Meta-Analytics'), active == 'meta_analytics', icon_name='bar-chart-3') }}
     {{ _nav_link('groups_view.index', 'organizations', _('Organizations'), active == 'organizations', icon_name='building-2') }}
     {{ _nav_link('platform_view.user_analytics', 'user_analytics', _('User Analytics'), active == 'user_analytics', icon_name='bar-chart-3') }}
     {{ _nav_link('platform_view.reported_issues', 'reported_issues', _('Reported Issues'), active == 'reported_issues', icon_name='help-circle') }}

@@ -2434,6 +2434,96 @@ def _metadata_metrics_csv_response(
     )
 
 
+class MetaAnalyticsView(AdminBaseView):
+    """Super-admin multi-tenant meta-analytics view (strictly zero document content)."""
+
+    def is_accessible(self):
+        return is_platform_super_admin()
+
+    def inaccessible_callback(self, name, **kwargs):
+        return platform_admin_inaccessible()
+
+    @expose("/")
+    def index(self):
+        require_platform_super_admin()
+        time_window = request.args.get("window", 30, type=int)
+        if time_window not in (1, 7, 30, 90, 365):
+            time_window = 30
+
+        from kalanjiyam.services.meta_analytics import MetaAnalyticsService
+
+        summary = MetaAnalyticsService.get_cluster_summary()
+        matrix = MetaAnalyticsService.get_org_activity_matrix(time_window_days=time_window)
+        trends = MetaAnalyticsService.get_workflow_velocity_trends(days=time_window)
+        events = MetaAnalyticsService.get_meta_events_stream(limit=35)
+
+        return render_template(
+            "admin/meta_analytics/overview.html",
+            summary=summary,
+            matrix=matrix,
+            trends=trends,
+            events=events,
+            current_window=time_window,
+        )
+
+    @expose("/org/<int:org_id>")
+    def org_detail(self, org_id):
+        require_platform_super_admin()
+        from kalanjiyam.services.meta_analytics import MetaAnalyticsService
+
+        profile = MetaAnalyticsService.get_org_meta_profile(org_id)
+        if not profile:
+            abort(404)
+        return render_template(
+            "admin/meta_analytics/org_detail.html",
+            profile=profile,
+        )
+
+    @expose("/api/velocity")
+    def api_velocity(self):
+        require_platform_super_admin()
+        from kalanjiyam.services.meta_analytics import MetaAnalyticsService
+
+        days = request.args.get("days", 30, type=int)
+        org_id = request.args.get("org_id", type=int)
+        if days < 1 or days > 365:
+            days = 30
+        trends = MetaAnalyticsService.get_workflow_velocity_trends(days=days, org_id=org_id)
+        return jsonify(trends)
+
+    @expose("/api/events")
+    def api_events(self):
+        require_platform_super_admin()
+        from kalanjiyam.services.meta_analytics import MetaAnalyticsService
+
+        limit = request.args.get("limit", 40, type=int)
+        org_id = request.args.get("org_id", type=int)
+        event_type = request.args.get("type")
+        if limit < 1 or limit > 100:
+            limit = 40
+        events = MetaAnalyticsService.get_meta_events_stream(
+            limit=limit, org_id=org_id, event_type=event_type
+        )
+        return jsonify({"events": events})
+
+    @expose("/export/csv")
+    def export_csv(self):
+        require_platform_super_admin()
+        from flask import Response
+        from kalanjiyam.services.meta_analytics import MetaAnalyticsService
+
+        time_window = request.args.get("window", 30, type=int)
+        if time_window not in (1, 7, 30, 90, 365):
+            time_window = 30
+        csv_data = MetaAnalyticsService.export_meta_metrics_csv(time_window_days=time_window)
+        filename = f"meta_analytics_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+        return Response(
+            csv_data,
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+
 class GroupsView(AdminBaseView):
     """Super-admin group management: list/create/edit/delete groups, manage users and books."""
 
@@ -4629,6 +4719,14 @@ def create_admin_manager(app):
         )
     )
     admin.add_view(
+        MetaAnalyticsView(
+            name="Meta-Analytics",
+            category="Access",
+            url="meta-analytics",
+            endpoint="meta_analytics_view",
+        )
+    )
+    admin.add_view(
         GroupsView(name="Groups", category="Access", url="groups", endpoint="groups_view")
     )
     admin.add_view(
@@ -4651,6 +4749,10 @@ def create_admin_manager(app):
     @app.route(f"{admin_url}/groups")
     def _redirect_groups_trailing_slash():
         return redirect(url_for("groups_view.index"))
+
+    @app.route(f"{admin_url}/meta-analytics")
+    def _redirect_meta_analytics_trailing_slash():
+        return redirect(url_for("meta_analytics_view.index"))
 
     admin.add_view(ProjectView(db.Project, session))
     admin.add_view(UserView(db.User, session))
