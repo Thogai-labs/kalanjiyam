@@ -12,6 +12,11 @@ import topKTracker, { DEFAULT_TOPICS } from './topk-search';
 import booksCatalog from './books-catalog';
 
 window.addEventListener('alpine:init', () => {
+  const $drawer = document.getElementById('mobile-drawer');
+  const $backdrop = document.getElementById('mobile-backdrop');
+  if ($drawer) $drawer.classList.remove('hidden');
+  if ($backdrop) $backdrop.classList.remove('hidden');
+
   Alpine.data('dictionary', Dictionary);
   Alpine.data('htmlPoller', HTMLPoller);
   Alpine.data('reader', Reader);
