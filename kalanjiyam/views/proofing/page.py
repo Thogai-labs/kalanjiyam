@@ -3118,3 +3118,62 @@ def _record_voice_metric(language, *, status, latency_ms, result=None, error=Non
         )
     except Exception:
         pass
+
+
+@api.route("/asr/transcribe/<project_slug>/<page_slug>/", methods=["POST"])
+@p2_required
+def asr_transcribe(project_slug, page_slug):
+    """Transcribe an audio clip using the server-side ASR service."""
+    from kalanjiyam.utils import asr_client
+
+    if current_user.is_authenticated and current_user.is_super_admin:
+        abort(403, description=_l("Superadmins are not allowed to access project data."))
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+    if not q.user_can_view_proofing_project(current_user, project_):
+        abort(403)
+    page_ = q.page(project_.id, page_slug)
+    if not page_:
+        abort(404)
+
+    audio = request.files.get("audio")
+    if audio is None or not audio.filename:
+        abort(400, description=_l("No audio was uploaded."))
+
+    content_type = (audio.mimetype or "").split(";")[0].strip().lower()
+    if content_type not in asr_client.ALLOWED_AUDIO_TYPES:
+        abort(400, description=_l("Unsupported audio format: %(kind)s", kind=content_type))
+
+    audio.stream.seek(0, 2)
+    size = audio.stream.tell()
+    audio.stream.seek(0)
+    if size > 10 * 1024 * 1024:
+        abort(413, description=_l("Audio clip is too large."))
+    if size == 0:
+        abort(400, description=_l("Audio clip is empty."))
+
+    language = (request.form.get("language") or "").strip()[:16]
+    model = (request.form.get("model") or "").strip()[:64]
+
+    try:
+        result = asr_client.transcribe_audio(
+            audio.read(),
+            filename=secure_filename(audio.filename) or "utterance.wav",
+            content_type=content_type,
+            language=language or None,
+            model=model or None,
+        )
+    except asr_client.AsrError as e:
+        logger.warning("ASR transcription call failed: %s", e)
+        abort(502, description=_l("The ASR service is unavailable."))
+
+    return jsonify(
+        {
+            "transcript": result.get("text", ""),
+            "language": result.get("language") or language,
+            "duration": result.get("duration"),
+            "model": result.get("model") or model or "asr",
+        }
+    )
+
