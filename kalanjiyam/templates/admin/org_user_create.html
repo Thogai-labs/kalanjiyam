@@ -1,0 +1,109 @@
+{% extends 'admin/master.html' %}
+{% import 'macros/admin.html' as admin %}
+
+{% block title %}{{ _('Create User') }} | {{ org.name }} | {{ _('Admin Console') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('create_user', current_user) }}
+{% endblock %}
+
+{% block content %}
+<!-- Google Admin Header -->
+<div class="mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0">
+        {{ admin.icon('user-plus', class='w-5 h-5') }}
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ _('Create Organization User') }}
+          </h1>
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-royalblue border border-blue-200">
+            {{ org.name }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">
+          {{ _('Provision a new member account and assign their initial role within %(org_name)s.', org_name=org.name) }}
+        </p>
+      </div>
+    </div>
+
+    <div>
+      <a href="{{ url_for('org_admin_view.index') }}"
+         class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-royalblue text-xs font-semibold transition-all shadow-xs">
+        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        <span>{{ _('Back to Dashboard') }}</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Create User Form Card -->
+<div class="bg-white rounded-2xl p-6 sm:p-8 shadow-xs border border-slate-200 max-w-2xl">
+  <form method="post" action="{{ url_for('org_admin_view.create_user') }}" class="space-y-5">
+    {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+
+    <div>
+      <label for="username" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+        {{ _('Username') }} <span class="text-rose-500">*</span>
+      </label>
+      <input type="text" id="username" name="username" required autofocus
+        placeholder="e.g. john.doe"
+        class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all font-medium text-slate-900 bg-white">
+      <p class="text-[11px] text-slate-400 mt-1 font-medium">{{ _('Unique username for account login.') }}</p>
+    </div>
+
+    <div>
+      <label for="email" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+        {{ _('Email Address') }} <span class="text-rose-500">*</span>
+      </label>
+      <input type="email" id="email" name="email" required
+        placeholder="e.g. john@example.com"
+        class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all font-medium text-slate-900 bg-white">
+      <p class="text-[11px] text-slate-400 mt-1 font-medium">{{ _('Used for notifications and communication.') }}</p>
+    </div>
+
+    <div>
+      <label for="password" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+        {{ _('Password') }} <span class="text-rose-500">*</span>
+      </label>
+      <input type="password" id="password" name="password" required
+        placeholder="••••••••••••"
+        class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all font-medium text-slate-900 bg-white">
+      <p class="text-[11px] text-slate-400 mt-1 font-medium">{{ _('Initial login password for the new member.') }}</p>
+    </div>
+
+    <div>
+      <label for="role_name" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+        {{ _('Initial Role') }}
+      </label>
+      <select id="role_name" name="role_name"
+        class="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all font-medium text-slate-900 bg-white">
+        <option value="p1" selected>{{ _('P1 — Basic proofer (Standard)') }}</option>
+        <option value="p2">{{ _('P2 — Advanced proofer') }}</option>
+        <option value="moderator">{{ _('Moderator — Can manage texts and proofing') }}</option>
+      </select>
+      <p class="text-[11px] text-slate-400 mt-1 font-medium">{{ _('Initial permission level within %(org_name)s.', org_name=org.name) }}</p>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100">
+      <a href="{{ url_for('org_admin_view.index') }}"
+         class="px-5 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
+        {{ _('Cancel') }}
+      </a>
+      <button type="submit"
+              class="inline-flex items-center gap-1.5 px-7 py-2.5 bg-royalblue hover:bg-blue-600 text-white font-bold rounded-full text-xs sm:text-sm transition-all shadow-xs">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+        </svg>
+        <span>{{ _('Create & Add Member') }}</span>
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
