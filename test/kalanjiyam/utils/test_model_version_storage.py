@@ -396,3 +396,296 @@ def test_extract_and_import_project_metadata_only_with_files(tmp_path, monkeypat
     assert created_revs[0].summary == "Exported ocr-tesseract"
 
 
+def test_import_project_restores_multiple_tracks_and_ocr_and_translations(tmp_path, monkeypatch):
+    import io
+    import json
+    import zipfile
+    from PIL import Image
+    import kalanjiyam.database as db
+    from config import create_config_only_app
+    from kalanjiyam.admin import KalanjiyamIndexView
+
+    storage = MemoryStorage()
+    monkeypatch.setattr("kalanjiyam.utils.storage.get_storage", lambda: storage)
+
+    export_dir = tmp_path / "export_tracks_test"
+    export_dir.mkdir()
+    files_dir = export_dir / "files"
+    files_dir.mkdir()
+    pages_dir = files_dir / "pages"
+    pages_dir.mkdir()
+    revisions_dir = files_dir / "revisions" / "1"
+    revisions_dir.mkdir(parents=True)
+
+    project_data = {
+        "format_version": "3.0",
+        "organization_slug": "test-org",
+        "metadata": {
+            "slug": "multi-track-proj",
+            "display_title": "Multi Track Project",
+            "print_title": "Multi Track Project",
+            "author": "Author",
+            "editor": None,
+            "publisher": None,
+            "publication_year": "2026",
+            "worldcat_link": None,
+            "description": "",
+            "notes": "",
+            "page_numbers": 1,
+            "created_at": "2026-08-10T00:00:00Z",
+            "updated_at": "2026-08-10T00:00:00Z",
+        },
+        "extracted_metadata": None,
+        "metadata_extraction_runs": [],
+    }
+    (export_dir / "project_data.json").write_text(json.dumps(project_data), encoding="utf-8")
+
+    # Create a real small JPEG image (120x240)
+    img = Image.new("RGB", (120, 240), color="white")
+    img_buf = io.BytesIO()
+    img.save(img_buf, format="JPEG")
+    (pages_dir / "1.jpg").write_bytes(img_buf.getvalue())
+
+    # OCR revision payload with blocks and words
+    ocr_payload = {
+        "page_width": 120,
+        "page_height": 240,
+        "content_format": "blocks",
+        "timestamp": "2026-08-10T10:00:00Z",
+        "blocks": [
+            {
+                "id": "b1",
+                "type": "paragraph",
+                "bbox": [10, 10, 100, 50],
+                "content": "Original OCR text",
+                "reading_order": 0,
+                "words": [
+                    {"text": "Original", "bbox": [10, 10, 50, 50]},
+                    {"text": "OCR", "bbox": [55, 10, 75, 50]},
+                    {"text": "text", "bbox": [80, 10, 100, 50]},
+                ],
+            }
+        ],
+    }
+    (revisions_dir / "ocr-tesseract.json").write_text(json.dumps(ocr_payload), encoding="utf-8")
+
+    # Translation revision payload
+    trans_payload = {
+        "page_width": 120,
+        "page_height": 240,
+        "content_format": "blocks",
+        "timestamp": "2026-08-10T11:00:00Z",
+        "blocks": [
+            {
+                "id": "tb1",
+                "type": "paragraph",
+                "bbox": [10, 10, 100, 50],
+                "content": "Translated text in English",
+                "reading_order": 0,
+            }
+        ],
+    }
+    (revisions_dir / "translation-nayan_sa-en.json").write_text(json.dumps(trans_payload), encoding="utf-8")
+
+    zip_path = tmp_path / "tracks_export.zip"
+    with zipfile.ZipFile(zip_path, "w") as zipf:
+        zipf.write(export_dir / "project_data.json", "project_data.json")
+        zipf.write(pages_dir / "1.jpg", "files/pages/1.jpg")
+        zipf.write(revisions_dir / "ocr-tesseract.json", "files/revisions/1/ocr-tesseract.json")
+        zipf.write(revisions_dir / "translation-nayan_sa-en.json", "files/revisions/1/translation-nayan_sa-en.json")
+
+    # DB session mock with tracking
+    added = []
+    session = MagicMock()
+    session.query.return_value.filter_by.return_value.first.return_value = None
+    session.query.return_value.filter_by.return_value.all.return_value = []
+    session.add.side_effect = lambda obj: added.append(obj)
+
+    view = KalanjiyamIndexView()
+    monkeypatch.setattr(view, "_get_or_create_page_status", lambda s, name: SimpleNamespace(id=1, name=name))
+    monkeypatch.setattr("kalanjiyam.queries.organization_by_slug", lambda slug: None)
+
+    app = create_config_only_app("testing")
+    with app.app_context():
+        result = view._extract_and_import_project(zip_path, session)
+
+    assert result["metadata"]["slug"] == "multi-track-proj"
+
+    # Verify Page was created with correct dimensions
+    pages = [o for o in added if isinstance(o, db.Page)]
+    assert len(pages) == 1
+    page = pages[0]
+    assert page.page_width == 120
+    assert page.page_height == 240
+    assert page.ocr_bounding_boxes is not None
+    assert "Original" in page.ocr_bounding_boxes
+
+    # Verify PageVersion tracks were created
+    page_versions = [o for o in added if isinstance(o, db.PageVersion)]
+    version_keys = {pv.version_key for pv in page_versions}
+    assert "ocr:tesseract" in version_keys
+    assert "translation:nayan:sa->en" in version_keys
+
+    # Verify Revisions were created with content extracted from blocks
+    revisions = [o for o in added if isinstance(o, db.Revision)]
+    assert len(revisions) == 2
+    summaries = {r.summary for r in revisions}
+    assert "Exported ocr-tesseract" in summaries
+    assert "Exported translation-nayan_sa-en" in summaries
+
+    ocr_rev = next(r for r in revisions if r.summary == "Exported ocr-tesseract")
+    assert "Original OCR text" in ocr_rev.content
+
+    trans_rev = next(r for r in revisions if r.summary == "Exported translation-nayan_sa-en")
+    assert "Translated text in English" in trans_rev.content
+
+    # Verify Translation record was created
+    translations = [o for o in added if isinstance(o, db.Translation)]
+    assert len(translations) == 1
+    assert translations[0].translation_engine == "nayan"
+    assert translations[0].source_language == "sa"
+    assert translations[0].target_language == "en"
+    assert "Translated text in English" in translations[0].content
+
+
+def test_bulk_import_projects_with_error_resilience(tmp_path, monkeypatch):
+    import json
+    import zipfile
+    from unittest.mock import MagicMock
+    from types import SimpleNamespace
+    from config import create_config_only_app
+    from kalanjiyam.admin import KalanjiyamIndexView
+
+    storage = MemoryStorage()
+    monkeypatch.setattr("kalanjiyam.utils.storage.get_storage", lambda: storage)
+
+    bulk_dir = tmp_path / "bulk_export_test"
+    bulk_dir.mkdir()
+
+    # Project 1: valid
+    proj1_dir = bulk_dir / "projects" / "proj-1"
+    proj1_dir.mkdir(parents=True)
+    proj1_data = {
+        "format_version": "3.0",
+        "organization_slug": "org-1",
+        "metadata": {
+            "slug": "proj-1",
+            "display_title": "Project One",
+            "print_title": "Project One",
+            "author": "Author One",
+            "editor": None,
+            "publisher": None,
+            "publication_year": "2026",
+            "worldcat_link": None,
+            "description": "",
+            "notes": "",
+            "page_numbers": 1,
+            "created_at": "2026-08-10T00:00:00Z",
+            "updated_at": "2026-08-10T00:00:00Z",
+        },
+        "extracted_metadata": None,
+        "metadata_extraction_runs": [],
+    }
+    (proj1_dir / "project_data.json").write_text(json.dumps(proj1_data), encoding="utf-8")
+
+    # Project 2: bad / will fail (missing project_data.json in folder)
+    proj2_dir = bulk_dir / "projects" / "proj-2"
+    proj2_dir.mkdir(parents=True)
+    (proj2_dir / "files_only.txt").write_text("no json here")
+
+    # Project 3: valid
+    proj3_dir = bulk_dir / "projects" / "proj-3"
+    proj3_dir.mkdir(parents=True)
+    proj3_data = {
+        "format_version": "3.0",
+        "organization_slug": "org-1",
+        "metadata": {
+            "slug": "proj-3",
+            "display_title": "Project Three",
+            "print_title": "Project Three",
+            "author": "Author Three",
+            "editor": None,
+            "publisher": None,
+            "publication_year": "2026",
+            "worldcat_link": None,
+            "description": "",
+            "notes": "",
+            "page_numbers": 1,
+            "created_at": "2026-08-10T00:00:00Z",
+            "updated_at": "2026-08-10T00:00:00Z",
+        },
+        "extracted_metadata": None,
+        "metadata_extraction_runs": [],
+    }
+    (proj3_dir / "project_data.json").write_text(json.dumps(proj3_data), encoding="utf-8")
+
+    all_data = {
+        "export_info": {"total_projects": 3},
+        "projects": [proj1_data, {"metadata": {"slug": "proj-2", "display_title": "Project Two"}}, proj3_data],
+    }
+    (bulk_dir / "all_projects_data.json").write_text(json.dumps(all_data), encoding="utf-8")
+
+    zip_path = tmp_path / "bulk_test.zip"
+    with zipfile.ZipFile(zip_path, "w") as zipf:
+        zipf.write(bulk_dir / "all_projects_data.json", "all_projects_data.json")
+        zipf.write(proj1_dir / "project_data.json", "projects/proj-1/project_data.json")
+        zipf.write(proj2_dir / "files_only.txt", "projects/proj-2/files_only.txt")
+        zipf.write(proj3_dir / "project_data.json", "projects/proj-3/project_data.json")
+
+    # Mock DB session
+    committed_count = 0
+    rolled_back_count = 0
+    session = MagicMock()
+    session.query.return_value.filter_by.return_value.first.return_value = None
+    session.query.return_value.filter_by.return_value.all.return_value = []
+    
+    def on_commit():
+        nonlocal committed_count
+        committed_count += 1
+
+    def on_rollback():
+        nonlocal rolled_back_count
+        rolled_back_count += 1
+
+    session.commit.side_effect = on_commit
+    session.rollback.side_effect = on_rollback
+
+    view = KalanjiyamIndexView()
+    monkeypatch.setattr(view, "_get_or_create_page_status", lambda s, name: SimpleNamespace(id=1, name=name))
+    monkeypatch.setattr("kalanjiyam.queries.organization_by_slug", lambda slug: None)
+    monkeypatch.setattr("kalanjiyam.queries.get_session", lambda: session)
+
+    app = create_config_only_app("testing")
+    app.config["UPLOAD_FOLDER"] = str(tmp_path / "uploads")
+    monkeypatch.setattr("kalanjiyam.admin.flash", lambda *a, **kw: None)
+    monkeypatch.setattr("kalanjiyam.admin.redirect", lambda target: target)
+    monkeypatch.setattr("kalanjiyam.admin.url_for", lambda endpoint, **kw: "/proofing")
+
+    mock_user = SimpleNamespace(
+        is_org_admin=True,
+        is_moderator=False,
+        is_master_user=False,
+        is_authenticated=True,
+        organization_id=1,
+    )
+
+    import io
+    from flask import g
+
+    monkeypatch.setattr("kalanjiyam.admin.is_platform_super_admin", lambda: False)
+    monkeypatch.setattr("kalanjiyam.admin.current_user", mock_user)
+
+    with app.test_request_context(
+        "/admin/import/all-projects",
+        method="POST",
+        data={"projects_file": (io.BytesIO(zip_path.read_bytes()), "bulk_test.zip")},
+    ):
+        g._login_user = mock_user
+        resp = view.import_all_projects()
+
+    # Verify that project 1 and 3 were committed, and project 2 caused rollback
+    assert committed_count == 2
+    assert rolled_back_count >= 1
+
+
+
