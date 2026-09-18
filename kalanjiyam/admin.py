@@ -467,8 +467,8 @@ class KalanjiyamIndexView(AdminIndexView):
         
         return render_template("admin/import_all.html")
 
-    def _export_project_data(self, project: db.Project) -> Dict[str, Any]:
-        """Export all data for a single project."""
+    def _export_project_data(self, project: db.Project, include_pages: bool = False) -> Dict[str, Any]:
+        """Export project details and metadata (and optionally page data)."""
         session = q.get_session()
         
         # Export project metadata
@@ -492,109 +492,65 @@ class KalanjiyamIndexView(AdminIndexView):
                 'genre_id': project.genre_id,
                 'creator_username': project.creator.username if project.creator else None
             },
-            'pages': [],
-            'revisions': [],
-            'translations': [],
-            'discussion': {
-                'board': None,
-                'threads': [],
-                'posts': []
-            }
+            'extracted_metadata': getattr(project, 'extracted_metadata', None),
+            'metadata_extraction_runs': [],
         }
-        
-        # Export pages
-        for page in project.pages:
-            from kalanjiyam.utils.document_storage import derive_revision_tag, get_page_revision_index, load_page_ocr, load_revision_document
 
-            page_data = {
-                'slug': page.slug,
-                'order': page.order,
-                'version': page.version,
-                'ocr_bounding_boxes': load_page_ocr(page),
-                'page_width': page.page_width,
-                'page_height': page.page_height,
-                'status_name': page.status.name if page.status else None
-            }
-            project_data['pages'].append(page_data)
-            
-            # Export revisions for this page
-            for revision in page.revisions:
-                doc_payload = load_revision_document(revision)
-                tag = derive_revision_tag(revision)
-                v_num = get_page_revision_index(revision)
-                page_version = getattr(revision, "page_version", None)
-                version_key = getattr(page_version, "version_key", "") if page_version else ""
+        # Export metadata extraction runs
+        try:
+            from kalanjiyam.models.archival import MetadataExtractionRun
+            runs = []
+            if hasattr(project, 'metadata_extraction_runs') and project.metadata_extraction_runs:
+                runs = project.metadata_extraction_runs
+            elif getattr(project, 'id', None):
+                runs = (
+                    session.query(MetadataExtractionRun)
+                    .filter_by(project_id=project.id)
+                    .order_by(MetadataExtractionRun.created_at.asc())
+                    .all()
+                )
+            for run in runs:
+                project_data['metadata_extraction_runs'].append({
+                    'status': run.status,
+                    'engine': run.engine,
+                    'model_name': run.model_name,
+                    'model_version': run.model_version,
+                    'taxonomy_version': run.taxonomy_version,
+                    'contract_version': run.contract_version,
+                    'windows_total': run.windows_total,
+                    'windows_completed': run.windows_completed,
+                    'windows_failed': run.windows_failed,
+                    'pages_total': run.pages_total,
+                    'pages_read': run.pages_read,
+                    'fields_filled': run.fields_filled,
+                    'fields_total': run.fields_total,
+                    'avg_field_confidence': run.avg_field_confidence,
+                    'min_field_confidence': run.min_field_confidence,
+                    'low_conf_field_count': run.low_conf_field_count,
+                    'evidence_spans': run.evidence_spans,
+                    'evidence_verified': run.evidence_verified,
+                    'evidence_verified_rate': run.evidence_verified_rate,
+                    'avg_source_ocr_confidence': run.avg_source_ocr_confidence,
+                    'pages_without_confidence': run.pages_without_confidence,
+                    'total_prompt_tokens': run.total_prompt_tokens,
+                    'total_completion_tokens': run.total_completion_tokens,
+                    'total_engine_latency_ms': run.total_engine_latency_ms,
+                    'total_extraction_latency_ms': run.total_extraction_latency_ms,
+                    'metadata_data_size_bytes': run.metadata_data_size_bytes,
+                    'error_message': run.error_message,
+                    'created_at': run.created_at.isoformat() if hasattr(run.created_at, 'isoformat') else str(run.created_at or ''),
+                    'completed_at': run.completed_at.isoformat() if hasattr(run.completed_at, 'isoformat') else (str(run.completed_at) if run.completed_at else None),
+                })
+        except Exception:
+            pass
 
-                if isinstance(doc_payload, dict) and "timestamp" not in doc_payload:
-                    created_dt = getattr(revision, "created", None)
-                    doc_payload["timestamp"] = created_dt.isoformat() if hasattr(created_dt, "isoformat") else str(created_dt or "")
-
-                ocr_model = None
-                trans_model = None
-                src_lang = None
-                tgt_lang = None
-
-                if version_key.startswith("ocr:"):
-                    ocr_model = version_key.split("ocr:", 1)[1]
-                elif tag.startswith("ocr-"):
-                    ocr_model = tag.split("ocr-", 1)[1]
-
-                if version_key.startswith("translation:"):
-                    parts = version_key.split(":", 2)
-                    if len(parts) >= 2:
-                        trans_model = parts[1]
-                    if len(parts) >= 3 and "->" in parts[2]:
-                        src_lang, tgt_lang = parts[2].split("->", 1)
-                elif revision.translations:
-                    t = revision.translations[0]
-                    trans_model = t.translation_engine
-                    src_lang = t.source_language
-                    tgt_lang = t.target_language
-                elif tag.startswith("translation-"):
-                    trans_model = tag.split("translation-", 1)[1]
-
-                payload_filename = f"{tag}_v{v_num}.json"
-
-                revision_data = {
-                    'revision_key': revision.id,
-                    'page_slug': page.slug,
-                    'version_key': version_key,
-                    'tag': tag,
-                    'payload_filename': payload_filename,
-                    'ocr_model': ocr_model,
-                    'translation_model': trans_model,
-                    'source_language': src_lang,
-                    'target_language': tgt_lang,
-                    'author_username': revision.author.username if revision.author else None,
-                    'status_name': revision.status.name if revision.status else None,
-                    'created': revision.created.isoformat() if hasattr(revision.created, "isoformat") else str(revision.created),
-                    'summary': revision.summary,
-                    'content': revision.content,
-                    'content_format': getattr(revision, 'content_format', 'plain'),
-                    'document': doc_payload,
-                }
-                project_data['revisions'].append(revision_data)
-                
-                # Export translations for this revision
-                for translation in revision.translations:
-                    translation_data = {
-                        'revision_key': revision.id,
-                        'page_slug': page.slug,
-                        'author_username': translation.author.username if translation.author else None,
-                        'content': translation.content,
-                        'source_language': translation.source_language,
-                        'target_language': translation.target_language,
-                        'translation_engine': translation.translation_engine,
-                        'status': translation.status,
-                        'created_at': translation.created_at.isoformat(),
-                        'updated_at': translation.updated_at.isoformat()
-                    }
-                    project_data['translations'].append(translation_data)
-        
         # Export discussion data
         if project.board:
-            project_data['discussion']['board'] = {
-                'title': project.board.title
+            project_data['discussion'] = {
+                'board': {
+                    'title': project.board.title
+                },
+                'threads': []
             }
             
             for thread in project.board.threads:
@@ -616,6 +572,106 @@ class KalanjiyamIndexView(AdminIndexView):
                     thread_data['posts'].append(post_data)
                 
                 project_data['discussion']['threads'].append(thread_data)
+        elif include_pages:
+            project_data['discussion'] = {
+                'board': None,
+                'threads': [],
+                'posts': []
+            }
+
+        if include_pages:
+            project_data['pages'] = []
+            project_data['revisions'] = []
+            project_data['translations'] = []
+            
+            # Export pages
+            for page in project.pages:
+                from kalanjiyam.utils.document_storage import derive_revision_tag, get_page_revision_index, load_page_ocr, load_revision_document
+
+                page_data = {
+                    'slug': page.slug,
+                    'order': page.order,
+                    'version': page.version,
+                    'ocr_bounding_boxes': load_page_ocr(page),
+                    'page_width': page.page_width,
+                    'page_height': page.page_height,
+                    'status_name': page.status.name if page.status else None
+                }
+                project_data['pages'].append(page_data)
+                
+                # Export revisions for this page
+                for revision in page.revisions:
+                    doc_payload = load_revision_document(revision)
+                    tag = derive_revision_tag(revision)
+                    v_num = get_page_revision_index(revision)
+                    page_version = getattr(revision, "page_version", None)
+                    version_key = getattr(page_version, "version_key", "") if page_version else ""
+
+                    if isinstance(doc_payload, dict) and "timestamp" not in doc_payload:
+                        created_dt = getattr(revision, "created", None)
+                        doc_payload["timestamp"] = created_dt.isoformat() if hasattr(created_dt, "isoformat") else str(created_dt or "")
+
+                    ocr_model = None
+                    trans_model = None
+                    src_lang = None
+                    tgt_lang = None
+
+                    if version_key.startswith("ocr:"):
+                        ocr_model = version_key.split("ocr:", 1)[1]
+                    elif tag.startswith("ocr-"):
+                        ocr_model = tag.split("ocr-", 1)[1]
+
+                    if version_key.startswith("translation:"):
+                        parts = version_key.split(":", 2)
+                        if len(parts) >= 2:
+                            trans_model = parts[1]
+                        if len(parts) >= 3 and "->" in parts[2]:
+                            src_lang, tgt_lang = parts[2].split("->", 1)
+                    elif revision.translations:
+                        t = revision.translations[0]
+                        trans_model = t.translation_engine
+                        src_lang = t.source_language
+                        tgt_lang = t.target_language
+                    elif tag.startswith("translation-"):
+                        trans_model = tag.split("translation-", 1)[1]
+
+                    payload_filename = f"{tag}_v{v_num}.json"
+
+                    revision_data = {
+                        'revision_key': revision.id,
+                        'page_slug': page.slug,
+                        'version_key': version_key,
+                        'tag': tag,
+                        'payload_filename': payload_filename,
+                        'ocr_model': ocr_model,
+                        'translation_model': trans_model,
+                        'source_language': src_lang,
+                        'target_language': tgt_lang,
+                        'author_username': revision.author.username if revision.author else None,
+                        'status_name': revision.status.name if revision.status else None,
+                        'created': revision.created.isoformat() if hasattr(revision.created, "isoformat") else str(revision.created),
+                        'summary': revision.summary,
+                        'content': revision.content,
+                        'content_format': getattr(revision, 'content_format', 'plain'),
+                        'document': doc_payload,
+                    }
+                    project_data['revisions'].append(revision_data)
+                    
+                    # Export translations for this revision
+                    for translation in revision.translations:
+                        translation_data = {
+                            'revision_key': revision.id,
+                            'page_slug': page.slug,
+                            'author_username': translation.author.username if translation.author else None,
+                            'content': translation.content,
+                            'source_language': translation.source_language,
+                            'target_language': translation.target_language,
+                            'translation_engine': translation.translation_engine,
+                            'status': translation.status,
+                            'created_at': translation.created_at.isoformat(),
+                            'updated_at': translation.updated_at.isoformat()
+                        }
+                        project_data['translations'].append(translation_data)
         
         return project_data
     
@@ -695,56 +751,99 @@ class KalanjiyamIndexView(AdminIndexView):
             created_at=datetime.fromisoformat(metadata['created_at']),
             updated_at=datetime.fromisoformat(metadata['updated_at']),
             creator_id=creator.id if creator else None,
-            genre_id=genre.id if genre else None
+            genre_id=genre.id if genre else None,
+            extracted_metadata=project_data.get('extracted_metadata') or metadata.get('extracted_metadata'),
         )
         
         session.add(project)
         session.flush()  # Get the project ID
+
+        # Import metadata extraction runs
+        if project_data.get('metadata_extraction_runs'):
+            try:
+                from kalanjiyam.models.archival import MetadataExtractionRun
+                for run_data in project_data['metadata_extraction_runs']:
+                    run = MetadataExtractionRun(
+                        project_id=project.id,
+                        status=run_data.get('status', 'COMPLETED'),
+                        engine=run_data.get('engine'),
+                        model_name=run_data.get('model_name'),
+                        model_version=run_data.get('model_version'),
+                        taxonomy_version=run_data.get('taxonomy_version'),
+                        contract_version=run_data.get('contract_version'),
+                        windows_total=run_data.get('windows_total'),
+                        windows_completed=run_data.get('windows_completed'),
+                        windows_failed=run_data.get('windows_failed'),
+                        pages_total=run_data.get('pages_total'),
+                        pages_read=run_data.get('pages_read'),
+                        fields_filled=run_data.get('fields_filled'),
+                        fields_total=run_data.get('fields_total'),
+                        avg_field_confidence=run_data.get('avg_field_confidence'),
+                        min_field_confidence=run_data.get('min_field_confidence'),
+                        low_conf_field_count=run_data.get('low_conf_field_count'),
+                        evidence_spans=run_data.get('evidence_spans'),
+                        evidence_verified=run_data.get('evidence_verified'),
+                        evidence_verified_rate=run_data.get('evidence_verified_rate'),
+                        avg_source_ocr_confidence=run_data.get('avg_source_ocr_confidence'),
+                        pages_without_confidence=run_data.get('pages_without_confidence'),
+                        total_prompt_tokens=run_data.get('total_prompt_tokens'),
+                        total_completion_tokens=run_data.get('total_completion_tokens'),
+                        total_engine_latency_ms=run_data.get('total_engine_latency_ms'),
+                        total_extraction_latency_ms=run_data.get('total_extraction_latency_ms'),
+                        metadata_data_size_bytes=run_data.get('metadata_data_size_bytes'),
+                        error_message=run_data.get('error_message'),
+                        created_at=datetime.fromisoformat(run_data['created_at']) if run_data.get('created_at') else datetime.utcnow(),
+                        completed_at=datetime.fromisoformat(run_data['completed_at']) if run_data.get('completed_at') else None,
+                    )
+                    session.add(run)
+                session.flush()
+            except Exception:
+                pass
         
         # Create discussion board
-        if project_data['discussion']['board']:
+        if project_data.get('discussion') and project_data['discussion'].get('board'):
             board = db.Board(title=project_data['discussion']['board']['title'])
             session.add(board)
             session.flush()
             project.board_id = board.id
             
             # Import threads and posts
-            for thread_data in project_data['discussion']['threads']:
-                thread_author = self._get_or_create_user(session, thread_data['author_username'])
+            for thread_data in project_data['discussion'].get('threads', []):
+                thread_author = self._get_or_create_user(session, thread_data.get('author_username'))
                 
                 thread = db.Thread(
-                    title=thread_data['title'],
+                    title=thread_data.get('title'),
                     board_id=board.id,
                     author_id=thread_author.id if thread_author else None,
-                    created_at=datetime.fromisoformat(thread_data['created_at']),
-                    updated_at=datetime.fromisoformat(thread_data['updated_at'])
+                    created_at=datetime.fromisoformat(thread_data['created_at']) if thread_data.get('created_at') else datetime.utcnow(),
+                    updated_at=datetime.fromisoformat(thread_data['updated_at']) if thread_data.get('updated_at') else datetime.utcnow()
                 )
                 session.add(thread)
                 session.flush()
                 
-                for post_data in thread_data['posts']:
-                    post_author = self._get_or_create_user(session, post_data['author_username'])
+                for post_data in thread_data.get('posts', []):
+                    post_author = self._get_or_create_user(session, post_data.get('author_username'))
                     
                     post = db.Post(
                         board_id=board.id,
                         thread_id=thread.id,
                         author_id=post_author.id if post_author else None,
-                        created_at=datetime.fromisoformat(post_data['created_at']),
-                        updated_at=datetime.fromisoformat(post_data['updated_at']),
-                        content=post_data['content']
+                        created_at=datetime.fromisoformat(post_data['created_at']) if post_data.get('created_at') else datetime.utcnow(),
+                        updated_at=datetime.fromisoformat(post_data['updated_at']) if post_data.get('updated_at') else datetime.utcnow(),
+                        content=post_data.get('content', '')
                     )
                     session.add(post)
         
         # Create pages
         page_mapping = {}  # Map page slugs to page objects
-        for page_data in project_data['pages']:
-            status = self._get_or_create_page_status(session, page_data['status_name'])
+        for page_data in project_data.get('pages', []):
+            status = self._get_or_create_page_status(session, page_data.get('status_name', 'reviewed-0'))
             
             page = db.Page(
                 project_id=project.id,
                 slug=page_data['slug'],
                 order=page_data['order'],
-                version=page_data['version'],
+                version=page_data.get('version', 1),
                 ocr_bounding_boxes=page_data.get('ocr_bounding_boxes'),
                 page_width=page_data.get('page_width'),
                 page_height=page_data.get('page_height'),
@@ -764,22 +863,22 @@ class KalanjiyamIndexView(AdminIndexView):
         
         # Create revisions
         revision_mapping = {}  # Map revision keys to revision objects
-        for revision_data in project_data['revisions']:
-            page = page_mapping.get(revision_data['page_slug'])
+        for revision_data in project_data.get('revisions', []):
+            page = page_mapping.get(revision_data.get('page_slug'))
             if not page:
                 continue
             
-            author = self._get_or_create_user(session, revision_data['author_username'])
-            status = self._get_or_create_page_status(session, revision_data['status_name'])
+            author = self._get_or_create_user(session, revision_data.get('author_username'))
+            status = self._get_or_create_page_status(session, revision_data.get('status_name', 'reviewed-0'))
             
             revision = db.Revision(
                 project_id=project.id,
                 page_id=page.id,
                 author_id=author.id if author else None,
                 status_id=status.id,
-                created=datetime.fromisoformat(revision_data['created']),
-                summary=revision_data['summary'],
-                content=revision_data['content'],
+                created=datetime.fromisoformat(revision_data['created']) if revision_data.get('created') else datetime.utcnow(),
+                summary=revision_data.get('summary', ''),
+                content=revision_data.get('content', ''),
                 content_format=revision_data.get('content_format', 'plain'),
                 document=revision_data.get('document'),
             )
@@ -796,26 +895,26 @@ class KalanjiyamIndexView(AdminIndexView):
             revision_mapping[revision_data.get('revision_key')] = revision
         
         # Create translations
-        for translation_data in project_data['translations']:
-            author = self._get_or_create_user(session, translation_data['author_username'])
+        for translation_data in project_data.get('translations', []):
+            author = self._get_or_create_user(session, translation_data.get('author_username'))
             
             translation = db.Translation(
-                page_id=page_mapping[translation_data['page_slug']].id if 'page_slug' in translation_data else None,
-                revision_id=revision_mapping.get(translation_data['revision_key']).id if translation_data.get('revision_key') in revision_mapping else None,
+                page_id=page_mapping[translation_data['page_slug']].id if 'page_slug' in translation_data and translation_data['page_slug'] in page_mapping else None,
+                revision_id=revision_mapping.get(translation_data.get('revision_key')).id if translation_data.get('revision_key') in revision_mapping else None,
                 author_id=author.id if author else None,
-                content=translation_data['content'],
-                source_language=translation_data['source_language'],
-                target_language=translation_data['target_language'],
-                translation_engine=translation_data['translation_engine'],
-                status=translation_data['status'],
-                created_at=datetime.fromisoformat(translation_data['created_at']),
-                updated_at=datetime.fromisoformat(translation_data['updated_at'])
+                content=translation_data.get('content', ''),
+                source_language=translation_data.get('source_language'),
+                target_language=translation_data.get('target_language'),
+                translation_engine=translation_data.get('translation_engine'),
+                status=translation_data.get('status'),
+                created_at=datetime.fromisoformat(translation_data['created_at']) if translation_data.get('created_at') else datetime.utcnow(),
+                updated_at=datetime.fromisoformat(translation_data['updated_at']) if translation_data.get('updated_at') else datetime.utcnow()
             )
             session.add(translation)
 
         # Enforce Org Admin's organization assignment
-        if not is_platform_super_admin() and current_user.is_org_admin:
-            org_id = current_user.organization_id
+        if not is_platform_super_admin() and getattr(current_user, "is_org_admin", False):
+            org_id = getattr(current_user, "organization_id", None)
             if org_id:
                 session.add(db.ProjectGroups(group_id=org_id, project_id=project.id))
         else:
@@ -860,13 +959,87 @@ class KalanjiyamIndexView(AdminIndexView):
                 if pdf_source.exists():
                     storage.save(pdf_key(project.slug), pdf_source)
 
-                # Copy page images
+                existing_pages = {p.slug: p for p in getattr(project, "pages", [])}
+                for p in session.query(db.Page).filter_by(project_id=project.id).all():
+                    existing_pages[p.slug] = p
+
+                # Copy page images and create pages if not already created
                 pages_source = files_dir / "pages"
                 if pages_source.exists():
-                    for image_file in pages_source.glob("*.jpg"):
+                    
+                    def _page_sort_key(f: Path):
+                        stem = f.stem
+                        if stem.isdigit():
+                            return (0, int(stem))
+                        import re
+                        m = re.search(r'\d+', stem)
+                        return (1, int(m.group())) if m else (2, stem)
+
+                    sorted_images = sorted(pages_source.glob("*.jpg"), key=_page_sort_key)
+                    default_status = self._get_or_create_page_status(session, "reviewed-0")
+                    for idx, image_file in enumerate(sorted_images):
+                        page_slug = image_file.stem
+                        if page_slug not in existing_pages:
+                            order = int(page_slug) if page_slug.isdigit() else (idx + 1)
+                            page = db.Page(
+                                project_id=project.id,
+                                slug=page_slug,
+                                order=order,
+                                status_id=default_status.id,
+                            )
+                            session.add(page)
+                            session.flush()
+                            existing_pages[page_slug] = page
                         storage.save(
-                            page_image_key(project.slug, image_file.stem), image_file
+                            page_image_key(project.slug, page_slug), image_file
                         )
+
+                # Import revision payloads from files/revisions if present
+                revisions_source = files_dir / "revisions"
+                if revisions_source.exists():
+                    from kalanjiyam.utils.document_storage import save_revision_document
+                    page_map = dict(existing_pages)
+                    for p in session.query(db.Page).filter_by(project_id=project.id).all():
+                        page_map[p.slug] = p
+                    default_status = self._get_or_create_page_status(session, "reviewed-0")
+                    for page_dir in revisions_source.iterdir():
+                        if not page_dir.is_dir():
+                            continue
+                        page_slug = page_dir.name
+                        page = page_map.get(page_slug)
+                        if not page:
+                            continue
+                        for json_file in page_dir.glob("*.json"):
+                            try:
+                                doc = json.loads(json_file.read_text(encoding="utf-8"))
+                                tag = json_file.stem
+                                existing_rev = (
+                                    session.query(db.Revision)
+                                    .filter_by(page_id=page.id, summary=f"Exported {tag}")
+                                    .first()
+                                )
+                                if not existing_rev and not page.revisions:
+                                    rev_created = datetime.utcnow()
+                                    if isinstance(doc, dict) and "timestamp" in doc:
+                                        try:
+                                            rev_created = datetime.fromisoformat(doc["timestamp"])
+                                        except Exception:
+                                            pass
+                                    rev = db.Revision(
+                                        project_id=project.id,
+                                        page_id=page.id,
+                                        status_id=default_status.id,
+                                        created=rev_created,
+                                        summary=f"Exported {tag}",
+                                        content=doc.get("text", "") if isinstance(doc, dict) else "",
+                                        content_format="blocks" if isinstance(doc, dict) and "blocks" in doc else "plain",
+                                        document=doc if isinstance(doc, dict) else None,
+                                    )
+                                    session.add(rev)
+                                    session.flush()
+                                    save_revision_document(rev, doc)
+                            except Exception:
+                                pass
             
             return {
                 'project': project,
