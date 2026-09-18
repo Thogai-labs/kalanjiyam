@@ -1058,6 +1058,20 @@ def documents_to_html_zip(project, pages, *, replica: bool = True) -> bytes:
     return zip_buffer.getvalue()
 
 
+def _is_valid_bbox(bbox) -> bool:
+    """Return True if bbox has 4 finite numbers with positive width and height."""
+    if not bbox or not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+        return False
+    try:
+        x1, y1, x2, y2 = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
+        import math
+        if any(math.isnan(v) or math.isinf(v) for v in (x1, y1, x2, y2)):
+            return False
+        return abs(x2 - x1) > 1e-3 and abs(y2 - y1) > 1e-3
+    except (TypeError, ValueError):
+        return False
+
+
 def _crop_figure_image(img_path, bbox) -> bytes | None:
     """Crop only the figure portion of the scanned page image using Pillow."""
     from PIL import Image
@@ -1065,10 +1079,10 @@ def _crop_figure_image(img_path, bbox) -> bytes | None:
     try:
         with Image.open(img_path) as img:
             w, h = img.size
-            x1 = max(0, min(bbox[0], w))
-            y1 = max(0, min(bbox[1], h))
-            x2 = max(0, min(bbox[2], w))
-            y2 = max(0, min(bbox[3], h))
+            x1 = max(0, min(min(bbox[0], bbox[2]), w))
+            y1 = max(0, min(min(bbox[1], bbox[3]), h))
+            x2 = max(0, min(max(bbox[0], bbox[2]), w))
+            y2 = max(0, min(max(bbox[1], bbox[3]), h))
             if x2 <= x1 or y2 <= y1:
                 return None
             cropped = img.crop((x1, y1, x2, y2))
@@ -1082,6 +1096,13 @@ def _crop_figure_image(img_path, bbox) -> bytes | None:
 
 def _insert_styled_text(pdf_page, rect, html_content, fontname, fontsize):
     """Insert text into a textbox preserving bold/italic if insert_htmlbox is available."""
+    if not rect or rect.is_empty or rect.is_infinite or not rect.is_valid:
+        return
+    if rect.width <= 0 or rect.height <= 0:
+        return
+    if not html_content or not str(html_content).strip():
+        return
+
     from bs4 import BeautifulSoup
     if hasattr(pdf_page, "insert_htmlbox"):
         try:
@@ -1106,12 +1127,19 @@ def _insert_styled_text(pdf_page, rect, html_content, fontname, fontsize):
             pass
 
     # Fallback to plain text
-    text = BeautifulSoup(html_content, "html.parser").get_text().strip()
-    pdf_page.insert_textbox(rect, text, fontname=fontname, fontsize=fontsize, align=0)
+    try:
+        text = BeautifulSoup(html_content, "html.parser").get_text().strip()
+        if text:
+            pdf_page.insert_textbox(rect, text, fontname=fontname, fontsize=fontsize, align=0)
+    except Exception:
+        pass
 
 
 def _insert_block_image(pdf_page, rect, html_content) -> bool:
     """Check if the block content contains an <img> tag, and render it inside the PDF."""
+    if not rect or rect.is_empty or rect.is_infinite or not rect.is_valid or rect.width <= 0 or rect.height <= 0:
+        return False
+
     from bs4 import BeautifulSoup
     import re
     from kalanjiyam.utils.storage import get_storage, editor_image_key
@@ -1145,19 +1173,22 @@ def _insert_block_image(pdf_page, rect, html_content) -> bool:
             pass
 
     # Draw fallback placeholder box
-    shape = pdf_page.new_shape()
-    shape.draw_rect(rect)
-    shape.finish(color=(0.8, 0.8, 0.8), fill=(0.95, 0.95, 0.95), width=1)
-    shape.commit()
+    try:
+        shape = pdf_page.new_shape()
+        shape.draw_rect(rect)
+        shape.finish(color=(0.8, 0.8, 0.8), fill=(0.95, 0.95, 0.95), width=1)
+        shape.commit()
 
-    pdf_page.insert_textbox(
-        rect,
-        "[Image]",
-        fontname="helv",
-        fontsize=9,
-        align=1
-    )
-    return True
+        pdf_page.insert_textbox(
+            rect,
+            "[Image]",
+            fontname="helv",
+            fontsize=9,
+            align=1
+        )
+        return True
+    except Exception:
+        return False
 
 
 def documents_to_pdf(project, pages) -> bytes:
@@ -1168,6 +1199,7 @@ def documents_to_pdf(project, pages) -> bytes:
     import os
     import re
     import glob
+    import math
     from bs4 import BeautifulSoup
 
     doc = fitz.open()
@@ -1185,6 +1217,12 @@ def documents_to_pdf(project, pages) -> bytes:
         "latin": "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
         "fallback_dejavu": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     }
+
+    if not pages:
+        doc.new_page(width=595, height=842)
+        pdf_bytes = doc.write()
+        doc.close()
+        return pdf_bytes
 
     for page in pages:
         # Enforce strict A4 format
@@ -1231,12 +1269,28 @@ def documents_to_pdf(project, pages) -> bytes:
             return "helv"
 
         # Render document content (text blocks, figures, tables) at coordinates
-        if page.revisions:
-            rev = page.revisions[-1]
+        revisions = getattr(page, "revisions", None)
+        if revisions:
+            rev = revisions[-1]
             from kalanjiyam.utils.document_storage import load_revision_document
 
-            if load_revision_document(rev):
+            rev_doc = load_revision_document(rev)
+            if rev_doc:
                 doc_obj = document_for_revision(rev, page)
+
+                # Check if any block has valid bounding box coordinates
+                has_valid_bboxes = any(_is_valid_bbox(b.bbox) for b in doc_obj.blocks) if doc_obj.blocks else False
+
+                if not has_valid_bboxes:
+                    # Flow-mode fallback: render entire page content sequentially with margins
+                    flow_html = doc_obj.to_html(replica=False) if doc_obj.blocks else ""
+                    if not flow_html.strip():
+                        flow_html = getattr(rev, "content", "") or ""
+                    if flow_html.strip():
+                        margin_rect = pdf_page.rect + (36, 36, -36, -36)
+                        active_font = _get_font_for_text(flow_html)
+                        _insert_styled_text(pdf_page, margin_rect, flow_html, active_font, 10)
+                    continue
 
                 # Determine if we have a scanned image to extract figures from
                 img_path = None
@@ -1247,23 +1301,39 @@ def documents_to_pdf(project, pages) -> bytes:
                 except Exception:
                     pass
 
+                # Scale block coordinates relative to A4 page size
+                pw = float(getattr(page, "page_width", None) or width)
+                if pw <= 0 or math.isnan(pw) or math.isinf(pw):
+                    pw = float(width)
+
+                ph = float(getattr(page, "page_height", None) or height)
+                if ph <= 0 or math.isnan(ph) or math.isinf(ph):
+                    ph = float(height)
+
+                scale_x = width / pw
+                scale_y = height / ph
+
+                # Cursor for blocks that lack valid bounding boxes on an otherwise positioned page
+                max_valid_y = max(
+                    (max(float(b.bbox[1]), float(b.bbox[3])) * scale_y for b in doc_obj.blocks if _is_valid_bbox(b.bbox)),
+                    default=36.0,
+                )
+                cursor_y = min(max_valid_y + 12.0, height - 60.0)
+
                 for block in doc_obj.blocks:
-                    bbox = block.bbox
-                    if not bbox or len(bbox) != 4:
+                    if _is_valid_bbox(block.bbox):
+                        x1 = min(float(block.bbox[0]), float(block.bbox[2])) * scale_x
+                        y1 = min(float(block.bbox[1]), float(block.bbox[3])) * scale_y
+                        x2 = max(float(block.bbox[0]), float(block.bbox[2])) * scale_x
+                        y2 = max(float(block.bbox[1]), float(block.bbox[3])) * scale_y
+                        rect = fitz.Rect(x1, y1, x2, y2)
+                    else:
+                        # Fallback box for unpositioned blocks (e.g. newly added blocks)
+                        rect = fitz.Rect(36, cursor_y, width - 36, min(cursor_y + 40, height - 20))
+                        cursor_y = min(rect.y1 + 8, height - 20)
+
+                    if not rect or rect.is_empty or rect.is_infinite or not rect.is_valid or rect.width <= 0 or rect.height <= 0:
                         continue
-
-                    # Scale block coordinates relative to A4 page size
-                    pw = page.page_width or width
-                    ph = page.page_height or height
-                    scale_x = width / pw
-                    scale_y = height / ph
-
-                    rect = fitz.Rect(
-                        bbox[0] * scale_x,
-                        bbox[1] * scale_y,
-                        bbox[2] * scale_x,
-                        bbox[3] * scale_y
-                    )
 
                     # 1. First check if block contains an inline <img> tag (uploaded image)
                     if _insert_block_image(pdf_page, rect, block.content or ""):
@@ -1273,8 +1343,8 @@ def documents_to_pdf(project, pages) -> bytes:
                     if block.type == "figure":
                         # Attempt to crop the figure from the scanned book page image
                         img_bytes = None
-                        if img_path:
-                            img_bytes = _crop_figure_image(img_path, bbox)
+                        if img_path and _is_valid_bbox(block.bbox):
+                            img_bytes = _crop_figure_image(img_path, block.bbox)
                         
                         if img_bytes:
                             try:
@@ -1284,30 +1354,37 @@ def documents_to_pdf(project, pages) -> bytes:
                                 
                         if not img_bytes:
                             # Fallback: Draw placeholder box for image
-                            shape = pdf_page.new_shape()
-                            shape.draw_rect(rect)
-                            shape.finish(color=(0.8, 0.8, 0.8), fill=(0.95, 0.95, 0.95), width=1)
-                            shape.commit()
+                            try:
+                                shape = pdf_page.new_shape()
+                                shape.draw_rect(rect)
+                                shape.finish(color=(0.8, 0.8, 0.8), fill=(0.95, 0.95, 0.95), width=1)
+                                shape.commit()
 
-                            # Draw [Image] label in the center
-                            pdf_page.insert_textbox(
-                                rect,
-                                "[Image]",
-                                fontname="helv",
-                                fontsize=9,
-                                align=1
-                            )
+                                # Draw [Image] label in the center
+                                pdf_page.insert_textbox(
+                                    rect,
+                                    "[Image]",
+                                    fontname="helv",
+                                    fontsize=9,
+                                    align=1
+                                )
+                            except Exception:
+                                pass
                     elif block.type == "table":
                         # Render tables with a border
-                        shape = pdf_page.new_shape()
-                        shape.draw_rect(rect)
-                        shape.finish(color=(0.7, 0.7, 0.7), width=1)
-                        shape.commit()
+                        try:
+                            shape = pdf_page.new_shape()
+                            shape.draw_rect(rect)
+                            shape.finish(color=(0.7, 0.7, 0.7), width=1)
+                            shape.commit()
+                        except Exception:
+                            pass
 
                         text = (block.content or "").strip()
-                        active_font = _get_font_for_text(text)
-                        # Render table content (using small monospace/fallback font)
-                        _insert_styled_text(pdf_page, rect + (4, 4, -4, -4), text, active_font, 8)
+                        if text:
+                            active_font = _get_font_for_text(text)
+                            table_rect = rect + (4, 4, -4, -4) if (rect.width > 8 and rect.height > 8) else rect
+                            _insert_styled_text(pdf_page, table_rect, text, active_font, 8)
                     else:
                         text = (block.content or "").strip()
                         if not text:
@@ -1320,10 +1397,14 @@ def documents_to_pdf(project, pages) -> bytes:
                         _insert_styled_text(pdf_page, rect, text, active_font, 10)
             else:
                 # Fallback: if there's no structured document model, draw raw content
-                text = rev.content or ""
-                margin_rect = pdf_page.rect + (36, 36, -36, -36)
-                active_font = _get_font_for_text(text)
-                _insert_styled_text(pdf_page, margin_rect, text, active_font, 12)
+                text = getattr(rev, "content", "") or ""
+                if text.strip():
+                    margin_rect = pdf_page.rect + (36, 36, -36, -36)
+                    active_font = _get_font_for_text(text)
+                    _insert_styled_text(pdf_page, margin_rect, text, active_font, 12)
+
+    if len(doc) == 0:
+        doc.new_page(width=595, height=842)
 
     pdf_bytes = doc.write()
     doc.close()
