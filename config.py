@@ -170,8 +170,24 @@ class BaseConfig:
         ENABLE_REGISTERED_ACCESS = True
     ENABLE_REGISTER_USER = ENABLE_REGISTERED_ACCESS
 
+    #: If True, enable the public books catalog and public book endpoints (/books/)
+    #: and public visibility toggles in admin views.
+    #: Disabled if set to "0", "false", "False", "disabled", "off", or "no".
+    _books_val = _env("ENABLE_BOOKS", None)
+    if _books_val is None:
+        _books_val = _env("ENABLE_LIBRARY", None)
+    if _books_val is not None:
+        ENABLE_BOOKS = str(_books_val).strip().lower() not in (
+            "0",
+            "false",
+            "disabled",
+            "off",
+            "no",
+        )
+    else:
+        ENABLE_BOOKS = True
+    ENABLE_LIBRARY = ENABLE_BOOKS
 
-    #: Guest daily rate limits (creations and OCR runs)
     GUEST_DAILY_PROJECT_LIMIT = int(_env("GUEST_DAILY_PROJECT_LIMIT", "5") or "5")
     GUEST_DAILY_OCR_LIMIT = int(_env("GUEST_DAILY_OCR_LIMIT", "10") or "10")
 
@@ -359,6 +375,7 @@ class UnitTestConfig(BaseConfig):
 
     KALANJIYAM_ENVIRONMENT = TESTING
     TESTING = True
+    ENABLE_BOOKS = True
     APPLICATION_URL_PREFIX = ""
     STORAGE_BACKEND = "local"
     MULTI_TENANT_MODE = False

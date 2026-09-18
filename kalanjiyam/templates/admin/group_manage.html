@@ -146,7 +146,7 @@
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
             <span class="font-mono text-xs font-semibold text-royalblue">{{ p.slug }}</span>
-            {% if p.is_publicly_viewable %}
+            {% if config.ENABLE_BOOKS and p.is_publicly_viewable %}
             <span class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-emerald-100 text-emerald-800 uppercase">{{ _('Public') }}</span>
             {% endif %}
           </div>
@@ -154,6 +154,7 @@
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
+          {% if config.ENABLE_BOOKS %}
           <form method="post" action="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page, texts_page=texts_page) }}">
             {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
             <input type="hidden" name="action" value="set_project_public">
@@ -170,6 +171,7 @@
             </button>
             {% endif %}
           </form>
+          {% endif %}
 
           <form method="post" action="{{ url_for('groups_view.manage', id=group.id, projects_page=projects_page, texts_page=texts_page) }}">
             {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}

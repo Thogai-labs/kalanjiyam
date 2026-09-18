@@ -19,11 +19,19 @@
    proofing view instead -- which is where a proofer can actually read them,
    and which search has already confirmed this viewer may see. #}
 {% macro book_url(is_public, project_slug) %}
+{%- if config.ENABLE_BOOKS and is_public -%}
+  {{ url_for('public.books.book', project_slug=project_slug) }}
+{%- else -%}
   {{ url_for('proofing.project.summary', slug=project_slug) }}
+{%- endif -%}
 {% endmacro %}
 
 {% macro page_url(is_public, project_slug, page_slug) %}
+{%- if config.ENABLE_BOOKS and is_public -%}
+  {{ url_for('public.books.page', project_slug=project_slug, page_slug=page_slug, q=req.q) }}
+{%- else -%}
   {{ url_for('proofing.page.edit', project_slug=project_slug, page_slug=page_slug, q=req.q) }}
+{%- endif -%}
 {% endmacro %}
 
 {% block title %}{% if req.q %}{{ _('%(q)s — Search', q=req.q) }}{% else %}{{ _('Search') }}{% endif %} | Kalanjiyam{% endblock %}

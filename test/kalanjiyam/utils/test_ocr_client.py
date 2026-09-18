@@ -1,8 +1,6 @@
 """Tests for OCR remote client and runner."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
-
 
 
 def test_parse_bounding_boxes_tsv():
@@ -397,4 +395,107 @@ def test_run_ocr_remote_fallback_to_chat_completions(flask_app, tmp_path):
         chat_payload = client.post.call_args_list[1][1]["json"]
         assert chat_payload["model"] == "llm-gemma"
         assert "Perform optical character recognition" in chat_payload["messages"][0]["content"][0]["text"]
+
+
+def test_run_ocr_remote_fallback_chandra_html_bboxes(flask_app, tmp_path):
+    """When fallback runner receives Chandra HTML with data-bbox, it should extract blocks and bboxes."""
+    from PIL import Image
+    img = tmp_path / "page.jpg"
+    Image.new("RGB", (1000, 2000), color="white").save(img)
+
+    with flask_app.app_context():
+        flask_app.config.update(
+            OCR_SERVICE_URL="http://10.195.100.51:4000/v1",
+            OCR_SERVICE_API_KEY="test-key",
+            OCR_SERVICE_TIMEOUT=30,
+        )
+
+        mock_ocr_resp = MagicMock()
+        mock_ocr_resp.status_code = 500
+        mock_ocr_resp.text = '{"error":{"message":"OCR is not supported for provider: openai."}}'
+
+        chandra_html = (
+            '<div data-bbox="100 200 500 400" data-label="Section-Header"><h2>Title</h2></div>'
+            '<div data-bbox="100 450 900 800" data-label="Text"><p>Line 1<br/>Line 2</p></div>'
+        )
+
+        mock_chat_resp = MagicMock()
+        mock_chat_resp.status_code = 200
+        mock_chat_resp.json.return_value = {
+            "choices": [{"message": {"role": "assistant", "content": chandra_html}}]
+        }
+
+        with patch("kalanjiyam.utils.ocr_client.httpx.Client") as client_cls:
+            client = client_cls.return_value.__enter__.return_value
+            client.post.side_effect = [mock_ocr_resp, mock_chat_resp]
+
+            from kalanjiyam.utils.ocr_client import run_ocr_remote
+
+            res = run_ocr_remote(img, "chandra", "sa")
+
+        assert res.engine == "chandra"
+        assert res.content_format == "blocks"
+        assert res.blocks is not None
+        assert len(res.blocks) == 2
+        # Verify 0-1000 normalized coords scaled to 1000x2000 image
+        assert res.blocks[0]["bbox"] == [100, 400, 500, 800]
+        assert res.blocks[0]["type"] == "heading"
+        assert res.blocks[1]["bbox"] == [100, 900, 900, 1600]
+        assert res.blocks[1]["type"] == "paragraph"
+        assert len(res.bounding_boxes) == 2
+        assert res.bounding_boxes[0][:4] == (100.0, 400.0, 500.0, 800.0)
+
+
+def test_run_ocr_remote_fallback_gemma_json_bboxes(flask_app, tmp_path):
+    """When fallback runner receives Gemma JSON with bbox, it should extract blocks and bboxes."""
+    from PIL import Image
+    img = tmp_path / "page.jpg"
+    Image.new("RGB", (1000, 2000), color="white").save(img)
+
+    with flask_app.app_context():
+        flask_app.config.update(
+            OCR_SERVICE_URL="http://10.195.100.51:4000/v1",
+            OCR_SERVICE_API_KEY="test-key",
+            OCR_SERVICE_TIMEOUT=30,
+        )
+
+        mock_ocr_resp = MagicMock()
+        mock_ocr_resp.status_code = 500
+        mock_ocr_resp.text = '{"error":{"message":"OCR is not supported for provider: openai."}}'
+
+        gemma_json = (
+            '```json\n'
+            '[\n'
+            '  {"type": "heading", "bbox": [100, 50, 200, 450], "text": "Chapter 1"},\n'
+            '  {"type": "paragraph", "bbox": [250, 50, 600, 850], "text": "Body paragraph"}\n'
+            ']\n'
+            '```'
+        )
+
+        mock_chat_resp = MagicMock()
+        mock_chat_resp.status_code = 200
+        mock_chat_resp.json.return_value = {
+            "choices": [{"message": {"role": "assistant", "content": gemma_json}}]
+        }
+
+        with patch("kalanjiyam.utils.ocr_client.httpx.Client") as client_cls:
+            client = client_cls.return_value.__enter__.return_value
+            client.post.side_effect = [mock_ocr_resp, mock_chat_resp]
+
+            from kalanjiyam.utils.ocr_client import run_ocr_remote
+
+            res = run_ocr_remote(img, "gemma_ocr", "sa")
+
+        assert res.engine == "gemma_ocr"
+        assert res.content_format == "blocks"
+        assert res.blocks is not None
+        assert len(res.blocks) == 2
+        # Gemma ymin=100 (y0=200), xmin=50 (x0=50), ymax=200 (y1=400), xmax=450 (x1=450)
+        assert res.blocks[0]["bbox"] == [50, 200, 450, 400]
+        assert res.blocks[0]["type"] == "heading"
+        assert res.blocks[0]["content"] == "Chapter 1"
+        assert res.blocks[1]["bbox"] == [50, 500, 850, 1200]
+        assert res.blocks[1]["type"] == "paragraph"
+        assert len(res.bounding_boxes) == 2
+
 

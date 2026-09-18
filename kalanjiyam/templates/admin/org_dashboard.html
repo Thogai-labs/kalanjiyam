@@ -360,11 +360,13 @@
         <h2 class="text-sm font-bold text-slate-900">{{ _('Books & Catalogs') }}</h2>
         <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600">{{ projects|length }} {{ _('assigned') }}</span>
       </div>
+      {% if config.ENABLE_BOOKS %}
       <p class="text-xs text-slate-500 font-medium mt-0.5">
         {{ _('Mark a book as public to list it on') }}
         <span class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded font-semibold text-slate-700">/books/</span>
         {{ _('for anyone, including guests.') }}
       </p>
+      {% endif %}
     </div>
 
     <!-- Add Book to Org Form -->
@@ -396,7 +398,9 @@
       <thead class="bg-slate-50/80 text-slate-500 uppercase tracking-wider font-bold text-[10px] border-b border-slate-100">
         <tr>
           <th class="px-4 py-3.5">{{ _('Book Title & Slug') }}</th>
+          {% if config.ENABLE_BOOKS %}
           <th class="px-4 py-3.5">{{ _('Visibility') }}</th>
+          {% endif %}
           <th class="px-4 py-3.5 text-right">{{ _('Actions') }}</th>
         </tr>
       </thead>
@@ -407,6 +411,7 @@
             <span class="font-bold text-slate-900 block text-xs sm:text-sm">{{ p.display_title }}</span>
             <span class="font-mono text-[11px] text-slate-400 block">{{ p.slug }}</span>
           </td>
+          {% if config.ENABLE_BOOKS %}
           <td class="px-4 py-3.5">
             {% if p.is_publicly_viewable %}
             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -420,8 +425,10 @@
             </span>
             {% endif %}
           </td>
+          {% endif %}
           <td class="px-4 py-3.5 text-right">
             <div class="flex items-center justify-end gap-2">
+              {% if config.ENABLE_BOOKS %}
               {% if p.is_publicly_viewable %}
               <form method="post" action="{{ url_for('org_admin_view.index') }}">
                 {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
@@ -442,6 +449,7 @@
                   {{ _('Make public') }}
                 </button>
               </form>
+              {% endif %}
               {% endif %}
 
               <a href="{{ url_for('admin.export_project', project_slug=p.slug) }}"
