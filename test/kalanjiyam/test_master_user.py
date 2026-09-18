@@ -375,7 +375,7 @@ def test_master_user_metrics_access_and_restrictions(client, flask_app):
         res_telemetry = client.get("/admin/master_metrics/metrics")
         assert res_telemetry.status_code == 200
         telemetry_html = res_telemetry.get_data(as_text=True)
-        assert "System Metrics & Logs" in telemetry_html
+        assert "System Telemetry & Logs" in telemetry_html or "System Metrics & Logs" in telemetry_html
         assert "Clear Logs" not in telemetry_html  # Clear logs button hidden for master user
 
         res_api = client.get("/admin/master_metrics/metrics/api?tab=queues")

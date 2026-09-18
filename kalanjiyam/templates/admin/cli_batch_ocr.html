@@ -249,7 +249,7 @@
           </span>
         </div>
         <p class="text-xs text-slate-500 font-medium mt-0.5">
-          {{ _('Detailed telemetry and per-item performance metrics for batch run.') }}
+          <span class="font-mono text-slate-600" title="{{ selected_job.target_uri }}">{{ selected_job.target_uri }}</span> &bull; {{ _('Detailed telemetry and per-item performance metrics for batch run.') }}
         </p>
       </div>
     </div>
@@ -328,7 +328,18 @@
             {{ it.pages or it.page_count or it.total_pages or '-' }}
           </td>
           <td class="px-4 py-3.5 text-right font-mono text-xs text-slate-800">
-            {{ ('%.2fs'|format(it.time_took_sec or it.processing_time_sec)) if (it.time_took_sec or it.processing_time_sec) is not none else '-' }}
+            {% if it.time_took_sec is defined and it.time_took_sec is not none and it.translation_time_took_sec is defined and it.translation_time_took_sec is not none %}
+              <div>{{ '%.2fs'|format(it.time_took_sec) }} <span class="text-[10px] text-slate-400">(OCR)</span></div>
+              <div>{{ '%.2fs'|format(it.translation_time_took_sec) }} <span class="text-[10px] text-indigo-500">(Trans)</span></div>
+            {% elif it.time_took_sec is defined and it.time_took_sec is not none %}
+              {{ '%.2fs'|format(it.time_took_sec) }}
+            {% elif it.translation_time_took_sec is defined and it.translation_time_took_sec is not none %}
+              {{ '%.2fs'|format(it.translation_time_took_sec) }}
+            {% elif it.processing_time_sec is defined and it.processing_time_sec is not none %}
+              {{ '%.2fs'|format(it.processing_time_sec) }}
+            {% else %}
+              -
+            {% endif %}
           </td>
           <td class="px-4 py-3.5 text-xs text-slate-500 truncate max-w-sm">
             {{ it.error_message or '-' }}

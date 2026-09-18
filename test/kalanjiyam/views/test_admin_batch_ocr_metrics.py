@@ -320,3 +320,71 @@ def test_batch_ocr_csv_exports(superadmin_client, setup_batch_jobs_with_metrics)
     assert "Item ID,Name / File Path,Page Number,Engine" in resp_pages.text
     assert "doc1.pdf,1" in resp_pages.text or "doc1.pdf" in resp_pages.text
 
+
+def test_batch_ocr_latency_rendering_null_and_translation(flask_app, setup_batch_jobs_with_metrics):
+    admin_id = setup_batch_jobs_with_metrics["admin_id"]
+    project_id = setup_batch_jobs_with_metrics["project_id"]
+    with flask_app.app_context():
+        session = get_session()
+        # Create a job with items having None latency, translation latency, and both
+        job = BatchJob(
+            target_uri="ui://project/test-latency-rendering",
+            job_type="UI_BATCH_OCR",
+            status="COMPLETED",
+            created_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+        )
+        session.add(job)
+        session.flush()
+
+        # Item 1: None latency (failed / no latency) - triggers UndefinedError if not handled safely
+        item_none = BatchItem(
+            job_id=job.id,
+            project_id=project_id,
+            file_path="failed_doc.pdf",
+            total_pages=5,
+            total_ocr_latency_ms=None,
+            total_translation_latency_ms=None,
+            status="FAILED",
+            error_message="Failed before OCR",
+        )
+        # Item 2: Translation latency only
+        item_trans = BatchItem(
+            job_id=job.id,
+            project_id=project_id,
+            file_path="trans_doc.pdf",
+            total_pages=3,
+            total_ocr_latency_ms=None,
+            total_translation_latency_ms=4500.0,
+            status="COMPLETED",
+        )
+        # Item 3: Both OCR and translation latency
+        item_both = BatchItem(
+            job_id=job.id,
+            project_id=project_id,
+            file_path="both_doc.pdf",
+            total_pages=2,
+            total_ocr_latency_ms=3200.0,
+            total_translation_latency_ms=1800.0,
+            status="COMPLETED",
+        )
+        session.add_all([item_none, item_trans, item_both])
+        session.commit()
+        job_id = job.id
+
+    session = get_session()
+    org_client = flask_app.test_client(user=session.query(db.User).get(admin_id))
+    resp = org_client.get(f"{ORG_BATCH_OCR}/{job_id}")
+    assert resp.status_code == 200
+    html = resp.text
+    assert "failed_doc.pdf" in html
+    assert "Failed" in html
+    assert "trans_doc.pdf" in html
+    assert "4.50s" in html
+    assert "both_doc.pdf" in html
+    assert "3.20s" in html
+    assert "(OCR)" in html
+    assert "1.80s" in html
+    assert "(Trans)" in html
+
+

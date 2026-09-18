@@ -1765,6 +1765,7 @@ class PlatformView(AdminBaseView):
                 "pages": pages,
                 "time_took_sec": round(time_sec, 2) if time_sec is not None else None,
                 "translation_time_took_sec": round(trans_time_sec, 2) if trans_time_sec is not None else None,
+                "processing_time_sec": round(time_sec or trans_time_sec, 2) if (time_sec is not None or trans_time_sec is not None) else None,
                 "avg_per_page_sec": round(avg_per_page_sec, 2) if avg_per_page_sec is not None else None,
                 "avg_trans_per_page_sec": round(avg_trans_per_page_sec, 2) if avg_trans_per_page_sec is not None else None,
                 "status": item.status,
@@ -3774,6 +3775,7 @@ class OrgAdminView(AdminBaseView):
                 "pages": pages,
                 "time_took_sec": round(time_sec, 2) if time_sec is not None else None,
                 "translation_time_took_sec": round(trans_time_sec, 2) if trans_time_sec is not None else None,
+                "processing_time_sec": round(time_sec or trans_time_sec, 2) if (time_sec is not None or trans_time_sec is not None) else None,
                 "avg_per_page_sec": round(avg_per_page_sec, 2) if avg_per_page_sec is not None else None,
                 "avg_trans_per_page_sec": round(avg_trans_per_page_sec, 2) if avg_trans_per_page_sec is not None else None,
                 "status": item.status,
@@ -4505,6 +4507,11 @@ class MasterMetricsView(AdminBaseView):
                 "translation_time_took_sec": (
                     round(trans_time_sec, 2)
                     if trans_time_sec is not None
+                    else None
+                ),
+                "processing_time_sec": (
+                    round(time_sec or trans_time_sec, 2)
+                    if (time_sec is not None or trans_time_sec is not None)
                     else None
                 ),
                 "avg_per_page_sec": (
