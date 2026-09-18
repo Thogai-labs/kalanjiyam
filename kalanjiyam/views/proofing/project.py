@@ -502,6 +502,11 @@ def edit(slug):
             abort(403)
 
     form = EditMetadataForm(obj=project_)
+    if not current_app.config.get("ENABLE_BOOKS", True):
+        form._fields.pop("is_publicly_viewable", None)
+        if hasattr(form, "is_publicly_viewable"):
+            delattr(form, "is_publicly_viewable")
+
     if request.method == "GET":
         form.condition_tags.data = json.dumps(project_.condition_tag_list)
 

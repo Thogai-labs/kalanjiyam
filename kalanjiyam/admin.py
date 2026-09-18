@@ -3057,17 +3057,20 @@ class GroupsView(AdminBaseView):
                     q.remove_project_from_group(project_id=project_id, group_id=id)
                     flash("Project removed from group.", "success")
             elif action == "set_project_public":
-                project_id = request.form.get("project_id", type=int)
-                is_public = request.form.get("is_public") == "1"
-                if project_id:
-                    updated = q.set_project_publicly_viewable(
-                        project_id=project_id, group_id=id, is_public=is_public
-                    )
-                    if updated is None:
-                        flash("Book not found in this organization.", "error")
-                    else:
-                        label = "public on /books/" if is_public else "organization-only"
-                        flash(f'"{updated.display_title}" is now {label}.', "success")
+                if not current_app.config.get("ENABLE_BOOKS", True):
+                    flash("Public books are currently disabled.", "error")
+                else:
+                    project_id = request.form.get("project_id", type=int)
+                    is_public = request.form.get("is_public") == "1"
+                    if project_id:
+                        updated = q.set_project_publicly_viewable(
+                            project_id=project_id, group_id=id, is_public=is_public
+                        )
+                        if updated is None:
+                            flash("Book not found in this organization.", "error")
+                        else:
+                            label = "public on /books/" if is_public else "organization-only"
+                            flash(f'"{updated.display_title}" is now {label}.', "success")
             elif action == "update_user_quotas":
                 default_user_storage_mb = request.form.get("default_user_storage_mb")
                 default_user_ocr_limit = request.form.get("default_user_ocr_limit")
@@ -3220,17 +3223,20 @@ class OrgAdminView(AdminBaseView):
                     q.remove_project_from_group(project_id=project_id, group_id=org.id)
                     flash("Book removed from organization.", "success")
             elif action == "set_project_public":
-                project_id = request.form.get("project_id", type=int)
-                is_public = request.form.get("is_public") == "1"
-                if project_id:
-                    updated = q.set_project_publicly_viewable(
-                        project_id=project_id, group_id=org.id, is_public=is_public
-                    )
-                    if updated is None:
-                        flash("Book not found in this organization.", "error")
-                    else:
-                        label = "public on /books/" if is_public else "organization-only"
-                        flash(f'"{updated.display_title}" is now {label}.', "success")
+                if not current_app.config.get("ENABLE_BOOKS", True):
+                    flash("Public books are currently disabled.", "error")
+                else:
+                    project_id = request.form.get("project_id", type=int)
+                    is_public = request.form.get("is_public") == "1"
+                    if project_id:
+                        updated = q.set_project_publicly_viewable(
+                            project_id=project_id, group_id=org.id, is_public=is_public
+                        )
+                        if updated is None:
+                            flash("Book not found in this organization.", "error")
+                        else:
+                            label = "public on /books/" if is_public else "organization-only"
+                            flash(f'"{updated.display_title}" is now {label}.', "success")
             elif action == "update_org_name":
                 new_name = (request.form.get("name") or "").strip()
                 if not new_name:
@@ -5061,6 +5067,18 @@ class ProjectView(BaseView):
     }
     form_columns = ["slug", "display_title", "is_publicly_viewable", "description"]
     form_excluded_columns = ["creator", "board", "pages", "created_at", "updated_at"]
+
+    def get_list_columns(self):
+        columns = super().get_list_columns()
+        if not current_app.config.get("ENABLE_BOOKS", True):
+            return [c for c in columns if c[0] != "is_publicly_viewable"]
+        return columns
+
+    def scaffold_form(self):
+        form_class = super().scaffold_form()
+        if not current_app.config.get("ENABLE_BOOKS", True) and hasattr(form_class, "is_publicly_viewable"):
+            delattr(form_class, "is_publicly_viewable")
+        return form_class
 
 
 class ReportedIssueView(BaseView):

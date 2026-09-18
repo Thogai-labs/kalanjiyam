@@ -80,6 +80,9 @@
 <nav class="mb-6">
   <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Site') }}</h2>
   <ul class="space-y-1">
+    {% if config.ENABLE_BOOKS %}
+    {{ _nav_link('public.books.index', 'books', _('Books'), active == 'books', icon_name='book') }}
+    {% endif %}
     {{ _nav_link('proofing.index', 'proofing', _('Proofing'), active == 'proofing', icon_name='check-square') }}
     {{ _nav_link('site.index', 'home', _('Home'), active == 'home', icon_name='home') }}
   </ul>
@@ -110,6 +113,9 @@
 <nav>
   <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Site') }}</h2>
   <ul class="space-y-1">
+    {% if config.ENABLE_BOOKS %}
+    {{ _nav_link('public.books.index', 'books', _('Books'), active == 'books', icon_name='book') }}
+    {% endif %}
     {{ _nav_link('proofing.index', 'proofing', _('Proofing'), active == 'proofing', icon_name='check-square') }}
     {{ _nav_link('site.index', 'home', _('Home'), active == 'home', icon_name='home') }}
   </ul>

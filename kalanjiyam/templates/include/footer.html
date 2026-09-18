@@ -41,12 +41,11 @@
       </div>
 
       <div class="flex flex-wrap flex-1 justify-end">
-          {{ _column(url_for('site.index'), _('Project'), [
-              (url_for('proofing.index'), _('Proofing')),
-              (url_for('about.contact'), _('Contact')),
-          ] if (config.ENABLE_GUEST_ACCESS or current_user.is_authenticated) else [
-              (url_for('about.contact'), _('Contact')),
-          ]) }}
+          {{ _column(url_for('site.index'), _('Project'), (
+              ([(url_for('public.books.index'), _('Books'))] if config.ENABLE_BOOKS else []) +
+              ([(url_for('proofing.index'), _('Proofing'))] if (config.ENABLE_GUEST_ACCESS or current_user.is_authenticated) else []) +
+              [(url_for('about.contact'), _('Contact'))]
+          )) }}
 
           {{ _column(url_for("about.index"), _('About'), [
               (url_for('about.mission'), _('Mission')),

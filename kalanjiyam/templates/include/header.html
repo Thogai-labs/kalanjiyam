@@ -148,6 +148,16 @@
         }" @mouseleave="hideCursor()">
 
       {% if config.ENABLE_GUEST_ACCESS or current_user.is_authenticated %}
+      {% if config.ENABLE_BOOKS %}
+      {% set is_books_active = request.blueprint and request.blueprint.startswith('public') %}
+      <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+        @mouseenter="moveCursor($el)">
+        <a class="block px-4 py-2 rounded-full {% if is_books_active %}text-white{% else %}text-slate-900{% endif %}" {%
+          if is_books_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+          href="{{ url_for('public.books.index') }}">{{ _('Library') }}</a>
+      </li>
+      {% endif %}
+
       <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
         @mouseenter="moveCursor($el)">
         <a class="block px-4 py-2 rounded-full {% if is_search_active %}text-white{% else %}text-slate-900{% endif %}" {%
@@ -578,6 +588,21 @@
         </div>
         <ul class="space-y-1 list-none p-0 m-0">
           {% if config.ENABLE_GUEST_ACCESS or current_user.is_authenticated %}
+          {% if config.ENABLE_BOOKS %}
+          <!-- Library Item -->
+          {% set is_books_active = request.blueprint and request.blueprint.startswith('public') %}
+          <li>
+            <a href="{{ url_for('public.books.index') }}"
+               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_books_active %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
+               {% if is_books_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
+              <svg class="w-4 h-4 shrink-0 {% if is_books_active %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+              <span>{{ _('Library') }}</span>
+            </a>
+          </li>
+          {% endif %}
+
           <!-- Search Item -->
           <li>
             <a href="{{ url_for('search.index') }}"

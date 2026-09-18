@@ -12,6 +12,13 @@ from kalanjiyam.utils.org_access import is_multi_tenant_enabled
 bp = Blueprint("books", __name__)
 
 
+@bp.before_request
+def check_books_enabled():
+    """Abort with 404 if public books / digital library catalog is disabled."""
+    if not current_app.config.get("ENABLE_BOOKS", True):
+        abort(404)
+
+
 def get_public_projects():
     """Get all projects marked as publicly viewable."""
     session = q.get_session()
