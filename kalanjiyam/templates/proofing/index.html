@@ -122,6 +122,19 @@
             <span>{{ _('Guidelines & Preparation') }}</span>
           </a>
 
+          <!-- Create Folder Action Button -->
+          <button
+            type="button"
+            @click="openCreateFolderModal('current')"
+            class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold text-xs sm:text-sm transition-all shadow-xs shrink-0 cursor-pointer"
+            title="{{ _('Create Folder') }}"
+          >
+            <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path>
+            </svg>
+            <span>{{ _('New Folder') }}</span>
+          </button>
+
           <!-- New Project Action Button -->
           <a href="{{ url_for('proofing.create_project') }}" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-royalblue hover:bg-blue-600 text-white font-semibold text-xs sm:text-sm shadow-md transition-all shrink-0">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -325,46 +338,6 @@
               </select>
             </div>
           </div>
-
-          <!-- Table / Cards / Folder View Mode Toggle -->
-          <div class="flex items-center bg-slate-100 border border-slate-200 rounded-xl p-0.5 shadow-xs shrink-0" role="group" aria-label="{{ _('View Mode') }}">
-            <button
-              type="button"
-              @click="setViewMode('table')"
-              :class="{ 'bg-white text-royalblue font-bold shadow-xs border border-slate-200': viewMode === 'table', 'text-slate-500 hover:text-slate-700 border border-transparent': viewMode !== 'table' }"
-              class="px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-              title="{{ _('Table View') }}"
-            >
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-              </svg>
-              <span class="hidden sm:inline">{{ _('Table') }}</span>
-            </button>
-            <button
-              type="button"
-              @click="setViewMode('cards')"
-              :class="{ 'bg-white text-royalblue font-bold shadow-xs border border-slate-200': viewMode === 'cards', 'text-slate-500 hover:text-slate-700 border border-transparent': viewMode !== 'cards' }"
-              class="px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-              title="{{ _('Cards View') }}"
-            >
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
-              </svg>
-              <span class="hidden sm:inline">{{ _('Cards') }}</span>
-            </button>
-            <button
-              type="button"
-              @click="setViewMode('folder')"
-              :class="{ 'bg-white text-royalblue font-bold shadow-xs border border-slate-200': viewMode === 'folder', 'text-slate-500 hover:text-slate-700 border border-transparent': viewMode !== 'folder' }"
-              class="px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-              title="{{ _('Folder View') }}"
-            >
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
-              </svg>
-              <span class="hidden sm:inline">{{ _('Folder') }}</span>
-            </button>
-          </div>
         </div>
 
         <!-- Active Filter Chips Row (Quick Removal) -->
@@ -451,6 +424,128 @@
     </div>
     {% endif %}
 
+    <!-- Create Folder Modal Dialog -->
+    <div
+      x-show="showCreateFolderModal"
+      x-cloak
+      class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+      @keydown.escape.window="closeCreateFolderModal()"
+    >
+      <div
+        @click.away="closeCreateFolderModal()"
+        class="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 text-left transform transition-all"
+      >
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 shadow-xs">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path>
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-slate-900 leading-none">{{ _('Create New Folder') }}</h3>
+              <p class="text-xs text-slate-500 mt-1">{{ _('Organize your manuscripts into structured folders') }}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            @click="closeCreateFolderModal()"
+            class="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+            aria-label="{{ _('Close') }}"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="py-4 space-y-4">
+          <!-- Target Location Option (if inside a folder) -->
+          <template x-if="folder">
+            <div class="space-y-1.5">
+              <label class="block text-xs font-bold text-slate-700">{{ _('Create Location') }}</label>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <button
+                  type="button"
+                  @click="folderTarget = 'current'"
+                  :class="{ 'bg-royalblue/10 border-royalblue text-royalblue font-bold': folderTarget === 'current', 'bg-slate-50 border-slate-200 text-slate-600': folderTarget !== 'current' }"
+                  class="p-2.5 rounded-xl border text-left transition-all cursor-pointer truncate"
+                >
+                  <span class="block text-[10px] uppercase font-bold text-slate-400">{{ _('Inside Current') }}</span>
+                  <span class="truncate block font-semibold" x-text="folder"></span>
+                </button>
+                <button
+                  type="button"
+                  @click="folderTarget = 'root'"
+                  :class="{ 'bg-royalblue/10 border-royalblue text-royalblue font-bold': folderTarget === 'root', 'bg-slate-50 border-slate-200 text-slate-600': folderTarget !== 'root' }"
+                  class="p-2.5 rounded-xl border text-left transition-all cursor-pointer"
+                >
+                  <span class="block text-[10px] uppercase font-bold text-slate-400">{{ _('Root Level') }}</span>
+                  <span class="block font-semibold">{{ _('All Folders') }}</span>
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Folder Name Input -->
+          <div class="space-y-1.5">
+            <label for="new-folder-name-input" class="block text-xs font-bold text-slate-700">
+              {{ _('Folder Name') }} <span class="text-rose-500">*</span>
+            </label>
+            <div class="relative">
+              <input
+                id="new-folder-name-input"
+                type="text"
+                x-model="newFolderName"
+                @keydown.enter.prevent="submitCreateFolder(false)"
+                placeholder="{{ _('e.g. Novels or 2024/Novels') }}"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-royalblue focus:bg-white transition-all font-medium"
+              />
+            </div>
+            <p class="text-[11px] text-slate-400 leading-tight">
+              {{ _('You can create nested folders by separating with slashes, e.g. "Poetry/Sangam".') }}
+            </p>
+          </div>
+
+          <!-- Live Path Preview -->
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2 text-xs">
+            <span class="text-slate-500 font-medium">{{ _('Path:') }}</span>
+            <span class="font-bold text-royalblue truncate" x-text="computedNewFolderPath || '{{ _('(Enter a name)') }}'"></span>
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            @click="closeCreateFolderModal()"
+            class="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-all cursor-pointer"
+          >
+            {{ _('Cancel') }}
+          </button>
+          <button
+            type="button"
+            @click="submitCreateFolder(true)"
+            :disabled="!newFolderName.trim()"
+            class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
+            title="{{ _('Create folder and immediately upload a project into it') }}"
+          >
+            {{ _('Create & Add Project') }}
+          </button>
+          <button
+            type="button"
+            @click="submitCreateFolder(false)"
+            :disabled="!newFolderName.trim()"
+            class="btn-premium !py-1.5 !px-4 !text-xs disabled:opacity-50 cursor-pointer"
+          >
+            {{ _('Create Folder') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
   </article>
 </div>
 
@@ -467,14 +562,57 @@ function proofingDashboard() {
     order: {{ sort_order|tojson }},
     page: {{ page }},
     perPage: {{ per_page }},
-    viewMode: (typeof localStorage !== 'undefined' && localStorage.getItem('proofing_view_mode')) || 'table',
+    viewMode: 'folder',
+    showCreateFolderModal: false,
+    newFolderName: '',
+    folderTarget: 'current',
     isLoading: false,
     abortController: null,
 
-    setViewMode(mode) {
-      this.viewMode = mode;
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('proofing_view_mode', mode);
+    openCreateFolderModal(target = 'current') {
+      this.folderTarget = target;
+      this.newFolderName = '';
+      this.showCreateFolderModal = true;
+      this.$nextTick(() => {
+        const input = document.getElementById('new-folder-name-input');
+        if (input) input.focus();
+      });
+    },
+
+    closeCreateFolderModal() {
+      this.showCreateFolderModal = false;
+      this.newFolderName = '';
+    },
+
+    get computedNewFolderPath() {
+      let name = (this.newFolderName || '').trim().replace(/^\/+|\/+$/g, '');
+      if (!name) {
+        return (this.folderTarget === 'current' && this.folder) ? this.folder : '';
+      }
+      if (this.folderTarget === 'current' && this.folder) {
+        return `${this.folder}/${name}`.replace(/\/+/g, '/');
+      }
+      return name;
+    },
+
+    submitCreateFolder(andAddProject = false) {
+      let name = (this.newFolderName || '').trim().replace(/^\/+|\/+$/g, '');
+      if (!name) return;
+
+      let targetPath = name;
+      if (this.folderTarget === 'current' && this.folder) {
+        targetPath = `${this.folder}/${name}`;
+      }
+      targetPath = targetPath.replace(/\/+/g, '/').replace(/^\/+|\/+$/g, '');
+      if (!targetPath) return;
+
+      this.closeCreateFolderModal();
+
+      if (andAddProject) {
+        const createUrl = '{{ url_for("proofing.create_project") }}?folder=' + encodeURIComponent(targetPath);
+        window.location.href = createUrl;
+      } else {
+        this.setFolder(targetPath);
       }
     },
 
