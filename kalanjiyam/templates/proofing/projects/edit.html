@@ -96,17 +96,104 @@
         {{ mf.field(form.display_title) }}
         {{ mf.field(form.genre) }}
 
-        <div class="my-4">
-          {{ mf.label(form.folder.label) }}
-          {{ form.folder(class_="modern-input block w-full", list="available-folders", placeholder=_("e.g. Literature/Poetry or Philosophy")) }}
-          {% if available_folders %}
-          <datalist id="available-folders">
-            {% for f in available_folders %}
-            <option value="{{ f }}">
-            {% endfor %}
-          </datalist>
-          {% endif %}
-          <p class="text-[11px] text-slate-400 mt-1 font-medium">{{ _('Use "/" for nested folders (e.g. Literature/Poetry or Philosophy/Nyaya).') }}</p>
+        <!-- Folder selector (Google Drive style) -->
+        <div class="my-4" x-data="{
+          selectedFolder: {{ (form.folder.data or '')|tojson }},
+          isCreatingNew: false,
+          newFolderName: '',
+          availableFolders: {{ available_folders|tojson }},
+          init() {
+            if (this.selectedFolder && !this.availableFolders.includes(this.selectedFolder)) {
+              this.availableFolders.push(this.selectedFolder);
+            }
+          },
+          onSelect(val) {
+            if (val === '__new__') {
+              this.isCreatingNew = true;
+              this.newFolderName = '';
+              this.$nextTick(() => {
+                const el = document.getElementById('edit-inline-new-folder-input');
+                if (el) el.focus();
+              });
+            } else {
+              this.isCreatingNew = false;
+              this.selectedFolder = val;
+            }
+          },
+          applyNewFolder() {
+            const name = (this.newFolderName || '').trim().replace(/^\/+|\/+$/g, '');
+            if (name) {
+              if (!this.availableFolders.includes(name)) {
+                this.availableFolders.push(name);
+              }
+              this.selectedFolder = name;
+            } else {
+              this.selectedFolder = '';
+            }
+            this.isCreatingNew = false;
+          },
+          cancelNewFolder() {
+            this.isCreatingNew = false;
+          }
+        }">
+          <label for="edit_project_folder_select" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+            </svg>
+            <span>{{ _('Folder') }}</span>
+            <span class="text-[10px] text-slate-400 font-normal lowercase">({{ _('optional') }})</span>
+          </label>
+
+          <!-- Hidden actual form input submitted to Flask backend -->
+          <input type="hidden" name="folder" :value="selectedFolder" />
+
+          <!-- Folder Dropdown Selector -->
+          <div x-show="!isCreatingNew">
+            <select
+              id="edit_project_folder_select"
+              :value="selectedFolder"
+              @change="onSelect($event.target.value)"
+              class="modern-input block w-full cursor-pointer font-semibold"
+            >
+              <option value="">📁 {{ _('Root (No folder / Home)') }}</option>
+              <template x-for="f in availableFolders" :key="f">
+                <option :value="f" :selected="f === selectedFolder" x-text="'📁 ' + f"></option>
+              </template>
+              <option value="__new__">➕ {{ _('Create New Folder...') }}</option>
+            </select>
+          </div>
+
+          <!-- Inline New Folder Creator -->
+          <div x-show="isCreatingNew" x-cloak class="space-y-2">
+            <div class="flex items-center gap-1.5">
+              <input
+                id="edit-inline-new-folder-input"
+                type="text"
+                x-model="newFolderName"
+                @keydown.enter.prevent="applyNewFolder()"
+                placeholder="{{ _('Folder name, e.g. Novels') }}"
+                class="flex-1 px-3.5 py-2 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all bg-white font-semibold text-slate-900 placeholder:text-slate-400"
+              />
+              <button
+                type="button"
+                @click="applyNewFolder()"
+                class="px-3.5 py-2 rounded-xl bg-royalblue hover:bg-blue-600 text-white text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
+              >
+                {{ _('Add') }}
+              </button>
+              <button
+                type="button"
+                @click="cancelNewFolder()"
+                class="px-2.5 py-2 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-800 text-xs font-semibold transition-all cursor-pointer shrink-0"
+              >
+                {{ _('Cancel') }}
+              </button>
+            </div>
+          </div>
+
+          <p class="text-[11px] text-slate-400 mt-1 font-medium">
+            {{ _('Choose a destination folder or keep in Root.') }}
+          </p>
         </div>
 
         <div class="my-4">
