@@ -24,6 +24,18 @@ statements = [
 
     "ALTER TABLE proof_projects ADD COLUMN IF NOT EXISTS folder VARCHAR;",
     "ALTER TABLE proof_projects ADD COLUMN IF NOT EXISTS tags JSON;",
+    """CREATE TABLE IF NOT EXISTS proof_folders (
+        id SERIAL PRIMARY KEY,
+        path VARCHAR NOT NULL UNIQUE,
+        name VARCHAR NOT NULL,
+        parent_path VARCHAR NOT NULL DEFAULT '',
+        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+        creator_id INTEGER REFERENCES users(id),
+        fingerprint_id VARCHAR
+    );""",
+    "CREATE INDEX IF NOT EXISTS ix_proof_folders_path ON proof_folders (path);",
+    "CREATE INDEX IF NOT EXISTS ix_proof_folders_parent_path ON proof_folders (parent_path);",
 ]
 
 def main():

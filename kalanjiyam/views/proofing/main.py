@@ -12,6 +12,7 @@ from flask import (
     Blueprint,
     current_app,
     flash,
+    jsonify,
     make_response,
     redirect,
     render_template,
@@ -279,18 +280,11 @@ def index():
     available_condition_tags = sorted(available_condition_tags, key=lambda s: s.lower())
 
     # Collect available folders and project tags across accessible projects
-    available_folders = set()
-    folder_rows = (
-        base_query.with_entities(db.Project.folder)
-        .filter(db.Project.folder.isnot(None), db.Project.folder != "")
-        .all()
+    available_folders = project_utils.get_all_available_folders(
+        session, base_query=base_query
     )
-    for (f_val,) in folder_rows:
-        if f_val and f_val.strip():
-            norm_f = project_utils.normalize_folder_path(f_val)
-            if norm_f:
-                available_folders.add(norm_f)
-    available_folders = sorted(available_folders, key=lambda s: s.lower())
+    has_any_folders = len(available_folders) > 0
+    has_any_items = has_any_projects or has_any_folders
 
     available_project_tags = set()
     tag_rows_proj = (
@@ -426,7 +420,9 @@ def index():
         ]
 
     folder_contents = project_utils.get_folder_contents(
-        all_scope_projects, current_folder=selected_folder
+        all_scope_projects,
+        current_folder=selected_folder,
+        all_known_folders=available_folders,
     )
 
     all_display_projects = list(paginated_projects)
@@ -538,6 +534,8 @@ def index():
         "sort_field": sort_field,
         "sort_order": sort_order,
         "has_any_projects": has_any_projects,
+        "has_any_folders": has_any_folders,
+        "has_any_items": has_any_items,
         "folder_contents": folder_contents,
     }
 
@@ -552,6 +550,179 @@ def index():
         return resp
 
     return render_template("proofing/index.html", **template_kwargs)
+
+
+@bp.route("/folders/create", methods=["POST"])
+def create_folder():
+    """Create a new proofing folder."""
+    data = request.get_json(silent=True) or request.form
+    raw_name = (data.get("name") or data.get("folder_name") or "").strip()
+    raw_parent = (data.get("parent_folder") or data.get("parent") or "").strip()
+
+    if not raw_name:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+            return jsonify({"success": False, "error": "Folder name is required."}), 400
+        flash(_l("Folder name is required."), "danger")
+        return redirect(url_for("proofing.index"))
+
+    clean_name = raw_name.strip().strip("/")
+    if raw_parent:
+        full_path = project_utils.normalize_folder_path(f"{raw_parent}/{clean_name}")
+    else:
+        full_path = project_utils.normalize_folder_path(clean_name)
+
+    if not full_path:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+            return jsonify({"success": False, "error": "Invalid folder name."}), 400
+        flash(_l("Invalid folder name."), "danger")
+        return redirect(url_for("proofing.index"))
+
+    session = q.get_session()
+    existing = session.query(db.ProofFolder).filter_by(path=full_path).first()
+    if existing is not None:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+            return jsonify({"success": False, "error": _l("A folder with this name already exists.")}), 400
+        flash(_l("A folder with this name already exists."), "danger")
+        return redirect(url_for("proofing.index", folder=full_path))
+
+    creator_id = current_user.id if current_user.is_authenticated else None
+    fingerprint_id = (
+        request.cookies.get("device_fingerprint")
+        if not current_user.is_authenticated
+        else None
+    )
+
+    project_utils.ensure_proof_folder(
+        session, full_path, creator_id=creator_id, fingerprint_id=fingerprint_id
+    )
+    session.commit()
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+        return jsonify({
+            "success": True,
+            "folder": full_path,
+            "path": full_path,
+            "name": full_path.split("/")[-1],
+            "parent_folder": raw_parent,
+        })
+
+    flash(_l("Folder created successfully."), "success")
+    return redirect(url_for("proofing.index", folder=full_path))
+
+
+@bp.route("/folders/rename", methods=["POST"])
+def rename_folder():
+    """Rename an existing folder."""
+    data = request.get_json(silent=True) or request.form
+    old_path = project_utils.normalize_folder_path(data.get("old_path", ""))
+    new_name = (data.get("new_name") or "").strip().strip("/")
+
+    if not old_path or not new_name:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+            return jsonify({"success": False, "error": "Old path and new name are required."}), 400
+        flash(_l("Old path and new name are required."), "danger")
+        return redirect(url_for("proofing.index"))
+
+    old_parts = old_path.split("/")
+    parent_path = "/".join(old_parts[:-1])
+    new_path = f"{parent_path}/{new_name}" if parent_path else new_name
+    new_path = project_utils.normalize_folder_path(new_path)
+
+    session = q.get_session()
+    # Update ProofFolder records
+    folders = session.query(db.ProofFolder).filter(
+        or_(
+            db.ProofFolder.path == old_path,
+            db.ProofFolder.path.like(f"{old_path}/%"),
+        )
+    ).all()
+    for f in folders:
+        if f.path == old_path:
+            f.path = new_path
+            f.name = new_name
+            f.parent_path = parent_path
+        elif f.path.startswith(old_path + "/"):
+            remainder = f.path[len(old_path) + 1 :]
+            f.path = f"{new_path}/{remainder}"
+            f_parts = f.path.split("/")
+            f.name = f_parts[-1]
+            f.parent_path = "/".join(f_parts[:-1])
+
+    # Update Project records
+    projects = session.query(db.Project).filter(
+        or_(
+            db.Project.folder == old_path,
+            db.Project.folder.like(f"{old_path}/%"),
+        )
+    ).all()
+    for p in projects:
+        if p.folder == old_path:
+            p.folder = new_path
+        elif p.folder and p.folder.startswith(old_path + "/"):
+            remainder = p.folder[len(old_path) + 1 :]
+            p.folder = f"{new_path}/{remainder}"
+
+    session.commit()
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+        return jsonify({
+            "success": True,
+            "old_path": old_path,
+            "new_path": new_path,
+            "parent_folder": parent_path,
+        })
+
+    flash(_l("Folder renamed successfully."), "success")
+    return redirect(url_for("proofing.index", folder=new_path))
+
+
+@bp.route("/folders/delete", methods=["POST"])
+def delete_folder():
+    """Delete a folder. Projects inside are safely moved to its parent (or root)."""
+    data = request.get_json(silent=True) or request.form
+    target_path = project_utils.normalize_folder_path(
+        data.get("path") or data.get("folder_path") or ""
+    )
+
+    if not target_path:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+            return jsonify({"success": False, "error": "Folder path is required."}), 400
+        flash(_l("Folder path is required."), "danger")
+        return redirect(url_for("proofing.index"))
+
+    parts = target_path.split("/")
+    parent_path = "/".join(parts[:-1])
+
+    session = q.get_session()
+    session.query(db.ProofFolder).filter(
+        or_(
+            db.ProofFolder.path == target_path,
+            db.ProofFolder.path.like(f"{target_path}/%"),
+        )
+    ).delete(synchronize_session=False)
+
+    # Safely move projects to parent_path
+    projects = session.query(db.Project).filter(
+        or_(
+            db.Project.folder == target_path,
+            db.Project.folder.like(f"{target_path}/%"),
+        )
+    ).all()
+    for p in projects:
+        p.folder = parent_path
+
+    session.commit()
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+        return jsonify({
+            "success": True,
+            "folder": target_path,
+            "path": target_path,
+            "parent_folder": parent_path,
+        })
+
+    flash(_l("Folder deleted successfully."), "success")
+    return redirect(url_for("proofing.index", folder=parent_path))
 
 
 @bp.route("/help")
@@ -681,15 +852,7 @@ def create_project():
     if request.method == "GET" and request.args.get("folder"):
         form.folder.data = request.args.get("folder").strip()
 
-    folder_rows = (
-        session.query(db.Project.folder)
-        .filter(db.Project.folder.isnot(None), db.Project.folder != "")
-        .distinct()
-        .all()
-    )
-    available_folders = sorted(
-        {f[0].strip() for f in folder_rows if f[0] and f[0].strip()}
-    )
+    available_folders = project_utils.get_all_available_folders(session)
 
     def _render_create_project():
         return render_template(
@@ -1078,6 +1241,19 @@ def create_project():
         from kalanjiyam.utils.project_utils import normalize_folder_path, normalize_tags
         folder_val = normalize_folder_path(form.folder.data)
         tags_val = normalize_tags(form.tags.data)
+
+        if folder_val:
+            project_utils.ensure_proof_folder(
+                session,
+                folder_val,
+                creator_id=current_user.id if current_user.is_authenticated else None,
+                fingerprint_id=(
+                    request.cookies.get("device_fingerprint")
+                    if not current_user.is_authenticated
+                    else None
+                ),
+            )
+            session.commit()
 
         if is_batch_pdf_upload:
             if not current_user.is_authenticated:

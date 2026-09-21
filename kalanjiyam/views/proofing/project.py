@@ -529,6 +529,17 @@ def edit(slug):
         form.populate_obj(project_)
 
         project_.folder = project_utils.normalize_folder_path(form.folder.data)
+        if project_.folder:
+            project_utils.ensure_proof_folder(
+                session,
+                project_.folder,
+                creator_id=current_user.id if current_user.is_authenticated else None,
+                fingerprint_id=(
+                    request.cookies.get("device_fingerprint")
+                    if not current_user.is_authenticated
+                    else None
+                ),
+            )
         project_.tags = project_utils.normalize_tags(form.tags.data)
         flag_modified(project_, "tags")
 
@@ -550,8 +561,7 @@ def edit(slug):
 
     delete_form = DeleteProjectForm()
     session = q.get_session()
-    folder_rows = session.query(db.Project.folder).filter(db.Project.folder.isnot(None), db.Project.folder != "").distinct().all()
-    available_folders = sorted({f[0].strip() for f in folder_rows if f[0] and f[0].strip()})
+    available_folders = project_utils.get_all_available_folders(session)
 
     return render_template(
         "proofing/projects/edit.html",
@@ -584,6 +594,17 @@ def move_folder(slug):
 
     session = q.get_session()
     project_.folder = norm_folder
+    if norm_folder:
+        project_utils.ensure_proof_folder(
+            session,
+            norm_folder,
+            creator_id=current_user.id if current_user.is_authenticated else None,
+            fingerprint_id=(
+                request.cookies.get("device_fingerprint")
+                if not current_user.is_authenticated
+                else None
+            ),
+        )
     session.commit()
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:

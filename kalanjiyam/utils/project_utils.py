@@ -244,11 +244,16 @@ def normalize_tags(tags: list | str | None) -> list[str]:
     return result
 
 
-def get_folder_contents(all_projects: list, current_folder: str = "") -> dict:
+def get_folder_contents(
+    all_projects: list,
+    current_folder: str = "",
+    all_known_folders: list[str] | set[str] | None = None,
+) -> dict:
     """Calculate breadcrumbs, immediate subfolders with project counts, and direct projects for the given folder level.
 
     :param all_projects: list of Project models or objects with folder_path/folder attributes.
     :param current_folder: normalized folder path of the current level ('' for root).
+    :param all_known_folders: optional list or set of known folder paths (including empty folders).
     :return: dict with:
         - 'current_folder': normalized current path
         - 'breadcrumbs': list of dicts [{'name': '...', 'path': '...'}] from root to current_folder
@@ -274,6 +279,25 @@ def get_folder_contents(all_projects: list, current_folder: str = "") -> dict:
     subfolders_dict = {}
     direct_projects = []
     total_projects_in_scope = 0
+
+    # Initialize subfolders from known folders so empty folders are preserved
+    if all_known_folders:
+        for raw_f in all_known_folders:
+            f_norm = normalize_folder_path(raw_f)
+            if not f_norm:
+                continue
+            if norm_current == "":
+                top_seg = f_norm.split("/")[0]
+                if top_seg not in subfolders_dict:
+                    subfolders_dict[top_seg] = 0
+            else:
+                if f_norm == norm_current:
+                    continue
+                if f_norm.startswith(norm_current + "/"):
+                    rel = f_norm[len(norm_current) + 1 :]
+                    sub_seg = rel.split("/")[0]
+                    if sub_seg not in subfolders_dict:
+                        subfolders_dict[sub_seg] = 0
 
     for project in all_projects:
         p_folder = getattr(project, "folder_path", None)
@@ -314,4 +338,72 @@ def get_folder_contents(all_projects: list, current_folder: str = "") -> dict:
         "direct_projects": direct_projects,
         "total_projects_in_scope": total_projects_in_scope,
     }
+
+
+def get_all_available_folders(session, base_query=None) -> list[str]:
+    """Collect all normalized folder paths from both ProofFolder and Project.folder."""
+    folders = set()
+    from kalanjiyam import database as db
+
+    try:
+        proof_folders = session.query(db.ProofFolder).all()
+        for pf in proof_folders:
+            if pf.path:
+                norm_p = normalize_folder_path(pf.path)
+                if norm_p:
+                    folders.add(norm_p)
+    except Exception:
+        pass
+
+    try:
+        q = base_query if base_query is not None else session.query(db.Project)
+        folder_rows = (
+            q.with_entities(db.Project.folder)
+            .filter(db.Project.folder.isnot(None), db.Project.folder != "")
+            .all()
+        )
+        for (f_val,) in folder_rows:
+            if f_val and f_val.strip():
+                norm_f = normalize_folder_path(f_val)
+                if norm_f:
+                    folders.add(norm_f)
+                    parts = norm_f.split("/")
+                    for i in range(1, len(parts)):
+                        folders.add("/".join(parts[:i]))
+    except Exception:
+        pass
+
+    return sorted(folders, key=lambda s: s.lower())
+
+
+def ensure_proof_folder(session, full_path: str, creator_id=None, fingerprint_id=None):
+    """Ensure that the normalized folder path and all intermediate parents exist in ProofFolder."""
+    norm = normalize_folder_path(full_path)
+    if not norm:
+        return None
+    from kalanjiyam import database as db
+
+    parts = norm.split("/")
+    target_folder = None
+    for i in range(1, len(parts) + 1):
+        sub_p = "/".join(parts[:i])
+        leaf = parts[i - 1]
+        parent_p = "/".join(parts[: i - 1])
+        existing = session.query(db.ProofFolder).filter_by(path=sub_p).first()
+        if not existing:
+            new_f = db.ProofFolder(
+                path=sub_p,
+                name=leaf,
+                parent_path=parent_p,
+                creator_id=creator_id,
+                fingerprint_id=fingerprint_id,
+            )
+            session.add(new_f)
+            if i == len(parts):
+                target_folder = new_f
+        else:
+            if i == len(parts):
+                target_folder = existing
+    return target_folder
+
 

@@ -45,6 +45,34 @@ class OCRComparison(Base):
     project = relationship("Project", backref="ocr_comparisons")
 
 
+class ProofFolder(Base):
+    """A folder in the proofing workspace for organizing projects."""
+
+    __tablename__ = "proof_folders"
+
+    #: Primary key.
+    id = pk()
+    #: Normalized full path of the folder, e.g. "Literature" or "Literature/Poetry".
+    path = Column(String, unique=True, nullable=False, index=True)
+    #: Human-readable folder name, e.g. "Poetry".
+    name = Column(String, nullable=False)
+    #: Parent folder path, e.g. "Literature" (or "" if at root).
+    parent_path = Column(String, nullable=False, default="", index=True)
+    #: Timestamp at which folder was created.
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    #: Timestamp at which folder was last updated.
+    updated_at = Column(DateTime, default=same_as("created_at"), nullable=False)
+    #: Creator of this folder (optional).
+    creator_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=True)
+    #: Device fingerprint (for unregistered users, optional).
+    fingerprint_id = Column(String, nullable=True, index=True)
+
+    creator = relationship("User")
+
+    def __repr__(self):
+        return f"<ProofFolder {self.path}>"
+
+
 class Genre(Base):
     """A text genre.
 

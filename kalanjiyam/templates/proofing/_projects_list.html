@@ -61,7 +61,7 @@
       </span>
       <button
         type="button"
-        @click="openCreateFolderModal('current')"
+        @click="openCreateFolderModal({{ folder_contents.current_folder|tojson }})"
         class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/80 text-xs font-bold transition-all cursor-pointer shadow-xs"
         title="{{ _('Create new folder here') }}"
       >
@@ -97,10 +97,10 @@
     <div class="space-y-2">
       {% for sub in folder_contents.subfolders %}
       <div
-        @click="setFolder('{{ sub.path }}')"
         class="group flex items-center justify-between p-3 sm:p-3.5 bg-white hover:bg-slate-50/90 border border-slate-200/90 hover:border-royalblue/40 rounded-2xl shadow-xs hover:shadow-md transition-all cursor-pointer"
+        @click="setFolder('{{ sub.path }}')"
       >
-        <div class="flex items-center gap-3.5 min-w-0">
+        <div class="flex items-center gap-3.5 min-w-0 flex-1">
           <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-50 group-hover:bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 transition-colors">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
@@ -111,19 +111,89 @@
               {{ sub.name }}
             </span>
             <span class="block text-xs text-slate-400 font-medium">
-              {{ ngettext('%(num)d manuscript', '%(num)d manuscripts', sub.count) }}
+              {% if sub.count == 0 %}
+                <span class="text-slate-400">{{ _('0 manuscripts') }}</span>
+              {% else %}
+                {{ ngettext('%(num)d manuscript', '%(num)d manuscripts', sub.count) }}
+              {% endif %}
             </span>
           </div>
         </div>
 
-        <div class="flex items-center gap-2 shrink-0">
-          <span class="text-xs font-semibold text-slate-400 group-hover:text-royalblue transition-colors hidden sm:inline">
-            {{ _('Open folder') }}
-          </span>
-          <div class="w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-royalblue group-hover:text-white text-slate-500 flex items-center justify-center transition-all">
+        <div class="flex items-center gap-2 shrink-0" @click.stop>
+          <button
+            type="button"
+            @click="setFolder('{{ sub.path }}')"
+            class="text-xs font-semibold text-slate-400 hover:text-royalblue transition-colors hidden sm:inline cursor-pointer"
+          >
+            {{ _('Open') }}
+          </button>
+          <div
+            @click="setFolder('{{ sub.path }}')"
+            class="w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-royalblue group-hover:text-white text-slate-500 flex items-center justify-center transition-all cursor-pointer"
+          >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
             </svg>
+          </div>
+
+          <!-- 3-Dots Folder Menu -->
+          <div class="relative" x-data="{ folderMenuOpen: false }" @click.away="folderMenuOpen = false">
+            <button
+              type="button"
+              @click.stop="folderMenuOpen = !folderMenuOpen"
+              class="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              title="{{ _('Folder options') }}"
+              aria-label="{{ _('Folder options') }}"
+            >
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+              </svg>
+            </button>
+            <div
+              x-show="folderMenuOpen"
+              x-cloak
+              x-transition:enter="transition ease-out duration-100"
+              x-transition:enter-start="transform opacity-0 scale-95"
+              x-transition:enter-end="transform opacity-100 scale-100"
+              x-transition:leave="transition ease-in duration-75"
+              x-transition:leave-start="transform opacity-100 scale-100"
+              x-transition:leave-end="transform opacity-0 scale-95"
+              class="absolute right-0 mt-1.5 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-30 text-xs font-semibold"
+            >
+              <button
+                type="button"
+                @click="folderMenuOpen = false; setFolder('{{ sub.path }}')"
+                class="w-full flex items-center gap-2.5 px-3.5 py-2 text-slate-700 hover:bg-slate-50 hover:text-royalblue text-left cursor-pointer"
+              >
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                <span>{{ _('Open folder') }}</span>
+              </button>
+              <button
+                type="button"
+                @click="folderMenuOpen = false; openRenameFolderModal('{{ sub.path }}', {{ sub.name|tojson }})"
+                class="w-full flex items-center gap-2.5 px-3.5 py-2 text-slate-700 hover:bg-slate-50 hover:text-royalblue text-left cursor-pointer"
+              >
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                <span>{{ _('Rename…') }}</span>
+              </button>
+              <a
+                href="{{ url_for('proofing.create_project') }}?folder={{ sub.path|urlencode }}"
+                class="flex items-center gap-2.5 px-3.5 py-2 text-slate-700 hover:bg-slate-50 hover:text-royalblue"
+              >
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <span>{{ _('New manuscript here') }}</span>
+              </a>
+              <div class="h-px bg-slate-100 my-1"></div>
+              <button
+                type="button"
+                @click="folderMenuOpen = false; openDeleteFolderModal('{{ sub.path }}', {{ sub.name|tojson }}, {{ sub.count }})"
+                class="w-full flex items-center gap-2.5 px-3.5 py-2 text-rose-600 hover:bg-rose-50 text-left cursor-pointer"
+              >
+                <svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                <span>{{ _('Delete') }}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -449,19 +519,19 @@
     <div class="flex items-center justify-center gap-2.5">
       <button
         type="button"
-        @click="openCreateFolderModal('current')"
+        @click="openCreateFolderModal({{ folder_contents.current_folder|tojson }})"
         class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-semibold text-xs transition-all shadow-xs cursor-pointer"
       >
         <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path>
         </svg>
-        <span>{{ _('Create Subfolder') }}</span>
+        <span>{{ _('Create Subfolder') if folder_contents.current_folder else _('New Folder') }}</span>
       </button>
       <a
         href="{{ url_for('proofing.create_project') }}{% if folder_contents.current_folder %}?folder={{ folder_contents.current_folder|urlencode }}{% endif %}"
         class="btn-premium !text-xs !py-1.5 !px-3.5"
       >
-        {{ _('Create Project Here') }}
+        {{ _('New in folder') if folder_contents.current_folder else _('New Project') }}
       </a>
     </div>
   </div>

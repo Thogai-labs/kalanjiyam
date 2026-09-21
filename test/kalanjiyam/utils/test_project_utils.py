@@ -181,3 +181,38 @@ def test_get_folder_contents():
     assert len(nyaya_contents["subfolders"]) == 0
     assert nyaya_contents["total_projects_in_scope"] == 2
 
+
+def test_get_folder_contents_with_empty_folders():
+    class DummyProject:
+        def __init__(self, id, title, folder=""):
+            self.id = id
+            self.title = title
+            self.folder = folder
+            self.folder_path = pu.normalize_folder_path(folder)
+
+    projects = [
+        DummyProject(1, "Project In Novels", folder="Novels/Drama"),
+    ]
+    all_known_folders = ["Novels", "Novels/Drama", "Novels/Poetry", "EmptyRootFolder"]
+
+    root_contents = pu.get_folder_contents(
+        projects, current_folder="", all_known_folders=all_known_folders
+    )
+    assert root_contents["current_folder"] == ""
+    sub_names = [s["name"] for s in root_contents["subfolders"]]
+    assert "EmptyRootFolder" in sub_names
+    assert "Novels" in sub_names
+    sub_map = {s["name"]: s["count"] for s in root_contents["subfolders"]}
+    assert sub_map["EmptyRootFolder"] == 0
+    assert sub_map["Novels"] == 1
+
+    # Check inside Novels
+    novels_contents = pu.get_folder_contents(
+        projects, current_folder="Novels", all_known_folders=all_known_folders
+    )
+    sub_novels = {s["name"]: s["count"] for s in novels_contents["subfolders"]}
+    assert "Poetry" in sub_novels
+    assert sub_novels["Poetry"] == 0
+    assert sub_novels["Drama"] == 1
+
+
