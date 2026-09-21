@@ -16,14 +16,18 @@ from kalanjiyam.utils.storage import (
 def test_key_layout_matches_historical_disk_layout():
     assert project_prefix("my-book") == "projects/open-tenant/my-book/"
     assert pdf_key("my-book") == "projects/open-tenant/my-book/pdf/source.pdf"
-    assert page_image_key("my-book", "12") == "projects/open-tenant/my-book/pages/12.jpg"
+    assert (
+        page_image_key("my-book", "12") == "projects/open-tenant/my-book/pages/12.jpg"
+    )
     assert editor_image_key("my-book", "fig_1a2b.png") == (
         "projects/open-tenant/my-book/images/fig_1a2b.png"
     )
 
     # Test explicit organization slug
     assert project_prefix("my-book", org_slug="ignou") == "projects/ignou/my-book/"
-    assert pdf_key("my-book", org_slug="ignou") == "projects/ignou/my-book/pdf/source.pdf"
+    assert (
+        pdf_key("my-book", org_slug="ignou") == "projects/ignou/my-book/pdf/source.pdf"
+    )
 
 
 class TestLocalStorage:
@@ -78,6 +82,19 @@ class TestLocalStorage:
     def test_rejects_path_traversal(self, storage):
         with pytest.raises(ValueError):
             storage.save("../escape", b"x")
+
+    def test_serve_applies_caching_defaults(self, storage, flask_app):
+        storage.save("projects/p/pages/1.jpg", b"image-content")
+        with flask_app.test_request_context():
+            response = storage.serve("projects/p/pages/1.jpg")
+            assert response.status_code == 200
+            assert response.cache_control.max_age == 604800
+            assert "ETag" in response.headers
+
+        etag = response.headers.get("ETag")
+        with flask_app.test_request_context(headers={"If-None-Match": etag}):
+            res304 = storage.serve("projects/p/pages/1.jpg")
+            assert res304.status_code == 304
 
 
 class TestS3Storage:

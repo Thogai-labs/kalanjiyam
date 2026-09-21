@@ -178,8 +178,18 @@ def page_enhanced_ocr_key(
     return f"projects/{org}/{project_slug}/ocr/enhanced/{engine_tag}/{profile_tag}/{page_slug}.json.gz"
 
 
-# Storage interface
-# -----------------
+def _apply_send_file_cache_defaults(send_file_kwargs: dict) -> dict:
+    """Apply default caching and conditional headers for immutable file serving."""
+    max_age = 604800
+    try:
+        if current_app:
+            max_age = current_app.config.get("SEND_FILE_MAX_AGE_DEFAULT", 604800)
+    except (RuntimeError, AttributeError):
+        pass
+    send_file_kwargs.setdefault("max_age", max_age)
+    send_file_kwargs.setdefault("conditional", True)
+    send_file_kwargs.setdefault("etag", True)
+    return send_file_kwargs
 
 
 class Storage(ABC):
@@ -354,6 +364,7 @@ class LocalStorage(Storage):
         return self._path(key)
 
     def serve(self, key: str, **send_file_kwargs):
+        _apply_send_file_cache_defaults(send_file_kwargs)
         return send_file(self._path(key), **send_file_kwargs)
 
 
@@ -521,6 +532,7 @@ class S3Storage(Storage):
     def serve(self, key: str, **send_file_kwargs):
         if self.public_endpoint_url:
             return redirect(self.presigned_url(key))
+        _apply_send_file_cache_defaults(send_file_kwargs)
         return send_file(self.local_copy(key), **send_file_kwargs)
 
 
