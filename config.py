@@ -548,4 +548,15 @@ def create_config_only_app(config_name: str):
     """
     app = Flask(__name__)
     app.config.from_object(load_config_object(config_name))
+
+    @app.teardown_appcontext
+    def shutdown_session(exception=None):
+        try:
+            import kalanjiyam.queries as queries
+
+            queries.get_session_class().remove()
+        except Exception:
+            pass
+
     return app
+
