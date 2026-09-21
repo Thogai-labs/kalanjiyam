@@ -86,6 +86,33 @@ def test_index_issue_filter_ajax(client):
     assert "X-Total-Projects" in resp.headers
 
 
+def test_index_sorting_and_modes(client):
+    for sort in ("title", "created"):
+        for order in ("asc", "desc"):
+            resp = client.get(f"/proofing/?sort={sort}&order={order}")
+            assert resp.status_code == 200
+
+    for mode in ("ocr", "manual", "all"):
+        resp = client.get(f"/proofing/?mode={mode}")
+        assert resp.status_code == 200
+
+
+def test_index_org_filter(client):
+    resp = client.get("/proofing/?org=non-existent-org")
+    assert resp.status_code == 200
+    resp_ajax = client.get(
+        "/proofing/?org=non-existent-org",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_ajax.status_code == 200
+    assert resp_ajax.headers.get("X-Total-Projects") == "0"
+
+
+def test_index_pagination_bounds(client):
+    resp = client.get("/proofing/?page=999&per_page=10")
+    assert resp.status_code == 200
+
+
 def test_beginners_guide(client):
     resp = client.get("/proofing/help/beginners-guide")
     assert "Beginner's Guide" in resp.text
@@ -113,7 +140,9 @@ def test_recent_changes_pagination(client):
 
 
 def test_recent_changes_filters(client):
-    resp = client.get("/proofing/recent-changes?q=test&start_date=2026-08-01&end_date=2026-08-31&range=30d")
+    resp = client.get(
+        "/proofing/recent-changes?q=test&start_date=2026-08-01&end_date=2026-08-31&range=30d"
+    )
     assert resp.status_code == 200
     assert "Recent Changes" in resp.text
     assert "Activity Stream" in resp.text
@@ -153,8 +182,10 @@ def test_create_project_with_images_post(rama_client):
         ],
     }
 
-    with patch("kalanjiyam.utils.storage.LocalStorage.save"), \
-         patch("kalanjiyam.tasks.projects.create_project.delay") as mock_task:
+    with (
+        patch("kalanjiyam.utils.storage.LocalStorage.save"),
+        patch("kalanjiyam.tasks.projects.create_project.delay") as mock_task,
+    ):
         mock_task.return_value = Mock(id="mock-create-task-id", status="PENDING")
 
         resp = rama_client.post(
@@ -196,7 +227,10 @@ def test_create_project_with_mixed_files_fails(rama_client):
         content_type="multipart/form-data",
     )
     assert resp.status_code == 200
-    assert "When uploading multiple files, all files must be either all images (.jpg, .jpeg, .png, .webp) or all PDFs (.pdf)." in resp.text
+    assert (
+        "When uploading multiple files, all files must be either all images (.jpg, .jpeg, .png, .webp) or all PDFs (.pdf)."
+        in resp.text
+    )
 
 
 def test_talk(client):
@@ -219,7 +253,10 @@ def test_create_project_status_images_and_pdf(client):
     mock_async_images.status = "PENDING"
     mock_async_images.info = {"current": 0, "total": 2, "doc_type": "images"}
 
-    with patch("kalanjiyam.tasks.projects.create_project.AsyncResult", return_value=mock_async_images):
+    with patch(
+        "kalanjiyam.tasks.projects.create_project.AsyncResult",
+        return_value=mock_async_images,
+    ):
         resp = client.get("/proofing/status/dummy-images-task-id")
         assert resp.status_code == 200
         assert "Starting image processing..." in resp.text
@@ -228,7 +265,10 @@ def test_create_project_status_images_and_pdf(client):
 
     # 2. Status PROGRESS for doc_type="images"
     mock_async_images.status = "PROGRESS"
-    with patch("kalanjiyam.tasks.projects.create_project.AsyncResult", return_value=mock_async_images):
+    with patch(
+        "kalanjiyam.tasks.projects.create_project.AsyncResult",
+        return_value=mock_async_images,
+    ):
         resp = client.get("/proofing/status/dummy-images-task-id")
         assert resp.status_code == 200
         assert "Processing Images..." in resp.text
@@ -240,7 +280,10 @@ def test_create_project_status_images_and_pdf(client):
     mock_async_pdf.status = "PENDING"
     mock_async_pdf.info = {"current": 0, "total": 10, "doc_type": "pdf"}
 
-    with patch("kalanjiyam.tasks.projects.create_project.AsyncResult", return_value=mock_async_pdf):
+    with patch(
+        "kalanjiyam.tasks.projects.create_project.AsyncResult",
+        return_value=mock_async_pdf,
+    ):
         resp = client.get("/proofing/status/dummy-pdf-task-id")
         assert resp.status_code == 200
         assert "Starting PDF extraction..." in resp.text
@@ -294,8 +337,12 @@ def test_create_project_with_images_post_separate_projects(rama_client):
         ],
     }
 
-    with patch("kalanjiyam.utils.storage.LocalStorage.save"), \
-         patch("kalanjiyam.tasks.projects.create_batch_image_projects.apply_async") as mock_batch_task:
+    with (
+        patch("kalanjiyam.utils.storage.LocalStorage.save"),
+        patch(
+            "kalanjiyam.tasks.projects.create_batch_image_projects.apply_async"
+        ) as mock_batch_task,
+    ):
         mock_batch_task.return_value = Mock(id="mock-batch-task-id", status="PENDING")
 
         resp = rama_client.post(
@@ -343,6 +390,7 @@ def test_create_project_with_multiple_pdfs_post(rama_client):
     """Test that uploading multiple PDFs creates separate projects and dispatches Celery task with PRIORITY_BATCH."""
     import io
     from unittest.mock import Mock, patch
+
     import kalanjiyam.database as db
     import kalanjiyam.queries as q
     from kalanjiyam.tasks import PRIORITY_BATCH
@@ -362,8 +410,12 @@ def test_create_project_with_multiple_pdfs_post(rama_client):
         ],
     }
 
-    with patch("kalanjiyam.utils.storage.LocalStorage.save"), \
-         patch("kalanjiyam.tasks.projects.create_batch_pdf_projects.apply_async") as mock_batch_task:
+    with (
+        patch("kalanjiyam.utils.storage.LocalStorage.save"),
+        patch(
+            "kalanjiyam.tasks.projects.create_batch_pdf_projects.apply_async"
+        ) as mock_batch_task,
+    ):
         mock_batch_task.return_value = Mock(id="mock-batch-pdf-id", status="PENDING")
 
         resp = rama_client.post(
@@ -393,21 +445,38 @@ def test_create_project_status_batch_images(client):
     mock_async_batch.status = "PROGRESS"
     mock_async_batch.info = {"current": 2, "total": 5, "doc_type": "batch_images"}
 
-    with patch("kalanjiyam.tasks.projects.create_project.AsyncResult", return_value=mock_async_batch):
+    with patch(
+        "kalanjiyam.tasks.projects.create_project.AsyncResult",
+        return_value=mock_async_batch,
+    ):
         resp = client.get("/proofing/status/dummy-batch-task-id")
         assert resp.status_code == 200
         assert "Creating Projects..." in resp.text
-        assert "Created <span class=\"text-slate-900\">2</span> of <span class=\"text-slate-900\">5</span> projects" in resp.text
+        assert (
+            'Created <span class="text-slate-900">2</span> of <span class="text-slate-900">5</span> projects'
+            in resp.text
+        )
 
     # 2. Status SUCCESS for doc_type="batch_images"
     mock_async_batch.status = "SUCCESS"
-    mock_async_batch.info = {"current": 5, "total": 5, "slug": None, "doc_type": "batch_images"}
+    mock_async_batch.info = {
+        "current": 5,
+        "total": 5,
+        "slug": None,
+        "doc_type": "batch_images",
+    }
 
-    with patch("kalanjiyam.tasks.projects.create_project.AsyncResult", return_value=mock_async_batch):
+    with patch(
+        "kalanjiyam.tasks.projects.create_project.AsyncResult",
+        return_value=mock_async_batch,
+    ):
         resp = client.get("/proofing/status/dummy-batch-task-id")
         assert resp.status_code == 200
         assert "Projects Created!" in resp.text
-        assert "All 5 projects have been created and are ready for proofreading." in resp.text
+        assert (
+            "All 5 projects have been created and are ready for proofreading."
+            in resp.text
+        )
         assert "View Projects on Dashboard" in resp.text
 
 
@@ -420,32 +489,53 @@ def test_create_project_status_batch_pdfs(client):
     mock_async_batch.status = "PROGRESS"
     mock_async_batch.info = {"current": 2, "total": 5, "doc_type": "batch_pdfs"}
 
-    with patch("kalanjiyam.tasks.projects.create_project.AsyncResult", return_value=mock_async_batch):
+    with patch(
+        "kalanjiyam.tasks.projects.create_project.AsyncResult",
+        return_value=mock_async_batch,
+    ):
         resp = client.get("/proofing/status/dummy-batch-pdf-id")
         assert resp.status_code == 200
         assert "Processing PDFs..." in resp.text
-        assert "We are converting PDF pages to images and creating projects." in resp.text
-        assert "Created <span class=\"text-slate-900\">2</span> of <span class=\"text-slate-900\">5</span> projects" in resp.text
+        assert (
+            "We are converting PDF pages to images and creating projects." in resp.text
+        )
+        assert (
+            'Created <span class="text-slate-900">2</span> of <span class="text-slate-900">5</span> projects'
+            in resp.text
+        )
 
     # 2. Status SUCCESS for doc_type="batch_pdfs"
     mock_async_batch.status = "SUCCESS"
-    mock_async_batch.info = {"current": 5, "total": 5, "slug": None, "doc_type": "batch_pdfs"}
+    mock_async_batch.info = {
+        "current": 5,
+        "total": 5,
+        "slug": None,
+        "doc_type": "batch_pdfs",
+    }
 
-    with patch("kalanjiyam.tasks.projects.create_project.AsyncResult", return_value=mock_async_batch):
+    with patch(
+        "kalanjiyam.tasks.projects.create_project.AsyncResult",
+        return_value=mock_async_batch,
+    ):
         resp = client.get("/proofing/status/dummy-batch-pdf-id")
         assert resp.status_code == 200
         assert "Projects Created!" in resp.text
-        assert "All 5 projects have been created and are ready for proofreading." in resp.text
+        assert (
+            "All 5 projects have been created and are ready for proofreading."
+            in resp.text
+        )
         assert "View Projects on Dashboard" in resp.text
 
     # 3. Status PENDING for doc_type="batch_pdfs"
     mock_async_batch.status = "PENDING"
     mock_async_batch.info = {"doc_type": "batch_pdfs"}
 
-    with patch("kalanjiyam.tasks.projects.create_project.AsyncResult", return_value=mock_async_batch):
+    with patch(
+        "kalanjiyam.tasks.projects.create_project.AsyncResult",
+        return_value=mock_async_batch,
+    ):
         resp = client.get("/proofing/status/dummy-batch-pdf-id")
         assert resp.status_code == 200
         assert "Queueing Task..." in resp.text
         assert "Waiting for the server to start processing your PDFs." in resp.text
         assert "Starting batch PDF processing..." in resp.text
-

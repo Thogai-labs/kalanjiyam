@@ -104,3 +104,39 @@ app.conf.update(
     task_default_exchange="default",
     task_default_routing_key="default",
 )
+
+from celery.signals import task_failure, task_postrun, task_prerun
+
+
+@task_prerun.connect
+def on_task_prerun(*args, **kwargs):
+    """Ensure each task starts with a clean scoped session."""
+    try:
+        from kalanjiyam import queries
+        queries.get_session_class().remove()
+    except Exception:
+        pass
+
+
+@task_postrun.connect
+def on_task_postrun(*args, **kwargs):
+    """Ensure any session opened during task execution is closed/removed."""
+    try:
+        from kalanjiyam import queries
+        queries.get_session_class().remove()
+    except Exception:
+        pass
+
+
+@task_failure.connect
+def on_task_failure(*args, **kwargs):
+    """Ensure any failed task rolls back and removes its session."""
+    try:
+        from kalanjiyam import queries
+        session = queries.get_session()
+        session.rollback()
+        queries.get_session_class().remove()
+    except Exception:
+        pass
+
+

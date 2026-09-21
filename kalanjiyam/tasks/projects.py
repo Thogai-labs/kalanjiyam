@@ -10,6 +10,7 @@ from pathlib import Path
 import fitz
 from PIL import Image, ImageOps
 from slugify import slugify
+from sqlalchemy.exc import IntegrityError
 
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
@@ -110,56 +111,80 @@ def _add_project_to_database(
 
     logging.info(f"Creating project (slug = {slug}) ...")
     session = q.get_session()
-    board = db.Board(title=f"{slug} discussion board")
-    session.add(board)
-    session.flush()
-
-    project = db.Project(
-        slug=slug,
-        display_title=display_title,
-        creator_id=creator_id,
-        fingerprint_id=fingerprint_id,
-    )
-    project.board_id = board.id
-    session.add(project)
-    session.flush()
-
-    logging.info(f"Fetching project and status (slug = {slug}) ...")
-    unreviewed = session.query(db.PageStatus).filter_by(name="reviewed-0").one()
-
-    logging.info(f"Creating {num_pages} Page entries (slug = {slug}) ...")
-    for n in range(1, num_pages + 1):
-        session.add(
-            db.Page(
-                project_id=project.id,
-                slug=str(n),
-                order=n,
-                status_id=unreviewed.id,
-            )
+    existing = session.query(db.Project).filter_by(slug=slug).first()
+    if existing:
+        logging.warning(
+            f"Project with slug '{slug}' already exists in database (id={existing.id}). Reusing."
         )
-    creator = session.query(db.User).filter_by(id=creator_id).first() if creator_id else None
-    # Auto-assign projects to the target or creator's organization for tenant isolation.
-    target_group = None
-    if org_slug and org_slug != "open-tenant":
-        target_group = session.query(db.Group).filter_by(slug=org_slug).first()
-    if not target_group and creator:
-        from kalanjiyam.utils.org_access import user_organization_id
-        creator_org_id = user_organization_id(creator)
-        if creator_org_id:
-            target_group = session.query(db.Group).filter_by(id=creator_org_id).first()
+        return existing
 
-    if target_group:
-        session.add(db.ProjectGroups(group_id=target_group.id, project_id=project.id))
-    elif not creator and fingerprint_id:
-        # Guests default to the open-tenant workspace
-        try:
-            open_tenant = q.get_or_create_open_tenant()
-            session.add(db.ProjectGroups(group_id=open_tenant.id, project_id=project.id))
-        except Exception:
-            pass
-    elif creator and require_org:
-        raise ValueError("Project creator must belong to an organization.")
-    session.commit()
+    try:
+        board = db.Board(title=f"{slug} discussion board")
+        session.add(board)
+        session.flush()
+
+        project = db.Project(
+            slug=slug,
+            display_title=display_title,
+            creator_id=creator_id,
+            fingerprint_id=fingerprint_id,
+        )
+        project.board_id = board.id
+        session.add(project)
+        session.flush()
+
+        logging.info(f"Fetching project and status (slug = {slug}) ...")
+        unreviewed = session.query(db.PageStatus).filter_by(name="reviewed-0").one()
+
+        logging.info(f"Creating {num_pages} Page entries (slug = {slug}) ...")
+        for n in range(1, num_pages + 1):
+            session.add(
+                db.Page(
+                    project_id=project.id,
+                    slug=str(n),
+                    order=n,
+                    status_id=unreviewed.id,
+                )
+            )
+        creator = session.query(db.User).filter_by(id=creator_id).first() if creator_id else None
+        # Auto-assign projects to the target or creator's organization for tenant isolation.
+        target_group = None
+        if org_slug and org_slug != "open-tenant":
+            target_group = session.query(db.Group).filter_by(slug=org_slug).first()
+        if not target_group and creator:
+            from kalanjiyam.utils.org_access import user_organization_id
+            creator_org_id = user_organization_id(creator)
+            if creator_org_id:
+                target_group = session.query(db.Group).filter_by(id=creator_org_id).first()
+
+        if target_group:
+            session.add(db.ProjectGroups(group_id=target_group.id, project_id=project.id))
+        elif not creator and fingerprint_id:
+            # Guests default to the open-tenant workspace
+            try:
+                open_tenant = q.get_or_create_open_tenant()
+                session.add(db.ProjectGroups(group_id=open_tenant.id, project_id=project.id))
+            except Exception:
+                pass
+        elif creator and require_org:
+            raise ValueError("Project creator must belong to an organization.")
+        session.commit()
+        return project
+    except IntegrityError:
+        session.rollback()
+        # Handle concurrent creation race condition
+        existing = session.query(db.Project).filter_by(slug=slug).first()
+        if existing:
+            logging.warning(
+                f"Concurrent creation race detected for slug '{slug}'. Reusing existing project (id={existing.id})."
+            )
+            return existing
+        raise
+    except Exception:
+        session.rollback()
+        raise
+
+
 
 
 def _extract_docx_images(doc, project_slug, storage, org_slug: str = "open-tenant") -> dict:
@@ -641,13 +666,13 @@ def create_project_inner(
     app = create_config_only_app(app_environment)
     with app.app_context():
         session = q.get_session()
-        slug = slugify(display_title)
-        project = session.query(db.Project).filter_by(slug=slug).first()
+        base_slug = slugify(display_title) or "project"
+        slug = base_slug
+        counter = 2
+        while session.query(db.Project).filter_by(slug=slug).first():
+            slug = f"{base_slug}-{counter}"
+            counter += 1
 
-        if project:
-            raise ValueError(
-                f'Project "{display_title}" already exists. Please choose a different title.'
-            )
 
         storage = get_storage()
 

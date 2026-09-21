@@ -83,6 +83,12 @@ class BaseConfig:
     #: https://docs.sqlalchemy.org/en/14/core/engines.html#database-urls
     SQLALCHEMY_DATABASE_URI = _env("SQLALCHEMY_DATABASE_URI")
 
+    #: Database connection pool settings (for PostgreSQL/MySQL).
+    DB_POOL_SIZE = int(_env("DB_POOL_SIZE", "10") or "10")
+    DB_MAX_OVERFLOW = int(_env("DB_MAX_OVERFLOW", "20") or "20")
+    DB_POOL_RECYCLE = int(_env("DB_POOL_RECYCLE", "1800") or "1800")
+    DB_POOL_TIMEOUT = int(_env("DB_POOL_TIMEOUT", "30") or "30")
+
     #: Where to store user uploads (PDFs, images, etc.).
     UPLOAD_FOLDER = _env("FLASK_UPLOAD_FOLDER")
 
@@ -105,50 +111,61 @@ class BaseConfig:
     #: streamed through the app.
     S3_PUBLIC_ENDPOINT_URL = _env("S3_PUBLIC_ENDPOINT_URL")
 
+    #: Default browser cache lifetime (in seconds) for static files and send_file.
+    #: 604800 seconds = 7 days.
+    SEND_FILE_MAX_AGE_DEFAULT = int(
+        _env("SEND_FILE_MAX_AGE_DEFAULT", "604800") or "604800"
+    )
+
     #: If True, library texts (books) are restricted by group: only users in a
     #: group that contains the text (or admins) can view it. Texts not in any
     #: group remain visible to everyone. Set ENFORCE_GROUP_ACCESS_FOR_TEXTS=true
     #: in .env to enable.
-    ENFORCE_GROUP_ACCESS_FOR_TEXTS = (
-        _env("ENFORCE_GROUP_ACCESS_FOR_TEXTS", "false").lower() in ("true", "1", "yes")
-    )
+    ENFORCE_GROUP_ACCESS_FOR_TEXTS = _env(
+        "ENFORCE_GROUP_ACCESS_FOR_TEXTS", "false"
+    ).lower() in ("true", "1", "yes")
 
     #: If True, direct DOCX translation will save all data of the original docx in database.
-    SAVE_DOCX_DIRECT_TR_DATA = (
-        str(_env("SAVE_DOCX_DIRECT_TR_DATA", "false")).lower() in ("true", "1", "yes")
-    )
+    SAVE_DOCX_DIRECT_TR_DATA = str(
+        _env("SAVE_DOCX_DIRECT_TR_DATA", "false")
+    ).lower() in ("true", "1", "yes")
 
     #: If True, uploaded source PDF and DOC/DOCX files older than 7 days will be automatically deleted.
-    AUTO_UPLOADED_FILES_CLEANUP = (
-        str(_env("AUTO_UPLOADED_FILES_CLEANUP", "false")).lower() in ("true", "1", "yes")
-    )
+    AUTO_UPLOADED_FILES_CLEANUP = str(
+        _env("AUTO_UPLOADED_FILES_CLEANUP", "false")
+    ).lower() in ("true", "1", "yes")
 
     #: If True, proofing projects (public books under /books/...) are restricted
     #: by group: only users in a group that contains the project (or admins) can
     #: view it. Projects not in any group remain visible to everyone.
-    ENFORCE_GROUP_ACCESS_FOR_PROJECTS = (
-        _env("ENFORCE_GROUP_ACCESS_FOR_PROJECTS", "false").lower()
-        in ("true", "1", "yes")
-    )
+    ENFORCE_GROUP_ACCESS_FOR_PROJECTS = _env(
+        "ENFORCE_GROUP_ACCESS_FOR_PROJECTS", "false"
+    ).lower() in ("true", "1", "yes")
     #: Master switch for strict organization-based tenancy rules.
-    MULTI_TENANT_MODE = (
-        _env("MULTI_TENANT_MODE", "false").lower() in ("true", "1", "yes")
+    MULTI_TENANT_MODE = _env("MULTI_TENANT_MODE", "false").lower() in (
+        "true",
+        "1",
+        "yes",
     )
     #: If True, enforce org-level access checks across projects/texts when
     #: MULTI_TENANT_MODE is enabled.
-    ENFORCE_ORG_ACCESS = (
-        _env("ENFORCE_ORG_ACCESS", "true").lower() in ("true", "1", "yes")
+    ENFORCE_ORG_ACCESS = _env("ENFORCE_ORG_ACCESS", "true").lower() in (
+        "true",
+        "1",
+        "yes",
     )
     #: If True, newly created projects must be attached to an organization.
-    DEFAULT_PROJECT_REQUIRES_ORG = (
-        _env("DEFAULT_PROJECT_REQUIRES_ORG", "true").lower() in ("true", "1", "yes")
-    )
+    DEFAULT_PROJECT_REQUIRES_ORG = _env(
+        "DEFAULT_PROJECT_REQUIRES_ORG", "true"
+    ).lower() in ("true", "1", "yes")
 
     #: If True, allow guest (unregistered) users to create projects and access features.
     _guest_val = _env("ENABLE_GUEST_ACCESS", None)
     _unreg_val = _env("ENABLE_UNREGISTERED_ACCESS", None)
     if _guest_val is not None and _unreg_val is not None:
-        ENABLE_GUEST_ACCESS = (_guest_val.lower() in ("true", "1", "yes")) and (_unreg_val.lower() in ("true", "1", "yes"))
+        ENABLE_GUEST_ACCESS = (_guest_val.lower() in ("true", "1", "yes")) and (
+            _unreg_val.lower() in ("true", "1", "yes")
+        )
     elif _guest_val is not None:
         ENABLE_GUEST_ACCESS = _guest_val.lower() in ("true", "1", "yes")
     elif _unreg_val is not None:
@@ -159,9 +176,13 @@ class BaseConfig:
 
     #: If True, allow new users to register.
     _reg_val = _env("ENABLE_REGISTERED_ACCESS", None)
-    _reg_user_val = _env("ENABLE_REGISTER_USER", None) or _env("ENABLE_REGISTERED_USER", None)
+    _reg_user_val = _env("ENABLE_REGISTER_USER", None) or _env(
+        "ENABLE_REGISTERED_USER", None
+    )
     if _reg_val is not None and _reg_user_val is not None:
-        ENABLE_REGISTERED_ACCESS = (_reg_val.lower() in ("true", "1", "yes")) and (_reg_user_val.lower() in ("true", "1", "yes"))
+        ENABLE_REGISTERED_ACCESS = (_reg_val.lower() in ("true", "1", "yes")) and (
+            _reg_user_val.lower() in ("true", "1", "yes")
+        )
     elif _reg_val is not None:
         ENABLE_REGISTERED_ACCESS = _reg_val.lower() in ("true", "1", "yes")
     elif _reg_user_val is not None:
@@ -259,13 +280,17 @@ class BaseConfig:
     OCR_SERVICE_TIMEOUT = int(_env("OCR_SERVICE_TIMEOUT", "300") or "300")
 
     #: Base URL of the standalone translation service.
-    TRANSLATION_SERVICE_URL = _env("TRANSLATION_SERVICE_URL", "http://10.195.100.51:4000/v1")
+    TRANSLATION_SERVICE_URL = _env(
+        "TRANSLATION_SERVICE_URL", "http://10.195.100.51:4000/v1"
+    )
 
     #: API key for service-to-service translation requests.
     TRANSLATION_SERVICE_API_KEY = _env("TRANSLATION_SERVICE_API_KEY", "")
 
     #: Timeout in seconds for translation service HTTP requests.
-    TRANSLATION_SERVICE_TIMEOUT = int(_env("TRANSLATION_SERVICE_TIMEOUT", "300") or "300")
+    TRANSLATION_SERVICE_TIMEOUT = int(
+        _env("TRANSLATION_SERVICE_TIMEOUT", "300") or "300"
+    )
 
     #: Base URL for BharatGen translation chat completions API.
     BHARATGEN_TRANSLATION_API_URL = _env(
@@ -284,7 +309,9 @@ class BaseConfig:
     )
 
     #: Optional URL override for llm-gemma translation API (defaults to {OCR_SERVICE_URL}/v1/chat/completions with automatic fallback if /v1/ocr is given).
-    LLM_GEMMA_TRANSLATION_API_URL = _env("LLM_GEMMA_TRANSLATION_API_URL", "http://10.195.100.51:4000/v1/chat/completions")
+    LLM_GEMMA_TRANSLATION_API_URL = _env(
+        "LLM_GEMMA_TRANSLATION_API_URL", "http://10.195.100.51:4000/v1/chat/completions"
+    )
 
     #: Optional API key override for llm-gemma translation (defaults to OCR_SERVICE_API_KEY).
     LLM_GEMMA_TRANSLATION_API_KEY = _env("LLM_GEMMA_TRANSLATION_API_KEY", "")
@@ -297,7 +324,11 @@ class BaseConfig:
     #: Master switch for handsfree voice editing on the proofing page. Off by
     #: default: the feature needs the ``/v1/voice-edit`` agents deployed on the
     #: OCR service host, so it ships dark and is enabled per environment.
-    VOICE_EDIT_ENABLED = _env("VOICE_EDIT_ENABLED", "False").lower() in ("true", "1", "yes")
+    VOICE_EDIT_ENABLED = _env("VOICE_EDIT_ENABLED", "False").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
 
     #: Timeout in seconds for voice-edit HTTP requests. Much shorter than the
     #: OCR/translation timeouts on purpose -- a user is speaking and waiting, so
@@ -376,6 +407,7 @@ class UnitTestConfig(BaseConfig):
     KALANJIYAM_ENVIRONMENT = TESTING
     TESTING = True
     ENABLE_BOOKS = True
+    ENABLE_GUEST_ACCESS = True
     APPLICATION_URL_PREFIX = ""
     STORAGE_BACKEND = "local"
     MULTI_TENANT_MODE = False
@@ -490,7 +522,9 @@ def _validate_config(config: BaseConfig):
 
     if config.KALANJIYAM_ENVIRONMENT == PRODUCTION:
         if not config.SENTRY_DSN:
-            logging.warning("SENTRY_DSN is not set — production errors will not be reported to Sentry.")
+            logging.warning(
+                "SENTRY_DSN is not set — production errors will not be reported to Sentry."
+            )
 
 
 def load_config_object(name: str):
@@ -526,4 +560,15 @@ def create_config_only_app(config_name: str):
     """
     app = Flask(__name__)
     app.config.from_object(load_config_object(config_name))
+
+    @app.teardown_appcontext
+    def shutdown_session(exception=None):
+        try:
+            import kalanjiyam.queries as queries
+
+            queries.get_session_class().remove()
+        except Exception:
+            pass
+
     return app
+
