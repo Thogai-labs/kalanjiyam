@@ -113,6 +113,43 @@ def test_index_pagination_bounds(client):
     assert resp.status_code == 200
 
 
+def test_index_folder_and_tag_filters(client):
+    # Check that query with folder works
+    resp = client.get("/proofing/?folder=Philosophy/Nyaya")
+    assert resp.status_code == 200
+
+    resp_ajax = client.get(
+        "/proofing/?folder=Philosophy/Nyaya",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_ajax.status_code == 200
+    assert "X-Total-Projects" in resp_ajax.headers
+
+    # Check that query with tag works
+    resp_tag = client.get("/proofing/?tag=Manuscript")
+    assert resp_tag.status_code == 200
+
+    resp_tag_ajax = client.get(
+        "/proofing/?tag=Manuscript",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_tag_ajax.status_code == 200
+    assert "X-Total-Projects" in resp_tag_ajax.headers
+
+
+def test_project_model_folder_and_tags():
+    from kalanjiyam import database as db
+    proj = db.Project(
+        slug="folder-test-proj",
+        display_title="Folder Test Project",
+        folder="  Philosophy // Nyaya  ",
+        tags=["Sanskrit", "logic", "Sanskrit"],
+    )
+    assert proj.folder_path == "Philosophy/Nyaya"
+    assert proj.folder_parts == ["Philosophy", "Nyaya"]
+    assert proj.tag_list == ["Sanskrit", "logic"]
+
+
 def test_beginners_guide(client):
     resp = client.get("/proofing/help/beginners-guide")
     assert "Beginner's Guide" in resp.text

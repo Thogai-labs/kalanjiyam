@@ -120,6 +120,12 @@ class Project(Base):
     #: Condition tags / document issues (e.g. shmushing, blurry, torn) with affected pages
     condition_tags = Column(JSON, nullable=True, default=list)
 
+    #: Folder hierarchy path (e.g. "Philosophy/Nyaya", "Literature", etc.)
+    folder = Column(String, nullable=True, index=True, default="")
+
+    #: General project tags / labels (e.g. ["Manuscript", "Vedas", "Urgent"])
+    tags = Column(JSON, nullable=True, default=list)
+
     #: Timestamp at which this project was created.
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     #: Timestamp at which this project was last updated.
@@ -152,6 +158,24 @@ class Project(Base):
         from kalanjiyam.utils.project_utils import normalize_condition_tags
         total = len(self.pages) if self.pages else 0
         return normalize_condition_tags(self.condition_tags, total_pages=total)
+
+    @property
+    def tag_list(self) -> list:
+        """Return project tags as a list of cleaned strings."""
+        from kalanjiyam.utils.project_utils import normalize_tags
+        return normalize_tags(self.tags)
+
+    @property
+    def folder_path(self) -> str:
+        """Return normalized folder path without leading/trailing slashes."""
+        from kalanjiyam.utils.project_utils import normalize_folder_path
+        return normalize_folder_path(self.folder)
+
+    @property
+    def folder_parts(self) -> list:
+        """Return folder path split into individual segment names."""
+        path = self.folder_path
+        return path.split("/") if path else []
 
     @property
     def creator_mode(self) -> str:

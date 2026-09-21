@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 
 
@@ -193,4 +194,124 @@ def get_page_issues_map(condition_tags: list | str | None, total_pages: int = 0)
                     mapping.setdefault(p, []).append(name)
 
     return mapping
+
+
+def normalize_folder_path(folder: str | None) -> str:
+    """Normalize a folder path string.
+
+    Converts backslashes to forward slashes, strips whitespace, collapses duplicate
+    slashes, and removes leading/trailing slashes.
+    Example: '  Philosophy / Nyaya / ' -> 'Philosophy/Nyaya'
+    """
+    if not folder:
+        return ""
+    parts = [p.strip() for p in str(folder).replace("\\", "/").split("/") if p.strip()]
+    return "/".join(parts)
+
+
+def normalize_tags(tags: list | str | None) -> list[str]:
+    """Normalize project tags into a list of unique, non-empty stripped strings.
+
+    Accepts a list of strings, a JSON string, or a comma-separated string.
+    Example: 'Sanskrit, Manuscript, Sanskrit' -> ['Sanskrit', 'Manuscript']
+    """
+    if not tags:
+        return []
+    result = []
+    if isinstance(tags, str):
+        tags_str = tags.strip()
+        if not tags_str:
+            return []
+        try:
+            parsed = json.loads(tags_str)
+            if isinstance(parsed, list):
+                raw_list = parsed
+            else:
+                raw_list = [s.strip() for s in tags_str.split(",") if s.strip()]
+        except Exception:
+            raw_list = [s.strip() for s in tags_str.split(",") if s.strip()]
+    elif isinstance(tags, (list, tuple, set)):
+        raw_list = tags
+    else:
+        raw_list = []
+
+    seen = set()
+    for item in raw_list:
+        clean = str(item).strip()
+        if clean and clean.lower() not in seen:
+            seen.add(clean.lower())
+            result.append(clean)
+    return result
+
+
+def get_folder_contents(all_projects: list, current_folder: str = "") -> dict:
+    """Calculate breadcrumbs, immediate subfolders with project counts, and direct projects for the given folder level.
+
+    :param all_projects: list of Project models or objects with folder_path/folder attributes.
+    :param current_folder: normalized folder path of the current level ('' for root).
+    :return: dict with:
+        - 'current_folder': normalized current path
+        - 'breadcrumbs': list of dicts [{'name': '...', 'path': '...'}] from root to current_folder
+        - 'parent_folder': path of parent level (None if at root)
+        - 'subfolders': list of dicts [{'name': '...', 'path': '...', 'count': int}] sorted alphabetically
+        - 'direct_projects': projects situated directly at current_folder
+        - 'total_projects_in_scope': total projects in this folder and all subfolders
+    """
+    norm_current = normalize_folder_path(current_folder)
+
+    breadcrumbs = [{"name": "All Folders", "path": ""}]
+    if norm_current:
+        segments = norm_current.split("/")
+        for i in range(len(segments)):
+            sub_path = "/".join(segments[: i + 1])
+            breadcrumbs.append({"name": segments[i], "path": sub_path})
+
+    parent_folder = None
+    if norm_current:
+        parent_parts = norm_current.split("/")[:-1]
+        parent_folder = "/".join(parent_parts)
+
+    subfolders_dict = {}
+    direct_projects = []
+    total_projects_in_scope = 0
+
+    for project in all_projects:
+        p_folder = getattr(project, "folder_path", None)
+        if p_folder is None:
+            p_folder = normalize_folder_path(getattr(project, "folder", ""))
+
+        if norm_current == "":
+            total_projects_in_scope += 1
+            if not p_folder:
+                direct_projects.append(project)
+            else:
+                top_seg = p_folder.split("/")[0]
+                subfolders_dict[top_seg] = subfolders_dict.get(top_seg, 0) + 1
+        else:
+            if p_folder == norm_current:
+                direct_projects.append(project)
+                total_projects_in_scope += 1
+            elif p_folder.startswith(norm_current + "/"):
+                total_projects_in_scope += 1
+                rel = p_folder[len(norm_current) + 1 :]
+                sub_seg = rel.split("/")[0]
+                subfolders_dict[sub_seg] = subfolders_dict.get(sub_seg, 0) + 1
+
+    subfolders = [
+        {
+            "name": seg,
+            "path": (f"{norm_current}/{seg}" if norm_current else seg),
+            "count": count,
+        }
+        for seg, count in sorted(subfolders_dict.items(), key=lambda x: x[0].lower())
+    ]
+
+    return {
+        "current_folder": norm_current,
+        "breadcrumbs": breadcrumbs,
+        "parent_folder": parent_folder,
+        "subfolders": subfolders,
+        "direct_projects": direct_projects,
+        "total_projects_in_scope": total_projects_in_scope,
+    }
 

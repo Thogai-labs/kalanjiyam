@@ -95,6 +95,26 @@
       <div class="space-y-4">
         {{ mf.field(form.display_title) }}
         {{ mf.field(form.genre) }}
+
+        <div class="my-4">
+          {{ mf.label(form.folder.label) }}
+          {{ form.folder(class_="modern-input block w-full", list="available-folders", placeholder=_("e.g. Literature/Poetry or Philosophy")) }}
+          {% if available_folders %}
+          <datalist id="available-folders">
+            {% for f in available_folders %}
+            <option value="{{ f }}">
+            {% endfor %}
+          </datalist>
+          {% endif %}
+          <p class="text-[11px] text-slate-400 mt-1 font-medium">{{ _('Use "/" for nested folders (e.g. Literature/Poetry or Philosophy/Nyaya).') }}</p>
+        </div>
+
+        <div class="my-4">
+          {{ mf.label(form.tags.label) }}
+          {{ form.tags(class_="modern-input block w-full", placeholder=_("Comma-separated, e.g. Sanskrit, Manuscript")) }}
+          <p class="text-[11px] text-slate-400 mt-1 font-medium">{{ _('Comma-separated tags (e.g. Sanskrit, Manuscript, Critical Edition).') }}</p>
+        </div>
+
         {{ mf.markdown_field(form.description) }}
         
         {% if config.ENABLE_BOOKS and form.is_publicly_viewable is defined %}

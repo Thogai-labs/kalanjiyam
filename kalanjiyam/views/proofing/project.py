@@ -134,6 +134,18 @@ class EditMetadataForm(FlaskForm):
         },
     )
     condition_tags = HiddenField(_l("Condition tags"))
+    folder = StringField(
+        _l("Folder / Category"),
+        render_kw={
+            "placeholder": _l("e.g. Literature/Poetry or Philosophy"),
+        },
+    )
+    tags = StringField(
+        _l("Tags"),
+        render_kw={
+            "placeholder": _l("Comma-separated tags, e.g. Sanskrit, Manuscript"),
+        },
+    )
     genre = QuerySelectField(
         query_factory=q.genres, allow_blank=True, blank_text=_l("(none)")
     )
@@ -509,10 +521,16 @@ def edit(slug):
 
     if request.method == "GET":
         form.condition_tags.data = json.dumps(project_.condition_tag_list)
+        form.folder.data = project_.folder or ""
+        form.tags.data = ", ".join(project_.tag_list) if project_.tag_list else ""
 
     if form.validate_on_submit():
         session = q.get_session()
         form.populate_obj(project_)
+
+        project_.folder = project_utils.normalize_folder_path(form.folder.data)
+        project_.tags = project_utils.normalize_tags(form.tags.data)
+        flag_modified(project_, "tags")
 
         raw_tags = request.form.get("condition_tags") or form.condition_tags.data
         project_.condition_tags = project_utils.normalize_condition_tags(
@@ -531,12 +549,17 @@ def edit(slug):
         return redirect(url_for("proofing.project.summary", slug=slug))
 
     delete_form = DeleteProjectForm()
+    session = q.get_session()
+    folder_rows = session.query(db.Project.folder).filter(db.Project.folder.isnot(None), db.Project.folder != "").distinct().all()
+    available_folders = sorted({f[0].strip() for f in folder_rows if f[0] and f[0].strip()})
+
     return render_template(
         "proofing/projects/edit.html",
         project=project_,
         form=form,
         delete_form=delete_form,
         supported_engines=SUPPORTED_ENGINES,
+        available_folders=available_folders,
     )
 
 

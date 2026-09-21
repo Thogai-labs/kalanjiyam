@@ -33,6 +33,7 @@ from kalanjiyam import queries as q
 from kalanjiyam.enums import SitePageStatus
 from kalanjiyam.tasks import PRIORITY_BATCH, PRIORITY_LOW
 from kalanjiyam.tasks import projects as project_tasks
+from kalanjiyam.utils import project_utils
 from kalanjiyam.utils.quotas import ensure_storage_quota_for_user
 from kalanjiyam.views.proofing.decorators import moderator_required
 
@@ -164,6 +165,18 @@ class CreateProjectForm(FlaskForm):
             )
         ],
     )
+    folder = StringField(
+        _l("Folder (optional)"),
+        render_kw={
+            "placeholder": _l("e.g. Literature/Poetry or Philosophy"),
+        },
+    )
+    tags = StringField(
+        _l("Tags (optional)"),
+        render_kw={
+            "placeholder": _l("Comma-separated tags, e.g. Sanskrit, Manuscript"),
+        },
+    )
     group_images = BooleanField(
         _l("Group into one project"),
         default=True,
@@ -196,6 +209,8 @@ def index():
     selected_org = (request.args.get("org", "all")).strip()
     sort_field = (request.args.get("sort", "created")).strip().lower()
     sort_order = (request.args.get("order", "desc")).strip().lower()
+    selected_folder = (request.args.get("folder", "")).strip()
+    selected_tag = (request.args.get("tag", "")).strip()
 
     # Parse single or multiple condition issue filters
     raw_issues = request.args.getlist("issue")
@@ -263,6 +278,31 @@ def index():
                     available_condition_tags.add(t_name.strip())
     available_condition_tags = sorted(available_condition_tags, key=lambda s: s.lower())
 
+    # Collect available folders and project tags across accessible projects
+    available_folders = set()
+    folder_rows = (
+        base_query.with_entities(db.Project.folder)
+        .filter(db.Project.folder.isnot(None), db.Project.folder != "")
+        .all()
+    )
+    for (f_val,) in folder_rows:
+        if f_val and f_val.strip():
+            norm_f = project_utils.normalize_folder_path(f_val)
+            if norm_f:
+                available_folders.add(norm_f)
+    available_folders = sorted(available_folders, key=lambda s: s.lower())
+
+    available_project_tags = set()
+    tag_rows_proj = (
+        base_query.with_entities(db.Project.tags)
+        .filter(db.Project.tags.isnot(None))
+        .all()
+    )
+    for (t_val,) in tag_rows_proj:
+        for t_item in project_utils.normalize_tags(t_val):
+            available_project_tags.add(t_item)
+    available_project_tags = sorted(available_project_tags, key=lambda s: s.lower())
+
     query = base_query
 
     # 4. Filter by organization if specified
@@ -272,6 +312,15 @@ def index():
     # 5. Filter by creator mode if specified
     if selected_mode and selected_mode != "all":
         query = query.filter(db.Project.creator_mode == selected_mode)
+
+    # 5b. Filter by folder if specified
+    if selected_folder:
+        query = query.filter(
+            or_(
+                db.Project.folder == selected_folder,
+                db.Project.folder.like(f"{selected_folder}/%"),
+            )
+        )
 
     # 6. Full tenant search filtering (matching display_title, print_title, author, or slug)
     if search_query:
@@ -297,22 +346,30 @@ def index():
     else:
         query = query.order_by(order_col.asc(), db.Project.id.asc())
 
-    # 8. Server-side pagination
-    if selected_issues:
-        selected_issues_lower = {i.lower() for i in selected_issues}
+    # 8. Server-side pagination and filtering
+    if selected_issues or selected_tag:
         candidates = (
-            query.filter(db.Project.condition_tags.isnot(None))
-            .options(orm.selectinload(db.Project.groups))
+            query.options(orm.selectinload(db.Project.groups))
             .all()
         )
-        filtered_projects = [
-            p
-            for p in candidates
-            if any(
-                (tag.get("name", "").lower() in selected_issues_lower)
-                for tag in (p.condition_tag_list or [])
-            )
-        ]
+        filtered_projects = candidates
+        if selected_issues:
+            selected_issues_lower = {i.lower() for i in selected_issues}
+            filtered_projects = [
+                p
+                for p in filtered_projects
+                if any(
+                    (tag.get("name", "").lower() in selected_issues_lower)
+                    for tag in (p.condition_tag_list or [])
+                )
+            ]
+        if selected_tag:
+            sel_tag_lower = selected_tag.lower()
+            filtered_projects = [
+                p
+                for p in filtered_projects
+                if any(t.lower() == sel_tag_lower for t in (p.tag_list or []))
+            ]
         total_projects = len(filtered_projects)
         total_pages = (
             max(1, math.ceil(total_projects / per_page)) if total_projects else 1
@@ -337,12 +394,51 @@ def index():
             .all()
         )
 
-    # 9. Eagerly load pages & page status for ONLY current page projects
-    paginated_project_ids = [p.id for p in paginated_projects]
-    if paginated_project_ids:
+    # Build folder contents tree for Folder View
+    folder_scope_query = base_query
+    if selected_org and selected_org != "all":
+        folder_scope_query = folder_scope_query.filter(
+            db.Project.groups.any(db.Group.slug == selected_org)
+        )
+    if selected_mode and selected_mode != "all":
+        folder_scope_query = folder_scope_query.filter(
+            db.Project.creator_mode == selected_mode
+        )
+    if search_query:
+        like_pattern = f"%{search_query}%"
+        folder_scope_query = folder_scope_query.filter(
+            or_(
+                db.Project.display_title.ilike(like_pattern),
+                db.Project.print_title.ilike(like_pattern),
+                db.Project.author.ilike(like_pattern),
+                db.Project.slug.ilike(like_pattern),
+            )
+        )
+    all_scope_projects = folder_scope_query.options(
+        orm.selectinload(db.Project.groups)
+    ).all()
+    if selected_tag:
+        sel_tag_lower = selected_tag.lower()
+        all_scope_projects = [
+            p
+            for p in all_scope_projects
+            if any(t.lower() == sel_tag_lower for t in (p.tag_list or []))
+        ]
+
+    folder_contents = project_utils.get_folder_contents(
+        all_scope_projects, current_folder=selected_folder
+    )
+
+    all_display_projects = list(paginated_projects)
+    for dp in folder_contents["direct_projects"]:
+        if dp.id not in [p.id for p in all_display_projects]:
+            all_display_projects.append(dp)
+
+    all_display_project_ids = [p.id for p in all_display_projects]
+    if all_display_project_ids:
         session.query(db.Project).options(
             orm.selectinload(db.Project.pages).joinedload(db.Page.status)
-        ).filter(db.Project.id.in_(paginated_project_ids)).all()
+        ).filter(db.Project.id.in_(all_display_project_ids)).all()
 
     status_classes = {
         SitePageStatus.R2: "bg-green-200",
@@ -365,7 +461,7 @@ def index():
     progress_per_project = {}
     pages_per_project = {}
 
-    for project in paginated_projects:
+    for project in all_display_projects:
         updated_ts = (
             int(project.updated_at.timestamp())
             if getattr(project, "updated_at", None)
@@ -433,11 +529,16 @@ def index():
         "selected_mode": selected_mode,
         "selected_org": selected_org,
         "selected_issues": selected_issues,
+        "selected_folder": selected_folder,
+        "selected_tag": selected_tag,
         "available_condition_tags": available_condition_tags,
+        "available_folders": available_folders,
+        "available_tags": available_project_tags,
         "user_organizations": user_organizations,
         "sort_field": sort_field,
         "sort_order": sort_order,
         "has_any_projects": has_any_projects,
+        "folder_contents": folder_contents,
     }
 
     is_ajax = (
@@ -577,6 +678,29 @@ def create_project():
     languages = get_supported_languages_list()
 
     form = CreateProjectForm()
+    if request.method == "GET" and request.args.get("folder"):
+        form.folder.data = request.args.get("folder").strip()
+
+    folder_rows = (
+        session.query(db.Project.folder)
+        .filter(db.Project.folder.isnot(None), db.Project.folder != "")
+        .distinct()
+        .all()
+    )
+    available_folders = sorted(
+        {f[0].strip() for f in folder_rows if f[0] and f[0].strip()}
+    )
+
+    def _render_create_project():
+        return render_template(
+            "proofing/create-project.html",
+            form=form,
+            guest_upload_limit=guest_upload_limit,
+            engines=engines,
+            languages=languages,
+            user_organizations=user_organizations,
+            available_folders=available_folders,
+        )
 
     if request.method == "POST" and request.form.get("docx_workflow") == "direct":
         import json
@@ -590,26 +714,12 @@ def create_project():
         file = request.files.get("local_file")
         if not file or not file.filename:
             flash(_l("Please upload a file."), "error")
-            return render_template(
-                "proofing/create-project.html",
-                form=form,
-                guest_upload_limit=guest_upload_limit,
-                engines=engines,
-                languages=languages,
-                user_organizations=user_organizations,
-            )
+            return _render_create_project()
 
         filename = file.filename
         if Path(filename).suffix not in (".docx", ".doc"):
             flash(_l("Please upload a Word document (.docx)."), "error")
-            return render_template(
-                "proofing/create-project.html",
-                form=form,
-                guest_upload_limit=guest_upload_limit,
-                engines=engines,
-                languages=languages,
-                user_organizations=user_organizations,
-            )
+            return _render_create_project()
 
         source_lang = request.form.get("source_lang", "sa")
         target_lang = request.form.get("target_lang", "en")
@@ -622,14 +732,7 @@ def create_project():
 
         if not TranslationEngineFactory.is_supported(engine):
             flash(_l("Unsupported translation engine selected."), "error")
-            return render_template(
-                "proofing/create-project.html",
-                form=form,
-                guest_upload_limit=guest_upload_limit,
-                engines=engines,
-                languages=languages,
-                user_organizations=user_organizations,
-            )
+            return _render_create_project()
 
         docx_id = str(uuid.uuid4())
         from kalanjiyam.utils.storage import docx_upload_key, get_storage
@@ -696,14 +799,7 @@ def create_project():
                 and not user_organizations
             ):
                 flash(_l("Your account is not assigned to an organization."), "error")
-                return render_template(
-                    "proofing/create-project.html",
-                    form=form,
-                    guest_upload_limit=guest_upload_limit,
-                    engines=engines,
-                    languages=languages,
-                    user_organizations=user_organizations,
-                )
+                return _render_create_project()
         selected_org_slug = request.form.get("selected_org_slug")
         org_slug = "open-tenant"
         if current_user.is_authenticated:
@@ -731,14 +827,7 @@ def create_project():
         uploaded_files = [f for f in raw_files if f and getattr(f, "filename", None)]
         if not uploaded_files:
             flash(_l("Please upload a file or images."), "error")
-            return render_template(
-                "proofing/create-project.html",
-                form=form,
-                guest_upload_limit=guest_upload_limit,
-                engines=engines,
-                languages=languages,
-                user_organizations=user_organizations,
-            )
+            return _render_create_project()
 
         for f in uploaded_files:
             if not _is_allowed_document_file(f.filename):
@@ -749,14 +838,7 @@ def create_project():
                     ),
                     "error",
                 )
-                return render_template(
-                    "proofing/create-project.html",
-                    form=form,
-                    guest_upload_limit=guest_upload_limit,
-                    engines=engines,
-                    languages=languages,
-                    user_organizations=user_organizations,
-                )
+                return _render_create_project()
 
         is_multiple = len(uploaded_files) > 1
         all_are_images = all(
@@ -773,14 +855,7 @@ def create_project():
                 ),
                 "error",
             )
-            return render_template(
-                "proofing/create-project.html",
-                form=form,
-                guest_upload_limit=guest_upload_limit,
-                engines=engines,
-                languages=languages,
-                user_organizations=user_organizations,
-            )
+            return _render_create_project()
 
         is_image_upload = all_are_images
         is_batch_pdf_upload = is_multiple and all_are_pdfs
@@ -815,14 +890,7 @@ def create_project():
                     ),
                     "error",
                 )
-                return render_template(
-                    "proofing/create-project.html",
-                    form=form,
-                    guest_upload_limit=guest_upload_limit,
-                    engines=engines,
-                    languages=languages,
-                    user_organizations=user_organizations,
-                )
+                return _render_create_project()
         else:
             conflicts = []
             seen_slugs = set()
@@ -845,14 +913,7 @@ def create_project():
                     ),
                     "error",
                 )
-                return render_template(
-                    "proofing/create-project.html",
-                    form=form,
-                    guest_upload_limit=guest_upload_limit,
-                    engines=engines,
-                    languages=languages,
-                    user_organizations=user_organizations,
-                )
+                return _render_create_project()
 
             if not current_user.is_authenticated:
                 from datetime import datetime, timedelta
@@ -1014,6 +1075,10 @@ def create_project():
                     project_slug=slug,
                 )
 
+        from kalanjiyam.utils.project_utils import normalize_folder_path, normalize_tags
+        folder_val = normalize_folder_path(form.folder.data)
+        tags_val = normalize_tags(form.tags.data)
+
         if is_batch_pdf_upload:
             if not current_user.is_authenticated:
                 task = project_tasks.create_batch_pdf_projects.apply_async(
@@ -1023,6 +1088,8 @@ def create_project():
                         "creator_id": None,
                         "fingerprint_id": request.cookies.get("device_fingerprint"),
                         "org_slug": org_slug,
+                        "folder": folder_val,
+                        "tags": tags_val,
                     },
                     queue="low_priority",
                     priority=PRIORITY_LOW,
@@ -1034,6 +1101,8 @@ def create_project():
                         "app_environment": current_app.config["KALANJIYAM_ENVIRONMENT"],
                         "creator_id": current_user.id,
                         "org_slug": org_slug,
+                        "folder": folder_val,
+                        "tags": tags_val,
                     },
                     priority=PRIORITY_BATCH,
                 )
@@ -1046,6 +1115,8 @@ def create_project():
                         "creator_id": None,
                         "fingerprint_id": request.cookies.get("device_fingerprint"),
                         "org_slug": org_slug,
+                        "folder": folder_val,
+                        "tags": tags_val,
                     },
                     queue="low_priority",
                     priority=PRIORITY_LOW,
@@ -1057,6 +1128,8 @@ def create_project():
                         "app_environment": current_app.config["KALANJIYAM_ENVIRONMENT"],
                         "creator_id": current_user.id,
                         "org_slug": org_slug,
+                        "folder": folder_val,
+                        "tags": tags_val,
                     },
                     priority=PRIORITY_BATCH,
                 )
@@ -1073,6 +1146,8 @@ def create_project():
                         "creator_id": None,
                         "fingerprint_id": request.cookies.get("device_fingerprint"),
                         "org_slug": org_slug,
+                        "folder": folder_val,
+                        "tags": tags_val,
                     },
                     queue="low_priority",
                     priority=PRIORITY_LOW,
@@ -1086,6 +1161,8 @@ def create_project():
                     app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
                     creator_id=current_user.id,
                     org_slug=org_slug,
+                    folder=folder_val,
+                    tags=tags_val,
                 )
 
         from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
@@ -1145,14 +1222,7 @@ def create_project():
             doc_type=doc_type,
         )
 
-    return render_template(
-        "proofing/create-project.html",
-        form=form,
-        guest_upload_limit=guest_upload_limit,
-        engines=engines,
-        languages=languages,
-        user_organizations=user_organizations,
-    )
+    return _render_create_project()
 
 
 @bp.route("/status/<task_id>")

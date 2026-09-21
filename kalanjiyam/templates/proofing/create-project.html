@@ -508,6 +508,46 @@
           <p class="text-[11px] text-slate-400 mt-1 font-medium">{{ _('Auto-suggested from file name. You can edit this anytime.') }}</p>
         </div>
 
+        <!-- 3. Folder and Tags (Optional metadata) -->
+        <div x-show="!isDocx || docxWorkflow === 'project'" x-transition class="grid sm:grid-cols-2 gap-4">
+          <!-- Folder input -->
+          <div>
+            <label for="project_folder" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+              </svg>
+              <span>{{ _('Folder / Category') }}</span>
+              <span class="text-[10px] text-slate-400 font-normal lowercase">({{ _('optional') }})</span>
+            </label>
+            <fieldset>
+              {{ form.folder(id="project_folder", class_="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all bg-slate-50 font-semibold text-slate-900 placeholder:text-slate-400", placeholder=_("e.g. Literature/Poetry or Philosophy"), list="create-available-folders") }}
+              {% if available_folders %}
+              <datalist id="create-available-folders">
+                {% for f in available_folders %}
+                <option value="{{ f }}">
+                {% endfor %}
+              </datalist>
+              {% endif %}
+            </fieldset>
+            <p class="text-[11px] text-slate-400 mt-1 font-medium">{{ _('Use "/" for nested hierarchy (e.g. Literature/Poetry).') }}</p>
+          </div>
+
+          <!-- Tags input -->
+          <div>
+            <label for="project_tags" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+              </svg>
+              <span>{{ _('Project Tags') }}</span>
+              <span class="text-[10px] text-slate-400 font-normal lowercase">({{ _('optional') }})</span>
+            </label>
+            <fieldset>
+              {{ form.tags(id="project_tags", class_="w-full px-3.5 py-2.5 text-xs sm:text-sm border border-slate-200 rounded-xl focus:border-royalblue focus:bg-white focus:ring-2 focus:ring-royalblue/20 outline-none transition-all bg-slate-50 font-semibold text-slate-900 placeholder:text-slate-400", placeholder=_("Comma-separated, e.g. Sanskrit, Manuscript")) }}
+            </fieldset>
+            <p class="text-[11px] text-slate-400 mt-1 font-medium">{{ _('Comma-separated tags for filtering & organizing.') }}</p>
+          </div>
+        </div>
+
         <!-- Info note when creating separate projects per image -->
         <div x-show="isImage && fileCount > 1 && !groupImages" x-cloak x-transition class="p-3.5 bg-blue-50/60 border border-blue-100 rounded-2xl flex items-center gap-2.5 text-xs text-royalblue font-medium">
           <svg class="w-4 h-4 shrink-0 text-royalblue" fill="none" stroke="currentColor" viewBox="0 0 24 24">

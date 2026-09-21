@@ -264,6 +264,25 @@
             </div>
             {% endif %}
 
+            <!-- Tag Filter Dropdown -->
+            {% if available_tags %}
+            <div class="flex items-center gap-1.5 text-xs sm:text-sm">
+              <label for="tag-select" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Tag:') }}</label>
+              <select
+                id="tag-select"
+                name="tag"
+                x-model="tag"
+                class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
+                @change="fetchResults(1)"
+              >
+                <option value="">{{ _('All Tags') }}</option>
+                {% for t_name in available_tags %}
+                <option value="{{ t_name }}" {% if selected_tag == t_name %}selected{% endif %}>{{ t_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+
             <!-- Sort By & Order -->
             <div class="flex items-center gap-1.5 text-xs sm:text-sm">
               <label for="sort-select" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Sort:') }}</label>
@@ -307,7 +326,7 @@
             </div>
           </div>
 
-          <!-- Table / Cards View Mode Toggle -->
+          <!-- Table / Cards / Folder View Mode Toggle -->
           <div class="flex items-center bg-slate-100 border border-slate-200 rounded-xl p-0.5 shadow-xs shrink-0" role="group" aria-label="{{ _('View Mode') }}">
             <button
               type="button"
@@ -333,12 +352,44 @@
               </svg>
               <span class="hidden sm:inline">{{ _('Cards') }}</span>
             </button>
+            <button
+              type="button"
+              @click="setViewMode('folder')"
+              :class="{ 'bg-white text-royalblue font-bold shadow-xs border border-slate-200': viewMode === 'folder', 'text-slate-500 hover:text-slate-700 border border-transparent': viewMode !== 'folder' }"
+              class="px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="{{ _('Folder View') }}"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+              </svg>
+              <span class="hidden sm:inline">{{ _('Folder') }}</span>
+            </button>
           </div>
         </div>
 
-        <!-- Active Issue Chips Row (Quick Removal) -->
-        <div x-show="issues.length > 0" class="flex flex-wrap items-center gap-1.5 pt-1">
-          <span class="text-[11px] font-semibold text-slate-600">{{ _('Filtered by issues:') }}</span>
+        <!-- Active Filter Chips Row (Quick Removal) -->
+        <div x-show="issues.length > 0 || folder || tag" class="flex flex-wrap items-center gap-1.5 pt-1">
+          <span class="text-[11px] font-semibold text-slate-600">{{ _('Filtered by:') }}</span>
+
+          <!-- Folder Chip -->
+          <template x-if="folder">
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-300 shadow-xs">
+              <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+              <span>Folder: <strong x-text="folder"></strong></span>
+              <button type="button" @click="setFolder('')" class="ml-1 text-slate-600 hover:text-slate-900 font-bold cursor-pointer" title="{{ _('Remove folder filter') }}">×</button>
+            </span>
+          </template>
+
+          <!-- Tag Chip -->
+          <template x-if="tag">
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-royalblue border border-blue-200 shadow-xs">
+              <span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>
+              <span>Tag: <strong x-text="tag"></strong></span>
+              <button type="button" @click="setTag('')" class="ml-1 text-royalblue hover:text-blue-900 font-bold cursor-pointer" title="{{ _('Remove tag filter') }}">×</button>
+            </span>
+          </template>
+
+          <!-- Issues Chips -->
           <template x-for="iss in issues" :key="iss">
             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-xs">
               <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
@@ -346,8 +397,9 @@
               <button type="button" @click="toggleIssue(iss)" class="ml-1 text-amber-700 hover:text-amber-900 font-bold cursor-pointer" title="{{ _('Remove filter') }}">×</button>
             </span>
           </template>
-          <button type="button" @click="clearIssues()" class="text-xs text-royalblue hover:underline ml-1 font-semibold cursor-pointer">
-            {{ _('Clear all issues') }}
+
+          <button type="button" @click="clearFilters()" class="text-xs text-royalblue hover:underline ml-1 font-semibold cursor-pointer">
+            {{ _('Clear all filters') }}
           </button>
         </div>
       </form>
@@ -409,6 +461,8 @@ function proofingDashboard() {
     mode: {{ selected_mode|tojson }},
     org: {{ selected_org|tojson }},
     issues: {{ selected_issues|tojson }},
+    folder: {{ selected_folder|tojson }} || '',
+    tag: {{ selected_tag|tojson }} || '',
     sort: {{ sort_field|tojson }},
     order: {{ sort_order|tojson }},
     page: {{ page }},
@@ -430,6 +484,16 @@ function proofingDashboard() {
         this.perPage = parsed;
         this.fetchResults(1);
       }
+    },
+
+    setFolder(path) {
+      this.folder = path || '';
+      this.fetchResults(1);
+    },
+
+    setTag(name) {
+      this.tag = name || '';
+      this.fetchResults(1);
     },
 
     clearIssues() {
@@ -455,6 +519,8 @@ function proofingDashboard() {
         this.mode = params.get('mode') || 'all';
         this.org = params.get('org') || 'all';
         this.issues = params.getAll('issue').filter(Boolean);
+        this.folder = params.get('folder') || '';
+        this.tag = params.get('tag') || '';
         this.sort = params.get('sort') || 'created';
         this.order = params.get('order') || 'desc';
         this.page = parseInt(params.get('page') || '1', 10);
@@ -478,6 +544,8 @@ function proofingDashboard() {
       if (this.issues && this.issues.length) {
         this.issues.forEach(iss => params.append('issue', iss));
       }
+      if (this.folder) params.set('folder', this.folder);
+      if (this.tag) params.set('tag', this.tag);
       if (this.sort && this.sort !== 'created') params.set('sort', this.sort);
       if (this.order && this.order !== 'desc') params.set('order', this.order);
       if (this.page && this.page > 1) params.set('page', this.page);
@@ -531,6 +599,8 @@ function proofingDashboard() {
       this.mode = 'all';
       this.org = 'all';
       this.issues = [];
+      this.folder = '';
+      this.tag = '';
       this.sort = 'created';
       this.order = 'desc';
       this.fetchResults(1);

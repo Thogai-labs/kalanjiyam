@@ -21,6 +21,9 @@ statements = [
     "ALTER TABLE batch_ocr_pages ADD COLUMN IF NOT EXISTS translation_data_size_bytes INTEGER;",
     "ALTER TABLE batch_ocr_pages ADD COLUMN IF NOT EXISTS source_lang VARCHAR(32);",
     "ALTER TABLE batch_ocr_pages ADD COLUMN IF NOT EXISTS target_lang VARCHAR(32);",
+
+    "ALTER TABLE proof_projects ADD COLUMN IF NOT EXISTS folder VARCHAR;",
+    "ALTER TABLE proof_projects ADD COLUMN IF NOT EXISTS tags JSON;",
 ]
 
 def main():
