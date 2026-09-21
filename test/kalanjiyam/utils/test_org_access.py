@@ -12,7 +12,9 @@ def _make_org(session, slug: str) -> db.Group:
     return org
 
 
-def _make_user(session, username: str, org: db.Group | None, roles: list[str]) -> db.User:
+def _make_user(
+    session, username: str, org: db.Group | None, roles: list[str]
+) -> db.User:
     user = db.User(username=username, email=f"{username}@test.local")
     user.set_password("test-password")
     if org is not None:
@@ -29,11 +31,23 @@ def _make_user(session, username: str, org: db.Group | None, roles: list[str]) -
     return user
 
 
-def _make_project(session, slug: str, org: db.Group | None, creator_id: int | None = None, fingerprint_id: str | None = None) -> db.Project:
+def _make_project(
+    session,
+    slug: str,
+    org: db.Group | None,
+    creator_id: int | None = None,
+    fingerprint_id: str | None = None,
+) -> db.Project:
     board = db.Board(title=f"{slug} discussion board")
     session.add(board)
     session.flush()
-    project = db.Project(slug=slug, display_title=slug.title(), creator_id=creator_id, board_id=board.id, fingerprint_id=fingerprint_id)
+    project = db.Project(
+        slug=slug,
+        display_title=slug.title(),
+        creator_id=creator_id,
+        board_id=board.id,
+        fingerprint_id=fingerprint_id,
+    )
     session.add(project)
     session.flush()
     if org is not None:
@@ -46,7 +60,9 @@ def test_org_admin_requires_organization_id(flask_app):
     with flask_app.app_context():
         session = q.get_session()
         org = _make_org(session, "alpha")
-        user = _make_user(session, "orgadmin", org=None, roles=[SiteRole.ORG_ADMIN.value])
+        user = _make_user(
+            session, "orgadmin", org=None, roles=[SiteRole.ORG_ADMIN.value]
+        )
         assert user.is_org_admin is False
 
         user.organization_id = org.id
@@ -80,6 +96,7 @@ def test_user_can_access_project_scoped_by_org(flask_app):
 
 def test_user_can_view_proofing_project(flask_app):
     from kalanjiyam.utils.org_access import user_can_view_proofing_project
+
     flask_app.config["MULTI_TENANT_MODE"] = True
     flask_app.config["ENFORCE_ORG_ACCESS"] = True
 
@@ -87,12 +104,14 @@ def test_user_can_view_proofing_project(flask_app):
         session = q.get_session()
         org_a = _make_org(session, "org-a-view")
         org_b = _make_org(session, "org-b-view")
-        
+
         creator = _make_user(session, "creator-view", org_a, roles=[SiteRole.P1.value])
         member = _make_user(session, "member-view", org_a, roles=[SiteRole.P1.value])
         other = _make_user(session, "other-view", org_b, roles=[SiteRole.P1.value])
-        super_admin = _make_user(session, "superadmin-view", org_b, roles=[SiteRole.SUPER_ADMIN.value])
-        
+        super_admin = _make_user(
+            session, "superadmin-view", org_b, roles=[SiteRole.SUPER_ADMIN.value]
+        )
+
         project = _make_project(session, "book-view", org_a, creator_id=creator.id)
         project.is_publicly_viewable = True
         session.add(project)
@@ -108,11 +127,16 @@ def test_user_can_view_proofing_project(flask_app):
         # 4. Other user cannot see in proofing (even though project is public)
         assert user_can_view_proofing_project(other, project) is False
         # 5. Anonymous user cannot see
-        assert user_can_view_proofing_project(KalanjiyamAnonymousUser(), project) is False
+        assert (
+            user_can_view_proofing_project(KalanjiyamAnonymousUser(), project) is False
+        )
 
 
 def test_unregistered_guest_project_access_only_when_not_signed_in(flask_app):
-    from kalanjiyam.utils.org_access import user_can_access_project, user_can_view_proofing_project
+    from kalanjiyam.utils.org_access import (
+        user_can_access_project,
+        user_can_view_proofing_project,
+    )
 
     flask_app.config["MULTI_TENANT_MODE"] = True
     flask_app.config["ENFORCE_ORG_ACCESS"] = True
@@ -121,7 +145,9 @@ def test_unregistered_guest_project_access_only_when_not_signed_in(flask_app):
         session = q.get_session()
         open_tenant = q.get_or_create_open_tenant()
         org = _make_org(session, "test-guest-org")
-        signed_in_user = _make_user(session, "signed_in_user", org, roles=[SiteRole.P1.value])
+        signed_in_user = _make_user(
+            session, "signed_in_user", org, roles=[SiteRole.P1.value]
+        )
 
         guest_project = _make_project(
             session,
@@ -135,18 +161,25 @@ def test_unregistered_guest_project_access_only_when_not_signed_in(flask_app):
         anonymous_user = KalanjiyamAnonymousUser()
 
         # Test with request context containing device fingerprint cookie
-        with flask_app.test_request_context(headers={"Cookie": "device_fingerprint=device-fp-123"}):
+        with flask_app.test_request_context(
+            headers={"Cookie": "device_fingerprint=device-fp-123"}
+        ):
             # 1. Unregistered (not signed in) user WITH matching fingerprint CAN view/access
             assert user_can_access_project(anonymous_user, guest_project) is True
             assert user_can_view_proofing_project(anonymous_user, guest_project) is True
 
             # 2. Signed-in user WITH matching fingerprint CANNOT view/access guest project
             assert user_can_access_project(signed_in_user, guest_project) is False
-            assert user_can_view_proofing_project(signed_in_user, guest_project) is False
+            assert (
+                user_can_view_proofing_project(signed_in_user, guest_project) is False
+            )
 
 
 def test_master_user_multi_org_access(flask_app):
-    from kalanjiyam.utils.org_access import user_can_access_project, user_can_view_proofing_project
+    from kalanjiyam.utils.org_access import (
+        user_can_access_project,
+        user_can_view_proofing_project,
+    )
 
     flask_app.config["MULTI_TENANT_MODE"] = True
     flask_app.config["ENFORCE_ORG_ACCESS"] = True
@@ -158,7 +191,9 @@ def test_master_user_multi_org_access(flask_app):
         org_c = _make_org(session, "master-org-c")
 
         # Create master user assigned to Org A and Org B
-        master_user = _make_user(session, "master_user_1", org_a, roles=[SiteRole.MASTER_USER.value])
+        master_user = _make_user(
+            session, "master_user_1", org_a, roles=[SiteRole.MASTER_USER.value]
+        )
         session.add(db.UserGroups(user_id=master_user.id, group_id=org_b.id))
         session.flush()
 
@@ -179,3 +214,86 @@ def test_master_user_multi_org_access(flask_app):
         assert master_user.is_master_user is True
 
 
+def test_accessible_proofing_projects_query(flask_app):
+    from kalanjiyam.utils.org_access import accessible_proofing_projects_query
+
+    flask_app.config["MULTI_TENANT_MODE"] = True
+    flask_app.config["ENFORCE_ORG_ACCESS"] = True
+
+    with flask_app.app_context():
+        session = q.get_session()
+        org_a = _make_org(session, "query-org-a")
+        org_b = _make_org(session, "query-org-b")
+        open_tenant = q.get_or_create_open_tenant()
+
+        super_admin = _make_user(
+            session, "superadmin-q", org_a, roles=[SiteRole.SUPER_ADMIN.value]
+        )
+        user_a = _make_user(session, "member-q-a", org_a, roles=[SiteRole.P1.value])
+        user_b = _make_user(session, "member-q-b", org_b, roles=[SiteRole.P1.value])
+
+        proj_a = _make_project(session, "proj-qa", org_a, creator_id=user_a.id)
+        proj_b = _make_project(session, "proj-qb", org_b, creator_id=user_b.id)
+        guest_proj = _make_project(
+            session, "proj-qguest", open_tenant, fingerprint_id="fp-test-456"
+        )
+        session.commit()
+
+        # 1. Super admin query sees all
+        super_ids = {
+            p.id for p in accessible_proofing_projects_query(session, super_admin).all()
+        }
+        assert proj_a.id in super_ids
+        assert proj_b.id in super_ids
+        assert guest_proj.id in super_ids
+
+        # 2. Org A member sees proj_a but not proj_b or guest_proj
+        user_a_ids = {
+            p.id for p in accessible_proofing_projects_query(session, user_a).all()
+        }
+        assert proj_a.id in user_a_ids
+        assert proj_b.id not in user_a_ids
+        assert guest_proj.id not in user_a_ids
+
+        # 3. Anonymous user with matching fingerprint sees guest_proj
+        anon_user = KalanjiyamAnonymousUser()
+        anon_ids = {
+            p.id
+            for p in accessible_proofing_projects_query(
+                session, anon_user, device_fingerprint="fp-test-456"
+            ).all()
+        }
+        assert guest_proj.id in anon_ids
+        assert proj_a.id not in anon_ids
+        assert proj_b.id not in anon_ids
+
+        # 4. Anonymous user with no fingerprint sees none
+        empty_ids = {
+            p.id for p in accessible_proofing_projects_query(session, anon_user).all()
+        }
+        assert len(empty_ids) == 0
+
+    # 5. Legacy mode
+    flask_app.config["MULTI_TENANT_MODE"] = False
+    with flask_app.app_context():
+        session = q.get_session()
+        admin_user = _make_user(
+            session, "admin-legacy", None, roles=[SiteRole.SUPER_ADMIN.value]
+        )
+        ungrouped_proj = _make_project(session, "proj-ungrouped", org=None)
+        session.commit()
+
+        admin_ids = {
+            p.id for p in accessible_proofing_projects_query(session, admin_user).all()
+        }
+        assert ungrouped_proj.id in admin_ids
+        assert proj_a.id in admin_ids
+
+        anon_legacy_ids = {
+            p.id
+            for p in accessible_proofing_projects_query(
+                session, KalanjiyamAnonymousUser()
+            ).all()
+        }
+        # Ungrouped project is viewable by anonymous in legacy mode
+        assert ungrouped_proj.id in anon_legacy_ids

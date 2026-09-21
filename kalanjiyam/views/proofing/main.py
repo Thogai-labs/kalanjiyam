@@ -1,21 +1,29 @@
 """Views for basic site pages."""
 
-from datetime import datetime, timedelta
-from pathlib import Path
-
 import json
 import math
 import os
 import re
-import redis
+from datetime import datetime, timedelta
+from pathlib import Path
 
-from flask import Blueprint, current_app, flash, make_response, render_template, request, redirect, url_for
+import redis
+from flask import (
+    Blueprint,
+    current_app,
+    flash,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_babel import lazy_gettext as _l
 from flask_login import current_user
 from flask_wtf import FlaskForm
 from slugify import slugify
-from sqlalchemy import orm
-from wtforms import BooleanField, FileField, MultipleFileField, RadioField, StringField
+from sqlalchemy import func, or_, orm
+from wtforms import BooleanField, MultipleFileField, RadioField, StringField
 from wtforms.validators import DataRequired, ValidationError
 from wtforms.widgets import TextArea
 
@@ -23,17 +31,22 @@ from kalanjiyam import consts
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
 from kalanjiyam.enums import SitePageStatus
-from kalanjiyam.tasks import PRIORITY_BATCH, PRIORITY_LOW, projects as project_tasks
+from kalanjiyam.tasks import PRIORITY_BATCH, PRIORITY_LOW
+from kalanjiyam.tasks import projects as project_tasks
 from kalanjiyam.utils.quotas import ensure_storage_quota_for_user
-from kalanjiyam.views.proofing.decorators import moderator_required, p2_required
+from kalanjiyam.views.proofing.decorators import moderator_required
 
 bp = Blueprint("proofing", __name__)
 
 
 @bp.before_request
 def _require_guest_access_or_login():
-    if not current_app.config.get("ENABLE_GUEST_ACCESS", True) and not current_user.is_authenticated:
+    if (
+        not current_app.config.get("ENABLE_GUEST_ACCESS", True)
+        and not current_user.is_authenticated
+    ):
         return redirect(url_for("auth.sign_in"))
+
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".jpg", ".jpeg", ".png", ".webp"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -46,7 +59,9 @@ def _is_allowed_document_file(filename: str) -> bool:
 
 def _natural_sort_key(s: str):
     """Sort strings with embedded numbers naturally (e.g., page_2 before page_10)."""
-    return [int(text) if text.isdigit() else text.lower() for text in re.split(r"(\d+)", s)]
+    return [
+        int(text) if text.isdigit() else text.lower() for text in re.split(r"(\d+)", s)
+    ]
 
 
 def _filename_to_project_title(filename: str, fallback_index: int = 1) -> str:
@@ -101,13 +116,11 @@ def _required_if_local_title(message: str):
         if source == "local":
             raw_files = request.files.getlist("local_file")
             uploaded = [f for f in raw_files if f and getattr(f, "filename", None)]
-            is_multi_image = (
-                len(uploaded) > 1
-                and all(Path(f.filename).suffix.lower() in IMAGE_EXTENSIONS for f in uploaded)
+            is_multi_image = len(uploaded) > 1 and all(
+                Path(f.filename).suffix.lower() in IMAGE_EXTENSIONS for f in uploaded
             )
-            is_multi_pdf = (
-                len(uploaded) > 1
-                and all(Path(f.filename).suffix.lower() == ".pdf" for f in uploaded)
+            is_multi_pdf = len(uploaded) > 1 and all(
+                Path(f.filename).suffix.lower() == ".pdf" for f in uploaded
             )
             # If multiple images and group_images is unchecked, or multiple PDFs, title is not required
             group_images = is_group_images_enabled(request.form)
@@ -138,7 +151,9 @@ class CreateProjectForm(FlaskForm):
     local_file = MultipleFileField(
         _l("Document or images"),
         validators=[
-            _required_if_local(_l("Please provide a document or image file(s) to upload."))
+            _required_if_local(
+                _l("Please provide a document or image file(s) to upload.")
+            )
         ],
     )
     local_title = StringField(
@@ -188,7 +203,9 @@ def index():
         raw_issue_str = request.args.get("issue", "")
         if raw_issue_str:
             raw_issues = [s.strip() for s in raw_issue_str.split(",") if s.strip()]
-    selected_issues = [i.strip() for i in raw_issues if i and i.strip() and i.strip() != "all"]
+    selected_issues = [
+        i.strip() for i in raw_issues if i and i.strip() and i.strip() != "all"
+    ]
 
     # 1. Parse pagination parameters safely
     try:
@@ -220,81 +237,107 @@ def index():
                     .all()
                 )
 
-    # 3. Eagerly load groups to perform authorization check without N+1 queries
-    all_projects = (
-        session.query(db.Project)
-        .options(orm.selectinload(db.Project.groups))
-        .all()
+    # 3. Base query filtered by user tenant permissions in SQL
+    device_fp = request.cookies.get("device_fingerprint")
+    base_query = q.accessible_proofing_projects_query(
+        current_user, session=session, device_fingerprint=device_fp
     )
-
-    # 4. Filter projects based on user access permissions (tenant scope)
-    accessible_projects = [p for p in all_projects if q.user_can_view_proofing_project(current_user, p)]
-    has_any_projects = bool(accessible_projects)
-
-    projects = accessible_projects
+    has_any_projects = base_query.first() is not None
 
     # Collect all available condition tags across accessible projects for the filter UI
     available_condition_tags = set()
-    for p in accessible_projects:
-        if p.condition_tags and isinstance(p.condition_tags, list):
-            for t in p.condition_tags:
-                t_name = t.get("name") if isinstance(t, dict) else (str(t) if isinstance(t, str) else "")
+    tag_rows = (
+        base_query.with_entities(db.Project.condition_tags)
+        .filter(db.Project.condition_tags.isnot(None))
+        .all()
+    )
+    for (c_tags,) in tag_rows:
+        if c_tags and isinstance(c_tags, list):
+            for t in c_tags:
+                t_name = (
+                    t.get("name")
+                    if isinstance(t, dict)
+                    else (str(t) if isinstance(t, str) else "")
+                )
                 if t_name and t_name.strip():
                     available_condition_tags.add(t_name.strip())
     available_condition_tags = sorted(available_condition_tags, key=lambda s: s.lower())
 
-    # 5. Filter by condition tags / issues if specified
+    query = base_query
+
+    # 4. Filter by organization if specified
+    if selected_org and selected_org != "all":
+        query = query.filter(db.Project.groups.any(db.Group.slug == selected_org))
+
+    # 5. Filter by creator mode if specified
+    if selected_mode and selected_mode != "all":
+        query = query.filter(db.Project.creator_mode == selected_mode)
+
+    # 6. Full tenant search filtering (matching display_title, print_title, author, or slug)
+    if search_query:
+        like_pattern = f"%{search_query}%"
+        query = query.filter(
+            or_(
+                db.Project.display_title.ilike(like_pattern),
+                db.Project.print_title.ilike(like_pattern),
+                db.Project.author.ilike(like_pattern),
+                db.Project.slug.ilike(like_pattern),
+            )
+        )
+
+    # 7. Server-side sorting
+    if sort_field == "title":
+        order_col = func.lower(func.coalesce(db.Project.display_title, ""))
+    else:
+        # Default sort by created_at date
+        order_col = db.Project.created_at
+
+    if sort_order == "desc":
+        query = query.order_by(order_col.desc(), db.Project.id.desc())
+    else:
+        query = query.order_by(order_col.asc(), db.Project.id.asc())
+
+    # 8. Server-side pagination
     if selected_issues:
         selected_issues_lower = {i.lower() for i in selected_issues}
-        projects = [
-            p for p in projects
+        candidates = (
+            query.filter(db.Project.condition_tags.isnot(None))
+            .options(orm.selectinload(db.Project.groups))
+            .all()
+        )
+        filtered_projects = [
+            p
+            for p in candidates
             if any(
                 (tag.get("name", "").lower() in selected_issues_lower)
                 for tag in (p.condition_tag_list or [])
             )
         ]
-
-    # 6. Filter by organization if specified
-    if selected_org and selected_org != "all":
-        projects = [
-            p for p in projects
-            if any(g.slug == selected_org for g in p.groups)
-        ]
-
-    # 7. Filter by creator mode if specified
-    if selected_mode and selected_mode != "all":
-        projects = [p for p in projects if getattr(p, "creator_mode", None) == selected_mode]
-
-    # 8. Full tenant search filtering (matching display_title, print_title, author, or slug)
-    if search_query:
-        q_lower = search_query.lower()
-        projects = [
-            p for p in projects
-            if q_lower in (p.display_title or "").lower()
-            or q_lower in (p.print_title or "").lower()
-            or q_lower in (p.author or "").lower()
-            or q_lower in (p.slug or "").lower()
-        ]
-
-    # 6. Server-side sorting
-    reverse = (sort_order == "desc")
-    if sort_field == "title":
-        projects.sort(key=lambda x: (x.display_title or "").lower(), reverse=reverse)
+        total_projects = len(filtered_projects)
+        total_pages = (
+            max(1, math.ceil(total_projects / per_page)) if total_projects else 1
+        )
+        if page > total_pages:
+            page = total_pages
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_projects = filtered_projects[start_idx:end_idx]
     else:
-        # Default sort by created_at date
-        projects.sort(key=lambda x: x.created_at, reverse=reverse)
+        total_projects = query.count()
+        total_pages = (
+            max(1, math.ceil(total_projects / per_page)) if total_projects else 1
+        )
+        if page > total_pages:
+            page = total_pages
+        start_idx = (page - 1) * per_page
+        paginated_projects = (
+            query.options(orm.selectinload(db.Project.groups))
+            .offset(start_idx)
+            .limit(per_page)
+            .all()
+        )
 
-    total_projects = len(projects)
-    total_pages = max(1, math.ceil(total_projects / per_page)) if total_projects else 1
-    if page > total_pages:
-        page = total_pages
-
-    # 7. Slice current page items
-    start_idx = (page - 1) * per_page
-    end_idx = start_idx + per_page
-    paginated_projects = projects[start_idx:end_idx]
-
-    # 8. Eagerly load pages & page status for ONLY current page projects
+    # 9. Eagerly load pages & page status for ONLY current page projects
     paginated_project_ids = [p.id for p in paginated_projects]
     if paginated_project_ids:
         session.query(db.Project).options(
@@ -311,7 +354,9 @@ def index():
     # 9. Initialize Redis connection safely
     r_client = None
     try:
-        r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+        r_client = redis.Redis.from_url(
+            os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        )
         r_client.ping()
     except Exception:
         r_client = None
@@ -321,7 +366,11 @@ def index():
     pages_per_project = {}
 
     for project in paginated_projects:
-        updated_ts = int(project.updated_at.timestamp()) if getattr(project, "updated_at", None) else 0
+        updated_ts = (
+            int(project.updated_at.timestamp())
+            if getattr(project, "updated_at", None)
+            else 0
+        )
         cache_key = f"proofing:proj_stats:{project.id}:{updated_ts}"
         cached_data = None
 
@@ -391,7 +440,10 @@ def index():
         "has_any_projects": has_any_projects,
     }
 
-    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.args.get("ajax") == "1"
+    is_ajax = (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or request.args.get("ajax") == "1"
+    )
     if is_ajax:
         rendered = render_template("proofing/_projects_list.html", **template_kwargs)
         resp = make_response(rendered)
@@ -427,8 +479,16 @@ def editor_guide():
 
 @bp.route("/create-project", methods=["GET", "POST"])
 def create_project():
-    if not current_app.config.get("ENABLE_GUEST_ACCESS", True) and not current_user.is_authenticated:
-        flash(_l("Guest project creation is disabled. Please log in to create a project."), "warning")
+    if (
+        not current_app.config.get("ENABLE_GUEST_ACCESS", True)
+        and not current_user.is_authenticated
+    ):
+        flash(
+            _l(
+                "Guest project creation is disabled. Please log in to create a project."
+            ),
+            "warning",
+        )
         return redirect(url_for("auth.sign_in"))
 
     settings = q.get_system_settings()
@@ -460,15 +520,18 @@ def create_project():
     is_open_tenant = False
     if current_user.is_authenticated:
         from kalanjiyam.utils.org_access import user_organization_id
+
         try:
             open_tenant = q.get_or_create_open_tenant()
-            is_open_tenant = (user_organization_id(current_user) == open_tenant.id)
+            is_open_tenant = user_organization_id(current_user) == open_tenant.id
         except Exception:
             pass
 
     allowed = (
         not current_user.is_authenticated  # Guest
-        or (current_user.is_authenticated and is_open_tenant)  # Registered in open-tenant
+        or (
+            current_user.is_authenticated and is_open_tenant
+        )  # Registered in open-tenant
         or is_p2_or_admin  # Enterprise P2 or Admin
     )
     if not allowed:
@@ -478,6 +541,7 @@ def create_project():
     # Rate limiting for guest users
     if not current_user.is_authenticated:
         from kalanjiyam.utils.rate_limit import is_rate_limited
+
         ip_address = request.remote_addr
         fingerprint_id = request.cookies.get("device_fingerprint")
         limit = settings.unregistered_user_project_limit
@@ -496,16 +560,15 @@ def create_project():
         getattr(system_settings, "default_translation_engine", "indictrans3")
         or "indictrans3"
     )
-    rec_trans_engine = getattr(
-        system_settings, "recommended_translation_engine", None
-    )
+    rec_trans_engine = getattr(system_settings, "recommended_translation_engine", None)
     is_super_admin = getattr(current_user, "is_super_admin", False)
 
     from kalanjiyam.utils.translation_engine import (
         build_translation_choices,
-        normalize_translation_engine,
         get_supported_languages_list,
+        normalize_translation_engine,
     )
+
     engines = build_translation_choices(
         is_super_admin=is_super_admin,
         recommended_engine=rec_trans_engine,
@@ -516,21 +579,37 @@ def create_project():
     form = CreateProjectForm()
 
     if request.method == "POST" and request.form.get("docx_workflow") == "direct":
-        import uuid
         import json
-        import redis
         import os
+        import uuid
+
+        import redis
+
         from kalanjiyam.tasks.translation import run_docx_translation
 
         file = request.files.get("local_file")
         if not file or not file.filename:
             flash(_l("Please upload a file."), "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+            return render_template(
+                "proofing/create-project.html",
+                form=form,
+                guest_upload_limit=guest_upload_limit,
+                engines=engines,
+                languages=languages,
+                user_organizations=user_organizations,
+            )
 
         filename = file.filename
         if Path(filename).suffix not in (".docx", ".doc"):
             flash(_l("Please upload a Word document (.docx)."), "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+            return render_template(
+                "proofing/create-project.html",
+                form=form,
+                guest_upload_limit=guest_upload_limit,
+                engines=engines,
+                languages=languages,
+                user_organizations=user_organizations,
+            )
 
         source_lang = request.form.get("source_lang", "sa")
         target_lang = request.form.get("target_lang", "en")
@@ -540,27 +619,40 @@ def create_project():
 
         # Validate engine
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
+
         if not TranslationEngineFactory.is_supported(engine):
             flash(_l("Unsupported translation engine selected."), "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+            return render_template(
+                "proofing/create-project.html",
+                form=form,
+                guest_upload_limit=guest_upload_limit,
+                engines=engines,
+                languages=languages,
+                user_organizations=user_organizations,
+            )
 
         docx_id = str(uuid.uuid4())
-        from kalanjiyam.utils.storage import get_storage, docx_upload_key
+        from kalanjiyam.utils.storage import docx_upload_key, get_storage
+
         storage = get_storage()
         storage.save(docx_upload_key(docx_id), file.stream)
 
         # Store docx original filename and parameters in Redis
-        r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+        r_client = redis.Redis.from_url(
+            os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        )
         r_client.setex(
             f"docx_info:{docx_id}",
             86400,
-            json.dumps({
-                "original_filename": filename,
-                "source_lang": source_lang,
-                "target_lang": target_lang,
-                "engine": engine,
-                "glossary": glossary
-            })
+            json.dumps(
+                {
+                    "original_filename": filename,
+                    "source_lang": source_lang,
+                    "target_lang": target_lang,
+                    "engine": engine,
+                    "glossary": glossary,
+                }
+            ),
         )
 
         task = run_docx_translation.delay(
@@ -574,6 +666,7 @@ def create_project():
         )
 
         from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+
         user_id = get_user_identifier(current_user, request)
         if user_id:
             add_user_task(
@@ -582,7 +675,7 @@ def create_project():
                 task_type="docx_translation",
                 project_slug="",
                 project_title=filename,
-                extra_info={"docx_id": docx_id, "glossary": glossary}
+                extra_info={"docx_id": docx_id, "glossary": glossary},
             )
 
         return render_template(
@@ -597,19 +690,31 @@ def create_project():
 
     if form.validate_on_submit():
         if current_user.is_authenticated:
-            if current_app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True) and not getattr(
-                current_user, "organization_id", None
-            ) and not user_organizations:
+            if (
+                current_app.config.get("DEFAULT_PROJECT_REQUIRES_ORG", True)
+                and not getattr(current_user, "organization_id", None)
+                and not user_organizations
+            ):
                 flash(_l("Your account is not assigned to an organization."), "error")
-                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+                return render_template(
+                    "proofing/create-project.html",
+                    form=form,
+                    guest_upload_limit=guest_upload_limit,
+                    engines=engines,
+                    languages=languages,
+                    user_organizations=user_organizations,
+                )
         selected_org_slug = request.form.get("selected_org_slug")
         org_slug = "open-tenant"
         if current_user.is_authenticated:
-            user_org_map = {g.slug: g for g in user_organizations} if user_organizations else {}
+            user_org_map = (
+                {g.slug: g for g in user_organizations} if user_organizations else {}
+            )
             if selected_org_slug and selected_org_slug in user_org_map:
                 org_slug = selected_org_slug
             else:
                 from kalanjiyam.utils.org_access import user_organization_id
+
                 org_id = user_organization_id(current_user)
                 if org_id:
                     group = session.query(db.Group).get(org_id)
@@ -626,27 +731,71 @@ def create_project():
         uploaded_files = [f for f in raw_files if f and getattr(f, "filename", None)]
         if not uploaded_files:
             flash(_l("Please upload a file or images."), "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+            return render_template(
+                "proofing/create-project.html",
+                form=form,
+                guest_upload_limit=guest_upload_limit,
+                engines=engines,
+                languages=languages,
+                user_organizations=user_organizations,
+            )
 
         for f in uploaded_files:
             if not _is_allowed_document_file(f.filename):
-                flash(_l("Unsupported file type: %(filename)s. Please upload a PDF, DOCX, or JPG/PNG image(s).", filename=f.filename), "error")
-                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+                flash(
+                    _l(
+                        "Unsupported file type: %(filename)s. Please upload a PDF, DOCX, or JPG/PNG image(s).",
+                        filename=f.filename,
+                    ),
+                    "error",
+                )
+                return render_template(
+                    "proofing/create-project.html",
+                    form=form,
+                    guest_upload_limit=guest_upload_limit,
+                    engines=engines,
+                    languages=languages,
+                    user_organizations=user_organizations,
+                )
 
         is_multiple = len(uploaded_files) > 1
-        all_are_images = all(Path(f.filename).suffix.lower() in IMAGE_EXTENSIONS for f in uploaded_files)
-        all_are_pdfs = all(Path(f.filename).suffix.lower() == ".pdf" for f in uploaded_files)
+        all_are_images = all(
+            Path(f.filename).suffix.lower() in IMAGE_EXTENSIONS for f in uploaded_files
+        )
+        all_are_pdfs = all(
+            Path(f.filename).suffix.lower() == ".pdf" for f in uploaded_files
+        )
 
         if is_multiple and not all_are_images and not all_are_pdfs:
-            flash(_l("When uploading multiple files, all files must be either all images (.jpg, .jpeg, .png, .webp) or all PDFs (.pdf)."), "error")
-            return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+            flash(
+                _l(
+                    "When uploading multiple files, all files must be either all images (.jpg, .jpeg, .png, .webp) or all PDFs (.pdf)."
+                ),
+                "error",
+            )
+            return render_template(
+                "proofing/create-project.html",
+                form=form,
+                guest_upload_limit=guest_upload_limit,
+                engines=engines,
+                languages=languages,
+                user_organizations=user_organizations,
+            )
 
         is_image_upload = all_are_images
         is_batch_pdf_upload = is_multiple and all_are_pdfs
         first_filename = uploaded_files[0].filename
-        is_uploaded_docx = (not is_image_upload) and (not is_batch_pdf_upload) and Path(first_filename).suffix.lower() in (".docx", ".doc")
+        is_uploaded_docx = (
+            (not is_image_upload)
+            and (not is_batch_pdf_upload)
+            and Path(first_filename).suffix.lower() in (".docx", ".doc")
+        )
 
-        group_images = is_group_images_enabled(request.form) if (is_multiple and is_image_upload) else True
+        group_images = (
+            is_group_images_enabled(request.form)
+            if (is_multiple and is_image_upload)
+            else True
+        )
         is_batch_mode = (is_image_upload and not group_images) or is_batch_pdf_upload
 
         title = None
@@ -659,8 +808,21 @@ def create_project():
             # Check DB before writing files to storage to prevent overwriting existing project files
             existing_proj = session.query(db.Project).filter_by(slug=slug).first()
             if existing_proj:
-                flash(_l('Project "%(title)s" already exists. Please choose a different title.', title=title), "error")
-                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+                flash(
+                    _l(
+                        'Project "%(title)s" already exists. Please choose a different title.',
+                        title=title,
+                    ),
+                    "error",
+                )
+                return render_template(
+                    "proofing/create-project.html",
+                    form=form,
+                    guest_upload_limit=guest_upload_limit,
+                    engines=engines,
+                    languages=languages,
+                    user_organizations=user_organizations,
+                )
         else:
             conflicts = []
             seen_slugs = set()
@@ -683,10 +845,18 @@ def create_project():
                     ),
                     "error",
                 )
-                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+                return render_template(
+                    "proofing/create-project.html",
+                    form=form,
+                    guest_upload_limit=guest_upload_limit,
+                    engines=engines,
+                    languages=languages,
+                    user_organizations=user_organizations,
+                )
 
             if not current_user.is_authenticated:
                 from datetime import datetime, timedelta
+
                 cutoff = datetime.utcnow() - timedelta(seconds=86400)
                 existing_count = (
                     session.query(db.UsageLog)
@@ -694,7 +864,10 @@ def create_project():
                         db.UsageLog.action == "create_project",
                         db.UsageLog.created_at >= cutoff,
                         (db.UsageLog.ip_address == request.remote_addr)
-                        | (db.UsageLog.fingerprint_id == request.cookies.get("device_fingerprint")),
+                        | (
+                            db.UsageLog.fingerprint_id
+                            == request.cookies.get("device_fingerprint")
+                        ),
                     )
                     .count()
                 )
@@ -708,7 +881,14 @@ def create_project():
                         ),
                         "error",
                     )
-                    return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+                    return render_template(
+                        "proofing/create-project.html",
+                        form=form,
+                        guest_upload_limit=guest_upload_limit,
+                        engines=engines,
+                        languages=languages,
+                        user_organizations=user_organizations,
+                    )
 
         upload_size = 0
         for f in uploaded_files:
@@ -729,10 +909,22 @@ def create_project():
                     ),
                     "error",
                 )
-                return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+                return render_template(
+                    "proofing/create-project.html",
+                    form=form,
+                    guest_upload_limit=guest_upload_limit,
+                    engines=engines,
+                    languages=languages,
+                    user_organizations=user_organizations,
+                )
 
         # Save the original file so that it can be processed/downloaded later.
-        from kalanjiyam.utils.storage import get_storage, pdf_key, project_docx_key, project_raw_image_key
+        from kalanjiyam.utils.storage import (
+            get_storage,
+            pdf_key,
+            project_docx_key,
+            project_raw_image_key,
+        )
 
         source_pdf_key = None
         source_docx_key = None
@@ -746,12 +938,16 @@ def create_project():
             get_storage().save(source_docx_key, uploaded_files[0].stream)
         elif is_image_upload:
             if group_images:
-                sorted_images = sorted(uploaded_files, key=lambda f: _natural_sort_key(f.filename))
+                sorted_images = sorted(
+                    uploaded_files, key=lambda f: _natural_sort_key(f.filename)
+                )
                 image_keys = []
                 for idx, img_file in enumerate(sorted_images, start=1):
                     ext = Path(img_file.filename).suffix.lower() or ".jpg"
                     staged_name = f"{idx}{ext}"
-                    img_key = project_raw_image_key(slug, staged_name, org_slug=org_slug)
+                    img_key = project_raw_image_key(
+                        slug, staged_name, org_slug=org_slug
+                    )
                     img_file.stream.seek(0)
                     get_storage().save(img_key, img_file.stream)
                     image_keys.append(img_key)
@@ -760,25 +956,31 @@ def create_project():
                 for p_title, p_slug, img_file in batch_projects_preview:
                     ext = Path(img_file.filename).suffix.lower() or ".jpg"
                     staged_name = f"1{ext}"
-                    img_key = project_raw_image_key(p_slug, staged_name, org_slug=org_slug)
+                    img_key = project_raw_image_key(
+                        p_slug, staged_name, org_slug=org_slug
+                    )
                     img_file.stream.seek(0)
                     get_storage().save(img_key, img_file.stream)
-                    batch_projects_data.append({
-                        "display_title": p_title,
-                        "slug": p_slug,
-                        "image_keys": [img_key],
-                    })
+                    batch_projects_data.append(
+                        {
+                            "display_title": p_title,
+                            "slug": p_slug,
+                            "image_keys": [img_key],
+                        }
+                    )
         elif is_batch_pdf_upload:
             batch_pdf_projects_data = []
             for p_title, p_slug, pdf_file in batch_projects_preview:
                 source_key = pdf_key(p_slug, org_slug=org_slug)
                 pdf_file.stream.seek(0)
                 get_storage().save(source_key, pdf_file.stream)
-                batch_pdf_projects_data.append({
-                    "display_title": p_title,
-                    "slug": p_slug,
-                    "pdf_key": source_key,
-                })
+                batch_pdf_projects_data.append(
+                    {
+                        "display_title": p_title,
+                        "slug": p_slug,
+                        "pdf_key": source_key,
+                    }
+                )
         else:
             source_pdf_key = pdf_key(slug, org_slug=org_slug)
             uploaded_files[0].stream.seek(0)
@@ -787,6 +989,7 @@ def create_project():
         # Log usage action for guests
         if not current_user.is_authenticated:
             from kalanjiyam.utils.rate_limit import log_usage_action
+
             if is_image_upload and not group_images:
                 for item in batch_projects_data:
                     log_usage_action(
@@ -886,6 +1089,7 @@ def create_project():
                 )
 
         from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+
         user_id = get_user_identifier(current_user, request)
         if user_id:
             if is_batch_pdf_upload:
@@ -941,7 +1145,14 @@ def create_project():
             doc_type=doc_type,
         )
 
-    return render_template("proofing/create-project.html", form=form, guest_upload_limit=guest_upload_limit, engines=engines, languages=languages, user_organizations=user_organizations)
+    return render_template(
+        "proofing/create-project.html",
+        form=form,
+        guest_upload_limit=guest_upload_limit,
+        engines=engines,
+        languages=languages,
+        user_organizations=user_organizations,
+    )
 
 
 @bp.route("/status/<task_id>")
@@ -959,7 +1170,7 @@ def create_project_status(task_id):
         current = total = percent = 0
         slug = None
         error = str(info)
-    elif r.status == 'FAILURE':
+    elif r.status == "FAILURE":
         current = total = percent = 0
         slug = None
         error = str(info) if info else "An error occurred during project creation."
@@ -984,7 +1195,8 @@ def create_project_status(task_id):
 @bp.route("/recent-changes")
 def recent_changes():
     """Show recent changes across all projects with search and date range filtering."""
-    from datetime import datetime, timedelta, date as dt_date
+    from datetime import datetime, timedelta
+
     from sqlalchemy import or_
 
     try:
@@ -1032,11 +1244,11 @@ def recent_changes():
 
     # 1. Fetch accessible projects for current user in one query with eager loaded groups
     all_projects = (
-        session.query(db.Project)
-        .options(orm.selectinload(db.Project.groups))
-        .all()
+        session.query(db.Project).options(orm.selectinload(db.Project.groups)).all()
     )
-    accessible_projects = [p for p in all_projects if q.user_can_view_proofing_project(current_user, p)]
+    accessible_projects = [
+        p for p in all_projects if q.user_can_view_proofing_project(current_user, p)
+    ]
     accessible_project_ids = [p.id for p in accessible_projects]
 
     if not accessible_project_ids:
@@ -1140,16 +1352,15 @@ def recent_changes():
     # 4. Compute diffs ONLY for the revisions on the current page
     page_revisions = [item[2] for item in page_activity if item[0] == "revision"]
     if page_revisions:
-        from kalanjiyam.utils.diff import revision_diff
         from kalanjiyam.utils import proofing_utils
+        from kalanjiyam.utils.diff import revision_diff
 
         for r in page_revisions:
             cur_text = proofing_utils.revision_plain_content(r)
             prev_r = (
                 session.query(db.Revision)
                 .filter(
-                    db.Revision.page_id == r.page_id,
-                    db.Revision.created < r.created
+                    db.Revision.page_id == r.page_id, db.Revision.created < r.created
                 )
                 .order_by(db.Revision.created.desc())
                 .first()
@@ -1178,7 +1389,9 @@ def recent_changes():
     )
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        resp = make_response(render_template("proofing/_recent_changes_list.html", **context))
+        resp = make_response(
+            render_template("proofing/_recent_changes_list.html", **context)
+        )
         resp.headers["X-Total-Items"] = str(total_items)
         resp.headers["X-Total-Pages"] = str(total_pages)
         return resp
@@ -1189,7 +1402,9 @@ def recent_changes():
 @bp.route("/talk")
 def talk():
     """Show discussion across all projects."""
-    projects = [p for p in q.projects() if q.user_can_view_proofing_project(current_user, p)]
+    projects = [
+        p for p in q.projects() if q.user_can_view_proofing_project(current_user, p)
+    ]
 
     # FIXME: optimize this once we have a higher thread volume.
     all_threads = [(p, t) for p in projects for t in p.board.threads]
@@ -1225,9 +1440,15 @@ def dashboard():
     num_revisions_7d = len(revisions_7d)
     num_revisions_1d = len(revisions_1d)
 
-    num_contributors_30d = len({x.author_id for x in revisions_30d if x.author_id is not None})
-    num_contributors_7d = len({x.author_id for x in revisions_7d if x.author_id is not None})
-    num_contributors_1d = len({x.author_id for x in revisions_1d if x.author_id is not None})
+    num_contributors_30d = len(
+        {x.author_id for x in revisions_30d if x.author_id is not None}
+    )
+    num_contributors_7d = len(
+        {x.author_id for x in revisions_7d if x.author_id is not None}
+    )
+    num_contributors_1d = len(
+        {x.author_id for x in revisions_1d if x.author_id is not None}
+    )
 
     return render_template(
         "proofing/dashboard.html",
@@ -1243,11 +1464,12 @@ def dashboard():
 @bp.route("/api/tasks")
 def get_tasks_api():
     """Retrieve background tasks for the current user."""
-    from kalanjiyam.utils.user_tasks import get_user_tasks, get_user_identifier
+    from kalanjiyam.utils.user_tasks import get_user_identifier, get_user_tasks
+
     user_id = get_user_identifier(current_user, request)
     if not user_id:
         return {"tasks": []}
-    
+
     try:
         tasks = get_user_tasks(user_id)
         # Limit to the most recent 10 tasks to keep UI clean and fast
@@ -1261,10 +1483,11 @@ def get_tasks_api():
 def cancel_task_api(task_id):
     """Cancel a background task for the current user."""
     from kalanjiyam.utils.user_tasks import cancel_user_task, get_user_identifier
+
     user_id = get_user_identifier(current_user, request)
     if not user_id:
         return {"error": "Unauthorized"}, 401
-        
+
     try:
         success = cancel_user_task(user_id, task_id)
         if success:
@@ -1277,27 +1500,26 @@ def cancel_task_api(task_id):
 
 @bp.route("/translate/docx", methods=["GET", "POST"])
 def docx_translate():
-    import uuid
     import json
-    import redis
     import os
-    from flask import abort
+    import uuid
+
+    import redis
+
     system_settings = q.get_system_settings()
     default_trans_engine = (
         getattr(system_settings, "default_translation_engine", "indictrans3")
         or "indictrans3"
     )
-    rec_trans_engine = getattr(
-        system_settings, "recommended_translation_engine", None
-    )
+    rec_trans_engine = getattr(system_settings, "recommended_translation_engine", None)
     is_super_admin = getattr(current_user, "is_super_admin", False)
 
+    from kalanjiyam.tasks.translation import run_docx_translation
     from kalanjiyam.utils.translation_engine import (
         build_translation_choices,
-        normalize_translation_engine,
         get_supported_languages_list,
+        normalize_translation_engine,
     )
-    from kalanjiyam.tasks.translation import run_docx_translation
 
     engines = build_translation_choices(
         is_super_admin=is_super_admin,
@@ -1311,12 +1533,16 @@ def docx_translate():
         file = request.files.get("file")
         if not file or not file.filename:
             flash(_l("Please upload a file."), "error")
-            return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
+            return render_template(
+                "proofing/docx-translate.html", engines=engines, languages=languages
+            )
 
         filename = file.filename
         if Path(filename).suffix not in (".docx", ".doc"):
             flash(_l("Please upload a Word document (.docx)."), "error")
-            return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
+            return render_template(
+                "proofing/docx-translate.html", engines=engines, languages=languages
+            )
 
         source_lang = request.form.get("source_lang", "sa")
         target_lang = request.form.get("target_lang", "en")
@@ -1326,27 +1552,35 @@ def docx_translate():
 
         # Validate engine
         from kalanjiyam.utils.translation_engine import TranslationEngineFactory
+
         if not TranslationEngineFactory.is_supported(engine):
             flash(_l("Unsupported translation engine selected."), "error")
-            return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
+            return render_template(
+                "proofing/docx-translate.html", engines=engines, languages=languages
+            )
 
         docx_id = str(uuid.uuid4())
-        from kalanjiyam.utils.storage import get_storage, docx_upload_key
+        from kalanjiyam.utils.storage import docx_upload_key, get_storage
+
         storage = get_storage()
         storage.save(docx_upload_key(docx_id), file.stream)
 
         # Store docx original filename and parameters in Redis
-        r_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+        r_client = redis.Redis.from_url(
+            os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        )
         r_client.setex(
             f"docx_info:{docx_id}",
             86400,
-            json.dumps({
-                "original_filename": filename,
-                "source_lang": source_lang,
-                "target_lang": target_lang,
-                "engine": engine,
-                "glossary": glossary
-            })
+            json.dumps(
+                {
+                    "original_filename": filename,
+                    "source_lang": source_lang,
+                    "target_lang": target_lang,
+                    "engine": engine,
+                    "glossary": glossary,
+                }
+            ),
         )
 
         task = run_docx_translation.delay(
@@ -1360,6 +1594,7 @@ def docx_translate():
         )
 
         from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
+
         user_id = get_user_identifier(current_user, request)
         if user_id:
             add_user_task(
@@ -1368,7 +1603,7 @@ def docx_translate():
                 task_type="docx_translation",
                 project_slug="",
                 project_title=filename,
-                extra_info={"docx_id": docx_id, "glossary": glossary}
+                extra_info={"docx_id": docx_id, "glossary": glossary},
             )
 
         return render_template(
@@ -1381,48 +1616,54 @@ def docx_translate():
             total=0,
         )
 
-    return render_template("proofing/docx-translate.html", engines=engines, languages=languages)
+    return render_template(
+        "proofing/docx-translate.html", engines=engines, languages=languages
+    )
 
 
 @bp.route("/translate/docx/status/<task_id>")
 def docx_translate_status(task_id):
     from celery.result import AsyncResult
+
     from kalanjiyam.tasks import app as celery_app
-    
+
     r = AsyncResult(task_id, app=celery_app)
     info = r.info or {}
-    
+
     error = None
     if isinstance(info, Exception):
         current = total = percent = 0
         error = str(info)
-    elif r.status == 'FAILURE':
+    elif r.status == "FAILURE":
         current = total = percent = 0
         error = str(info) if info else "An error occurred during translation."
     else:
         current = info.get("current", 0)
         total = info.get("total", 0)
         percent = info.get("percent", 0)
-        
+
     return {
         "status": r.status,
         "current": current,
         "total": total,
         "percent": percent,
-        "error": error
+        "error": error,
     }
 
 
 @bp.route("/translate/docx/download/<docx_id>")
 def docx_translate_download(docx_id):
-    import redis
-    import os
     import json
+    import os
+
+    import redis
     from flask import abort
-    from kalanjiyam.utils.storage import get_storage, docx_translation_key
+
+    from kalanjiyam.utils.storage import docx_translation_key, get_storage
+
     storage = get_storage()
     trans_key = docx_translation_key(docx_id)
-    
+
     if not storage.exists(trans_key):
         abort(404, description=_l("Translated file not found."))
 
@@ -1437,5 +1678,3 @@ def docx_translate_download(docx_id):
         download_name = "translated_document.docx"
 
     return storage.serve(trans_key, as_attachment=True, download_name=download_name)
-
-

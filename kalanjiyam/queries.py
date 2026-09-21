@@ -596,6 +596,21 @@ def user_can_view_proofing_project(user, project: db.Project) -> bool:
     return user_can_view_proofing_project(user, project)
 
 
+def accessible_proofing_projects_query(
+    user, session=None, device_fingerprint: str | None = None
+):
+    """Tenant-aware query for proofing projects viewable by the user."""
+    from kalanjiyam.utils.org_access import (
+        accessible_proofing_projects_query as _accessible_proofing_projects_query,
+    )
+
+    if session is None:
+        session = get_session()
+    return _accessible_proofing_projects_query(
+        session, user, device_fingerprint=device_fingerprint
+    )
+
+
 def projects_in_group(
     group_id: int, page: int = 1, per_page: int = 20
 ) -> tuple[list[db.Project], int]:

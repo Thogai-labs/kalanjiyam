@@ -15,12 +15,15 @@ def user_organization_id(user) -> int | None:
     org_id = getattr(user, "organization_id", None)
     if org_id is None and getattr(user, "is_authenticated", False):
         from kalanjiyam import queries as q
+
         try:
             open_tenant = q.get_or_create_open_tenant()
             org_id = open_tenant.id
         except Exception as exc:
             try:
-                current_app.logger.warning("Failed to retrieve open tenant for user: %s", exc)
+                current_app.logger.warning(
+                    "Failed to retrieve open tenant for user: %s", exc
+                )
             except RuntimeError:
                 pass
     return org_id
@@ -34,9 +37,12 @@ def user_organization_ids(user) -> set[int]:
         org_ids.update(g.id for g in user.groups)
     elif getattr(user, "id", None):
         from kalanjiyam import queries as q
+
         try:
             session = q.get_session()
-            rows = session.query(db.UserGroups.group_id).filter_by(user_id=user.id).all()
+            rows = (
+                session.query(db.UserGroups.group_id).filter_by(user_id=user.id).all()
+            )
             org_ids.update(r[0] for r in rows)
         except Exception:
             pass
@@ -67,6 +73,7 @@ def user_can_access_project(user, project: db.Project) -> bool:
 
     if not is_multi_tenant_enabled():
         from kalanjiyam import queries as q
+
         return q.user_can_view_project_legacy(user, project)
 
     # 2. Check open-tenant isolation
@@ -75,7 +82,7 @@ def user_can_access_project(user, project: db.Project) -> bool:
         # If it is a guest-created project (has fingerprint_id), we ONLY allow if fingerprint matches.
         if getattr(project, "fingerprint_id", None):
             return False
-            
+
         # Otherwise, it's a registered user project. Guests are not allowed.
         if not getattr(user, "is_authenticated", False):
             return False
@@ -139,6 +146,7 @@ def is_restricted_ocr_user(user) -> bool:
         return False
 
     from kalanjiyam import queries as q
+
     try:
         open_tenant = q.get_or_create_open_tenant()
         if user_organization_id(user) == open_tenant.id:
@@ -164,22 +172,94 @@ def user_can_view_proofing_project(user, project: db.Project) -> bool:
     # 2. If it is made public, we enforce the extra proofing restriction:
     if getattr(project, "is_publicly_viewable", False):
         # Allow creator (registered user)
-        if getattr(user, "is_authenticated", False) and project.creator_id == getattr(user, "id", None):
+        if getattr(user, "is_authenticated", False) and project.creator_id == getattr(
+            user, "id", None
+        ):
             return True
-            
+
         # Allow creator (guest fingerprint, only if user is not signed in)
         if not getattr(user, "is_authenticated", False):
             device_fp = request.cookies.get("device_fingerprint") if request else None
-            if project.fingerprint_id and device_fp and project.fingerprint_id == device_fp:
+            if (
+                project.fingerprint_id
+                and device_fp
+                and project.fingerprint_id == device_fp
+            ):
                 return True
-            
+
         # Allow user of the same organization(s)
         user_orgs = user_organization_ids(user)
         if user_orgs and any(g.id in user_orgs for g in project.groups):
             return True
-            
+
         return False
 
     # Otherwise, fall back to standard access check
     return user_can_access_project(user, project)
 
+
+def accessible_proofing_projects_query(
+    session, user, device_fingerprint: str | None = None
+):
+    """Return a SQLAlchemy Query for proofing projects viewable by the user."""
+    from sqlalchemy import false, or_
+
+    if device_fingerprint is None:
+        try:
+            from flask import request
+
+            if request:
+                device_fingerprint = request.cookies.get("device_fingerprint")
+        except Exception:
+            pass
+
+    query = session.query(db.Project)
+
+    # 1. Super admins can view all projects
+    if getattr(user, "is_super_admin", False):
+        return query
+
+    # 2. Legacy / single-tenant mode
+    if not is_multi_tenant_enabled():
+        if getattr(user, "is_admin", False):
+            return query
+
+        conditions = [
+            db.Project.is_publicly_viewable.is_(True),
+            ~db.Project.groups.any(),
+        ]
+        if not getattr(user, "is_authenticated", False) and device_fingerprint:
+            conditions.append(db.Project.fingerprint_id == device_fingerprint)
+        if getattr(user, "is_authenticated", False):
+            user_groups = getattr(user, "groups", None)
+            if user_groups:
+                g_ids = [g.id for g in user_groups]
+            else:
+                g_ids = [
+                    r[0]
+                    for r in session.query(db.UserGroups.group_id)
+                    .filter_by(user_id=user.id)
+                    .all()
+                ]
+            if g_ids:
+                conditions.append(db.Project.groups.any(db.Group.id.in_(g_ids)))
+        return query.filter(or_(*conditions))
+
+    # 3. Multi-tenant mode:
+    # In proofing context, creator or enterprise org members can access.
+    if getattr(user, "is_authenticated", False):
+        user_orgs = list(user_organization_ids(user))
+        conditions = [db.Project.creator_id == user.id]
+        if user_orgs:
+            conditions.append(
+                db.Project.groups.any(
+                    db.Group.id.in_(user_orgs) & (db.Group.slug != "open-tenant")
+                )
+            )
+        return query.filter(or_(*conditions))
+
+    # 4. Guest user: device fingerprint check
+    if device_fingerprint:
+        return query.filter(db.Project.fingerprint_id == device_fingerprint)
+
+    return query.filter(false())

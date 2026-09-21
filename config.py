@@ -395,6 +395,7 @@ class UnitTestConfig(BaseConfig):
     KALANJIYAM_ENVIRONMENT = TESTING
     TESTING = True
     ENABLE_BOOKS = True
+    ENABLE_GUEST_ACCESS = True
     APPLICATION_URL_PREFIX = ""
     STORAGE_BACKEND = "local"
     MULTI_TENANT_MODE = False
