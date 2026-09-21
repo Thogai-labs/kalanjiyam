@@ -83,6 +83,12 @@ class BaseConfig:
     #: https://docs.sqlalchemy.org/en/14/core/engines.html#database-urls
     SQLALCHEMY_DATABASE_URI = _env("SQLALCHEMY_DATABASE_URI")
 
+    #: Database connection pool settings (for PostgreSQL/MySQL).
+    DB_POOL_SIZE = int(_env("DB_POOL_SIZE", "10") or "10")
+    DB_MAX_OVERFLOW = int(_env("DB_MAX_OVERFLOW", "20") or "20")
+    DB_POOL_RECYCLE = int(_env("DB_POOL_RECYCLE", "1800") or "1800")
+    DB_POOL_TIMEOUT = int(_env("DB_POOL_TIMEOUT", "30") or "30")
+
     #: Where to store user uploads (PDFs, images, etc.).
     UPLOAD_FOLDER = _env("FLASK_UPLOAD_FOLDER")
 

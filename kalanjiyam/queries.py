@@ -5,6 +5,7 @@ For simple or adhoc queries, you can just write them in their corresponding view
 """
 
 import functools
+import os
 
 from flask import current_app
 from sqlalchemy import create_engine, func
@@ -27,8 +28,28 @@ except ImportError:
 # functools.cache makes this return value a singleton.
 @functools.cache
 def get_engine():
-    database_uri = current_app.config["SQLALCHEMY_DATABASE_URI"]
-    return create_engine(database_uri)
+    try:
+        database_uri = current_app.config["SQLALCHEMY_DATABASE_URI"]
+        pool_size = current_app.config.get("DB_POOL_SIZE", 10)
+        max_overflow = current_app.config.get("DB_MAX_OVERFLOW", 20)
+        pool_recycle = current_app.config.get("DB_POOL_RECYCLE", 1800)
+        pool_timeout = current_app.config.get("DB_POOL_TIMEOUT", 30)
+    except (RuntimeError, AttributeError):
+        database_uri = os.environ.get("SQLALCHEMY_DATABASE_URI", "sqlite:///:memory:")
+        pool_size = int(os.environ.get("DB_POOL_SIZE", "10"))
+        max_overflow = int(os.environ.get("DB_MAX_OVERFLOW", "20"))
+        pool_recycle = int(os.environ.get("DB_POOL_RECYCLE", "1800"))
+        pool_timeout = int(os.environ.get("DB_POOL_TIMEOUT", "30"))
+
+    engine_kwargs = {"pool_pre_ping": True}
+    if not str(database_uri).startswith("sqlite"):
+        engine_kwargs.update(
+            pool_size=int(pool_size),
+            max_overflow=int(max_overflow),
+            pool_recycle=int(pool_recycle),
+            pool_timeout=int(pool_timeout),
+        )
+    return create_engine(database_uri, **engine_kwargs)
 
 
 # functools.cache makes this return value a singleton.
@@ -242,13 +263,14 @@ def get_or_create_open_tenant() -> db.Group | None:
     tenant = session.query(db.Group).filter_by(slug="open-tenant").first()
     if not tenant:
         from flask import current_app
+
         if current_app and not current_app.config.get("ENABLE_REGISTERED_ACCESS", True):
             return None
 
         tenant = db.Group(
             name="Open Tenant",
             slug="open-tenant",
-            description="Default tenant for registered users."
+            description="Default tenant for registered users.",
         )
         session.add(tenant)
         session.commit()
@@ -260,11 +282,14 @@ def get_system_settings() -> db.SystemSetting:
     settings = session.query(db.SystemSetting).first()
     if not settings:
         from flask import current_app
+
         default_eng = "gemma_ocr"
         default_trans = "indictrans3"
         try:
             default_eng = current_app.config.get("DEFAULT_OCR_ENGINE", "gemma_ocr")
-            default_trans = current_app.config.get("DEFAULT_TRANSLATION_ENGINE", "indictrans3")
+            default_trans = current_app.config.get(
+                "DEFAULT_TRANSLATION_ENGINE", "indictrans3"
+            )
         except RuntimeError:
             pass
         settings = db.SystemSetting(
@@ -282,16 +307,15 @@ def get_system_settings() -> db.SystemSetting:
     return settings
 
 
-
 def create_user(*, username: str, email: str, raw_password: str) -> db.User:
     session = get_session()
     user = db.User(username=username, email=email)
     user.set_password(raw_password)
-    
+
     # Assign default tenant
     open_tenant = get_or_create_open_tenant()
     user.organization_id = open_tenant.id
-    
+
     session.add(user)
     session.flush()
 
@@ -301,7 +325,7 @@ def create_user(*, username: str, email: str, raw_password: str) -> db.User:
     )
     user_role = db.UserRoles(user_id=user.id, role_id=proofreader_role.id)
     session.add(user_role)
-    
+
     # Also add user to the default tenant group
     session.add(db.UserGroups(user_id=user.id, group_id=open_tenant.id))
 
@@ -377,10 +401,7 @@ def groups_paginated(page: int = 1, per_page: int = 20) -> tuple[list[db.Group],
     q = session.query(db.Group)
     total = q.count()
     items = (
-        q.order_by(db.Group.name)
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
+        q.order_by(db.Group.name).offset((page - 1) * per_page).limit(per_page).all()
     )
     return items, total
 
@@ -415,12 +436,7 @@ def texts_in_group(
         .filter(db.TextGroups.group_id == group_id)
     )
     total = q.count()
-    items = (
-        q.order_by(db.Text.slug)
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
-    )
+    items = q.order_by(db.Text.slug).offset((page - 1) * per_page).limit(per_page).all()
     return items, total
 
 
@@ -444,9 +460,7 @@ def add_user_to_group(user_id: int, group_id: int) -> None:
 def remove_user_from_group(user_id: int, group_id: int) -> None:
     """Remove a user from a group. Clears organization_id when it matches."""
     session = get_session()
-    session.query(db.UserGroups).filter_by(
-        user_id=user_id, group_id=group_id
-    ).delete()
+    session.query(db.UserGroups).filter_by(user_id=user_id, group_id=group_id).delete()
     user = session.query(db.User).filter_by(id=user_id).first()
     if user is not None and user.organization_id == group_id:
         user.organization_id = None
@@ -470,9 +484,7 @@ def add_text_to_group(text_id: int, group_id: int) -> None:
 def remove_text_from_group(text_id: int, group_id: int) -> None:
     """Remove a text from a group."""
     session = get_session()
-    session.query(db.TextGroups).filter_by(
-        group_id=group_id, text_id=text_id
-    ).delete()
+    session.query(db.TextGroups).filter_by(group_id=group_id, text_id=text_id).delete()
     session.commit()
 
 
@@ -584,7 +596,6 @@ def user_can_view_proofing_project(user, project: db.Project) -> bool:
     return user_can_view_proofing_project(user, project)
 
 
-
 def projects_in_group(
     group_id: int, page: int = 1, per_page: int = 20
 ) -> tuple[list[db.Project], int]:
@@ -597,10 +608,7 @@ def projects_in_group(
     )
     total = q_.count()
     items = (
-        q_.order_by(db.Project.slug)
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
+        q_.order_by(db.Project.slug).offset((page - 1) * per_page).limit(per_page).all()
     )
     return items, total
 
@@ -644,7 +652,9 @@ def _reindex_project(project_id: int) -> None:
         import logging
 
         logging.getLogger(__name__).warning(
-            "Could not schedule search indexing for project %s", project_id, exc_info=True
+            "Could not schedule search indexing for project %s",
+            project_id,
+            exc_info=True,
         )
 
 
