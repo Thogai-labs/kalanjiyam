@@ -563,6 +563,36 @@ def edit(slug):
     )
 
 
+@bp.route("/<slug>/move-folder", methods=["POST"])
+def move_folder(slug):
+    """Move project to a folder."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    # Restrict guests to editing only their own created projects
+    if not current_user.is_authenticated:
+        fingerprint_id = request.cookies.get("device_fingerprint")
+        if project_.creator_id is not None or project_.fingerprint_id != fingerprint_id:
+            abort(403)
+
+    target_folder = request.form.get("folder")
+    if target_folder is None and request.is_json:
+        target_folder = request.get_json().get("folder", "")
+    target_folder = (target_folder or "").strip()
+    norm_folder = project_utils.normalize_folder_path(target_folder)
+
+    session = q.get_session()
+    project_.folder = norm_folder
+    session.commit()
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+        return jsonify({"success": True, "folder": norm_folder, "slug": slug})
+
+    flash(_l("Project moved successfully."), "success")
+    return redirect(request.referrer or url_for("proofing.index", folder=norm_folder))
+
+
 @bp.route("/<slug>/metadata", methods=["GET", "POST"])
 @moderator_required
 def metadata(slug):

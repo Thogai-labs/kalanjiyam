@@ -576,3 +576,45 @@ def test_create_project_status_batch_pdfs(client):
         assert "Queueing Task..." in resp.text
         assert "Waiting for the server to start processing your PDFs." in resp.text
         assert "Starting batch PDF processing..." in resp.text
+
+
+def test_move_folder__ajax_and_redirect(rama_client):
+    """Test move_folder endpoint with AJAX and normal POST."""
+    resp = rama_client.post(
+        "/proofing/test-project/move-folder",
+        data={"folder": "Manuscripts/Tamil"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    assert data["folder"] == "Manuscripts/Tamil"
+    assert data["slug"] == "test-project"
+
+    # Move back to root
+    resp = rama_client.post(
+        "/proofing/test-project/move-folder",
+        data={"folder": ""},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    assert data["folder"] == ""
+
+    # Unknown slug returns 404
+    resp = rama_client.post(
+        "/proofing/nonexistent-project-slug/move-folder",
+        data={"folder": "SomeFolder"},
+    )
+    assert resp.status_code == 404
+
+
+def test_index_folder_and_projects_layout(client):
+    """Test index template renders horizontal items layout, 3-dots context menu, and move modal."""
+    resp = client.get("/proofing/")
+    assert resp.status_code == 200
+    assert "openMoveModal" in resp.text
+    assert "Move to folder…" in resp.text
+    assert "showMoveModal" in resp.text
+
