@@ -511,10 +511,10 @@
         <!-- 3. Folder and Tags (Optional metadata) -->
         <div x-show="!isDocx || docxWorkflow === 'project'" x-transition class="grid sm:grid-cols-2 gap-4">
           <!-- Folder selector (Google Drive style) -->
-          <div x-data="{
-            selectedFolder: {{ (form.folder.data or '')|tojson }},
+          <div x-data='{
+            selectedFolder: {{ (form.folder.data or "")|tojson }},
             isCreatingNew: false,
-            newFolderName: '',
+            newFolderName: "",
             availableFolders: {{ available_folders|tojson }},
             init() {
               if (this.selectedFolder && !this.availableFolders.includes(this.selectedFolder)) {
@@ -522,11 +522,11 @@
               }
             },
             onSelect(val) {
-              if (val === '__new__') {
+              if (val === "__new__") {
                 this.isCreatingNew = true;
-                this.newFolderName = '';
+                this.newFolderName = "";
                 this.$nextTick(() => {
-                  const el = document.getElementById('inline-new-folder-input');
+                  const el = document.getElementById("inline-new-folder-input");
                   if (el) el.focus();
                 });
               } else {
@@ -535,7 +535,7 @@
               }
             },
             applyNewFolder() {
-              const name = (this.newFolderName || '').trim().replace(/^\/+|\/+$/g, '');
+              const name = (this.newFolderName || "").trim().replace(/^\/+|\/+$/g, "");
               if (name) {
                 if (!this.availableFolders.includes(name)) {
                   this.availableFolders.push(name);
@@ -547,7 +547,7 @@
             cancelNewFolder() {
               this.isCreatingNew = false;
             }
-          }">
+          }'>
             <label for="project_folder_select" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>

@@ -914,7 +914,7 @@ function proofingDashboard() {
           },
           body: JSON.stringify({
             name: name,
-            parent_folder: this.movingCurrentFolder || ''
+            parent_folder: this.moveTargetFolder || ''
           })
         });
 
@@ -945,7 +945,8 @@ function proofingDashboard() {
       try {
         const formData = new FormData();
         formData.append('folder', targetFolder);
-        const resp = await fetch(`/proofing/${this.movingSlug}/move-folder`, {
+        const baseUrl = '{{ url_for("proofing.index") }}'.replace(/\/+$/, '');
+        const resp = await fetch(`${baseUrl}/${this.movingSlug}/move-folder`, {
           method: 'POST',
           body: formData,
           headers: {

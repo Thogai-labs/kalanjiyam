@@ -77,6 +77,11 @@ def _filename_to_project_title(filename: str, fallback_index: int = 1) -> str:
     return f"Project {fallback_index}"
 
 
+def _escape_like(value: str) -> str:
+    """Escape SQL LIKE wildcard characters (%, _) in a value for safe use in LIKE patterns."""
+    return value.replace("%", r"\%").replace("_", r"\_")
+
+
 def is_group_images_enabled(request_form) -> bool:
     """Determine whether multiple images should be grouped into one project."""
     if "group_images" in request_form:
@@ -623,17 +628,35 @@ def rename_folder():
         flash(_l("Old path and new name are required."), "danger")
         return redirect(url_for("proofing.index"))
 
+    # Reject slashes in new_name to prevent creating nested paths
+    if "/" in new_name or "\\" in new_name:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+            return jsonify({"success": False, "error": "Folder name cannot contain slashes."}), 400
+        flash(_l("Folder name cannot contain slashes."), "danger")
+        return redirect(url_for("proofing.index"))
+
     old_parts = old_path.split("/")
     parent_path = "/".join(old_parts[:-1])
     new_path = f"{parent_path}/{new_name}" if parent_path else new_name
     new_path = project_utils.normalize_folder_path(new_path)
 
     session = q.get_session()
-    # Update ProofFolder records
+
+    # Check for collision with existing folder
+    if new_path != old_path:
+        existing = session.query(db.ProofFolder).filter_by(path=new_path).first()
+        if existing is not None:
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+                return jsonify({"success": False, "error": _l("A folder with this name already exists.")}), 400
+            flash(_l("A folder with this name already exists."), "danger")
+            return redirect(url_for("proofing.index"))
+
+    # Update ProofFolder records (escape LIKE wildcards in old_path)
+    escaped_old = _escape_like(old_path)
     folders = session.query(db.ProofFolder).filter(
         or_(
             db.ProofFolder.path == old_path,
-            db.ProofFolder.path.like(f"{old_path}/%"),
+            db.ProofFolder.path.like(f"{escaped_old}/%", escape="\\"),
         )
     ).all()
     for f in folders:
@@ -652,7 +675,7 @@ def rename_folder():
     projects = session.query(db.Project).filter(
         or_(
             db.Project.folder == old_path,
-            db.Project.folder.like(f"{old_path}/%"),
+            db.Project.folder.like(f"{escaped_old}/%", escape="\\"),
         )
     ).all()
     for p in projects:
@@ -694,10 +717,11 @@ def delete_folder():
     parent_path = "/".join(parts[:-1])
 
     session = q.get_session()
+    escaped_target = _escape_like(target_path)
     session.query(db.ProofFolder).filter(
         or_(
             db.ProofFolder.path == target_path,
-            db.ProofFolder.path.like(f"{target_path}/%"),
+            db.ProofFolder.path.like(f"{escaped_target}/%", escape="\\"),
         )
     ).delete(synchronize_session=False)
 
@@ -705,7 +729,7 @@ def delete_folder():
     projects = session.query(db.Project).filter(
         or_(
             db.Project.folder == target_path,
-            db.Project.folder.like(f"{target_path}/%"),
+            db.Project.folder.like(f"{escaped_target}/%", escape="\\"),
         )
     ).all()
     for p in projects:

@@ -381,6 +381,8 @@ def ensure_proof_folder(session, full_path: str, creator_id=None, fingerprint_id
     norm = normalize_folder_path(full_path)
     if not norm:
         return None
+    from sqlalchemy.exc import IntegrityError
+
     from kalanjiyam import database as db
 
     parts = norm.split("/")
@@ -399,6 +401,14 @@ def ensure_proof_folder(session, full_path: str, creator_id=None, fingerprint_id
                 fingerprint_id=fingerprint_id,
             )
             session.add(new_f)
+            try:
+                session.flush()
+            except IntegrityError:
+                session.rollback()
+                existing = session.query(db.ProofFolder).filter_by(path=sub_p).first()
+                if i == len(parts):
+                    target_folder = existing
+                continue
             if i == len(parts):
                 target_folder = new_f
         else:
