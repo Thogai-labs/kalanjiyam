@@ -4,12 +4,16 @@ import pytest
 
 from kalanjiyam.utils.storage import (
     LocalStorage,
+    MemoryStorage,
+    MultiTenantStorage,
     S3Storage,
+    _extract_org_slug_from_key,
     editor_image_key,
     get_storage,
     page_image_key,
     pdf_key,
     project_prefix,
+    sanitize_bucket_name,
 )
 
 
@@ -151,10 +155,122 @@ class TestS3Storage:
     def test_local_copy_of_missing_key_does_not_exist(self, storage):
         assert not storage.local_copy("projects/p/pages/404.jpg").exists()
 
-
 def test_get_storage_uses_local_backend_in_tests(flask_app):
     with flask_app.app_context():
         storage = get_storage()
         assert isinstance(storage, LocalStorage)
         # The instance is created once and cached on the app.
         assert get_storage() is storage
+
+
+# -------------------------------------------------------------------------
+# Multi-tenant storage helpers
+# -------------------------------------------------------------------------
+
+
+class TestSanitizeBucketName:
+    def test_simple_slug(self):
+        assert sanitize_bucket_name("anna-univ") == "org-anna-univ"
+
+    def test_underscores_converted_to_dashes(self):
+        assert sanitize_bucket_name("tamil_dept") == "org-tamil-dept"
+
+    def test_uppercase_lowered(self):
+        assert sanitize_bucket_name("IGNOU") == "org-ignou"
+
+    def test_special_chars_stripped(self):
+        name = sanitize_bucket_name("my org (test)!")
+        assert name == "org-my-org-test"
+
+    def test_length_capped_at_63(self):
+        long_slug = "a" * 100
+        assert len(sanitize_bucket_name(long_slug)) <= 63
+
+
+class TestExtractOrgSlugFromKey:
+    def test_standard_project_key(self):
+        assert _extract_org_slug_from_key("projects/anna-univ/book-1/pages/1.jpg") == "anna-univ"
+
+    def test_open_tenant_key(self):
+        assert _extract_org_slug_from_key("projects/open-tenant/book/pdf/source.pdf") == "open-tenant"
+
+    def test_docx_key_returns_none(self):
+        assert _extract_org_slug_from_key("docx/uploads/abc.docx") is None
+
+    def test_short_key_returns_none(self):
+        assert _extract_org_slug_from_key("projects/") is None
+
+    def test_empty_key_returns_none(self):
+        assert _extract_org_slug_from_key("") is None
+
+
+class TestMultiTenantStorage:
+    """Test MultiTenantStorage routing using in-memory backends."""
+
+    @pytest.fixture
+    def default_backend(self):
+        return MemoryStorage()
+
+    @pytest.fixture
+    def org_backend(self):
+        return MemoryStorage()
+
+    @pytest.fixture
+    def mt_storage(self, default_backend, org_backend, monkeypatch):
+        """MultiTenantStorage that routes 'custom-org' to org_backend."""
+        from kalanjiyam.utils import storage as storage_mod
+
+        def mock_get_org_storage(org_slug):
+            if org_slug == "custom-org":
+                return org_backend
+            return None
+
+        monkeypatch.setattr(storage_mod, "get_org_storage", mock_get_org_storage)
+        return MultiTenantStorage(default_backend)
+
+    def test_default_org_uses_default_backend(self, mt_storage, default_backend):
+        mt_storage.save("projects/open-tenant/book/pages/1.jpg", b"default-data")
+        assert default_backend.exists("projects/open-tenant/book/pages/1.jpg")
+        assert mt_storage.read_bytes("projects/open-tenant/book/pages/1.jpg") == b"default-data"
+
+    def test_custom_org_routes_to_org_backend(self, mt_storage, default_backend, org_backend):
+        mt_storage.save("projects/custom-org/book/pages/1.jpg", b"org-data")
+        assert org_backend.exists("projects/custom-org/book/pages/1.jpg")
+        assert not default_backend.exists("projects/custom-org/book/pages/1.jpg")
+        assert mt_storage.read_bytes("projects/custom-org/book/pages/1.jpg") == b"org-data"
+
+    def test_non_project_keys_use_default(self, mt_storage, default_backend):
+        mt_storage.save("docx/uploads/abc.docx", b"docx-data")
+        assert default_backend.exists("docx/uploads/abc.docx")
+        assert mt_storage.read_bytes("docx/uploads/abc.docx") == b"docx-data"
+
+    def test_exists_routes_correctly(self, mt_storage, org_backend):
+        org_backend.save("projects/custom-org/book/pdf/source.pdf", b"pdf")
+        assert mt_storage.exists("projects/custom-org/book/pdf/source.pdf")
+        assert not mt_storage.exists("projects/custom-org/book/pdf/missing.pdf")
+
+    def test_delete_routes_correctly(self, mt_storage, org_backend):
+        org_backend.save("projects/custom-org/book/pages/1.jpg", b"data")
+        assert mt_storage.delete("projects/custom-org/book/pages/1.jpg")
+        assert not org_backend.exists("projects/custom-org/book/pages/1.jpg")
+
+    def test_list_keys_routes_correctly(self, mt_storage, org_backend):
+        org_backend.save("projects/custom-org/book/pages/1.jpg", b"a")
+        org_backend.save("projects/custom-org/book/pages/2.jpg", b"bb")
+        keys = dict(mt_storage.list_keys("projects/custom-org/"))
+        assert keys == {
+            "projects/custom-org/book/pages/1.jpg": 1,
+            "projects/custom-org/book/pages/2.jpg": 2,
+        }
+
+    def test_size_routes_correctly(self, mt_storage, org_backend):
+        org_backend.save("projects/custom-org/book/pages/1.jpg", b"1234")
+        assert mt_storage.size("projects/custom-org/book/pages/1.jpg") == 4
+
+    def test_delete_prefix_routes_correctly(self, mt_storage, default_backend, org_backend):
+        org_backend.save("projects/custom-org/book/pages/1.jpg", b"a")
+        org_backend.save("projects/custom-org/book/pages/2.jpg", b"b")
+        default_backend.save("projects/open-tenant/book/pages/1.jpg", b"c")
+        assert mt_storage.delete_prefix("projects/custom-org/") == 2
+        assert not org_backend.exists("projects/custom-org/book/pages/1.jpg")
+        assert default_backend.exists("projects/open-tenant/book/pages/1.jpg")
