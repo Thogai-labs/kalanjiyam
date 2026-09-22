@@ -340,13 +340,50 @@ def get_folder_contents(
     }
 
 
-def get_all_available_folders(session, base_query=None) -> list[str]:
-    """Collect all normalized folder paths from both ProofFolder and Project.folder."""
+def get_all_available_folders(
+    session,
+    base_query=None,
+    organization_id=None,
+    creator_id=None,
+    fingerprint_id=None,
+    is_super_admin=False,
+) -> list[str]:
+    """Collect all normalized folder paths from both ProofFolder and Project.folder.
+
+    :param organization_id: if provided, only return ProofFolder records belonging to this org.
+    :param creator_id: optional user id filter.
+    :param fingerprint_id: optional guest device fingerprint filter.
+    :param is_super_admin: if True, returns all ProofFolder records across organizations.
+    """
     folders = set()
+    from sqlalchemy import false, or_
     from kalanjiyam import database as db
 
     try:
-        proof_folders = session.query(db.ProofFolder).all()
+        pf_query = session.query(db.ProofFolder)
+        if is_super_admin:
+            if organization_id is not None:
+                pf_query = pf_query.filter(db.ProofFolder.organization_id == organization_id)
+        else:
+            conditions = []
+            if organization_id is not None:
+                conditions.append(db.ProofFolder.organization_id == organization_id)
+            if creator_id is not None:
+                conditions.append(db.ProofFolder.creator_id == creator_id)
+            if fingerprint_id is not None:
+                conditions.append(
+                    (db.ProofFolder.fingerprint_id == fingerprint_id)
+                    & (db.ProofFolder.organization_id.is_(None))
+                )
+            if conditions:
+                pf_query = pf_query.filter(or_(*conditions))
+            elif organization_id is None and creator_id is None and fingerprint_id is None and base_query is None:
+                # Unfiltered legacy call (e.g. tests or internal scripts) -> query all
+                pass
+            else:
+                pf_query = pf_query.filter(false())
+
+        proof_folders = pf_query.all()
         for pf in proof_folders:
             if pf.path:
                 norm_p = normalize_folder_path(pf.path)
@@ -376,8 +413,11 @@ def get_all_available_folders(session, base_query=None) -> list[str]:
     return sorted(folders, key=lambda s: s.lower())
 
 
-def ensure_proof_folder(session, full_path: str, creator_id=None, fingerprint_id=None):
-    """Ensure that the normalized folder path and all intermediate parents exist in ProofFolder."""
+def ensure_proof_folder(session, full_path: str, creator_id=None, fingerprint_id=None, organization_id=None):
+    """Ensure that the normalized folder path and all intermediate parents exist in ProofFolder.
+
+    :param organization_id: the org that owns this folder. Used for both filtering and creation.
+    """
     norm = normalize_folder_path(full_path)
     if not norm:
         return None
@@ -391,7 +431,8 @@ def ensure_proof_folder(session, full_path: str, creator_id=None, fingerprint_id
         sub_p = "/".join(parts[:i])
         leaf = parts[i - 1]
         parent_p = "/".join(parts[: i - 1])
-        existing = session.query(db.ProofFolder).filter_by(path=sub_p).first()
+        pf_filter = {"path": sub_p, "organization_id": organization_id}
+        existing = session.query(db.ProofFolder).filter_by(**pf_filter).first()
         if not existing:
             new_f = db.ProofFolder(
                 path=sub_p,
@@ -399,13 +440,14 @@ def ensure_proof_folder(session, full_path: str, creator_id=None, fingerprint_id
                 parent_path=parent_p,
                 creator_id=creator_id,
                 fingerprint_id=fingerprint_id,
+                organization_id=organization_id,
             )
             session.add(new_f)
             try:
                 session.flush()
             except IntegrityError:
                 session.rollback()
-                existing = session.query(db.ProofFolder).filter_by(path=sub_p).first()
+                existing = session.query(db.ProofFolder).filter_by(**pf_filter).first()
                 if i == len(parts):
                     target_folder = existing
                 continue
@@ -415,5 +457,6 @@ def ensure_proof_folder(session, full_path: str, creator_id=None, fingerprint_id
             if i == len(parts):
                 target_folder = existing
     return target_folder
+
 
 

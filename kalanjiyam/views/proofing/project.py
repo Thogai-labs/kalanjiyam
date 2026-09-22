@@ -528,6 +528,12 @@ def edit(slug):
         session = q.get_session()
         form.populate_obj(project_)
 
+        project_org_id = project_.groups[0].id if project_.groups else None
+        if project_org_id is None and current_user.is_authenticated:
+            from kalanjiyam.utils.org_access import user_organization_id
+
+            project_org_id = user_organization_id(current_user)
+
         project_.folder = project_utils.normalize_folder_path(form.folder.data)
         if project_.folder:
             project_utils.ensure_proof_folder(
@@ -539,6 +545,7 @@ def edit(slug):
                     if not current_user.is_authenticated
                     else None
                 ),
+                organization_id=project_org_id,
             )
         project_.tags = project_utils.normalize_tags(form.tags.data)
         flag_modified(project_, "tags")
@@ -561,7 +568,25 @@ def edit(slug):
 
     delete_form = DeleteProjectForm()
     session = q.get_session()
-    available_folders = project_utils.get_all_available_folders(session)
+
+    project_org_id = project_.groups[0].id if project_.groups else None
+    if project_org_id is None and current_user.is_authenticated:
+        from kalanjiyam.utils.org_access import user_organization_id
+
+        project_org_id = user_organization_id(current_user)
+
+    device_fp = request.cookies.get("device_fingerprint")
+    base_query = q.accessible_proofing_projects_query(
+        current_user, session=session, device_fingerprint=device_fp
+    )
+    available_folders = project_utils.get_all_available_folders(
+        session,
+        base_query=base_query,
+        organization_id=project_org_id,
+        creator_id=current_user.id if current_user.is_authenticated else None,
+        fingerprint_id=device_fp if not current_user.is_authenticated else None,
+        is_super_admin=getattr(current_user, "is_super_admin", False),
+    )
 
     return render_template(
         "proofing/projects/edit.html",
@@ -592,6 +617,12 @@ def move_folder(slug):
     target_folder = (target_folder or "").strip()
     norm_folder = project_utils.normalize_folder_path(target_folder)
 
+    project_org_id = project_.groups[0].id if project_.groups else None
+    if project_org_id is None and current_user.is_authenticated:
+        from kalanjiyam.utils.org_access import user_organization_id
+
+        project_org_id = user_organization_id(current_user)
+
     session = q.get_session()
     project_.folder = norm_folder
     if norm_folder:
@@ -604,6 +635,7 @@ def move_folder(slug):
                 if not current_user.is_authenticated
                 else None
             ),
+            organization_id=project_org_id,
         )
     session.commit()
 
