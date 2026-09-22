@@ -134,6 +134,18 @@ class EditMetadataForm(FlaskForm):
         },
     )
     condition_tags = HiddenField(_l("Condition tags"))
+    folder = StringField(
+        _l("Folder / Category"),
+        render_kw={
+            "placeholder": _l("e.g. Literature/Poetry or Philosophy"),
+        },
+    )
+    tags = StringField(
+        _l("Tags"),
+        render_kw={
+            "placeholder": _l("Comma-separated tags, e.g. Sanskrit, Manuscript"),
+        },
+    )
     genre = QuerySelectField(
         query_factory=q.genres, allow_blank=True, blank_text=_l("(none)")
     )
@@ -509,10 +521,27 @@ def edit(slug):
 
     if request.method == "GET":
         form.condition_tags.data = json.dumps(project_.condition_tag_list)
+        form.folder.data = project_.folder or ""
+        form.tags.data = ", ".join(project_.tag_list) if project_.tag_list else ""
 
     if form.validate_on_submit():
         session = q.get_session()
         form.populate_obj(project_)
+
+        project_.folder = project_utils.normalize_folder_path(form.folder.data)
+        if project_.folder:
+            project_utils.ensure_proof_folder(
+                session,
+                project_.folder,
+                creator_id=current_user.id if current_user.is_authenticated else None,
+                fingerprint_id=(
+                    request.cookies.get("device_fingerprint")
+                    if not current_user.is_authenticated
+                    else None
+                ),
+            )
+        project_.tags = project_utils.normalize_tags(form.tags.data)
+        flag_modified(project_, "tags")
 
         raw_tags = request.form.get("condition_tags") or form.condition_tags.data
         project_.condition_tags = project_utils.normalize_condition_tags(
@@ -531,13 +560,58 @@ def edit(slug):
         return redirect(url_for("proofing.project.summary", slug=slug))
 
     delete_form = DeleteProjectForm()
+    session = q.get_session()
+    available_folders = project_utils.get_all_available_folders(session)
+
     return render_template(
         "proofing/projects/edit.html",
         project=project_,
         form=form,
         delete_form=delete_form,
         supported_engines=SUPPORTED_ENGINES,
+        available_folders=available_folders,
     )
+
+
+@bp.route("/<slug>/move-folder", methods=["POST"])
+def move_folder(slug):
+    """Move project to a folder."""
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    # Restrict guests to editing only their own created projects
+    if not current_user.is_authenticated:
+        fingerprint_id = request.cookies.get("device_fingerprint")
+        if project_.creator_id is not None or project_.fingerprint_id != fingerprint_id:
+            abort(403)
+
+    target_folder = request.form.get("folder")
+    if target_folder is None and request.is_json:
+        target_folder = request.get_json().get("folder", "")
+    target_folder = (target_folder or "").strip()
+    norm_folder = project_utils.normalize_folder_path(target_folder)
+
+    session = q.get_session()
+    project_.folder = norm_folder
+    if norm_folder:
+        project_utils.ensure_proof_folder(
+            session,
+            norm_folder,
+            creator_id=current_user.id if current_user.is_authenticated else None,
+            fingerprint_id=(
+                request.cookies.get("device_fingerprint")
+                if not current_user.is_authenticated
+                else None
+            ),
+        )
+    session.commit()
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+        return jsonify({"success": True, "folder": norm_folder, "slug": slug})
+
+    flash(_l("Project moved successfully."), "success")
+    return redirect(request.referrer or url_for("proofing.index", folder=norm_folder))
 
 
 @bp.route("/<slug>/metadata", methods=["GET", "POST"])

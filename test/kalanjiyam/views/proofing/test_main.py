@@ -113,6 +113,43 @@ def test_index_pagination_bounds(client):
     assert resp.status_code == 200
 
 
+def test_index_folder_and_tag_filters(client):
+    # Check that query with folder works
+    resp = client.get("/proofing/?folder=Philosophy/Nyaya")
+    assert resp.status_code == 200
+
+    resp_ajax = client.get(
+        "/proofing/?folder=Philosophy/Nyaya",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_ajax.status_code == 200
+    assert "X-Total-Projects" in resp_ajax.headers
+
+    # Check that query with tag works
+    resp_tag = client.get("/proofing/?tag=Manuscript")
+    assert resp_tag.status_code == 200
+
+    resp_tag_ajax = client.get(
+        "/proofing/?tag=Manuscript",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_tag_ajax.status_code == 200
+    assert "X-Total-Projects" in resp_tag_ajax.headers
+
+
+def test_project_model_folder_and_tags():
+    from kalanjiyam import database as db
+    proj = db.Project(
+        slug="folder-test-proj",
+        display_title="Folder Test Project",
+        folder="  Philosophy // Nyaya  ",
+        tags=["Sanskrit", "logic", "Sanskrit"],
+    )
+    assert proj.folder_path == "Philosophy/Nyaya"
+    assert proj.folder_parts == ["Philosophy", "Nyaya"]
+    assert proj.tag_list == ["Sanskrit", "logic"]
+
+
 def test_beginners_guide(client):
     resp = client.get("/proofing/help/beginners-guide")
     assert "Beginner's Guide" in resp.text
@@ -539,3 +576,242 @@ def test_create_project_status_batch_pdfs(client):
         assert "Queueing Task..." in resp.text
         assert "Waiting for the server to start processing your PDFs." in resp.text
         assert "Starting batch PDF processing..." in resp.text
+
+
+def test_move_folder__ajax_and_redirect(rama_client):
+    """Test move_folder endpoint with AJAX and normal POST."""
+    resp = rama_client.post(
+        "/proofing/test-project/move-folder",
+        data={"folder": "Manuscripts/Tamil"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    assert data["folder"] == "Manuscripts/Tamil"
+    assert data["slug"] == "test-project"
+
+    # Move back to root
+    resp = rama_client.post(
+        "/proofing/test-project/move-folder",
+        data={"folder": ""},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    assert data["folder"] == ""
+
+    # Unknown slug returns 404
+    resp = rama_client.post(
+        "/proofing/nonexistent-project-slug/move-folder",
+        data={"folder": "SomeFolder"},
+    )
+    assert resp.status_code == 404
+
+
+def test_index_folder_and_projects_layout(client):
+    """Test index template renders horizontal items layout, 3-dots context menu, and move modal."""
+    resp = client.get("/proofing/")
+    assert resp.status_code == 200
+    assert "openMoveModal" in resp.text
+    assert "Move to folder…" in resp.text
+    assert "showMoveModal" in resp.text
+
+
+def test_create_and_manage_folders(rama_client):
+    """Test creating folders and subfolders via POST /proofing/folders/create."""
+    from kalanjiyam import database as db
+    from kalanjiyam.queries import get_session
+
+    session = get_session()
+
+    # 1. Create root folder "Literature"
+    resp = rama_client.post(
+        "/proofing/folders/create",
+        data={"folder_name": "Literature", "parent_folder": ""},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    assert data["folder"] == "Literature"
+    assert data["path"] == "Literature"
+    assert data["name"] == "Literature"
+
+    # Verify ProofFolder in database
+    folder_rec = session.query(db.ProofFolder).filter_by(path="Literature").first()
+    assert folder_rec is not None
+    assert folder_rec.name == "Literature"
+    assert folder_rec.parent_path == ""
+
+    # 2. Create subfolder "Poetry" under "Literature"
+    resp = rama_client.post(
+        "/proofing/folders/create",
+        data={"folder_name": "Poetry", "parent_folder": "Literature"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    assert data["folder"] == "Literature/Poetry"
+    assert data["path"] == "Literature/Poetry"
+    assert data["name"] == "Poetry"
+
+    sub_rec = session.query(db.ProofFolder).filter_by(path="Literature/Poetry").first()
+    assert sub_rec is not None
+    assert sub_rec.name == "Poetry"
+    assert sub_rec.parent_path == "Literature"
+
+    # 3. Duplicate creation returns 400
+    resp = rama_client.post(
+        "/proofing/folders/create",
+        data={"folder_name": "Poetry", "parent_folder": "Literature"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 400
+
+    # 4. Invalid empty name returns 400
+    resp = rama_client.post(
+        "/proofing/folders/create",
+        data={"folder_name": "   ", "parent_folder": "Literature"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 400
+
+
+def test_empty_folder_rendered_in_workspace(client, rama_client):
+    """Test that an empty folder appears at root with count 0 and can be opened."""
+    # Create empty folder "Unpublished"
+    resp = rama_client.post(
+        "/proofing/folders/create",
+        data={"folder_name": "Unpublished", "parent_folder": ""},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+
+    # GET root index
+    resp = client.get("/proofing/")
+    assert resp.status_code == 200
+    assert "Unpublished" in resp.text
+    assert "0 projects" in resp.text
+
+    # GET inside the folder
+    resp = client.get("/proofing/?folder=Unpublished")
+    assert resp.status_code == 200
+    assert "This folder is empty" in resp.text
+    assert "Unpublished" in resp.text
+
+
+def test_rename_folder_cascade(rama_client):
+    """Test renaming a folder cascades to subfolders and project records."""
+    from kalanjiyam import database as db
+    from kalanjiyam.queries import get_session
+
+    session = get_session()
+
+    # Create folder "Ancient" and subfolder "Ancient/Vedic"
+    rama_client.post(
+        "/proofing/folders/create",
+        data={"folder_name": "Ancient", "parent_folder": ""},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    rama_client.post(
+        "/proofing/folders/create",
+        data={"folder_name": "Vedic", "parent_folder": "Ancient"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+
+    # Move test-project into "Ancient/Vedic"
+    resp = rama_client.post(
+        "/proofing/test-project/move-folder",
+        data={"folder": "Ancient/Vedic"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+
+    # Rename "Ancient" -> "Classical"
+    resp = rama_client.post(
+        "/proofing/folders/rename",
+        data={"old_path": "Ancient", "new_name": "Classical"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    assert data["new_path"] == "Classical"
+
+    session.expire_all()
+    # Ancient is gone, Classical exists
+    assert session.query(db.ProofFolder).filter_by(path="Ancient").first() is None
+    assert session.query(db.ProofFolder).filter_by(path="Classical").first() is not None
+    # Ancient/Vedic is now Classical/Vedic
+    assert session.query(db.ProofFolder).filter_by(path="Ancient/Vedic").first() is None
+    sub = session.query(db.ProofFolder).filter_by(path="Classical/Vedic").first()
+    assert sub is not None
+    assert sub.parent_path == "Classical"
+
+    # Project folder is updated to Classical/Vedic
+    project = session.query(db.Project).filter_by(slug="test-project").first()
+    assert project.folder == "Classical/Vedic"
+
+
+def test_delete_folder_safely_moves_manuscripts(rama_client):
+    """Test deleting a folder deletes ProofFolder and safely moves manuscripts to parent."""
+    from kalanjiyam import database as db
+    from kalanjiyam.queries import get_session
+
+    session = get_session()
+
+    # Create "CategoryX/SubY"
+    rama_client.post(
+        "/proofing/folders/create",
+        data={"folder_name": "CategoryX", "parent_folder": ""},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    rama_client.post(
+        "/proofing/folders/create",
+        data={"folder_name": "SubY", "parent_folder": "CategoryX"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+
+    # Move test-project into "CategoryX/SubY"
+    rama_client.post(
+        "/proofing/test-project/move-folder",
+        data={"folder": "CategoryX/SubY"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+
+    # Delete "CategoryX/SubY" -> project should move to "CategoryX"
+    resp = rama_client.post(
+        "/proofing/folders/delete",
+        data={"folder_path": "CategoryX/SubY"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    assert data["parent_folder"] == "CategoryX"
+
+    session.expire_all()
+    assert session.query(db.ProofFolder).filter_by(path="CategoryX/SubY").first() is None
+    project = session.query(db.Project).filter_by(slug="test-project").first()
+    assert project.folder == "CategoryX"
+
+    # Delete "CategoryX" -> project should move to "" (root)
+    resp = rama_client.post(
+        "/proofing/folders/delete",
+        data={"folder_path": "CategoryX"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["success"] is True
+    assert data["parent_folder"] == ""
+
+    session.expire_all()
+    assert session.query(db.ProofFolder).filter_by(path="CategoryX").first() is None
+    project = session.query(db.Project).filter_by(slug="test-project").first()
+    assert project.folder == ""
+
+

@@ -45,6 +45,34 @@ class OCRComparison(Base):
     project = relationship("Project", backref="ocr_comparisons")
 
 
+class ProofFolder(Base):
+    """A folder in the proofing workspace for organizing projects."""
+
+    __tablename__ = "proof_folders"
+
+    #: Primary key.
+    id = pk()
+    #: Normalized full path of the folder, e.g. "Literature" or "Literature/Poetry".
+    path = Column(String, unique=True, nullable=False, index=True)
+    #: Human-readable folder name, e.g. "Poetry".
+    name = Column(String, nullable=False)
+    #: Parent folder path, e.g. "Literature" (or "" if at root).
+    parent_path = Column(String, nullable=False, default="", index=True)
+    #: Timestamp at which folder was created.
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    #: Timestamp at which folder was last updated.
+    updated_at = Column(DateTime, default=same_as("created_at"), nullable=False)
+    #: Creator of this folder (optional).
+    creator_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=True)
+    #: Device fingerprint (for unregistered users, optional).
+    fingerprint_id = Column(String, nullable=True, index=True)
+
+    creator = relationship("User")
+
+    def __repr__(self):
+        return f"<ProofFolder {self.path}>"
+
+
 class Genre(Base):
     """A text genre.
 
@@ -120,6 +148,12 @@ class Project(Base):
     #: Condition tags / document issues (e.g. shmushing, blurry, torn) with affected pages
     condition_tags = Column(JSON, nullable=True, default=list)
 
+    #: Folder hierarchy path (e.g. "Philosophy/Nyaya", "Literature", etc.)
+    folder = Column(String, nullable=True, index=True, default="")
+
+    #: General project tags / labels (e.g. ["Manuscript", "Vedas", "Urgent"])
+    tags = Column(JSON, nullable=True, default=list)
+
     #: Timestamp at which this project was created.
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     #: Timestamp at which this project was last updated.
@@ -152,6 +186,24 @@ class Project(Base):
         from kalanjiyam.utils.project_utils import normalize_condition_tags
         total = len(self.pages) if self.pages else 0
         return normalize_condition_tags(self.condition_tags, total_pages=total)
+
+    @property
+    def tag_list(self) -> list:
+        """Return project tags as a list of cleaned strings."""
+        from kalanjiyam.utils.project_utils import normalize_tags
+        return normalize_tags(self.tags)
+
+    @property
+    def folder_path(self) -> str:
+        """Return normalized folder path without leading/trailing slashes."""
+        from kalanjiyam.utils.project_utils import normalize_folder_path
+        return normalize_folder_path(self.folder)
+
+    @property
+    def folder_parts(self) -> list:
+        """Return folder path split into individual segment names."""
+        path = self.folder_path
+        return path.split("/") if path else []
 
     @property
     def creator_mode(self) -> str:

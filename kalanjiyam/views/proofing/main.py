@@ -12,6 +12,7 @@ from flask import (
     Blueprint,
     current_app,
     flash,
+    jsonify,
     make_response,
     redirect,
     render_template,
@@ -33,6 +34,7 @@ from kalanjiyam import queries as q
 from kalanjiyam.enums import SitePageStatus
 from kalanjiyam.tasks import PRIORITY_BATCH, PRIORITY_LOW
 from kalanjiyam.tasks import projects as project_tasks
+from kalanjiyam.utils import project_utils
 from kalanjiyam.utils.quotas import ensure_storage_quota_for_user
 from kalanjiyam.views.proofing.decorators import moderator_required
 
@@ -73,6 +75,11 @@ def _filename_to_project_title(filename: str, fallback_index: int = 1) -> str:
     if base:
         return base
     return f"Project {fallback_index}"
+
+
+def _escape_like(value: str) -> str:
+    """Escape SQL LIKE wildcard characters (%, _) in a value for safe use in LIKE patterns."""
+    return value.replace("%", r"\%").replace("_", r"\_")
 
 
 def is_group_images_enabled(request_form) -> bool:
@@ -164,6 +171,18 @@ class CreateProjectForm(FlaskForm):
             )
         ],
     )
+    folder = StringField(
+        _l("Folder (optional)"),
+        render_kw={
+            "placeholder": _l("e.g. Literature/Poetry or Philosophy"),
+        },
+    )
+    tags = StringField(
+        _l("Tags (optional)"),
+        render_kw={
+            "placeholder": _l("Comma-separated tags, e.g. Sanskrit, Manuscript"),
+        },
+    )
     group_images = BooleanField(
         _l("Group into one project"),
         default=True,
@@ -196,6 +215,8 @@ def index():
     selected_org = (request.args.get("org", "all")).strip()
     sort_field = (request.args.get("sort", "created")).strip().lower()
     sort_order = (request.args.get("order", "desc")).strip().lower()
+    selected_folder = (request.args.get("folder", "")).strip()
+    selected_tag = (request.args.get("tag", "")).strip()
 
     # Parse single or multiple condition issue filters
     raw_issues = request.args.getlist("issue")
@@ -263,6 +284,24 @@ def index():
                     available_condition_tags.add(t_name.strip())
     available_condition_tags = sorted(available_condition_tags, key=lambda s: s.lower())
 
+    # Collect available folders and project tags across accessible projects
+    available_folders = project_utils.get_all_available_folders(
+        session, base_query=base_query
+    )
+    has_any_folders = len(available_folders) > 0
+    has_any_items = has_any_projects or has_any_folders
+
+    available_project_tags = set()
+    tag_rows_proj = (
+        base_query.with_entities(db.Project.tags)
+        .filter(db.Project.tags.isnot(None))
+        .all()
+    )
+    for (t_val,) in tag_rows_proj:
+        for t_item in project_utils.normalize_tags(t_val):
+            available_project_tags.add(t_item)
+    available_project_tags = sorted(available_project_tags, key=lambda s: s.lower())
+
     query = base_query
 
     # 4. Filter by organization if specified
@@ -272,6 +311,15 @@ def index():
     # 5. Filter by creator mode if specified
     if selected_mode and selected_mode != "all":
         query = query.filter(db.Project.creator_mode == selected_mode)
+
+    # 5b. Filter by folder if specified
+    if selected_folder:
+        query = query.filter(
+            or_(
+                db.Project.folder == selected_folder,
+                db.Project.folder.like(f"{selected_folder}/%"),
+            )
+        )
 
     # 6. Full tenant search filtering (matching display_title, print_title, author, or slug)
     if search_query:
@@ -297,22 +345,30 @@ def index():
     else:
         query = query.order_by(order_col.asc(), db.Project.id.asc())
 
-    # 8. Server-side pagination
-    if selected_issues:
-        selected_issues_lower = {i.lower() for i in selected_issues}
+    # 8. Server-side pagination and filtering
+    if selected_issues or selected_tag:
         candidates = (
-            query.filter(db.Project.condition_tags.isnot(None))
-            .options(orm.selectinload(db.Project.groups))
+            query.options(orm.selectinload(db.Project.groups))
             .all()
         )
-        filtered_projects = [
-            p
-            for p in candidates
-            if any(
-                (tag.get("name", "").lower() in selected_issues_lower)
-                for tag in (p.condition_tag_list or [])
-            )
-        ]
+        filtered_projects = candidates
+        if selected_issues:
+            selected_issues_lower = {i.lower() for i in selected_issues}
+            filtered_projects = [
+                p
+                for p in filtered_projects
+                if any(
+                    (tag.get("name", "").lower() in selected_issues_lower)
+                    for tag in (p.condition_tag_list or [])
+                )
+            ]
+        if selected_tag:
+            sel_tag_lower = selected_tag.lower()
+            filtered_projects = [
+                p
+                for p in filtered_projects
+                if any(t.lower() == sel_tag_lower for t in (p.tag_list or []))
+            ]
         total_projects = len(filtered_projects)
         total_pages = (
             max(1, math.ceil(total_projects / per_page)) if total_projects else 1
@@ -337,12 +393,53 @@ def index():
             .all()
         )
 
-    # 9. Eagerly load pages & page status for ONLY current page projects
-    paginated_project_ids = [p.id for p in paginated_projects]
-    if paginated_project_ids:
+    # Build folder contents tree for Folder View
+    folder_scope_query = base_query
+    if selected_org and selected_org != "all":
+        folder_scope_query = folder_scope_query.filter(
+            db.Project.groups.any(db.Group.slug == selected_org)
+        )
+    if selected_mode and selected_mode != "all":
+        folder_scope_query = folder_scope_query.filter(
+            db.Project.creator_mode == selected_mode
+        )
+    if search_query:
+        like_pattern = f"%{search_query}%"
+        folder_scope_query = folder_scope_query.filter(
+            or_(
+                db.Project.display_title.ilike(like_pattern),
+                db.Project.print_title.ilike(like_pattern),
+                db.Project.author.ilike(like_pattern),
+                db.Project.slug.ilike(like_pattern),
+            )
+        )
+    all_scope_projects = folder_scope_query.options(
+        orm.selectinload(db.Project.groups)
+    ).all()
+    if selected_tag:
+        sel_tag_lower = selected_tag.lower()
+        all_scope_projects = [
+            p
+            for p in all_scope_projects
+            if any(t.lower() == sel_tag_lower for t in (p.tag_list or []))
+        ]
+
+    folder_contents = project_utils.get_folder_contents(
+        all_scope_projects,
+        current_folder=selected_folder,
+        all_known_folders=available_folders,
+    )
+
+    all_display_projects = list(paginated_projects)
+    for dp in folder_contents["direct_projects"]:
+        if dp.id not in [p.id for p in all_display_projects]:
+            all_display_projects.append(dp)
+
+    all_display_project_ids = [p.id for p in all_display_projects]
+    if all_display_project_ids:
         session.query(db.Project).options(
             orm.selectinload(db.Project.pages).joinedload(db.Page.status)
-        ).filter(db.Project.id.in_(paginated_project_ids)).all()
+        ).filter(db.Project.id.in_(all_display_project_ids)).all()
 
     status_classes = {
         SitePageStatus.R2: "bg-green-200",
@@ -365,7 +462,7 @@ def index():
     progress_per_project = {}
     pages_per_project = {}
 
-    for project in paginated_projects:
+    for project in all_display_projects:
         updated_ts = (
             int(project.updated_at.timestamp())
             if getattr(project, "updated_at", None)
@@ -433,11 +530,18 @@ def index():
         "selected_mode": selected_mode,
         "selected_org": selected_org,
         "selected_issues": selected_issues,
+        "selected_folder": selected_folder,
+        "selected_tag": selected_tag,
         "available_condition_tags": available_condition_tags,
+        "available_folders": available_folders,
+        "available_tags": available_project_tags,
         "user_organizations": user_organizations,
         "sort_field": sort_field,
         "sort_order": sort_order,
         "has_any_projects": has_any_projects,
+        "has_any_folders": has_any_folders,
+        "has_any_items": has_any_items,
+        "folder_contents": folder_contents,
     }
 
     is_ajax = (
@@ -451,6 +555,198 @@ def index():
         return resp
 
     return render_template("proofing/index.html", **template_kwargs)
+
+
+@bp.route("/folders/create", methods=["POST"])
+def create_folder():
+    """Create a new proofing folder."""
+    data = request.get_json(silent=True) or request.form
+    raw_name = (data.get("name") or data.get("folder_name") or "").strip()
+    raw_parent = (data.get("parent_folder") or data.get("parent") or "").strip()
+
+    if not raw_name:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+            return jsonify({"success": False, "error": "Folder name is required."}), 400
+        flash(_l("Folder name is required."), "danger")
+        return redirect(url_for("proofing.index"))
+
+    clean_name = raw_name.strip().strip("/")
+    if raw_parent:
+        full_path = project_utils.normalize_folder_path(f"{raw_parent}/{clean_name}")
+    else:
+        full_path = project_utils.normalize_folder_path(clean_name)
+
+    if not full_path:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+            return jsonify({"success": False, "error": "Invalid folder name."}), 400
+        flash(_l("Invalid folder name."), "danger")
+        return redirect(url_for("proofing.index"))
+
+    session = q.get_session()
+    existing = session.query(db.ProofFolder).filter_by(path=full_path).first()
+    if existing is not None:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+            return jsonify({"success": False, "error": _l("A folder with this name already exists.")}), 400
+        flash(_l("A folder with this name already exists."), "danger")
+        return redirect(url_for("proofing.index", folder=full_path))
+
+    creator_id = current_user.id if current_user.is_authenticated else None
+    fingerprint_id = (
+        request.cookies.get("device_fingerprint")
+        if not current_user.is_authenticated
+        else None
+    )
+
+    project_utils.ensure_proof_folder(
+        session, full_path, creator_id=creator_id, fingerprint_id=fingerprint_id
+    )
+    session.commit()
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+        return jsonify({
+            "success": True,
+            "folder": full_path,
+            "path": full_path,
+            "name": full_path.split("/")[-1],
+            "parent_folder": raw_parent,
+        })
+
+    flash(_l("Folder created successfully."), "success")
+    return redirect(url_for("proofing.index", folder=full_path))
+
+
+@bp.route("/folders/rename", methods=["POST"])
+def rename_folder():
+    """Rename an existing folder."""
+    data = request.get_json(silent=True) or request.form
+    old_path = project_utils.normalize_folder_path(data.get("old_path", ""))
+    new_name = (data.get("new_name") or "").strip().strip("/")
+
+    if not old_path or not new_name:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+            return jsonify({"success": False, "error": "Old path and new name are required."}), 400
+        flash(_l("Old path and new name are required."), "danger")
+        return redirect(url_for("proofing.index"))
+
+    # Reject slashes in new_name to prevent creating nested paths
+    if "/" in new_name or "\\" in new_name:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+            return jsonify({"success": False, "error": "Folder name cannot contain slashes."}), 400
+        flash(_l("Folder name cannot contain slashes."), "danger")
+        return redirect(url_for("proofing.index"))
+
+    old_parts = old_path.split("/")
+    parent_path = "/".join(old_parts[:-1])
+    new_path = f"{parent_path}/{new_name}" if parent_path else new_name
+    new_path = project_utils.normalize_folder_path(new_path)
+
+    session = q.get_session()
+
+    # Check for collision with existing folder
+    if new_path != old_path:
+        existing = session.query(db.ProofFolder).filter_by(path=new_path).first()
+        if existing is not None:
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+                return jsonify({"success": False, "error": _l("A folder with this name already exists.")}), 400
+            flash(_l("A folder with this name already exists."), "danger")
+            return redirect(url_for("proofing.index"))
+
+    # Update ProofFolder records (escape LIKE wildcards in old_path)
+    escaped_old = _escape_like(old_path)
+    folders = session.query(db.ProofFolder).filter(
+        or_(
+            db.ProofFolder.path == old_path,
+            db.ProofFolder.path.like(f"{escaped_old}/%", escape="\\"),
+        )
+    ).all()
+    for f in folders:
+        if f.path == old_path:
+            f.path = new_path
+            f.name = new_name
+            f.parent_path = parent_path
+        elif f.path.startswith(old_path + "/"):
+            remainder = f.path[len(old_path) + 1 :]
+            f.path = f"{new_path}/{remainder}"
+            f_parts = f.path.split("/")
+            f.name = f_parts[-1]
+            f.parent_path = "/".join(f_parts[:-1])
+
+    # Update Project records
+    projects = session.query(db.Project).filter(
+        or_(
+            db.Project.folder == old_path,
+            db.Project.folder.like(f"{escaped_old}/%", escape="\\"),
+        )
+    ).all()
+    for p in projects:
+        if p.folder == old_path:
+            p.folder = new_path
+        elif p.folder and p.folder.startswith(old_path + "/"):
+            remainder = p.folder[len(old_path) + 1 :]
+            p.folder = f"{new_path}/{remainder}"
+
+    session.commit()
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+        return jsonify({
+            "success": True,
+            "old_path": old_path,
+            "new_path": new_path,
+            "parent_folder": parent_path,
+        })
+
+    flash(_l("Folder renamed successfully."), "success")
+    return redirect(url_for("proofing.index", folder=new_path))
+
+
+@bp.route("/folders/delete", methods=["POST"])
+def delete_folder():
+    """Delete a folder. Projects inside are safely moved to its parent (or root)."""
+    data = request.get_json(silent=True) or request.form
+    target_path = project_utils.normalize_folder_path(
+        data.get("path") or data.get("folder_path") or ""
+    )
+
+    if not target_path:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+            return jsonify({"success": False, "error": "Folder path is required."}), 400
+        flash(_l("Folder path is required."), "danger")
+        return redirect(url_for("proofing.index"))
+
+    parts = target_path.split("/")
+    parent_path = "/".join(parts[:-1])
+
+    session = q.get_session()
+    escaped_target = _escape_like(target_path)
+    session.query(db.ProofFolder).filter(
+        or_(
+            db.ProofFolder.path == target_path,
+            db.ProofFolder.path.like(f"{escaped_target}/%", escape="\\"),
+        )
+    ).delete(synchronize_session=False)
+
+    # Safely move projects to parent_path
+    projects = session.query(db.Project).filter(
+        or_(
+            db.Project.folder == target_path,
+            db.Project.folder.like(f"{escaped_target}/%", escape="\\"),
+        )
+    ).all()
+    for p in projects:
+        p.folder = parent_path
+
+    session.commit()
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+        return jsonify({
+            "success": True,
+            "folder": target_path,
+            "path": target_path,
+            "parent_folder": parent_path,
+        })
+
+    flash(_l("Folder deleted successfully."), "success")
+    return redirect(url_for("proofing.index", folder=parent_path))
 
 
 @bp.route("/help")
@@ -577,6 +873,21 @@ def create_project():
     languages = get_supported_languages_list()
 
     form = CreateProjectForm()
+    if request.method == "GET" and request.args.get("folder"):
+        form.folder.data = request.args.get("folder").strip()
+
+    available_folders = project_utils.get_all_available_folders(session)
+
+    def _render_create_project():
+        return render_template(
+            "proofing/create-project.html",
+            form=form,
+            guest_upload_limit=guest_upload_limit,
+            engines=engines,
+            languages=languages,
+            user_organizations=user_organizations,
+            available_folders=available_folders,
+        )
 
     if request.method == "POST" and request.form.get("docx_workflow") == "direct":
         import json
@@ -590,26 +901,12 @@ def create_project():
         file = request.files.get("local_file")
         if not file or not file.filename:
             flash(_l("Please upload a file."), "error")
-            return render_template(
-                "proofing/create-project.html",
-                form=form,
-                guest_upload_limit=guest_upload_limit,
-                engines=engines,
-                languages=languages,
-                user_organizations=user_organizations,
-            )
+            return _render_create_project()
 
         filename = file.filename
         if Path(filename).suffix not in (".docx", ".doc"):
             flash(_l("Please upload a Word document (.docx)."), "error")
-            return render_template(
-                "proofing/create-project.html",
-                form=form,
-                guest_upload_limit=guest_upload_limit,
-                engines=engines,
-                languages=languages,
-                user_organizations=user_organizations,
-            )
+            return _render_create_project()
 
         source_lang = request.form.get("source_lang", "sa")
         target_lang = request.form.get("target_lang", "en")
@@ -622,14 +919,7 @@ def create_project():
 
         if not TranslationEngineFactory.is_supported(engine):
             flash(_l("Unsupported translation engine selected."), "error")
-            return render_template(
-                "proofing/create-project.html",
-                form=form,
-                guest_upload_limit=guest_upload_limit,
-                engines=engines,
-                languages=languages,
-                user_organizations=user_organizations,
-            )
+            return _render_create_project()
 
         docx_id = str(uuid.uuid4())
         from kalanjiyam.utils.storage import docx_upload_key, get_storage
@@ -696,14 +986,7 @@ def create_project():
                 and not user_organizations
             ):
                 flash(_l("Your account is not assigned to an organization."), "error")
-                return render_template(
-                    "proofing/create-project.html",
-                    form=form,
-                    guest_upload_limit=guest_upload_limit,
-                    engines=engines,
-                    languages=languages,
-                    user_organizations=user_organizations,
-                )
+                return _render_create_project()
         selected_org_slug = request.form.get("selected_org_slug")
         org_slug = "open-tenant"
         if current_user.is_authenticated:
@@ -731,14 +1014,7 @@ def create_project():
         uploaded_files = [f for f in raw_files if f and getattr(f, "filename", None)]
         if not uploaded_files:
             flash(_l("Please upload a file or images."), "error")
-            return render_template(
-                "proofing/create-project.html",
-                form=form,
-                guest_upload_limit=guest_upload_limit,
-                engines=engines,
-                languages=languages,
-                user_organizations=user_organizations,
-            )
+            return _render_create_project()
 
         for f in uploaded_files:
             if not _is_allowed_document_file(f.filename):
@@ -749,14 +1025,7 @@ def create_project():
                     ),
                     "error",
                 )
-                return render_template(
-                    "proofing/create-project.html",
-                    form=form,
-                    guest_upload_limit=guest_upload_limit,
-                    engines=engines,
-                    languages=languages,
-                    user_organizations=user_organizations,
-                )
+                return _render_create_project()
 
         is_multiple = len(uploaded_files) > 1
         all_are_images = all(
@@ -773,14 +1042,7 @@ def create_project():
                 ),
                 "error",
             )
-            return render_template(
-                "proofing/create-project.html",
-                form=form,
-                guest_upload_limit=guest_upload_limit,
-                engines=engines,
-                languages=languages,
-                user_organizations=user_organizations,
-            )
+            return _render_create_project()
 
         is_image_upload = all_are_images
         is_batch_pdf_upload = is_multiple and all_are_pdfs
@@ -815,14 +1077,7 @@ def create_project():
                     ),
                     "error",
                 )
-                return render_template(
-                    "proofing/create-project.html",
-                    form=form,
-                    guest_upload_limit=guest_upload_limit,
-                    engines=engines,
-                    languages=languages,
-                    user_organizations=user_organizations,
-                )
+                return _render_create_project()
         else:
             conflicts = []
             seen_slugs = set()
@@ -845,14 +1100,7 @@ def create_project():
                     ),
                     "error",
                 )
-                return render_template(
-                    "proofing/create-project.html",
-                    form=form,
-                    guest_upload_limit=guest_upload_limit,
-                    engines=engines,
-                    languages=languages,
-                    user_organizations=user_organizations,
-                )
+                return _render_create_project()
 
             if not current_user.is_authenticated:
                 from datetime import datetime, timedelta
@@ -1014,6 +1262,23 @@ def create_project():
                     project_slug=slug,
                 )
 
+        from kalanjiyam.utils.project_utils import normalize_folder_path, normalize_tags
+        folder_val = normalize_folder_path(form.folder.data)
+        tags_val = normalize_tags(form.tags.data)
+
+        if folder_val:
+            project_utils.ensure_proof_folder(
+                session,
+                folder_val,
+                creator_id=current_user.id if current_user.is_authenticated else None,
+                fingerprint_id=(
+                    request.cookies.get("device_fingerprint")
+                    if not current_user.is_authenticated
+                    else None
+                ),
+            )
+            session.commit()
+
         if is_batch_pdf_upload:
             if not current_user.is_authenticated:
                 task = project_tasks.create_batch_pdf_projects.apply_async(
@@ -1023,6 +1288,8 @@ def create_project():
                         "creator_id": None,
                         "fingerprint_id": request.cookies.get("device_fingerprint"),
                         "org_slug": org_slug,
+                        "folder": folder_val,
+                        "tags": tags_val,
                     },
                     queue="low_priority",
                     priority=PRIORITY_LOW,
@@ -1034,6 +1301,8 @@ def create_project():
                         "app_environment": current_app.config["KALANJIYAM_ENVIRONMENT"],
                         "creator_id": current_user.id,
                         "org_slug": org_slug,
+                        "folder": folder_val,
+                        "tags": tags_val,
                     },
                     priority=PRIORITY_BATCH,
                 )
@@ -1046,6 +1315,8 @@ def create_project():
                         "creator_id": None,
                         "fingerprint_id": request.cookies.get("device_fingerprint"),
                         "org_slug": org_slug,
+                        "folder": folder_val,
+                        "tags": tags_val,
                     },
                     queue="low_priority",
                     priority=PRIORITY_LOW,
@@ -1057,6 +1328,8 @@ def create_project():
                         "app_environment": current_app.config["KALANJIYAM_ENVIRONMENT"],
                         "creator_id": current_user.id,
                         "org_slug": org_slug,
+                        "folder": folder_val,
+                        "tags": tags_val,
                     },
                     priority=PRIORITY_BATCH,
                 )
@@ -1073,6 +1346,8 @@ def create_project():
                         "creator_id": None,
                         "fingerprint_id": request.cookies.get("device_fingerprint"),
                         "org_slug": org_slug,
+                        "folder": folder_val,
+                        "tags": tags_val,
                     },
                     queue="low_priority",
                     priority=PRIORITY_LOW,
@@ -1086,6 +1361,8 @@ def create_project():
                     app_environment=current_app.config["KALANJIYAM_ENVIRONMENT"],
                     creator_id=current_user.id,
                     org_slug=org_slug,
+                    folder=folder_val,
+                    tags=tags_val,
                 )
 
         from kalanjiyam.utils.user_tasks import add_user_task, get_user_identifier
@@ -1145,14 +1422,7 @@ def create_project():
             doc_type=doc_type,
         )
 
-    return render_template(
-        "proofing/create-project.html",
-        form=form,
-        guest_upload_limit=guest_upload_limit,
-        engines=engines,
-        languages=languages,
-        user_organizations=user_organizations,
-    )
+    return _render_create_project()
 
 
 @bp.route("/status/<task_id>")

@@ -102,6 +102,8 @@ def _add_project_to_database(
     require_org: bool,
     fingerprint_id: str | None = None,
     org_slug: str = "open-tenant",
+    folder: str | None = None,
+    tags: list | str | None = None,
 ):
     """Create a project on the database.
 
@@ -123,11 +125,15 @@ def _add_project_to_database(
         session.add(board)
         session.flush()
 
+        from kalanjiyam.utils.project_utils import normalize_folder_path, normalize_tags
+
         project = db.Project(
             slug=slug,
             display_title=display_title,
             creator_id=creator_id,
             fingerprint_id=fingerprint_id,
+            folder=normalize_folder_path(folder),
+            tags=normalize_tags(tags),
         )
         project.board_id = board.id
         session.add(project)
@@ -657,6 +663,8 @@ def create_project_inner(
     fingerprint_id: str | None = None,
     task_status: TaskStatus,
     org_slug: str = "open-tenant",
+    folder: str | None = None,
+    tags: list | str | None = None,
 ):
     """Split the given PDF, DOCX, or images into pages and register the project on the database."""
     logging.info(
@@ -696,6 +704,8 @@ def create_project_inner(
                 require_org=require_org,
                 fingerprint_id=fingerprint_id,
                 org_slug=org_slug,
+                folder=folder,
+                tags=tags,
             )
 
             db_project = session.query(db.Project).filter_by(slug=slug).one()
@@ -812,6 +822,8 @@ def create_project_inner(
                 require_org=require_org,
                 fingerprint_id=fingerprint_id,
                 org_slug=org_slug,
+                folder=folder,
+                tags=tags,
             )
 
             total_images_size_bytes = 0
@@ -902,6 +914,8 @@ def create_project_inner(
                 require_org=require_org,
                 fingerprint_id=fingerprint_id,
                 org_slug=org_slug,
+                folder=folder,
+                tags=tags,
             )
 
             # Update DB project metadata and metrics log
@@ -963,6 +977,8 @@ def create_project(
     creator_id: int | None,
     fingerprint_id: str | None = None,
     org_slug: str = "open-tenant",
+    folder: str | None = None,
+    tags: list | str | None = None,
 ):
     """Split the given PDF, DOCX, or images into pages and register the project on the database."""
     task_status = CeleryTaskStatus(self)
@@ -976,6 +992,8 @@ def create_project(
         fingerprint_id=fingerprint_id,
         task_status=task_status,
         org_slug=org_slug,
+        folder=folder,
+        tags=tags,
     )
 
 
@@ -987,6 +1005,8 @@ def create_batch_image_projects_inner(
     fingerprint_id: str | None = None,
     task_status: TaskStatus,
     org_slug: str = "open-tenant",
+    folder: str | None = None,
+    tags: list | str | None = None,
 ):
     """Create multiple separate 1-page projects from a batch of images."""
     total = len(projects_data)
@@ -997,6 +1017,8 @@ def create_batch_image_projects_inner(
     for idx, item in enumerate(projects_data, start=1):
         display_title = item["display_title"]
         image_keys = item["image_keys"]
+        item_folder = item.get("folder", folder)
+        item_tags = item.get("tags", tags)
         from kalanjiyam.tasks.utils import LocalTaskStatus
 
         local_status = LocalTaskStatus()
@@ -1008,6 +1030,8 @@ def create_batch_image_projects_inner(
             fingerprint_id=fingerprint_id,
             task_status=local_status,
             org_slug=org_slug,
+            folder=item_folder,
+            tags=item_tags,
         )
         created_slugs.append(res["slug"])
         task_status.progress(idx, total, doc_type="batch_images")
@@ -1031,6 +1055,8 @@ def create_batch_image_projects(
     creator_id: int | None,
     fingerprint_id: str | None = None,
     org_slug: str = "open-tenant",
+    folder: str | None = None,
+    tags: list | str | None = None,
 ):
     """Celery task to create multiple separate 1-page projects from a batch of images."""
     task_status = CeleryTaskStatus(self)
@@ -1041,6 +1067,8 @@ def create_batch_image_projects(
         fingerprint_id=fingerprint_id,
         task_status=task_status,
         org_slug=org_slug,
+        folder=folder,
+        tags=tags,
     )
 
 
@@ -1052,6 +1080,8 @@ def create_batch_pdf_projects_inner(
     fingerprint_id: str | None = None,
     task_status: TaskStatus,
     org_slug: str = "open-tenant",
+    folder: str | None = None,
+    tags: list | str | None = None,
 ):
     """Create multiple separate projects from a batch of PDFs (PDF pages to JPGs)."""
     total = len(projects_data)
@@ -1062,6 +1092,8 @@ def create_batch_pdf_projects_inner(
     for idx, item in enumerate(projects_data, start=1):
         display_title = item["display_title"]
         pdf_key = item["pdf_key"]
+        item_folder = item.get("folder", folder)
+        item_tags = item.get("tags", tags)
         from kalanjiyam.tasks.utils import LocalTaskStatus
 
         local_status = LocalTaskStatus()
@@ -1073,6 +1105,8 @@ def create_batch_pdf_projects_inner(
             fingerprint_id=fingerprint_id,
             task_status=local_status,
             org_slug=org_slug,
+            folder=item_folder,
+            tags=item_tags,
         )
         created_slugs.append(res["slug"])
         task_status.progress(idx, total, doc_type="batch_pdfs")
@@ -1096,6 +1130,8 @@ def create_batch_pdf_projects(
     creator_id: int | None,
     fingerprint_id: str | None = None,
     org_slug: str = "open-tenant",
+    folder: str | None = None,
+    tags: list | str | None = None,
 ):
     """Celery task to batch process PDFs into separate projects."""
     task_status = CeleryTaskStatus(self)
@@ -1106,6 +1142,8 @@ def create_batch_pdf_projects(
         fingerprint_id=fingerprint_id,
         task_status=task_status,
         org_slug=org_slug,
+        folder=folder,
+        tags=tags,
     )
 
 
