@@ -694,7 +694,7 @@ def test_empty_folder_rendered_in_workspace(client, rama_client):
     resp = client.get("/proofing/")
     assert resp.status_code == 200
     assert "Unpublished" in resp.text
-    assert "0 manuscripts" in resp.text
+    assert "0 projects" in resp.text
 
     # GET inside the folder
     resp = client.get("/proofing/?folder=Unpublished")

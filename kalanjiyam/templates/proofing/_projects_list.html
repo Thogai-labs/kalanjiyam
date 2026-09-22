@@ -83,9 +83,9 @@
             </span>
             <span class="block text-xs text-slate-400 font-medium">
               {% if sub.count == 0 %}
-                <span class="text-slate-400">{{ _('0 manuscripts') }}</span>
+                <span class="text-slate-400">{{ _('0 projects') }}</span>
               {% else %}
-                {{ ngettext('%(num)d manuscript', '%(num)d manuscripts', sub.count) }}
+                {{ ngettext('%(num)d project', '%(num)d projects', sub.count) }}
               {% endif %}
             </span>
           </div>
@@ -153,7 +153,7 @@
                 class="flex items-center gap-2.5 px-3.5 py-2 text-slate-700 hover:bg-slate-50 hover:text-royalblue"
               >
                 <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                <span>{{ _('New manuscript here') }}</span>
+                <span>{{ _('New project here') }}</span>
               </a>
               <div class="h-px bg-slate-100 my-1"></div>
               <button
@@ -173,7 +173,7 @@
   </div>
   {% endif %}
 
-  <!-- Manuscripts Section (Minimal Table-Like Horizontal Rows) -->
+  <!-- Projects Section (Minimal Table-Like Horizontal Rows) -->
   {% set docs_list = projects if (search_query or selected_tag or selected_issues) else folder_contents.direct_projects %}
   {% if docs_list %}
   <div class="space-y-2">
@@ -185,11 +185,11 @@
         {% if search_query %}
           <span>{{ _('Search Results') }} ({{ total_projects }})</span>
         {% elif selected_tag or selected_issues %}
-          <span>{{ _('Filtered Manuscripts') }} ({{ total_projects }})</span>
+          <span>{{ _('Filtered Projects') }} ({{ total_projects }})</span>
         {% elif folder_contents.current_folder %}
-          <span>{{ _('Manuscripts in this folder') }} ({{ docs_list|length }})</span>
+          <span>{{ _('Projects in this folder') }} ({{ docs_list|length }})</span>
         {% else %}
-          <span>{{ _('Manuscripts at root') }} ({{ docs_list|length }})</span>
+          <span>{{ _('Projects at root') }} ({{ docs_list|length }})</span>
         {% endif %}
       </h3>
 
@@ -486,7 +486,7 @@
       </svg>
     </div>
     <h3 class="text-sm font-bold text-slate-800 mb-1">{{ _('This folder is empty') }}</h3>
-    <p class="text-xs text-slate-500 mb-4 max-w-xs mx-auto">{{ _('No manuscripts are located in this folder yet.') }}</p>
+    <p class="text-xs text-slate-500 mb-4 max-w-xs mx-auto">{{ _('No projects are located in this folder yet.') }}</p>
     <div class="flex items-center justify-center gap-2.5">
       <button
         type="button"
@@ -547,7 +547,7 @@
     </svg>
   </div>
   <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('No projects found') }}</h3>
-  <p class="text-xs text-slate-500 mb-6 max-w-sm mx-auto leading-relaxed">{{ _('Ready to digitize some manuscripts? Create your first project to get started.') }}</p>
+  <p class="text-xs text-slate-500 mb-6 max-w-sm mx-auto leading-relaxed">{{ _('Ready to digitize some projects? Create your first project to get started.') }}</p>
   <a href="{{ url_for('proofing.create_project') }}" class="btn-premium">
     {{ _('Create project') }}
   </a>

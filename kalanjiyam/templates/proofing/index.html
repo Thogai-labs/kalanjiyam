@@ -163,10 +163,10 @@
             name="q"
             x-model="query"
             value="{{ search_query }}"
-            placeholder="{{ _('Search by manuscript title, author, or slug…') }}"
+            placeholder="{{ _('Search by project title, author, or slug…') }}"
             class="w-full bg-transparent text-slate-800 placeholder-slate-400 text-sm sm:text-base focus:outline-none font-medium"
             @input.debounce.300ms="fetchResults(1)"
-            aria-label="{{ _('Search proofing manuscripts') }}"
+            aria-label="{{ _('Search proofing projects') }}"
           />
           <div class="flex items-center gap-1.5 shrink-0 ml-2">
             <template x-if="isLoading">
@@ -421,8 +421,8 @@
           </path>
         </svg>
       </div>
-      <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('No manuscripts or folders yet') }}</h3>
-      <p class="text-xs text-slate-500 mb-6 max-w-sm mx-auto leading-relaxed">{{ _('Ready to digitize some manuscripts? Create a folder to organize your work or start your first project.') }}</p>
+      <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('No projects or folders yet') }}</h3>
+      <p class="text-xs text-slate-500 mb-6 max-w-sm mx-auto leading-relaxed">{{ _('Ready to digitize some projects? Create a folder to organize your work or start your first project.') }}</p>
       <div class="flex flex-wrap items-center justify-center gap-3">
         <button
           type="button"
@@ -643,7 +643,7 @@
           </p>
           <p class="text-xs text-slate-500 leading-relaxed">
             <template x-if="deleteFolderCount > 0">
-              <span>{{ _('This folder contains manuscripts. Any manuscripts inside will safely be moved to the parent folder.') }}</span>
+              <span>{{ _('This folder contains projects. Any projects inside will safely be moved to the parent folder.') }}</span>
             </template>
             <template x-if="deleteFolderCount === 0">
               <span>{{ _('This folder is empty and will be removed.') }}</span>
@@ -679,7 +679,7 @@
       </div>
     </div>
 
-    <!-- Move Manuscript Modal Dialog (Google Drive Visual Folder Picker) -->
+    <!-- Move Project Modal Dialog (Google Drive Visual Folder Picker) -->
     <div
       x-show="showMoveModal"
       x-cloak
@@ -699,7 +699,7 @@
               </svg>
             </div>
             <div>
-              <h3 class="text-base font-bold text-slate-900 leading-none">{{ _('Move manuscript') }}</h3>
+              <h3 class="text-base font-bold text-slate-900 leading-none">{{ _('Move project') }}</h3>
               <p class="text-xs text-slate-500 mt-1 truncate max-w-[280px]" x-text="movingTitle"></p>
             </div>
           </div>
