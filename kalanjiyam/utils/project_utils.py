@@ -264,7 +264,7 @@ def get_folder_contents(
     """
     norm_current = normalize_folder_path(current_folder)
 
-    breadcrumbs = [{"name": "All Folders", "path": ""}]
+    breadcrumbs = [{"name": "Root", "path": ""}]
     if norm_current:
         segments = norm_current.split("/")
         for i in range(len(segments)):

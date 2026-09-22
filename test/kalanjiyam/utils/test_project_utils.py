@@ -151,7 +151,7 @@ def test_get_folder_contents():
     assert root_contents["current_folder"] == ""
     assert root_contents["parent_folder"] is None
     assert len(root_contents["breadcrumbs"]) == 1
-    assert root_contents["breadcrumbs"][0] == {"name": "All Folders", "path": ""}
+    assert root_contents["breadcrumbs"][0] == {"name": "Root", "path": ""}
     assert len(root_contents["direct_projects"]) == 1
     assert root_contents["direct_projects"][0].title == "Root Project"
     # Subfolders at root should be Literature and Philosophy
@@ -165,7 +165,7 @@ def test_get_folder_contents():
     phil_contents = pu.get_folder_contents(projects, current_folder="Philosophy")
     assert phil_contents["current_folder"] == "Philosophy"
     assert phil_contents["parent_folder"] == ""
-    assert [b["name"] for b in phil_contents["breadcrumbs"]] == ["All Folders", "Philosophy"]
+    assert [b["name"] for b in phil_contents["breadcrumbs"]] == ["Root", "Philosophy"]
     assert len(phil_contents["direct_projects"]) == 0
     phil_sub_names = [s["name"] for s in phil_contents["subfolders"]]
     assert phil_sub_names == ["Mimamsa", "Nyaya"]
