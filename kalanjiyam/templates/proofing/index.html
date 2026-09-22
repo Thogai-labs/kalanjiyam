@@ -127,7 +127,7 @@
             type="button"
             @click="openCreateFolderModal(folder || '')"
             class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold text-xs sm:text-sm transition-all shadow-xs shrink-0 cursor-pointer"
-            title="{{ _('Create Folder') }}"
+            :title="folder ? '{{ _('Create folder in') }} ' + folder : '{{ _('Create Folder') }}'"
           >
             <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path>
@@ -136,7 +136,12 @@
           </button>
 
           <!-- New Project Action Button -->
-          <a href="{{ url_for('proofing.create_project') }}" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-royalblue hover:bg-blue-600 text-white font-semibold text-xs sm:text-sm shadow-md transition-all shrink-0">
+          <a
+            :href="'{{ url_for('proofing.create_project') }}' + (folder ? '?folder=' + encodeURIComponent(folder) : '')"
+            href="{{ url_for('proofing.create_project') }}"
+            class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-royalblue hover:bg-blue-600 text-white font-semibold text-xs sm:text-sm shadow-md transition-all shrink-0"
+            :title="folder ? '{{ _('New project in') }} ' + folder : '{{ _('New Project') }}'"
+          >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
             </svg>
