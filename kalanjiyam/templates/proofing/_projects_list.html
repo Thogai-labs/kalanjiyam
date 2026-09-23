@@ -546,11 +546,26 @@
       </path>
     </svg>
   </div>
-  <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('No projects found') }}</h3>
-  <p class="text-xs text-slate-500 mb-6 max-w-sm mx-auto leading-relaxed">{{ _('Ready to digitize some projects? Create your first project to get started.') }}</p>
-  <a href="{{ url_for('proofing.create_project') }}" class="btn-premium">
-    {{ _('Create project') }}
-  </a>
+  <h3 class="text-lg font-bold text-slate-900 mb-2">{{ _('No projects or folders yet') }}</h3>
+  <p class="text-xs text-slate-500 mb-6 max-w-sm mx-auto leading-relaxed">{{ _('Ready to digitize some projects? Create a folder to organize your work or start your first project.') }}</p>
+  <div class="flex flex-wrap items-center justify-center gap-3">
+    <button
+      type="button"
+      @click="openCreateFolderModal('')"
+      class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-xs sm:text-sm shadow-xs cursor-pointer"
+    >
+      <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path>
+      </svg>
+      <span>{{ _('New Folder') }}</span>
+    </button>
+    <a href="{{ url_for('proofing.create_project') }}" class="btn-premium">
+      <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+      </svg>
+      {{ _('Create project') }}
+    </a>
+  </div>
 </div>
 {% endif %}
 {% endif %}

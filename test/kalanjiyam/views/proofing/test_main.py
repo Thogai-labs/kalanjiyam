@@ -693,8 +693,20 @@ def test_empty_folder_rendered_in_workspace(client, rama_client):
     # GET root index as creator (rama)
     resp = rama_client.get("/proofing/")
     assert resp.status_code == 200
+    assert "projects-results-container" in resp.text
     assert "Unpublished" in resp.text
     assert "0 projects" in resp.text
+    assert resp.headers.get("Cache-Control") is not None
+
+    # AJAX GET immediately returns the created folder HTML
+    resp_ajax = rama_client.get(
+        "/proofing/",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_ajax.status_code == 200
+    assert "Unpublished" in resp_ajax.text
+    assert "0 projects" in resp_ajax.text
+    assert resp_ajax.headers.get("Cache-Control") is not None
 
     # GET inside the folder as creator (rama)
     resp = rama_client.get("/proofing/?folder=Unpublished")

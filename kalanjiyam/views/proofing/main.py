@@ -576,9 +576,16 @@ def index():
         rendered = render_template("proofing/_projects_list.html", **template_kwargs)
         resp = make_response(rendered)
         resp.headers["X-Total-Projects"] = str(total_projects)
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
         return resp
 
-    return render_template("proofing/index.html", **template_kwargs)
+    resp = make_response(render_template("proofing/index.html", **template_kwargs))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 @bp.route("/folders/create", methods=["POST"])
