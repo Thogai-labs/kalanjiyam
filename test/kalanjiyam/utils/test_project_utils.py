@@ -216,3 +216,39 @@ def test_get_folder_contents_with_empty_folders():
     assert sub_novels["Drama"] == 1
 
 
+def test_folder_organization_isolation(flask_app):
+    """Test that ProofFolders are scoped by organization_id and can share names across orgs."""
+    from kalanjiyam.queries import get_session
+
+    with flask_app.app_context():
+        session = get_session()
+
+        # Org 101 creates "Science" and "Literature"
+        f1 = pu.ensure_proof_folder(session, "Science", organization_id=101)
+        f2 = pu.ensure_proof_folder(session, "Literature/Fiction", organization_id=101)
+        session.commit()
+
+        # Org 102 creates "Science" (same name) and "History"
+        f3 = pu.ensure_proof_folder(session, "Science", organization_id=102)
+        f4 = pu.ensure_proof_folder(session, "History", organization_id=102)
+        session.commit()
+
+        assert f1.id != f3.id
+        assert f1.organization_id == 101
+        assert f3.organization_id == 102
+
+        # Query available folders for Org 101
+        org1_folders = pu.get_all_available_folders(session, organization_id=101)
+        assert "Science" in org1_folders
+        assert "Literature" in org1_folders
+        assert "Literature/Fiction" in org1_folders
+        assert "History" not in org1_folders
+
+        # Query available folders for Org 102
+        org2_folders = pu.get_all_available_folders(session, organization_id=102)
+        assert "Science" in org2_folders
+        assert "History" in org2_folders
+        assert "Literature" not in org2_folders
+        assert "Literature/Fiction" not in org2_folders
+
+

@@ -23,7 +23,7 @@ from flask_babel import lazy_gettext as _l
 from flask_login import current_user
 from flask_wtf import FlaskForm
 from slugify import slugify
-from sqlalchemy import func, or_, orm
+from sqlalchemy import and_, func, or_, orm
 from wtforms import BooleanField, MultipleFileField, RadioField, StringField
 from wtforms.validators import DataRequired, ValidationError
 from wtforms.widgets import TextArea
@@ -80,6 +80,15 @@ def _filename_to_project_title(filename: str, fallback_index: int = 1) -> str:
 def _escape_like(value: str) -> str:
     """Escape SQL LIKE wildcard characters (%, _) in a value for safe use in LIKE patterns."""
     return value.replace("%", r"\%").replace("_", r"\_")
+
+
+def _current_org_id() -> int | None:
+    """Return the organization_id for folder scoping based on the current user."""
+    from kalanjiyam.utils.org_access import user_organization_id
+
+    if current_user.is_authenticated:
+        return user_organization_id(current_user)
+    return None
 
 
 def is_group_images_enabled(request_form) -> bool:
@@ -285,8 +294,23 @@ def index():
     available_condition_tags = sorted(available_condition_tags, key=lambda s: s.lower())
 
     # Collect available folders and project tags across accessible projects
+    target_org_id = None
+    if selected_org and selected_org != "all":
+        target_group = session.query(db.Group).filter_by(slug=selected_org).first()
+        if target_group:
+            target_org_id = target_group.id
+        elif not getattr(current_user, "is_super_admin", False):
+            target_org_id = -1
+    elif not getattr(current_user, "is_super_admin", False):
+        target_org_id = _current_org_id()
+
     available_folders = project_utils.get_all_available_folders(
-        session, base_query=base_query
+        session,
+        base_query=base_query,
+        organization_id=target_org_id,
+        creator_id=current_user.id if current_user.is_authenticated else None,
+        fingerprint_id=device_fp if not current_user.is_authenticated else None,
+        is_super_admin=getattr(current_user, "is_super_admin", False) and (not selected_org or selected_org == "all"),
     )
     has_any_folders = len(available_folders) > 0
     has_any_items = has_any_projects or has_any_folders
@@ -552,9 +576,16 @@ def index():
         rendered = render_template("proofing/_projects_list.html", **template_kwargs)
         resp = make_response(rendered)
         resp.headers["X-Total-Projects"] = str(total_projects)
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
         return resp
 
-    return render_template("proofing/index.html", **template_kwargs)
+    resp = make_response(render_template("proofing/index.html", **template_kwargs))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 @bp.route("/folders/create", methods=["POST"])
@@ -582,8 +613,11 @@ def create_folder():
         flash(_l("Invalid folder name."), "danger")
         return redirect(url_for("proofing.index"))
 
+    org_id = _current_org_id()
     session = q.get_session()
-    existing = session.query(db.ProofFolder).filter_by(path=full_path).first()
+    existing = session.query(db.ProofFolder).filter_by(
+        path=full_path, organization_id=org_id
+    ).first()
     if existing is not None:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
             return jsonify({"success": False, "error": _l("A folder with this name already exists.")}), 400
@@ -598,7 +632,11 @@ def create_folder():
     )
 
     project_utils.ensure_proof_folder(
-        session, full_path, creator_id=creator_id, fingerprint_id=fingerprint_id
+        session,
+        full_path,
+        creator_id=creator_id,
+        fingerprint_id=fingerprint_id,
+        organization_id=org_id,
     )
     session.commit()
 
@@ -640,11 +678,14 @@ def rename_folder():
     new_path = f"{parent_path}/{new_name}" if parent_path else new_name
     new_path = project_utils.normalize_folder_path(new_path)
 
+    org_id = _current_org_id()
     session = q.get_session()
 
-    # Check for collision with existing folder
+    # Check for collision with existing folder in same organization
     if new_path != old_path:
-        existing = session.query(db.ProofFolder).filter_by(path=new_path).first()
+        existing = session.query(db.ProofFolder).filter_by(
+            path=new_path, organization_id=org_id
+        ).first()
         if existing is not None:
             if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
                 return jsonify({"success": False, "error": _l("A folder with this name already exists.")}), 400
@@ -653,12 +694,24 @@ def rename_folder():
 
     # Update ProofFolder records (escape LIKE wildcards in old_path)
     escaped_old = _escape_like(old_path)
-    folders = session.query(db.ProofFolder).filter(
-        or_(
-            db.ProofFolder.path == old_path,
-            db.ProofFolder.path.like(f"{escaped_old}/%", escape="\\"),
-        )
-    ).all()
+    folder_filter = or_(
+        db.ProofFolder.path == old_path,
+        db.ProofFolder.path.like(f"{escaped_old}/%", escape="\\"),
+    )
+    if org_id is not None:
+        folder_filter = and_(folder_filter, db.ProofFolder.organization_id == org_id)
+    elif not getattr(current_user, "is_super_admin", False):
+        device_fp = request.cookies.get("device_fingerprint")
+        if current_user.is_authenticated:
+            folder_filter = and_(folder_filter, db.ProofFolder.creator_id == current_user.id)
+        elif device_fp:
+            folder_filter = and_(
+                folder_filter,
+                db.ProofFolder.fingerprint_id == device_fp,
+                db.ProofFolder.organization_id.is_(None),
+            )
+
+    folders = session.query(db.ProofFolder).filter(folder_filter).all()
     for f in folders:
         if f.path == old_path:
             f.path = new_path
@@ -671,8 +724,12 @@ def rename_folder():
             f.name = f_parts[-1]
             f.parent_path = "/".join(f_parts[:-1])
 
-    # Update Project records
-    projects = session.query(db.Project).filter(
+    # Update Project records (scoped to user's accessible projects)
+    device_fp = request.cookies.get("device_fingerprint")
+    base_query = q.accessible_proofing_projects_query(
+        current_user, session=session, device_fingerprint=device_fp
+    )
+    projects = base_query.filter(
         or_(
             db.Project.folder == old_path,
             db.Project.folder.like(f"{escaped_old}/%", escape="\\"),
@@ -716,17 +773,34 @@ def delete_folder():
     parts = target_path.split("/")
     parent_path = "/".join(parts[:-1])
 
+    org_id = _current_org_id()
     session = q.get_session()
     escaped_target = _escape_like(target_path)
-    session.query(db.ProofFolder).filter(
-        or_(
-            db.ProofFolder.path == target_path,
-            db.ProofFolder.path.like(f"{escaped_target}/%", escape="\\"),
-        )
-    ).delete(synchronize_session=False)
+    folder_filter = or_(
+        db.ProofFolder.path == target_path,
+        db.ProofFolder.path.like(f"{escaped_target}/%", escape="\\"),
+    )
+    if org_id is not None:
+        folder_filter = and_(folder_filter, db.ProofFolder.organization_id == org_id)
+    elif not getattr(current_user, "is_super_admin", False):
+        device_fp = request.cookies.get("device_fingerprint")
+        if current_user.is_authenticated:
+            folder_filter = and_(folder_filter, db.ProofFolder.creator_id == current_user.id)
+        elif device_fp:
+            folder_filter = and_(
+                folder_filter,
+                db.ProofFolder.fingerprint_id == device_fp,
+                db.ProofFolder.organization_id.is_(None),
+            )
 
-    # Safely move projects to parent_path
-    projects = session.query(db.Project).filter(
+    session.query(db.ProofFolder).filter(folder_filter).delete(synchronize_session=False)
+
+    # Safely move projects to parent_path (scoped to user's accessible projects)
+    device_fp = request.cookies.get("device_fingerprint")
+    base_query = q.accessible_proofing_projects_query(
+        current_user, session=session, device_fingerprint=device_fp
+    )
+    projects = base_query.filter(
         or_(
             db.Project.folder == target_path,
             db.Project.folder.like(f"{escaped_target}/%", escape="\\"),
@@ -876,7 +950,18 @@ def create_project():
     if request.method == "GET" and request.args.get("folder"):
         form.folder.data = request.args.get("folder").strip()
 
-    available_folders = project_utils.get_all_available_folders(session)
+    device_fp = request.cookies.get("device_fingerprint")
+    base_query = q.accessible_proofing_projects_query(
+        current_user, session=session, device_fingerprint=device_fp
+    )
+    available_folders = project_utils.get_all_available_folders(
+        session,
+        base_query=base_query,
+        organization_id=_current_org_id(),
+        creator_id=current_user.id if current_user.is_authenticated else None,
+        fingerprint_id=device_fp if not current_user.is_authenticated else None,
+        is_super_admin=getattr(current_user, "is_super_admin", False),
+    )
 
     def _render_create_project():
         return render_template(
@@ -1276,6 +1361,7 @@ def create_project():
                     if not current_user.is_authenticated
                     else None
                 ),
+                organization_id=_current_org_id(),
             )
             session.commit()
 

@@ -2940,6 +2940,7 @@ class GroupsView(AdminBaseView):
             ocr_credit_limit = request.form.get("ocr_credit_limit", type=int)
             translation_credit_limit = request.form.get("translation_credit_limit", type=int)
             admin_user_id = request.form.get("admin_user_id", type=int)
+            has_custom_storage = bool(request.form.get("has_custom_storage"))
             if not name:
                 flash("Name is required.", "error")
                 return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
@@ -2952,6 +2953,23 @@ class GroupsView(AdminBaseView):
             if translation_credit_limit is not None and translation_credit_limit < 0:
                 flash("Translation credit limit cannot be negative.", "error")
                 return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
+
+            # Custom storage fields
+            s3_bucket = None
+            s3_endpoint_url = None
+            s3_region = None
+            s3_access_key_id = None
+            s3_secret_access_key = None
+            if has_custom_storage:
+                from kalanjiyam.utils.storage import sanitize_bucket_name
+                s3_bucket = (request.form.get("s3_bucket") or "").strip() or None
+                if not s3_bucket:
+                    s3_bucket = sanitize_bucket_name(slug)
+                s3_endpoint_url = (request.form.get("s3_endpoint_url") or "").strip() or None
+                s3_region = (request.form.get("s3_region") or "").strip() or None
+                s3_access_key_id = (request.form.get("s3_access_key_id") or "").strip() or None
+                s3_secret_access_key = (request.form.get("s3_secret_access_key") or "").strip() or None
+
             session = q.get_session()
             group = db.Group(
                 name=name,
@@ -2961,11 +2979,29 @@ class GroupsView(AdminBaseView):
                 ocr_credit_limit=ocr_credit_limit,
                 translation_credit_limit=translation_credit_limit,
                 admin_user_id=admin_user_id,
+                has_custom_storage=has_custom_storage,
+                s3_bucket=s3_bucket,
+                s3_endpoint_url=s3_endpoint_url,
+                s3_region=s3_region,
+                s3_access_key_id=s3_access_key_id,
+                s3_secret_access_key=s3_secret_access_key,
             )
             session.add(group)
             session.flush()
             _promote_org_admin(session, group, admin_user_id)
             session.commit()
+
+            # Provision the dedicated S3 bucket after commit so the Group
+            # row is visible to _load_org_storage_config().
+            if has_custom_storage:
+                from kalanjiyam.utils.storage import invalidate_org_storage_cache, provision_org_bucket
+                try:
+                    invalidate_org_storage_cache(slug)
+                    bucket_name = provision_org_bucket(slug)
+                    flash(f"Dedicated S3 bucket '{bucket_name}' provisioned.", "success")
+                except Exception as err:
+                    flash(f"Group created, but S3 bucket provisioning failed: {err}", "warning")
+
             flash("Group created.", "success")
             return redirect(url_for("groups_view.manage", id=group.id))
         return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
@@ -2985,6 +3021,7 @@ class GroupsView(AdminBaseView):
             ocr_credit_limit = request.form.get("ocr_credit_limit", type=int)
             translation_credit_limit = request.form.get("translation_credit_limit", type=int)
             admin_user_id = request.form.get("admin_user_id", type=int)
+            has_custom_storage = bool(request.form.get("has_custom_storage"))
             if not name:
                 flash("Name is required.", "error")
                 return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())
@@ -2997,6 +3034,10 @@ class GroupsView(AdminBaseView):
             if not translation_credit_limit is None and translation_credit_limit < 0:
                 flash("Translation credit limit cannot be negative.", "error")
                 return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())   
+
+            old_slug = group.slug
+            was_custom = group.has_custom_storage
+
             group.name = name
             group.slug = slug
             group.description = description
@@ -3004,11 +3045,44 @@ class GroupsView(AdminBaseView):
             group.ocr_credit_limit = ocr_credit_limit
             group.translation_credit_limit = translation_credit_limit
             group.admin_user_id = admin_user_id
+            group.has_custom_storage = has_custom_storage
+
+            if has_custom_storage:
+                from kalanjiyam.utils.storage import sanitize_bucket_name
+                group.s3_bucket = (request.form.get("s3_bucket") or "").strip() or sanitize_bucket_name(slug)
+                group.s3_endpoint_url = (request.form.get("s3_endpoint_url") or "").strip() or None
+                group.s3_region = (request.form.get("s3_region") or "").strip() or None
+                group.s3_access_key_id = (request.form.get("s3_access_key_id") or "").strip() or None
+                group.s3_secret_access_key = (request.form.get("s3_secret_access_key") or "").strip() or None
+            else:
+                # Switching back to shared bucket — clear custom fields.
+                group.s3_bucket = None
+                group.s3_endpoint_url = None
+                group.s3_region = None
+                group.s3_access_key_id = None
+                group.s3_secret_access_key = None
+
             session = q.get_session()
             session.add(group)
             session.flush()
             _promote_org_admin(session, group, admin_user_id)
             session.commit()
+
+            # Invalidate cached storage instances for both old and new slugs.
+            from kalanjiyam.utils.storage import invalidate_org_storage_cache
+            invalidate_org_storage_cache(old_slug)
+            if slug != old_slug:
+                invalidate_org_storage_cache(slug)
+
+            # Provision the bucket if custom storage was just enabled.
+            if has_custom_storage and not was_custom:
+                from kalanjiyam.utils.storage import provision_org_bucket
+                try:
+                    bucket_name = provision_org_bucket(slug)
+                    flash(f"Dedicated S3 bucket '{bucket_name}' provisioned.", "success")
+                except Exception as err:
+                    flash(f"Group updated, but S3 bucket provisioning failed: {err}", "warning")
+
             flash("Group updated.", "success")
             return redirect(url_for("groups_view.index"))
         return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())

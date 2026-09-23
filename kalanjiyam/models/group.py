@@ -42,6 +42,22 @@ class Group(Base):
     default_user_ocr_limit = Column(Integer, nullable=True)
     #: Optional per-user translation credit limit. Null means unlimited/no personal quota.
     default_user_translation_limit = Column(Integer, nullable=True)
+    #: Whether this org uses a dedicated S3 bucket instead of the shared
+    #: platform bucket.  When False (default), files live in the platform
+    #: bucket under the ``projects/{org_slug}/`` prefix.
+    has_custom_storage = Column(Boolean, nullable=False, default=False)
+    #: Dedicated S3 bucket name.  Auto-generated as ``org-{slug}`` when the
+    #: admin enables custom storage but leaves this blank.
+    s3_bucket = Column(String(63), nullable=True)
+    #: Optional external S3 endpoint URL.  When blank, the platform's own
+    #: VersityGW / S3 endpoint is used.
+    s3_endpoint_url = Column(String, nullable=True)
+    #: Optional S3 region for external buckets.
+    s3_region = Column(String(32), nullable=True)
+    #: Optional AWS access key for an external bucket.
+    s3_access_key_id = Column(String, nullable=True)
+    #: Optional AWS secret key for an external bucket.
+    s3_secret_access_key = Column(String, nullable=True)
     #: Optional user designated as organization admin.
     admin_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     #: Timestamps.

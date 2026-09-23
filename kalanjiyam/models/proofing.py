@@ -49,15 +49,20 @@ class ProofFolder(Base):
     """A folder in the proofing workspace for organizing projects."""
 
     __tablename__ = "proof_folders"
+    __table_args__ = (
+        UniqueConstraint("path", "organization_id", name="uq_proof_folders_path_org"),
+    )
 
     #: Primary key.
     id = pk()
     #: Normalized full path of the folder, e.g. "Literature" or "Literature/Poetry".
-    path = Column(String, unique=True, nullable=False, index=True)
+    path = Column(String, nullable=False, index=True)
     #: Human-readable folder name, e.g. "Poetry".
     name = Column(String, nullable=False)
     #: Parent folder path, e.g. "Literature" (or "" if at root).
     parent_path = Column(String, nullable=False, default="", index=True)
+    #: Organization that owns this folder.
+    organization_id = Column(Integer, ForeignKey("groups.id"), nullable=True, index=True)
     #: Timestamp at which folder was created.
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     #: Timestamp at which folder was last updated.
@@ -68,6 +73,7 @@ class ProofFolder(Base):
     fingerprint_id = Column(String, nullable=True, index=True)
 
     creator = relationship("User")
+    organization = relationship("Group")
 
     def __repr__(self):
         return f"<ProofFolder {self.path}>"

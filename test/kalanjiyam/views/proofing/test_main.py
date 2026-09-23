@@ -681,8 +681,8 @@ def test_create_and_manage_folders(rama_client):
 
 
 def test_empty_folder_rendered_in_workspace(client, rama_client):
-    """Test that an empty folder appears at root with count 0 and can be opened."""
-    # Create empty folder "Unpublished"
+    """Test that an empty folder appears at root for its creator/org, and is isolated from others."""
+    # Create empty folder "Unpublished" as rama
     resp = rama_client.post(
         "/proofing/folders/create",
         data={"folder_name": "Unpublished", "parent_folder": ""},
@@ -690,17 +690,34 @@ def test_empty_folder_rendered_in_workspace(client, rama_client):
     )
     assert resp.status_code == 200
 
-    # GET root index
-    resp = client.get("/proofing/")
+    # GET root index as creator (rama)
+    resp = rama_client.get("/proofing/")
     assert resp.status_code == 200
+    assert "projects-results-container" in resp.text
     assert "Unpublished" in resp.text
     assert "0 projects" in resp.text
+    assert resp.headers.get("Cache-Control") is not None
 
-    # GET inside the folder
-    resp = client.get("/proofing/?folder=Unpublished")
+    # AJAX GET immediately returns the created folder HTML
+    resp_ajax = rama_client.get(
+        "/proofing/",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_ajax.status_code == 200
+    assert "Unpublished" in resp_ajax.text
+    assert "0 projects" in resp_ajax.text
+    assert resp_ajax.headers.get("Cache-Control") is not None
+
+    # GET inside the folder as creator (rama)
+    resp = rama_client.get("/proofing/?folder=Unpublished")
     assert resp.status_code == 200
     assert "This folder is empty" in resp.text
     assert "Unpublished" in resp.text
+
+    # Another user / anonymous client should NOT see rama's folder
+    resp_other = client.get("/proofing/")
+    assert resp_other.status_code == 200
+    assert "Unpublished" not in resp_other.text
 
 
 def test_rename_folder_cascade(rama_client):
