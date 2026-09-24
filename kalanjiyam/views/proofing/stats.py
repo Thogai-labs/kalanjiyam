@@ -73,8 +73,36 @@ def _calculate_stats_for_strings(strings: Iterable[str]) -> Stats:
 
 
 def _iter_page_strings(project: Project) -> Iterable[str]:
-    for page in project.pages:
-        yield page.revisions[-1].content if page.revisions else ""
+    if not getattr(project, "id", None):
+        for page in getattr(project, "pages", []):
+            yield page.revisions[-1].content if getattr(page, "revisions", None) else ""
+        return
+
+    from sqlalchemy import func
+
+    from kalanjiyam import database as db
+    from kalanjiyam import queries as q
+
+    session = q.get_session()
+    subq = (
+        session.query(
+            db.Revision.page_id,
+            func.max(db.Revision.id).label("max_id"),
+        )
+        .filter(db.Revision.project_id == project.id)
+        .group_by(db.Revision.page_id)
+        .subquery()
+    )
+    rows = (
+        session.query(db.Page.id, db.Revision.content)
+        .filter(db.Page.project_id == project.id)
+        .outerjoin(subq, db.Page.id == subq.c.page_id)
+        .outerjoin(db.Revision, db.Revision.id == subq.c.max_id)
+        .order_by(db.Page.order)
+        .all()
+    )
+    for _page_id, content in rows:
+        yield content or ""
 
 
 def calculate_stats(project: Project) -> Stats:

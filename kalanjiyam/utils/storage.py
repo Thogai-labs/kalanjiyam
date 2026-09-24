@@ -627,11 +627,197 @@ def _build_storage(config) -> Storage:
     raise ValueError(f"Unknown STORAGE_BACKEND: {backend!r}")
 
 
+# ---------------------------------------------------------------------------
+# Per-org bucket helpers
+# ---------------------------------------------------------------------------
+
+#: In-memory cache of org_slug -> S3Storage (or None for default).
+#: Populated lazily; invalidated by ``invalidate_org_storage_cache()``.
+_org_storage_cache: dict[str, S3Storage | None] = {}
+
+
+def sanitize_bucket_name(slug: str) -> str:
+    """Derive a valid S3 bucket name from an org slug.
+
+    S3 bucket names must be 3-63 chars, lowercase, no underscores,
+    start/end with a letter or digit.
+    """
+    import re
+
+    name = f"org-{slug}".lower()
+    name = re.sub(r"[^a-z0-9\-.]", "-", name)
+    name = re.sub(r"-{2,}", "-", name)
+    name = name.strip("-.")
+    return name[:63] or "org-default"
+
+
+def _load_org_storage_config(org_slug: str) -> S3Storage | None:
+    """Query the Group table for custom storage config and return an
+    ``S3Storage`` instance if the org has ``has_custom_storage=True``.
+
+    Returns ``None`` when the org should use the default platform bucket.
+    """
+    try:
+        from kalanjiyam import database as db
+        from kalanjiyam import queries as q
+
+        session = q.get_session()
+        group = session.query(db.Group).filter_by(slug=org_slug).first()
+        if not group or not group.has_custom_storage:
+            return None
+        bucket = group.s3_bucket or sanitize_bucket_name(org_slug)
+        return S3Storage(
+            bucket=bucket,
+            endpoint_url=group.s3_endpoint_url or current_app.config.get("S3_ENDPOINT_URL"),
+            access_key_id=group.s3_access_key_id or current_app.config.get("S3_ACCESS_KEY_ID"),
+            secret_access_key=group.s3_secret_access_key or current_app.config.get("S3_SECRET_ACCESS_KEY"),
+            region=group.s3_region or current_app.config.get("S3_REGION"),
+            public_endpoint_url=current_app.config.get("S3_PUBLIC_ENDPOINT_URL") if not group.s3_endpoint_url else None,
+        )
+    except Exception:
+        return None
+
+
+def get_org_storage(org_slug: str) -> S3Storage | None:
+    """Return the dedicated ``S3Storage`` for *org_slug*, or ``None`` to use
+    the default bucket.  Results are cached in-process."""
+    if org_slug in _org_storage_cache:
+        return _org_storage_cache[org_slug]
+    storage = _load_org_storage_config(org_slug)
+    _org_storage_cache[org_slug] = storage
+    return storage
+
+
+def invalidate_org_storage_cache(org_slug: str | None = None) -> None:
+    """Clear cached ``S3Storage`` instances.
+
+    Call this whenever a Group's storage settings are changed in the admin
+    panel so the next ``get_org_storage()`` call picks up the new config.
+
+    :param org_slug: If given, only that org's cache entry is cleared.
+                     If ``None``, the entire cache is flushed.
+    """
+    if org_slug is None:
+        _org_storage_cache.clear()
+    else:
+        _org_storage_cache.pop(org_slug, None)
+
+
+def provision_org_bucket(org_slug: str) -> str:
+    """Create the dedicated S3 bucket for *org_slug* and return the bucket name.
+
+    Safe to call multiple times; does nothing if the bucket already exists.
+    Uses the org's custom storage config if available, otherwise auto-generates
+    a bucket name and uses the platform's default S3 credentials.
+    """
+    storage = get_org_storage(org_slug)
+    if storage is not None:
+        # The S3Storage.client property already auto-creates the bucket.
+        _ = storage.client
+        return storage.bucket
+    # Org doesn't have custom storage config yet — create with defaults.
+    bucket = sanitize_bucket_name(org_slug)
+    tmp = S3Storage(
+        bucket=bucket,
+        endpoint_url=current_app.config.get("S3_ENDPOINT_URL"),
+        access_key_id=current_app.config.get("S3_ACCESS_KEY_ID"),
+        secret_access_key=current_app.config.get("S3_SECRET_ACCESS_KEY"),
+        region=current_app.config.get("S3_REGION"),
+    )
+    _ = tmp.client  # triggers head_bucket / create_bucket
+    return bucket
+
+
+def _extract_org_slug_from_key(key: str) -> str | None:
+    """Extract the org slug from a storage key like ``projects/{org_slug}/...``.
+
+    Returns ``None`` for keys that don't follow this pattern (e.g. ``docx/``).
+    """
+    parts = key.split("/")
+    if len(parts) >= 3 and parts[0] == "projects":
+        return parts[1]
+    return None
+
+
+class MultiTenantStorage(Storage):
+    """Transparent per-org storage router.
+
+    Wraps a default ``Storage`` backend and routes operations to
+    per-org ``S3Storage`` instances when the key's org slug maps to an
+    org with ``has_custom_storage = True``.
+
+    Keys that don't match the ``projects/{org_slug}/...`` pattern (e.g.
+    ``docx/uploads/...``) always go to the default backend.
+    """
+
+    def __init__(self, default: Storage):
+        self.default = default
+
+    def _backend_for_key(self, key: str) -> Storage:
+        """Return the correct storage backend for *key*."""
+        org_slug = _extract_org_slug_from_key(key)
+        if org_slug:
+            org_storage = get_org_storage(org_slug)
+            if org_storage is not None:
+                return org_storage
+        return self.default
+
+    # --- Delegate every abstract method through _backend_for_key ---
+
+    def save(self, key: str, source: Path | str | bytes | BinaryIO) -> None:
+        self._backend_for_key(key).save(key, source)
+
+    def read_bytes(self, key: str) -> bytes:
+        return self._backend_for_key(key).read_bytes(key)
+
+    def exists(self, key: str) -> bool:
+        return self._backend_for_key(key).exists(key)
+
+    def size(self, key: str) -> int:
+        return self._backend_for_key(key).size(key)
+
+    def delete(self, key: str) -> bool:
+        return self._backend_for_key(key).delete(key)
+
+    def list_keys(self, prefix: str) -> Iterator[tuple[str, int]]:
+        return self._backend_for_key(prefix).list_keys(prefix)
+
+    def list_keys_with_mtime(
+        self, prefix: str = ""
+    ) -> Iterator[tuple[str, int, float]]:
+        return self._backend_for_key(prefix).list_keys_with_mtime(prefix)
+
+    def delete_prefix(self, prefix: str) -> int:
+        return self._backend_for_key(prefix).delete_prefix(prefix)
+
+    def local_copy(self, key: str) -> Path:
+        return self._backend_for_key(key).local_copy(key)
+
+    def serve(self, key: str, **send_file_kwargs):
+        return self._backend_for_key(key).serve(key, **send_file_kwargs)
+
+    # Convenience: expose the underlying gzip helpers from the default.
+
+    def save_json_gz(self, key: str, data: dict | list | str) -> None:
+        self._backend_for_key(key).save_json_gz(key, data)
+
+    def load_json_gz(self, key: str) -> dict | list | str | None:
+        return self._backend_for_key(key).load_json_gz(key)
+
+
 def get_storage() -> Storage:
-    """Return the storage backend for the current app, creating it once."""
+    """Return the storage backend for the current app, creating it once.
+
+    When the backend is S3-based, the returned storage is a
+    :class:`MultiTenantStorage` that transparently routes per-org keys
+    to dedicated buckets for orgs with ``has_custom_storage = True``.
+    """
     extensions = current_app.extensions
     if "kalanjiyam_storage" not in extensions:
-        extensions["kalanjiyam_storage"] = _build_storage(current_app.config)
+        base = _build_storage(current_app.config)
+        if isinstance(base, S3Storage):
+            base = MultiTenantStorage(base)
+        extensions["kalanjiyam_storage"] = base
     return extensions["kalanjiyam_storage"]
 
 

@@ -2,7 +2,17 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy import Text as Text_
 from sqlalchemy.orm import relationship
 
@@ -49,15 +59,22 @@ class ProofFolder(Base):
     """A folder in the proofing workspace for organizing projects."""
 
     __tablename__ = "proof_folders"
+    __table_args__ = (
+        UniqueConstraint("path", "organization_id", name="uq_proof_folders_path_org"),
+    )
 
     #: Primary key.
     id = pk()
     #: Normalized full path of the folder, e.g. "Literature" or "Literature/Poetry".
-    path = Column(String, unique=True, nullable=False, index=True)
+    path = Column(String, nullable=False, index=True)
     #: Human-readable folder name, e.g. "Poetry".
     name = Column(String, nullable=False)
     #: Parent folder path, e.g. "Literature" (or "" if at root).
     parent_path = Column(String, nullable=False, default="", index=True)
+    #: Organization that owns this folder.
+    organization_id = Column(
+        Integer, ForeignKey("groups.id"), nullable=True, index=True
+    )
     #: Timestamp at which folder was created.
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     #: Timestamp at which folder was last updated.
@@ -68,6 +85,7 @@ class ProofFolder(Base):
     fingerprint_id = Column(String, nullable=True, index=True)
 
     creator = relationship("User")
+    organization = relationship("Group")
 
     def __repr__(self):
         return f"<ProofFolder {self.path}>"
@@ -92,7 +110,6 @@ class Genre(Base):
 
 
 class Project(Base):
-
     """A proofreading project.
 
     Each project corresponds to exactly one printed book.
@@ -155,7 +172,7 @@ class Project(Base):
     tags = Column(JSON, nullable=True, default=list)
 
     #: Timestamp at which this project was created.
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     #: Timestamp at which this project was last updated.
     updated_at = Column(DateTime, default=same_as("created_at"), nullable=False)
 
@@ -167,7 +184,7 @@ class Project(Base):
     #: The genre of this project.
     genre_id = Column(Integer, ForeignKey("genres.id"), index=True)
     #: When true, anyone (including guests) can read this book at /books/ in multi-tenant mode.
-    is_publicly_viewable = Column(Boolean, nullable=False, default=False)
+    is_publicly_viewable = Column(Boolean, nullable=False, default=False, index=True)
     #: Device fingerprint that created this project (for unregistered users).
     fingerprint_id = Column(String, nullable=True, index=True)
 
@@ -184,6 +201,7 @@ class Project(Base):
     def condition_tag_list(self) -> list:
         """Return condition tags as a list of normalized dictionaries."""
         from kalanjiyam.utils.project_utils import normalize_condition_tags
+
         total = len(self.pages) if self.pages else 0
         return normalize_condition_tags(self.condition_tags, total_pages=total)
 
@@ -191,12 +209,14 @@ class Project(Base):
     def tag_list(self) -> list:
         """Return project tags as a list of cleaned strings."""
         from kalanjiyam.utils.project_utils import normalize_tags
+
         return normalize_tags(self.tags)
 
     @property
     def folder_path(self) -> str:
         """Return normalized folder path without leading/trailing slashes."""
         from kalanjiyam.utils.project_utils import normalize_folder_path
+
         return normalize_folder_path(self.folder)
 
     @property
@@ -212,24 +232,23 @@ class Project(Base):
         """
         if self.fingerprint_id:
             return "unregistered"
-        
+
         # Check if project belongs to any group whose slug is not "open-tenant"
         has_enterprise_group = any(g.slug != "open-tenant" for g in self.groups)
         if has_enterprise_group:
             return "enterprise"
-            
+
         return "registered"
 
 
-
 class Page(Base):
-
     """A page in a proofreading project.
 
     This corresponds to a specific page in a PDF.
     """
 
     __tablename__ = "proof_pages"
+    __table_args__ = (Index("ix_proof_pages_project_id_order", "project_id", "order"),)
 
     #: Primary key.
     id = pk()
@@ -278,13 +297,12 @@ class Page(Base):
         back_populates="page",
         cascade="all, delete-orphan",
     )
-    
+
     #: Translations for this page.
     translations = relationship("Translation", backref="page", cascade="delete")
 
 
 class PageStatus(Base):
-
     """The transcription status of a given page.
 
     For specific values, see `kalanjiyam.seed.lookup.page_status`.
@@ -302,12 +320,19 @@ class PageVersion(Base):
     """A specific version/branch track of revisions for a page."""
 
     __tablename__ = "proof_page_versions"
-    __table_args__ = (UniqueConstraint("page_id", "version_key", name="uq_page_version_key"),)
+    __table_args__ = (
+        UniqueConstraint("page_id", "version_key", name="uq_page_version_key"),
+    )
 
     #: Primary key.
     id = pk()
     #: The page this version corresponds to.
-    page_id = Column(Integer, ForeignKey("proof_pages.id", ondelete="CASCADE"), nullable=False, index=True)
+    page_id = Column(
+        Integer,
+        ForeignKey("proof_pages.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     #: The unique version/track key (e.g. 'role:p1', 'ocr:chandra').
     version_key = Column(String, nullable=False)
     #: Optimistic locking version counter.
@@ -325,13 +350,15 @@ class PageVersion(Base):
 
 
 class Revision(Base):
-
     """A specific page revision.
 
     To get the latest revision, sort by `created`.
     """
 
     __tablename__ = "proof_revisions"
+    __table_args__ = (
+        Index("ix_proof_revisions_project_id_created", "project_id", "created"),
+    )
 
     #: Primary key.
     id = pk()
@@ -341,19 +368,20 @@ class Revision(Base):
     page_id = foreign_key("proof_pages.id")
     #: The page version track this revision belongs to.
     page_version_id = Column(
-        Integer, ForeignKey("proof_page_versions.id", ondelete="SET NULL"), index=True, nullable=True
+        Integer,
+        ForeignKey("proof_page_versions.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
     )
     #: The author of this revision. Nullable for unregistered guest users.
-    author_id = Column(
-        Integer, ForeignKey("users.id"), index=True, nullable=True
-    )
+    author_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=True)
     #: Page status
     status_id = Column(
         Integer, ForeignKey("proof_page_statuses.id"), index=True, nullable=False
     )
     #: Timestamp at which this revision was created.
     #: FIXME: rename to `created_at` for consistency with other models.
-    created = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     #: An optional editor summary for this revision.
     summary = Column(Text_, nullable=False, default="")
     #: The actual content of this revision (derived plain text for legacy consumers).
@@ -369,13 +397,12 @@ class Revision(Base):
     project = relationship("Project")
     #: The status of this page.
     status = relationship("PageStatus", backref="revisions")
-    
+
     #: Translations for this revision.
     translations = relationship("Translation", backref="revision", cascade="delete")
 
 
 class Translation(Base):
-
     """A translation of a page revision.
 
     Each translation corresponds to a specific revision and provides
@@ -392,19 +419,21 @@ class Translation(Base):
     revision_id = foreign_key("proof_revisions.id")
     #: The author of this translation (bot user for auto-translations).
     author_id = foreign_key("users.id")
-    
+
     #: The translated content.
     content = Column(Text_, nullable=False)
-    
+
     #: Source language code (e.g., 'sa' for Sanskrit).
     source_language = Column(String, nullable=False)
     #: Target language code (e.g., 'en' for English).
     target_language = Column(String, nullable=False)
     #: Translation engine used (e.g., 'google', 'openai').
     translation_engine = Column(String, nullable=False)
-    
+
     #: Translation status.
-    status = Column(String, default='pending', nullable=False)  # pending, completed, failed
+    status = Column(
+        String, default="pending", nullable=False
+    )  # pending, completed, failed
     #: Timestamp at which this translation was created.
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     #: Timestamp at which this translation was last updated.

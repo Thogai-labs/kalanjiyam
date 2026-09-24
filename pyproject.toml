@@ -61,6 +61,7 @@ dependencies = [
     "numpy>=2.4.6",
     "scipy>=1.17.1",
     "prometheus-client>=0.26.0",
+    "flask-compress>=1.14",
 ]
 
 [dependency-groups]

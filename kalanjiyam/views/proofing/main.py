@@ -23,7 +23,7 @@ from flask_babel import lazy_gettext as _l
 from flask_login import current_user
 from flask_wtf import FlaskForm
 from slugify import slugify
-from sqlalchemy import func, or_, orm
+from sqlalchemy import and_, case, func, or_, orm
 from wtforms import BooleanField, MultipleFileField, RadioField, StringField
 from wtforms.validators import DataRequired, ValidationError
 from wtforms.widgets import TextArea
@@ -80,6 +80,15 @@ def _filename_to_project_title(filename: str, fallback_index: int = 1) -> str:
 def _escape_like(value: str) -> str:
     """Escape SQL LIKE wildcard characters (%, _) in a value for safe use in LIKE patterns."""
     return value.replace("%", r"\%").replace("_", r"\_")
+
+
+def _current_org_id() -> int | None:
+    """Return the organization_id for folder scoping based on the current user."""
+    from kalanjiyam.utils.org_access import user_organization_id
+
+    if current_user.is_authenticated:
+        return user_organization_id(current_user)
+    return None
 
 
 def is_group_images_enabled(request_form) -> bool:
@@ -235,8 +244,7 @@ def index():
         page = 1
     try:
         per_page = int(request.args.get("per_page", 20))
-        if per_page not in (10, 20, 50, 100):
-            per_page = 20
+        per_page = max(1, min(100, per_page))
     except (ValueError, TypeError):
         per_page = 20
 
@@ -285,8 +293,24 @@ def index():
     available_condition_tags = sorted(available_condition_tags, key=lambda s: s.lower())
 
     # Collect available folders and project tags across accessible projects
+    target_org_id = None
+    if selected_org and selected_org != "all":
+        target_group = session.query(db.Group).filter_by(slug=selected_org).first()
+        if target_group:
+            target_org_id = target_group.id
+        elif not getattr(current_user, "is_super_admin", False):
+            target_org_id = -1
+    elif not getattr(current_user, "is_super_admin", False):
+        target_org_id = _current_org_id()
+
     available_folders = project_utils.get_all_available_folders(
-        session, base_query=base_query
+        session,
+        base_query=base_query,
+        organization_id=target_org_id,
+        creator_id=current_user.id if current_user.is_authenticated else None,
+        fingerprint_id=device_fp if not current_user.is_authenticated else None,
+        is_super_admin=getattr(current_user, "is_super_admin", False)
+        and (not selected_org or selected_org == "all"),
     )
     has_any_folders = len(available_folders) > 0
     has_any_items = has_any_projects or has_any_folders
@@ -313,13 +337,34 @@ def index():
         query = query.filter(db.Project.creator_mode == selected_mode)
 
     # 5b. Filter by folder if specified
-    if selected_folder:
-        query = query.filter(
-            or_(
-                db.Project.folder == selected_folder,
-                db.Project.folder.like(f"{selected_folder}/%"),
+    norm_selected_folder = project_utils.normalize_folder_path(selected_folder)
+    is_searching_or_filtering = bool(search_query or selected_tag or selected_issues)
+
+    if is_searching_or_filtering:
+        if norm_selected_folder:
+            escaped_folder = _escape_like(norm_selected_folder)
+            query = query.filter(
+                or_(
+                    db.Project.folder == norm_selected_folder,
+                    db.Project.folder == selected_folder,
+                    db.Project.folder.like(f"{escaped_folder}/%"),
+                )
             )
-        )
+    else:
+        if norm_selected_folder:
+            query = query.filter(
+                or_(
+                    db.Project.folder == norm_selected_folder,
+                    db.Project.folder == selected_folder,
+                )
+            )
+        else:
+            query = query.filter(
+                or_(
+                    db.Project.folder.is_(None),
+                    func.trim(db.Project.folder) == "",
+                )
+            )
 
     # 6. Full tenant search filtering (matching display_title, print_title, author, or slug)
     if search_query:
@@ -347,10 +392,7 @@ def index():
 
     # 8. Server-side pagination and filtering
     if selected_issues or selected_tag:
-        candidates = (
-            query.options(orm.selectinload(db.Project.groups))
-            .all()
-        )
+        candidates = query.options(orm.selectinload(db.Project.groups)).all()
         filtered_projects = candidates
         if selected_issues:
             selected_issues_lower = {i.lower() for i in selected_issues}
@@ -431,9 +473,6 @@ def index():
     )
 
     all_display_projects = list(paginated_projects)
-    for dp in folder_contents["direct_projects"]:
-        if dp.id not in [p.id for p in all_display_projects]:
-            all_display_projects.append(dp)
 
     all_display_project_ids = [p.id for p in all_display_projects]
     if all_display_project_ids:
@@ -549,12 +588,27 @@ def index():
         or request.args.get("ajax") == "1"
     )
     if is_ajax:
-        rendered = render_template("proofing/_projects_list.html", **template_kwargs)
+        is_append = request.args.get("append") == "1"
+        template_name = (
+            "proofing/_project_cards.html"
+            if is_append
+            else "proofing/_projects_list.html"
+        )
+        rendered = render_template(template_name, **template_kwargs)
         resp = make_response(rendered)
         resp.headers["X-Total-Projects"] = str(total_projects)
+        resp.headers["X-Total-Pages"] = str(total_pages)
+        resp.headers["X-Current-Page"] = str(page)
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
         return resp
 
-    return render_template("proofing/index.html", **template_kwargs)
+    resp = make_response(render_template("proofing/index.html", **template_kwargs))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 @bp.route("/folders/create", methods=["POST"])
@@ -565,7 +619,10 @@ def create_folder():
     raw_parent = (data.get("parent_folder") or data.get("parent") or "").strip()
 
     if not raw_name:
-        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+        if (
+            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or request.is_json
+        ):
             return jsonify({"success": False, "error": "Folder name is required."}), 400
         flash(_l("Folder name is required."), "danger")
         return redirect(url_for("proofing.index"))
@@ -577,16 +634,35 @@ def create_folder():
         full_path = project_utils.normalize_folder_path(clean_name)
 
     if not full_path:
-        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+        if (
+            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or request.is_json
+        ):
             return jsonify({"success": False, "error": "Invalid folder name."}), 400
         flash(_l("Invalid folder name."), "danger")
         return redirect(url_for("proofing.index"))
 
+    org_id = _current_org_id()
     session = q.get_session()
-    existing = session.query(db.ProofFolder).filter_by(path=full_path).first()
+    existing = (
+        session.query(db.ProofFolder)
+        .filter_by(path=full_path, organization_id=org_id)
+        .first()
+    )
     if existing is not None:
-        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
-            return jsonify({"success": False, "error": _l("A folder with this name already exists.")}), 400
+        if (
+            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or request.is_json
+        ):
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": _l("A folder with this name already exists."),
+                    }
+                ),
+                400,
+            )
         flash(_l("A folder with this name already exists."), "danger")
         return redirect(url_for("proofing.index", folder=full_path))
 
@@ -598,18 +674,24 @@ def create_folder():
     )
 
     project_utils.ensure_proof_folder(
-        session, full_path, creator_id=creator_id, fingerprint_id=fingerprint_id
+        session,
+        full_path,
+        creator_id=creator_id,
+        fingerprint_id=fingerprint_id,
+        organization_id=org_id,
     )
     session.commit()
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
-        return jsonify({
-            "success": True,
-            "folder": full_path,
-            "path": full_path,
-            "name": full_path.split("/")[-1],
-            "parent_folder": raw_parent,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "folder": full_path,
+                "path": full_path,
+                "name": full_path.split("/")[-1],
+                "parent_folder": raw_parent,
+            }
+        )
 
     flash(_l("Folder created successfully."), "success")
     return redirect(url_for("proofing.index", folder=full_path))
@@ -623,15 +705,31 @@ def rename_folder():
     new_name = (data.get("new_name") or "").strip().strip("/")
 
     if not old_path or not new_name:
-        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
-            return jsonify({"success": False, "error": "Old path and new name are required."}), 400
+        if (
+            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or request.is_json
+        ):
+            return (
+                jsonify(
+                    {"success": False, "error": "Old path and new name are required."}
+                ),
+                400,
+            )
         flash(_l("Old path and new name are required."), "danger")
         return redirect(url_for("proofing.index"))
 
     # Reject slashes in new_name to prevent creating nested paths
     if "/" in new_name or "\\" in new_name:
-        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
-            return jsonify({"success": False, "error": "Folder name cannot contain slashes."}), 400
+        if (
+            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or request.is_json
+        ):
+            return (
+                jsonify(
+                    {"success": False, "error": "Folder name cannot contain slashes."}
+                ),
+                400,
+            )
         flash(_l("Folder name cannot contain slashes."), "danger")
         return redirect(url_for("proofing.index"))
 
@@ -640,25 +738,55 @@ def rename_folder():
     new_path = f"{parent_path}/{new_name}" if parent_path else new_name
     new_path = project_utils.normalize_folder_path(new_path)
 
+    org_id = _current_org_id()
     session = q.get_session()
 
-    # Check for collision with existing folder
+    # Check for collision with existing folder in same organization
     if new_path != old_path:
-        existing = session.query(db.ProofFolder).filter_by(path=new_path).first()
+        existing = (
+            session.query(db.ProofFolder)
+            .filter_by(path=new_path, organization_id=org_id)
+            .first()
+        )
         if existing is not None:
-            if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
-                return jsonify({"success": False, "error": _l("A folder with this name already exists.")}), 400
+            if (
+                request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                or request.is_json
+            ):
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": _l("A folder with this name already exists."),
+                        }
+                    ),
+                    400,
+                )
             flash(_l("A folder with this name already exists."), "danger")
             return redirect(url_for("proofing.index"))
 
     # Update ProofFolder records (escape LIKE wildcards in old_path)
     escaped_old = _escape_like(old_path)
-    folders = session.query(db.ProofFolder).filter(
-        or_(
-            db.ProofFolder.path == old_path,
-            db.ProofFolder.path.like(f"{escaped_old}/%", escape="\\"),
-        )
-    ).all()
+    folder_filter = or_(
+        db.ProofFolder.path == old_path,
+        db.ProofFolder.path.like(f"{escaped_old}/%", escape="\\"),
+    )
+    if org_id is not None:
+        folder_filter = and_(folder_filter, db.ProofFolder.organization_id == org_id)
+    elif not getattr(current_user, "is_super_admin", False):
+        device_fp = request.cookies.get("device_fingerprint")
+        if current_user.is_authenticated:
+            folder_filter = and_(
+                folder_filter, db.ProofFolder.creator_id == current_user.id
+            )
+        elif device_fp:
+            folder_filter = and_(
+                folder_filter,
+                db.ProofFolder.fingerprint_id == device_fp,
+                db.ProofFolder.organization_id.is_(None),
+            )
+
+    folders = session.query(db.ProofFolder).filter(folder_filter).all()
     for f in folders:
         if f.path == old_path:
             f.path = new_path
@@ -671,8 +799,12 @@ def rename_folder():
             f.name = f_parts[-1]
             f.parent_path = "/".join(f_parts[:-1])
 
-    # Update Project records
-    projects = session.query(db.Project).filter(
+    # Update Project records (scoped to user's accessible projects)
+    device_fp = request.cookies.get("device_fingerprint")
+    base_query = q.accessible_proofing_projects_query(
+        current_user, session=session, device_fingerprint=device_fp
+    )
+    projects = base_query.filter(
         or_(
             db.Project.folder == old_path,
             db.Project.folder.like(f"{escaped_old}/%", escape="\\"),
@@ -688,12 +820,14 @@ def rename_folder():
     session.commit()
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
-        return jsonify({
-            "success": True,
-            "old_path": old_path,
-            "new_path": new_path,
-            "parent_folder": parent_path,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "old_path": old_path,
+                "new_path": new_path,
+                "parent_folder": parent_path,
+            }
+        )
 
     flash(_l("Folder renamed successfully."), "success")
     return redirect(url_for("proofing.index", folder=new_path))
@@ -708,7 +842,10 @@ def delete_folder():
     )
 
     if not target_path:
-        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
+        if (
+            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or request.is_json
+        ):
             return jsonify({"success": False, "error": "Folder path is required."}), 400
         flash(_l("Folder path is required."), "danger")
         return redirect(url_for("proofing.index"))
@@ -716,17 +853,38 @@ def delete_folder():
     parts = target_path.split("/")
     parent_path = "/".join(parts[:-1])
 
+    org_id = _current_org_id()
     session = q.get_session()
     escaped_target = _escape_like(target_path)
-    session.query(db.ProofFolder).filter(
-        or_(
-            db.ProofFolder.path == target_path,
-            db.ProofFolder.path.like(f"{escaped_target}/%", escape="\\"),
-        )
-    ).delete(synchronize_session=False)
+    folder_filter = or_(
+        db.ProofFolder.path == target_path,
+        db.ProofFolder.path.like(f"{escaped_target}/%", escape="\\"),
+    )
+    if org_id is not None:
+        folder_filter = and_(folder_filter, db.ProofFolder.organization_id == org_id)
+    elif not getattr(current_user, "is_super_admin", False):
+        device_fp = request.cookies.get("device_fingerprint")
+        if current_user.is_authenticated:
+            folder_filter = and_(
+                folder_filter, db.ProofFolder.creator_id == current_user.id
+            )
+        elif device_fp:
+            folder_filter = and_(
+                folder_filter,
+                db.ProofFolder.fingerprint_id == device_fp,
+                db.ProofFolder.organization_id.is_(None),
+            )
 
-    # Safely move projects to parent_path
-    projects = session.query(db.Project).filter(
+    session.query(db.ProofFolder).filter(folder_filter).delete(
+        synchronize_session=False
+    )
+
+    # Safely move projects to parent_path (scoped to user's accessible projects)
+    device_fp = request.cookies.get("device_fingerprint")
+    base_query = q.accessible_proofing_projects_query(
+        current_user, session=session, device_fingerprint=device_fp
+    )
+    projects = base_query.filter(
         or_(
             db.Project.folder == target_path,
             db.Project.folder.like(f"{escaped_target}/%", escape="\\"),
@@ -738,12 +896,14 @@ def delete_folder():
     session.commit()
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
-        return jsonify({
-            "success": True,
-            "folder": target_path,
-            "path": target_path,
-            "parent_folder": parent_path,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "folder": target_path,
+                "path": target_path,
+                "parent_folder": parent_path,
+            }
+        )
 
     flash(_l("Folder deleted successfully."), "success")
     return redirect(url_for("proofing.index", folder=parent_path))
@@ -876,7 +1036,18 @@ def create_project():
     if request.method == "GET" and request.args.get("folder"):
         form.folder.data = request.args.get("folder").strip()
 
-    available_folders = project_utils.get_all_available_folders(session)
+    device_fp = request.cookies.get("device_fingerprint")
+    base_query = q.accessible_proofing_projects_query(
+        current_user, session=session, device_fingerprint=device_fp
+    )
+    available_folders = project_utils.get_all_available_folders(
+        session,
+        base_query=base_query,
+        organization_id=_current_org_id(),
+        creator_id=current_user.id if current_user.is_authenticated else None,
+        fingerprint_id=device_fp if not current_user.is_authenticated else None,
+        is_super_admin=getattr(current_user, "is_super_admin", False),
+    )
 
     def _render_create_project():
         return render_template(
@@ -1263,6 +1434,7 @@ def create_project():
                 )
 
         from kalanjiyam.utils.project_utils import normalize_folder_path, normalize_tags
+
         folder_val = normalize_folder_path(form.folder.data)
         tags_val = normalize_tags(form.tags.data)
 
@@ -1276,6 +1448,7 @@ def create_project():
                     if not current_user.is_authenticated
                     else None
                 ),
+                organization_id=_current_org_id(),
             )
             session.commit()
 
@@ -1512,14 +1685,14 @@ def recent_changes():
 
     session = q.get_session()
 
-    # 1. Fetch accessible projects for current user in one query with eager loaded groups
-    all_projects = (
-        session.query(db.Project).options(orm.selectinload(db.Project.groups)).all()
+    # 1. Fetch accessible projects for current user in SQL without loading full project models
+    device_fp = request.cookies.get("device_fingerprint")
+    accessible_query = q.accessible_proofing_projects_query(
+        current_user, session=session, device_fingerprint=device_fp
     )
-    accessible_projects = [
-        p for p in all_projects if q.user_can_view_proofing_project(current_user, p)
+    accessible_project_ids = [
+        r[0] for r in accessible_query.with_entities(db.Project.id).all()
     ]
-    accessible_project_ids = [p.id for p in accessible_projects]
 
     if not accessible_project_ids:
         return render_template(
@@ -1574,8 +1747,12 @@ def recent_changes():
         )
 
     # Counts
-    total_revisions = session.query(db.Revision.id).filter(*rev_filters).count()
-    total_projects = session.query(db.Project.id).filter(*proj_filters).count()
+    total_revisions = (
+        session.query(func.count(db.Revision.id)).filter(*rev_filters).scalar() or 0
+    )
+    total_projects = (
+        session.query(func.count(db.Project.id)).filter(*proj_filters).scalar() or 0
+    )
     total_items = total_revisions + total_projects
     total_pages = max(1, math.ceil(total_items / per_page)) if total_items else 1
     if page > total_pages:
@@ -1691,43 +1868,80 @@ def dashboard():
     days_ago_7d = now - timedelta(days=7)
     days_ago_1d = now - timedelta(days=1)
 
-    session = q.get_session()
-    bot = session.query(db.User).filter_by(username=consts.BOT_USERNAME).one()
-    bot_id = bot.id
-
-    revisions_30d = (
-        session.query(db.Revision)
-        .filter(
-            (db.Revision.created >= days_ago_30d) & (db.Revision.author_id != bot_id)
+    r_client = None
+    try:
+        r_client = redis.Redis.from_url(
+            os.getenv("REDIS_URL", "redis://localhost:6379/0")
         )
-        .options(orm.load_only(db.Revision.created, db.Revision.author_id))
-        .order_by(db.Revision.created)
-        .all()
-    )
-    revisions_7d = [x for x in revisions_30d if x.created >= days_ago_7d]
-    revisions_1d = [x for x in revisions_7d if x.created >= days_ago_1d]
-    num_revisions_30d = len(revisions_30d)
-    num_revisions_7d = len(revisions_7d)
-    num_revisions_1d = len(revisions_1d)
+        r_client.ping()
+    except Exception:
+        r_client = None
 
-    num_contributors_30d = len(
-        {x.author_id for x in revisions_30d if x.author_id is not None}
+    cache_key = "proofing:admin_dashboard_stats"
+    if r_client:
+        try:
+            cached = r_client.get(cache_key)
+            if cached:
+                cached_data = json.loads(cached.decode("utf-8"))
+                return render_template(
+                    "proofing/dashboard.html",
+                    **cached_data,
+                )
+        except Exception:
+            pass
+
+    session = q.get_session()
+    bot = session.query(db.User).filter_by(username=consts.BOT_USERNAME).first()
+    bot_id = bot.id if bot else None
+
+    bot_filter = (
+        or_(db.Revision.author_id != bot_id, db.Revision.author_id.is_(None))
+        if bot_id is not None
+        else True
     )
-    num_contributors_7d = len(
-        {x.author_id for x in revisions_7d if x.author_id is not None}
+
+    row = (
+        session.query(
+            func.count(db.Revision.id),
+            func.count(func.distinct(db.Revision.author_id)),
+            func.count(case((db.Revision.created >= days_ago_7d, db.Revision.id))),
+            func.count(
+                func.distinct(
+                    case((db.Revision.created >= days_ago_7d, db.Revision.author_id))
+                )
+            ),
+            func.count(case((db.Revision.created >= days_ago_1d, db.Revision.id))),
+            func.count(
+                func.distinct(
+                    case((db.Revision.created >= days_ago_1d, db.Revision.author_id))
+                )
+            ),
+        )
+        .filter(
+            db.Revision.created >= days_ago_30d,
+            bot_filter,
+        )
+        .one()
     )
-    num_contributors_1d = len(
-        {x.author_id for x in revisions_1d if x.author_id is not None}
-    )
+
+    stats = {
+        "num_revisions_30d": int(row[0] or 0),
+        "num_contributors_30d": int(row[1] or 0),
+        "num_revisions_7d": int(row[2] or 0),
+        "num_contributors_7d": int(row[3] or 0),
+        "num_revisions_1d": int(row[4] or 0),
+        "num_contributors_1d": int(row[5] or 0),
+    }
+
+    if r_client:
+        try:
+            r_client.setex(cache_key, 300, json.dumps(stats))
+        except Exception:
+            pass
 
     return render_template(
         "proofing/dashboard.html",
-        num_revisions_30d=num_revisions_30d,
-        num_revisions_7d=num_revisions_7d,
-        num_revisions_1d=num_revisions_1d,
-        num_contributors_30d=num_contributors_30d,
-        num_contributors_7d=num_contributors_7d,
-        num_contributors_1d=num_contributors_1d,
+        **stats,
     )
 
 

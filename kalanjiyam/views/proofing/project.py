@@ -23,6 +23,7 @@ from flask_babel import lazy_gettext as _l
 from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from markupsafe import Markup, escape
+from sqlalchemy import orm
 from sqlalchemy.orm.attributes import flag_modified
 from werkzeug.exceptions import abort
 from werkzeug.utils import redirect
@@ -55,7 +56,6 @@ from kalanjiyam.utils import project_utils, proofing_utils
 from kalanjiyam.utils.ocr_types import SUPPORTED_ENGINES
 from kalanjiyam.utils.revisions import add_revision
 from kalanjiyam.utils.translation_engine import (
-    get_available_translation_engines,
     get_supported_languages_list,
 )
 from kalanjiyam.views.proofing.decorators import moderator_required, p2_required
@@ -351,23 +351,37 @@ class ConfirmChangesForm(ReplaceForm):
 @bp.route("/<slug>/")
 def summary(slug):
     """Show basic information about the project."""
-    project_ = q.project(slug)
+    session = q.get_session()
+    project_ = (
+        session.query(db.Project)
+        .options(
+            orm.selectinload(db.Project.pages).joinedload(db.Page.status),
+            orm.joinedload(db.Project.creator),
+        )
+        .filter(db.Project.slug == slug)
+        .first()
+    )
     if project_ is None:
         abort(404)
 
-    session = q.get_session()
     recent_revisions = (
         session.query(db.Revision)
+        .options(
+            orm.joinedload(db.Revision.author),
+            orm.joinedload(db.Revision.status),
+            orm.joinedload(db.Revision.page),
+            orm.joinedload(db.Revision.project),
+        )
         .filter_by(project_id=project_.id)
         .order_by(db.Revision.created.desc())
         .limit(10)
         .all()
     )
 
-    page_rules = project_utils.parse_page_number_spec(project_.page_numbers)
-    page_titles = project_utils.apply_rules(len(project_.pages), page_rules)
-    page_issues_map = project_utils.get_page_issues_map(
-        project_.condition_tags, len(project_.pages)
+    total_pages = len(project_.pages)
+    page_titles = project_utils.get_cached_project_page_titles(project_, total_pages)
+    page_issues_map = project_utils.get_cached_project_page_issues_map(
+        project_, total_pages
     )
     return render_template(
         "proofing/projects/summary.html",
@@ -381,11 +395,20 @@ def summary(slug):
 @bp.route("/<slug>/activity")
 def activity(slug):
     """Show recent activity on this project with interactive heatmap and date filter."""
-    from datetime import date as dt_date, datetime, timedelta
+    from datetime import date as dt_date
+    from datetime import datetime, timedelta
+
     from sqlalchemy import func
+
     from kalanjiyam.utils import heatmap
 
-    project_ = q.project(slug)
+    session = q.get_session()
+    project_ = (
+        session.query(db.Project)
+        .options(orm.joinedload(db.Project.creator))
+        .filter(db.Project.slug == slug)
+        .first()
+    )
     if project_ is None:
         abort(404)
 
@@ -398,8 +421,6 @@ def activity(slug):
             filter_date = None
             date_str = None
 
-    session = q.get_session()
-
     # 1. Compute 1-Year Heatmap Activity Data for this project
     one_year_ago = datetime.utcnow() - timedelta(days=365)
     hm_rev_rows = (
@@ -407,7 +428,9 @@ def activity(slug):
             func.date(db.Revision.created).label("d"),
             func.count(db.Revision.id).label("c"),
         )
-        .filter(db.Revision.project_id == project_.id, db.Revision.created >= one_year_ago)
+        .filter(
+            db.Revision.project_id == project_.id, db.Revision.created >= one_year_ago
+        )
         .group_by(func.date(db.Revision.created))
         .all()
     )
@@ -423,11 +446,19 @@ def activity(slug):
     counts_map = {}
     for row in hm_rev_rows:
         if row[0]:
-            d = row[0] if isinstance(row[0], dt_date) else datetime.strptime(str(row[0])[:10], "%Y-%m-%d").date()
+            d = (
+                row[0]
+                if isinstance(row[0], dt_date)
+                else datetime.strptime(str(row[0])[:10], "%Y-%m-%d").date()
+            )
             counts_map[d] = counts_map.get(d, 0) + int(row[1])
     for row in hm_proj_row:
         if row[0]:
-            d = row[0] if isinstance(row[0], dt_date) else datetime.strptime(str(row[0])[:10], "%Y-%m-%d").date()
+            d = (
+                row[0]
+                if isinstance(row[0], dt_date)
+                else datetime.strptime(str(row[0])[:10], "%Y-%m-%d").date()
+            )
             counts_map[d] = counts_map.get(d, 0) + int(row[1])
 
     hm = heatmap.create_from_counts(counts_map)
@@ -438,10 +469,18 @@ def activity(slug):
     if filter_date:
         start_dt = datetime.combine(filter_date, datetime.min.time())
         end_dt = datetime.combine(filter_date, datetime.max.time())
-        rev_filters.extend([db.Revision.created >= start_dt, db.Revision.created <= end_dt])
+        rev_filters.extend(
+            [db.Revision.created >= start_dt, db.Revision.created <= end_dt]
+        )
 
     recent_revisions = (
         session.query(db.Revision)
+        .options(
+            orm.joinedload(db.Revision.author),
+            orm.joinedload(db.Revision.status),
+            orm.joinedload(db.Revision.page),
+            orm.joinedload(db.Revision.project),
+        )
         .filter(*rev_filters)
         .order_by(db.Revision.created.desc())
         .limit(100)
@@ -452,6 +491,16 @@ def activity(slug):
     if page_ids:
         all_page_revisions = (
             session.query(db.Revision)
+            .options(
+                orm.load_only(
+                    db.Revision.id,
+                    db.Revision.page_id,
+                    db.Revision.created,
+                    db.Revision.content,
+                    db.Revision.content_format,
+                    db.Revision.document,
+                )
+            )
             .filter(db.Revision.page_id.in_(page_ids))
             .order_by(db.Revision.page_id, db.Revision.created.desc())
             .all()
@@ -487,7 +536,9 @@ def activity(slug):
                 r.diff = None
 
     recent_activity = [("revision", r.created, r) for r in recent_revisions]
-    if not filter_date or (project_.created_at and project_.created_at.date() == filter_date):
+    if not filter_date or (
+        project_.created_at and project_.created_at.date() == filter_date
+    ):
         recent_activity.append(("project", project_.created_at, project_))
 
     return render_template(
@@ -528,6 +579,12 @@ def edit(slug):
         session = q.get_session()
         form.populate_obj(project_)
 
+        project_org_id = project_.groups[0].id if project_.groups else None
+        if project_org_id is None and current_user.is_authenticated:
+            from kalanjiyam.utils.org_access import user_organization_id
+
+            project_org_id = user_organization_id(current_user)
+
         project_.folder = project_utils.normalize_folder_path(form.folder.data)
         if project_.folder:
             project_utils.ensure_proof_folder(
@@ -539,6 +596,7 @@ def edit(slug):
                     if not current_user.is_authenticated
                     else None
                 ),
+                organization_id=project_org_id,
             )
         project_.tags = project_utils.normalize_tags(form.tags.data)
         flag_modified(project_, "tags")
@@ -561,7 +619,25 @@ def edit(slug):
 
     delete_form = DeleteProjectForm()
     session = q.get_session()
-    available_folders = project_utils.get_all_available_folders(session)
+
+    project_org_id = project_.groups[0].id if project_.groups else None
+    if project_org_id is None and current_user.is_authenticated:
+        from kalanjiyam.utils.org_access import user_organization_id
+
+        project_org_id = user_organization_id(current_user)
+
+    device_fp = request.cookies.get("device_fingerprint")
+    base_query = q.accessible_proofing_projects_query(
+        current_user, session=session, device_fingerprint=device_fp
+    )
+    available_folders = project_utils.get_all_available_folders(
+        session,
+        base_query=base_query,
+        organization_id=project_org_id,
+        creator_id=current_user.id if current_user.is_authenticated else None,
+        fingerprint_id=device_fp if not current_user.is_authenticated else None,
+        is_super_admin=getattr(current_user, "is_super_admin", False),
+    )
 
     return render_template(
         "proofing/projects/edit.html",
@@ -592,6 +668,12 @@ def move_folder(slug):
     target_folder = (target_folder or "").strip()
     norm_folder = project_utils.normalize_folder_path(target_folder)
 
+    project_org_id = project_.groups[0].id if project_.groups else None
+    if project_org_id is None and current_user.is_authenticated:
+        from kalanjiyam.utils.org_access import user_organization_id
+
+        project_org_id = user_organization_id(current_user)
+
     session = q.get_session()
     project_.folder = norm_folder
     if norm_folder:
@@ -604,6 +686,7 @@ def move_folder(slug):
                 if not current_user.is_authenticated
                 else None
             ),
+            organization_id=project_org_id,
         )
     session.commit()
 
@@ -2016,7 +2099,12 @@ def batch_enhanced_ocr(slug):
         profile = validate_enhancement_profile(profile_raw)
         language = request.form.get("language") or "auto"
         save_enhanced_images = request.form.get("save_enhanced_images") == "1"
-        line_segmentation = request.form.get("line_segmentation") in ("1", "true", "True", True) or request.form.get("closely_written") in ("1", "true", "True", True)
+        line_segmentation = request.form.get("line_segmentation") in (
+            "1",
+            "true",
+            "True",
+            True,
+        ) or request.form.get("closely_written") in ("1", "true", "True", True)
         upscale = request.form.get("upscale") in ("1", "true", "True", True)
         try:
             upscale_factor = int(request.form.get("upscale_factor", 2) or 2)
@@ -2248,16 +2336,14 @@ def batch_translate(slug):
         getattr(system_settings, "default_translation_engine", "indictrans3")
         or "indictrans3"
     )
-    rec_trans_engine = getattr(
-        system_settings, "recommended_translation_engine", None
-    )
+    rec_trans_engine = getattr(system_settings, "recommended_translation_engine", None)
     is_super_admin = getattr(current_user, "is_super_admin", False)
 
     from kalanjiyam.utils.translation_engine import (
-        build_translation_choices,
-        normalize_translation_engine,
         REVERSE_TRANSLATION_ENGINE_MAP,
         TRANSLATION_ENGINE_LABELS,
+        build_translation_choices,
+        normalize_translation_engine,
     )
 
     engines = build_translation_choices(
@@ -2409,9 +2495,7 @@ def batch_translate(slug):
 
             numeric_value = REVERSE_TRANSLATION_ENGINE_MAP.get(engine, "1")
             engine_label = (
-                TRANSLATION_ENGINE_LABELS.get(
-                    engine, engine.replace("_", " ").title()
-                )
+                TRANSLATION_ENGINE_LABELS.get(engine, engine.replace("_", " ").title())
                 if is_super_admin
                 else f"Translation {numeric_value}"
             )

@@ -302,9 +302,17 @@ def get_version_display_name(version_key: str) -> str:
                 profile, profile.replace("_", " ").title() if profile else ""
             )
             if is_segmented:
-                profile_label = f"{profile_label} + Line Segmentation" if profile_label else _l("Line Segmentation")
+                profile_label = (
+                    f"{profile_label} + Line Segmentation"
+                    if profile_label
+                    else _l("Line Segmentation")
+                )
             if upscale_str:
-                profile_label = f"{profile_label} + {upscale_str.upper()} Upscale" if profile_label else f"{upscale_str.upper()} Upscale"
+                profile_label = (
+                    f"{profile_label} + {upscale_str.upper()} Upscale"
+                    if profile_label
+                    else f"{upscale_str.upper()} Upscale"
+                )
             if profile_label:
                 return _l(
                     "Enhanced %(ocr)s (%(profile)s)",
@@ -584,9 +592,10 @@ def _editor_template_kwargs(
     is_restricted_ocr = is_restricted_ocr_user(current_user)
 
     from kalanjiyam.utils.translation_engine import (
-        build_translation_choices,
         REVERSE_TRANSLATION_ENGINE_MAP,
+        build_translation_choices,
     )
+
     default_trans_engine = (
         getattr(system_settings, "default_translation_engine", "indictrans3")
         or "indictrans3"
@@ -594,9 +603,7 @@ def _editor_template_kwargs(
     default_translation_value = REVERSE_TRANSLATION_ENGINE_MAP.get(
         default_trans_engine, "1"
     )
-    rec_trans_engine = getattr(
-        system_settings, "recommended_translation_engine", None
-    )
+    rec_trans_engine = getattr(system_settings, "recommended_translation_engine", None)
     is_super_admin = getattr(current_user, "is_super_admin", False)
     translation_choices = build_translation_choices(
         is_super_admin=is_super_admin,
@@ -604,8 +611,8 @@ def _editor_template_kwargs(
         default_engine=default_trans_engine,
     )
 
-    page_rules = project_utils.parse_page_number_spec(ctx.project.page_numbers)
-    page_titles = project_utils.apply_rules(len(ctx.project.pages), page_rules)
+    total_pages = len(ctx.project.pages)
+    page_titles = project_utils.get_cached_project_page_titles(ctx.project, total_pages)
     pages = list(zip(page_titles, ctx.project.pages))
     main_version_record = (
         session.query(db.PageVersion)
@@ -660,8 +667,8 @@ def _editor_template_kwargs(
         .first()
     )
     page_version = target_version_record.version if target_version_record else 0
-    page_issues_map = project_utils.get_page_issues_map(
-        ctx.project.condition_tags, len(ctx.project.pages)
+    page_issues_map = project_utils.get_cached_project_page_issues_map(
+        ctx.project, total_pages
     )
     cur_page_index = 1
     for idx, p in enumerate(ctx.project.pages, start=1):
@@ -722,8 +729,9 @@ def _get_page_number(project_: db.Project, page_: db.Page) -> str:
     if not project_.page_numbers:
         return page_.slug
 
-    page_rules = project_utils.parse_page_number_spec(project_.page_numbers)
-    page_titles = project_utils.apply_rules(len(project_.pages), page_rules)
+    page_titles = project_utils.get_cached_project_page_titles(
+        project_, len(project_.pages)
+    )
     for title, cur in zip(page_titles, project_.pages):
         if cur.id == page_.id:
             return title
@@ -2065,12 +2073,15 @@ def replace_page_image(project_slug, page_slug):
 
     if action == "revert":
         if not storage.exists(master_key):
-            return jsonify(
-                {
-                    "status": "error",
-                    "message": "No master scan backup found to revert to.",
-                }
-            ), 400
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "No master scan backup found to revert to.",
+                    }
+                ),
+                400,
+            )
 
         master_bytes = storage.read_bytes(master_key)
         storage.save(active_key, master_bytes)
@@ -2948,7 +2959,9 @@ def get_glossaries():
 def page_versions(project_slug, page_slug):
     """Return the available versions for a page."""
     if current_user.is_authenticated and current_user.is_super_admin:
-        abort(403, description=_l("Superadmins are not allowed to access project data."))
+        abort(
+            403, description=_l("Superadmins are not allowed to access project data.")
+        )
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
@@ -2997,7 +3010,9 @@ def voice_edit(project_slug, page_slug):
         abort(404)
 
     if current_user.is_authenticated and current_user.is_super_admin:
-        abort(403, description=_l("Superadmins are not allowed to access project data."))
+        abort(
+            403, description=_l("Superadmins are not allowed to access project data.")
+        )
     project_ = q.project(project_slug)
     if project_ is None:
         abort(404)
@@ -3035,7 +3050,9 @@ def voice_edit(project_slug, page_slug):
 
     content_type = (audio.mimetype or "").split(";")[0].strip().lower()
     if content_type not in voice_client.ALLOWED_AUDIO_TYPES:
-        abort(400, description=_l("Unsupported audio format: %(kind)s", kind=content_type))
+        abort(
+            400, description=_l("Unsupported audio format: %(kind)s", kind=content_type)
+        )
 
     audio.stream.seek(0, 2)
     size = audio.stream.tell()
@@ -3076,7 +3093,10 @@ def voice_edit(project_slug, page_slug):
         )
     except voice_client.VoiceError as e:
         _record_voice_metric(
-            language, status="FAILED", latency_ms=(time.monotonic() - started) * 1000, error=e
+            language,
+            status="FAILED",
+            latency_ms=(time.monotonic() - started) * 1000,
+            error=e,
         )
         logging.warning("voice-edit call failed: %s", e)
         # 502, not 500: the fault is upstream. The editor shows a quiet status

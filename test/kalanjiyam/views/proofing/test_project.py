@@ -1,7 +1,7 @@
-import kalanjiyam.queries as q
-from kalanjiyam.database import Project
 from unittest.mock import MagicMock, patch
 
+import kalanjiyam.queries as q
+from kalanjiyam.database import Project
 
 
 def test_summary(client):
@@ -30,6 +30,58 @@ def test_activity_with_date_filter(client):
 def test_activity__bad_project(client):
     resp = client.get("/proofing/unknown/activity")
     assert resp.status_code == 404
+
+
+def test_summary_with_revisions(client):
+    from kalanjiyam import database as db
+    from kalanjiyam.utils.revisions import add_revision
+
+    session = q.get_session()
+    project = q.project("test-project")
+    page = project.pages[0]
+    pv = (
+        session.query(db.PageVersion)
+        .filter_by(page_id=page.id, version_key="role:p1")
+        .first()
+    )
+    cur_ver = pv.version if pv else 0
+    add_revision(
+        page, "test edit summary", "Hello summary revision", "reviewed-1", cur_ver, None
+    )
+    resp = client.get("/proofing/test-project/")
+    assert resp.status_code == 200
+    assert "test edit summary" in resp.text
+
+
+def test_activity_with_revisions(client):
+    from kalanjiyam import database as db
+    from kalanjiyam.utils.revisions import add_revision
+
+    session = q.get_session()
+    project = q.project("test-project")
+    page = project.pages[0]
+    pv = (
+        session.query(db.PageVersion)
+        .filter_by(page_id=page.id, version_key="role:p1")
+        .first()
+    )
+    cur_ver = pv.version if pv else 0
+    add_revision(
+        page, "first edit", "First revision content", "reviewed-1", cur_ver, None
+    )
+
+    pv = (
+        session.query(db.PageVersion)
+        .filter_by(page_id=page.id, version_key="role:p1")
+        .first()
+    )
+    cur_ver = pv.version if pv else 0
+    add_revision(
+        page, "second edit", "Second revision content", "reviewed-2", cur_ver, None
+    )
+    resp = client.get("/proofing/test-project/activity")
+    assert resp.status_code == 200
+    assert "second edit" in resp.text
 
 
 # For "Talk:" tests, see test_talk.py.
@@ -63,6 +115,7 @@ def test_edit__auth__post_succeeds(rama_client):
 
 def test_edit__condition_tags(rama_client):
     import json
+
     tags = [
         {"name": "Shmushing", "pages": "1-2"},
         {"name": "Torn", "pages": "3"},
@@ -94,7 +147,6 @@ def test_edit__condition_tags(rama_client):
     assert edit_resp.status_code == 200
     assert "Shmushing" in edit_resp.text
     assert "initial-condition-tags" in edit_resp.text
-
 
 
 def test_edit__auth__post_fails(rama_client):
@@ -302,7 +354,10 @@ def test_batch_ocr__unauth(client):
 
 def test_batch_translate_view_engines_list(rama_client):
     from unittest.mock import patch
-    with patch("kalanjiyam.views.proofing.project.get_available_translation_engines") as mock_engines:
+
+    with patch(
+        "kalanjiyam.views.proofing.project.get_available_translation_engines"
+    ) as mock_engines:
         mock_engines.return_value = [
             {"value": "test-engine", "label": "Test Dynamic Engine"}
         ]
@@ -314,18 +369,20 @@ def test_batch_translate_view_engines_list(rama_client):
 
 @patch("redis.Redis.from_url")
 @patch("kalanjiyam.views.proofing.project.GroupResult")
-def test_batch_ocr_status_cancelled(mock_group_result, mock_redis_from_url, rama_client):
+def test_batch_ocr_status_cancelled(
+    mock_group_result, mock_redis_from_url, rama_client
+):
     mock_redis = MagicMock()
     mock_redis.scan_iter.return_value = []
     mock_redis_from_url.return_value = mock_redis
-    
+
     mock_group = MagicMock()
     mock_group.results = [MagicMock()]
-    mock_group.results[0].state = 'REVOKED'
+    mock_group.results[0].state = "REVOKED"
     mock_group.results[0].failed.return_value = False
     mock_group.completed_count.return_value = 0
     mock_group_result.restore.return_value = mock_group
-    
+
     resp = rama_client.get("/proofing/batch-ocr-status/task-123")
     assert resp.status_code == 200
     assert "OCR Cancelled" in resp.text
@@ -333,18 +390,20 @@ def test_batch_ocr_status_cancelled(mock_group_result, mock_redis_from_url, rama
 
 @patch("redis.Redis.from_url")
 @patch("kalanjiyam.views.proofing.project.GroupResult")
-def test_batch_translate_status_cancelled(mock_group_result, mock_redis_from_url, rama_client):
+def test_batch_translate_status_cancelled(
+    mock_group_result, mock_redis_from_url, rama_client
+):
     mock_redis = MagicMock()
     mock_redis.scan_iter.return_value = []
     mock_redis_from_url.return_value = mock_redis
-    
+
     mock_group = MagicMock()
     mock_group.results = [MagicMock()]
-    mock_group.results[0].state = 'REVOKED'
+    mock_group.results[0].state = "REVOKED"
     mock_group.results[0].failed.return_value = False
     mock_group.completed_count.return_value = 0
     mock_group_result.restore.return_value = mock_group
-    
+
     resp = rama_client.get("/proofing/batch-translate-status/task-123")
     assert resp.status_code == 200
     assert "Cancelled" in resp.text
@@ -352,22 +411,24 @@ def test_batch_translate_status_cancelled(mock_group_result, mock_redis_from_url
 
 @patch("redis.Redis.from_url")
 @patch("kalanjiyam.views.proofing.project.GroupResult")
-def test_batch_ocr_status_progress_math(mock_group_result, mock_redis_from_url, rama_client):
+def test_batch_ocr_status_progress_math(
+    mock_group_result, mock_redis_from_url, rama_client
+):
     mock_redis = MagicMock()
     mock_redis.scan_iter.return_value = []
     mock_redis_from_url.return_value = mock_redis
-    
+
     # 5 out of 10 tasks completed -> 50% progress
     mock_results = [MagicMock() for _ in range(10)]
     for res in mock_results:
-        res.state = 'STARTED'
+        res.state = "STARTED"
         res.failed.return_value = False
-        
+
     mock_group = MagicMock()
     mock_group.results = mock_results
     mock_group.completed_count.return_value = 5
     mock_group_result.restore.return_value = mock_group
-    
+
     resp = rama_client.get("/proofing/batch-ocr-status/task-123")
     assert resp.status_code == 200
     assert "50%" in resp.text
@@ -377,7 +438,9 @@ def test_batch_ocr_status_progress_math(mock_group_result, mock_redis_from_url, 
 
 @patch("redis.Redis.from_url")
 @patch("kalanjiyam.views.proofing.project.GroupResult")
-def test_batch_ocr_status_default_language_auto(mock_group_result, mock_redis_from_url, rama_client):
+def test_batch_ocr_status_default_language_auto(
+    mock_group_result, mock_redis_from_url, rama_client
+):
     mock_redis = MagicMock()
     mock_redis.scan_iter.return_value = []
     mock_redis_from_url.return_value = mock_redis
@@ -393,6 +456,3 @@ def test_batch_ocr_status_default_language_auto(mock_group_result, mock_redis_fr
     resp = rama_client.get("/proofing/batch-ocr-status/task-123")
     assert resp.status_code == 200
     assert "AUTO" in resp.text
-
-
-

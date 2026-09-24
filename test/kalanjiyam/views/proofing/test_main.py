@@ -137,8 +137,22 @@ def test_index_folder_and_tag_filters(client):
     assert "X-Total-Projects" in resp_tag_ajax.headers
 
 
+def test_index_append_ajax(client):
+    resp = client.get(
+        "/proofing/?append=1&page=1&per_page=10",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    assert "X-Total-Projects" in resp.headers
+    assert "X-Total-Pages" in resp.headers
+    assert "X-Current-Page" in resp.headers
+    # When append=1, only card elements are returned, not the outer folder breadcrumb or sentinel
+    assert "infinite-scroll-sentinel" not in resp.text
+
+
 def test_project_model_folder_and_tags():
     from kalanjiyam import database as db
+
     proj = db.Project(
         slug="folder-test-proj",
         display_title="Folder Test Project",
@@ -183,6 +197,50 @@ def test_recent_changes_filters(client):
     assert resp.status_code == 200
     assert "Recent Changes" in resp.text
     assert "Activity Stream" in resp.text
+
+
+def test_admin_dashboard_moderator_required(client):
+    resp = client.get("/proofing/admin/dashboard/")
+    assert resp.status_code in (302, 403)
+
+
+def test_admin_dashboard(moderator_client):
+    resp = moderator_client.get("/proofing/admin/dashboard/")
+    assert resp.status_code == 200
+    assert "Proofing Analytics" in resp.text
+    assert "Revisions" in resp.text
+    assert "Contributors" in resp.text
+
+
+def test_admin_dashboard_redis_cache(moderator_client, monkeypatch):
+    import json
+    from unittest.mock import MagicMock
+
+    import redis
+
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = None
+    monkeypatch.setattr(redis.Redis, "from_url", lambda *args, **kwargs: mock_redis)
+
+    resp = moderator_client.get("/proofing/admin/dashboard/")
+    assert resp.status_code == 200
+    assert mock_redis.setex.called
+
+    # When cache is populated, it returns cached template values directly
+    mock_redis.get.return_value = json.dumps(
+        {
+            "num_revisions_30d": 99,
+            "num_contributors_30d": 42,
+            "num_revisions_7d": 10,
+            "num_contributors_7d": 5,
+            "num_revisions_1d": 2,
+            "num_contributors_1d": 1,
+        }
+    ).encode("utf-8")
+    resp_cached = moderator_client.get("/proofing/admin/dashboard/")
+    assert resp_cached.status_code == 200
+    assert "99" in resp_cached.text
+    assert "42" in resp_cached.text
 
 
 def test_create_project__unauth(client):
@@ -681,8 +739,8 @@ def test_create_and_manage_folders(rama_client):
 
 
 def test_empty_folder_rendered_in_workspace(client, rama_client):
-    """Test that an empty folder appears at root with count 0 and can be opened."""
-    # Create empty folder "Unpublished"
+    """Test that an empty folder appears at root for its creator/org, and is isolated from others."""
+    # Create empty folder "Unpublished" as rama
     resp = rama_client.post(
         "/proofing/folders/create",
         data={"folder_name": "Unpublished", "parent_folder": ""},
@@ -690,17 +748,34 @@ def test_empty_folder_rendered_in_workspace(client, rama_client):
     )
     assert resp.status_code == 200
 
-    # GET root index
-    resp = client.get("/proofing/")
+    # GET root index as creator (rama)
+    resp = rama_client.get("/proofing/")
     assert resp.status_code == 200
+    assert "projects-results-container" in resp.text
     assert "Unpublished" in resp.text
     assert "0 projects" in resp.text
+    assert resp.headers.get("Cache-Control") is not None
 
-    # GET inside the folder
-    resp = client.get("/proofing/?folder=Unpublished")
+    # AJAX GET immediately returns the created folder HTML
+    resp_ajax = rama_client.get(
+        "/proofing/",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_ajax.status_code == 200
+    assert "Unpublished" in resp_ajax.text
+    assert "0 projects" in resp_ajax.text
+    assert resp_ajax.headers.get("Cache-Control") is not None
+
+    # GET inside the folder as creator (rama)
+    resp = rama_client.get("/proofing/?folder=Unpublished")
     assert resp.status_code == 200
     assert "This folder is empty" in resp.text
     assert "Unpublished" in resp.text
+
+    # Another user / anonymous client should NOT see rama's folder
+    resp_other = client.get("/proofing/")
+    assert resp_other.status_code == 200
+    assert "Unpublished" not in resp_other.text
 
 
 def test_rename_folder_cascade(rama_client):
@@ -794,7 +869,9 @@ def test_delete_folder_safely_moves_manuscripts(rama_client):
     assert data["parent_folder"] == "CategoryX"
 
     session.expire_all()
-    assert session.query(db.ProofFolder).filter_by(path="CategoryX/SubY").first() is None
+    assert (
+        session.query(db.ProofFolder).filter_by(path="CategoryX/SubY").first() is None
+    )
     project = session.query(db.Project).filter_by(slug="test-project").first()
     assert project.folder == "CategoryX"
 
@@ -815,3 +892,120 @@ def test_delete_folder_safely_moves_manuscripts(rama_client):
     assert project.folder == ""
 
 
+def test_workspace_pagination_at_root_and_in_folders(superadmin_client):
+    """Test pagination and infinite-scroll appending works properly at root and inside folders."""
+    from kalanjiyam import database as db
+    from kalanjiyam.queries import get_session
+
+    session = get_session()
+    board = session.query(db.Board).first()
+    board_id = board.id if board else 1
+
+    # Create 5 root projects
+    for i in range(5):
+        p = db.Project(
+            slug=f"root-proj-{i}",
+            display_title=f"Root Book {i}",
+            folder="",
+            board_id=board_id,
+            is_publicly_viewable=True,
+        )
+        session.add(p)
+
+    # Create folder Fiction with 4 direct projects and subfolder Fiction/Fantasy with 2 projects
+    superadmin_client.post(
+        "/proofing/folders/create",
+        json={"name": "Fiction", "parent_folder": ""},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    superadmin_client.post(
+        "/proofing/folders/create",
+        json={"name": "Fantasy", "parent_folder": "Fiction"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+
+    for i in range(4):
+        p = db.Project(
+            slug=f"fiction-proj-{i}",
+            display_title=f"Fiction Story {i}",
+            folder="Fiction",
+            board_id=board_id,
+            is_publicly_viewable=True,
+        )
+        session.add(p)
+
+    for i in range(2):
+        p = db.Project(
+            slug=f"fantasy-proj-{i}",
+            display_title=f"Fantasy Epic {i}",
+            folder="Fiction/Fantasy",
+            board_id=board_id,
+            is_publicly_viewable=True,
+        )
+        session.add(p)
+
+    session.commit()
+
+    # 1. Root pagination: total direct root projects should be 5 + 1 (existing test-project) = 6
+    resp_root_p1 = superadmin_client.get(
+        "/proofing/?per_page=2",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_root_p1.status_code == 200
+    assert resp_root_p1.headers.get("X-Total-Projects") == "6"
+    assert resp_root_p1.headers.get("X-Total-Pages") == "3"
+    assert resp_root_p1.headers.get("X-Current-Page") == "1"
+    assert "Fiction" in resp_root_p1.text  # Subfolder listed
+    assert "infinite-scroll-sentinel" in resp_root_p1.text
+    assert "Load more" in resp_root_p1.text
+
+    resp_root_p2 = superadmin_client.get(
+        "/proofing/?page=2&per_page=2&append=1",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_root_p2.status_code == 200
+    assert resp_root_p2.headers.get("X-Current-Page") == "2"
+    assert resp_root_p2.headers.get("X-Total-Projects") == "6"
+    assert resp_root_p2.headers.get("X-Total-Pages") == "3"
+    assert "infinite-scroll-sentinel" not in resp_root_p2.text
+
+    # 2. Folder pagination: inside Fiction, 4 direct projects, subfolder Fantasy
+    resp_fict_p1 = superadmin_client.get(
+        "/proofing/?folder=Fiction&per_page=2",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_fict_p1.status_code == 200
+    assert resp_fict_p1.headers.get("X-Total-Projects") == "4"
+    assert resp_fict_p1.headers.get("X-Total-Pages") == "2"
+    assert resp_fict_p1.headers.get("X-Current-Page") == "1"
+    assert "Projects in this folder (4)" in resp_fict_p1.text
+    assert "Fantasy" in resp_fict_p1.text  # Subfolder listed
+    assert "infinite-scroll-sentinel" in resp_fict_p1.text
+
+    resp_fict_p2 = superadmin_client.get(
+        "/proofing/?folder=Fiction&page=2&per_page=2&append=1",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_fict_p2.status_code == 200
+    assert resp_fict_p2.headers.get("X-Current-Page") == "2"
+    assert resp_fict_p2.headers.get("X-Total-Projects") == "4"
+    assert resp_fict_p2.headers.get("X-Total-Pages") == "2"
+    assert "infinite-scroll-sentinel" not in resp_fict_p2.text
+
+    # 3. Search inside Fiction: searches Fiction + Fiction/Fantasy (spans subfolders)
+    resp_search = superadmin_client.get(
+        "/proofing/?folder=Fiction&q=Epic",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_search.status_code == 200
+    assert resp_search.headers.get("X-Total-Projects") == "2"
+    assert "Search Results (2)" in resp_search.text
+
+    # 4. Search with no results shows friendly empty state
+    resp_empty = superadmin_client.get(
+        "/proofing/?q=nonexistent_query_xyz",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_empty.status_code == 200
+    assert resp_empty.headers.get("X-Total-Projects") == "0"
+    assert "No matching projects" in resp_empty.text
