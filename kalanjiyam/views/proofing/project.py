@@ -378,10 +378,10 @@ def summary(slug):
         .all()
     )
 
-    page_rules = project_utils.parse_page_number_spec(project_.page_numbers)
-    page_titles = project_utils.apply_rules(len(project_.pages), page_rules)
-    page_issues_map = project_utils.get_page_issues_map(
-        project_.condition_tags, len(project_.pages)
+    total_pages = len(project_.pages)
+    page_titles = project_utils.get_cached_project_page_titles(project_, total_pages)
+    page_issues_map = project_utils.get_cached_project_page_issues_map(
+        project_, total_pages
     )
     return render_template(
         "proofing/projects/summary.html",

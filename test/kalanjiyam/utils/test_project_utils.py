@@ -61,7 +61,12 @@ def test_parse_page_ranges():
     assert pu.parse_page_ranges("all", total_pages=4) == [1, 2, 3, 4]
     assert pu.parse_page_ranges("*", total_pages=3) == [1, 2, 3]
     assert pu.parse_page_ranges("") == []
-    assert pu.parse_page_ranges("invalid, 5, abc, 8-10", total_pages=10) == [5, 8, 9, 10]
+    assert pu.parse_page_ranges("invalid, 5, abc, 8-10", total_pages=10) == [
+        5,
+        8,
+        9,
+        10,
+    ]
 
 
 def test_normalize_condition_tags():
@@ -107,7 +112,10 @@ def test_normalize_folder_path():
     assert pu.normalize_folder_path("   ") == ""
     assert pu.normalize_folder_path("/Philosophy/Nyaya/") == "Philosophy/Nyaya"
     assert pu.normalize_folder_path("Literature\\Poetry") == "Literature/Poetry"
-    assert pu.normalize_folder_path("  Religion // Hindu /// Vedanta  ") == "Religion/Hindu/Vedanta"
+    assert (
+        pu.normalize_folder_path("  Religion // Hindu /// Vedanta  ")
+        == "Religion/Hindu/Vedanta"
+    )
 
 
 def test_normalize_tags():
@@ -225,12 +233,12 @@ def test_folder_organization_isolation(flask_app):
 
         # Org 101 creates "Science" and "Literature"
         f1 = pu.ensure_proof_folder(session, "Science", organization_id=101)
-        f2 = pu.ensure_proof_folder(session, "Literature/Fiction", organization_id=101)
+        _ = pu.ensure_proof_folder(session, "Literature/Fiction", organization_id=101)
         session.commit()
 
         # Org 102 creates "Science" (same name) and "History"
         f3 = pu.ensure_proof_folder(session, "Science", organization_id=102)
-        f4 = pu.ensure_proof_folder(session, "History", organization_id=102)
+        _ = pu.ensure_proof_folder(session, "History", organization_id=102)
         session.commit()
 
         assert f1.id != f3.id
@@ -252,3 +260,54 @@ def test_folder_organization_isolation(flask_app):
         assert "Literature/Fiction" not in org2_folders
 
 
+def test_get_cached_project_page_titles():
+    import json
+    from unittest.mock import MagicMock
+
+    class FakeProject:
+        id = 42
+        page_numbers = "1 = i\n3 = 1"
+
+    project = FakeProject()
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = None
+
+    # First call computes and caches
+    titles1 = pu.get_cached_project_page_titles(project, 5, r_client=mock_redis)
+    assert titles1 == ["i", "ii", "1", "2", "3"]
+    assert mock_redis.setex.called
+
+    # Second call returns from cache
+    mock_redis.get.return_value = json.dumps(["i", "ii", "1", "2", "3"]).encode("utf-8")
+    titles2 = pu.get_cached_project_page_titles(project, 5, r_client=mock_redis)
+    assert titles2 == titles1
+
+
+def test_get_cached_project_page_issues_map():
+    import json
+    from unittest.mock import MagicMock
+
+    class FakeProject:
+        id = 42
+        condition_tags = [
+            {"name": "Torn", "pages": "1-2"},
+        ]
+
+    project = FakeProject()
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = None
+
+    # First call computes and caches
+    issues1 = pu.get_cached_project_page_issues_map(project, 3, r_client=mock_redis)
+    assert issues1[1] == ["Torn"]
+    assert issues1[2] == ["Torn"]
+    assert issues1[3] == []
+    assert mock_redis.setex.called
+
+    # Second call retrieves from cache and parses keys to int
+    mock_redis.get.return_value = json.dumps(
+        {"1": ["Torn"], "2": ["Torn"], "3": []}
+    ).encode("utf-8")
+    issues2 = pu.get_cached_project_page_issues_map(project, 3, r_client=mock_redis)
+    assert issues2 == issues1
+    assert isinstance(list(issues2.keys())[0], int)

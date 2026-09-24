@@ -78,6 +78,59 @@ def apply_rules(num_pages: int, rules: list[Rule]):
     return slugs
 
 
+def get_cached_project_page_titles(
+    project, total_pages: int, r_client=None
+) -> list[str]:
+    """Return page titles for a project, using Redis caching if available.
+
+    Keyed by project.id, hash of page_numbers spec, and total_pages.
+    """
+    import hashlib
+    import json
+    import os
+
+    import redis
+
+    page_numbers_spec = getattr(project, "page_numbers", "") or ""
+    project_id = getattr(project, "id", None)
+
+    if not project_id or total_pages <= 0:
+        page_rules = parse_page_number_spec(page_numbers_spec)
+        return apply_rules(total_pages, page_rules)
+
+    spec_hash = hashlib.md5(page_numbers_spec.encode("utf-8")).hexdigest()[:8]
+    cache_key = f"proofing:project_page_titles:{project_id}:{spec_hash}:{total_pages}"
+
+    client = r_client
+    if client is None:
+        try:
+            client = redis.Redis.from_url(
+                os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            )
+            client.ping()
+        except Exception:
+            client = None
+
+    if client:
+        try:
+            cached = client.get(cache_key)
+            if cached:
+                return json.loads(cached.decode("utf-8"))
+        except Exception:
+            pass
+
+    page_rules = parse_page_number_spec(page_numbers_spec)
+    titles = apply_rules(total_pages, page_rules)
+
+    if client:
+        try:
+            client.setex(cache_key, 3600, json.dumps(titles))
+        except Exception:
+            pass
+
+    return titles
+
+
 def parse_page_ranges(pages_str: str, total_pages: int | None = None) -> list[int]:
     """Parse a page range string into a list of sorted, unique 1-indexed page numbers.
 
@@ -121,7 +174,9 @@ def parse_page_ranges(pages_str: str, total_pages: int | None = None) -> list[in
     return sorted(nums)
 
 
-def normalize_condition_tags(tags: list | str | None, total_pages: int | None = None) -> list[dict]:
+def normalize_condition_tags(
+    tags: list | str | None, total_pages: int | None = None
+) -> list[dict]:
     """Normalize raw condition tags into standard dictionary representations.
 
     Each item in the returned list has:
@@ -134,6 +189,7 @@ def normalize_condition_tags(tags: list | str | None, total_pages: int | None = 
 
     if isinstance(tags, str):
         import json
+
         try:
             tags = json.loads(tags)
         except Exception:
@@ -152,23 +208,29 @@ def normalize_condition_tags(tags: list | str | None, total_pages: int | None = 
             page_nums = item.get("page_numbers")
             if not isinstance(page_nums, list) or not page_nums:
                 page_nums = parse_page_ranges(pages_str, total_pages)
-            normalized.append({
-                "name": name,
-                "pages": pages_str,
-                "page_numbers": sorted(set(page_nums)),
-            })
+            normalized.append(
+                {
+                    "name": name,
+                    "pages": pages_str,
+                    "page_numbers": sorted(set(page_nums)),
+                }
+            )
         elif isinstance(item, str):
             name = item.strip()
             if name:
-                normalized.append({
-                    "name": name,
-                    "pages": "",
-                    "page_numbers": [],
-                })
+                normalized.append(
+                    {
+                        "name": name,
+                        "pages": "",
+                        "page_numbers": [],
+                    }
+                )
     return normalized
 
 
-def get_page_issues_map(condition_tags: list | str | None, total_pages: int = 0) -> dict[int, list[str]]:
+def get_page_issues_map(
+    condition_tags: list | str | None, total_pages: int = 0
+) -> dict[int, list[str]]:
     """Return a mapping of 1-indexed page numbers to list of issue tag names.
 
     If a tag has empty `page_numbers` and empty `pages`, it applies to all pages.
@@ -194,6 +256,59 @@ def get_page_issues_map(condition_tags: list | str | None, total_pages: int = 0)
                     mapping.setdefault(p, []).append(name)
 
     return mapping
+
+
+def get_cached_project_page_issues_map(
+    project, total_pages: int, r_client=None
+) -> dict[int, list[str]]:
+    """Return page issues map for a project, using Redis caching if available.
+
+    Keyed by project.id, hash of condition_tags, and total_pages.
+    """
+    import hashlib
+    import json
+    import os
+
+    import redis
+
+    condition_tags = getattr(project, "condition_tags", None)
+    project_id = getattr(project, "id", None)
+
+    if not project_id or total_pages <= 0:
+        return get_page_issues_map(condition_tags, total_pages)
+
+    tags_str = json.dumps(condition_tags, sort_keys=True) if condition_tags else ""
+    tags_hash = hashlib.md5(tags_str.encode("utf-8")).hexdigest()[:8]
+    cache_key = f"proofing:project_issues_map:{project_id}:{tags_hash}:{total_pages}"
+
+    client = r_client
+    if client is None:
+        try:
+            client = redis.Redis.from_url(
+                os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            )
+            client.ping()
+        except Exception:
+            client = None
+
+    if client:
+        try:
+            cached = client.get(cache_key)
+            if cached:
+                data = json.loads(cached.decode("utf-8"))
+                return {int(k): v for k, v in data.items()}
+        except Exception:
+            pass
+
+    issues_map = get_page_issues_map(condition_tags, total_pages)
+
+    if client:
+        try:
+            client.setex(cache_key, 3600, json.dumps(issues_map))
+        except Exception:
+            pass
+
+    return issues_map
 
 
 def normalize_folder_path(folder: str | None) -> str:
@@ -357,13 +472,16 @@ def get_all_available_folders(
     """
     folders = set()
     from sqlalchemy import false, or_
+
     from kalanjiyam import database as db
 
     try:
         pf_query = session.query(db.ProofFolder)
         if is_super_admin:
             if organization_id is not None:
-                pf_query = pf_query.filter(db.ProofFolder.organization_id == organization_id)
+                pf_query = pf_query.filter(
+                    db.ProofFolder.organization_id == organization_id
+                )
         else:
             conditions = []
             if organization_id is not None:
@@ -377,7 +495,12 @@ def get_all_available_folders(
                 )
             if conditions:
                 pf_query = pf_query.filter(or_(*conditions))
-            elif organization_id is None and creator_id is None and fingerprint_id is None and base_query is None:
+            elif (
+                organization_id is None
+                and creator_id is None
+                and fingerprint_id is None
+                and base_query is None
+            ):
                 # Unfiltered legacy call (e.g. tests or internal scripts) -> query all
                 pass
             else:
@@ -413,7 +536,9 @@ def get_all_available_folders(
     return sorted(folders, key=lambda s: s.lower())
 
 
-def ensure_proof_folder(session, full_path: str, creator_id=None, fingerprint_id=None, organization_id=None):
+def ensure_proof_folder(
+    session, full_path: str, creator_id=None, fingerprint_id=None, organization_id=None
+):
     """Ensure that the normalized folder path and all intermediate parents exist in ProofFolder.
 
     :param organization_id: the org that owns this folder. Used for both filtering and creation.
@@ -457,6 +582,3 @@ def ensure_proof_folder(session, full_path: str, creator_id=None, fingerprint_id
             if i == len(parts):
                 target_folder = existing
     return target_folder
-
-
-
