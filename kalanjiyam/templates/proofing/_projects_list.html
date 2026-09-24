@@ -1,4 +1,4 @@
-{% if projects or (folder_contents and (folder_contents.subfolders or folder_contents.direct_projects or selected_folder)) %}
+{% if (not (search_query or selected_tag or selected_issues) and (folder_contents and (folder_contents.subfolders or projects or selected_folder))) or projects %}
 <!-- Proofing Folder Workspace -->
 <div class="space-y-6 mb-6">
   <!-- Folder Breadcrumbs (Minimal inline navigation) -->
@@ -174,7 +174,7 @@
   {% endif %}
 
   <!-- Projects Section (Minimal Table-Like Horizontal Rows) -->
-  {% set docs_list = projects if (search_query or selected_tag or selected_issues) else folder_contents.direct_projects %}
+  {% set docs_list = projects %}
   {% if docs_list %}
   <div class="space-y-2">
     <div class="flex items-center justify-between px-1">
@@ -187,9 +187,9 @@
         {% elif selected_tag or selected_issues %}
           <span>{{ _('Filtered Projects') }} ({{ total_projects }})</span>
         {% elif folder_contents.current_folder %}
-          <span>{{ _('Projects in this folder') }} ({{ docs_list|length }})</span>
+          <span>{{ _('Projects in this folder') }} ({{ total_projects }})</span>
         {% else %}
-          <span>{{ _('Projects at root') }} ({{ docs_list|length }})</span>
+          <span>{{ _('Projects at root') }} ({{ total_projects }})</span>
         {% endif %}
       </h3>
 
@@ -417,8 +417,8 @@
       {% endfor %}
     </div>
 
-    <!-- Pagination (when filtered or search results span multiple pages) -->
-    {% if total_pages and total_pages > 1 and (search_query or selected_tag or selected_issues) %}
+    <!-- Pagination (when projects span multiple pages) -->
+    {% if total_pages and total_pages > 1 %}
     <div class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200/80 text-sm">
       <div class="text-slate-500 font-medium text-xs">
         {{ _('Showing %(start)d - %(end)d of %(total)d projects', start=((page - 1) * per_page) + 1, end=[page * per_page, total_projects]|min, total=total_projects) }}

@@ -1237,6 +1237,10 @@ function proofingDashboard() {
           const count = parseInt(totalHeader, 10);
           this.hasAnyItems = (count > 0 || this.availableFoldersList.length > 0);
         }
+        const pageHeader = response.headers.get('X-Current-Page');
+        if (pageHeader !== null) {
+          this.page = parseInt(pageHeader, 10);
+        }
       } catch (err) {
         if (err.name !== 'AbortError') {
           console.error('Failed to fetch proofing projects:', err);

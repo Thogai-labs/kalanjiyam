@@ -338,13 +338,34 @@ def index():
         query = query.filter(db.Project.creator_mode == selected_mode)
 
     # 5b. Filter by folder if specified
-    if selected_folder:
-        query = query.filter(
-            or_(
-                db.Project.folder == selected_folder,
-                db.Project.folder.like(f"{selected_folder}/%"),
+    norm_selected_folder = project_utils.normalize_folder_path(selected_folder)
+    is_searching_or_filtering = bool(search_query or selected_tag or selected_issues)
+
+    if is_searching_or_filtering:
+        if norm_selected_folder:
+            escaped_folder = _escape_like(norm_selected_folder)
+            query = query.filter(
+                or_(
+                    db.Project.folder == norm_selected_folder,
+                    db.Project.folder == selected_folder,
+                    db.Project.folder.like(f"{escaped_folder}/%"),
+                )
             )
-        )
+    else:
+        if norm_selected_folder:
+            query = query.filter(
+                or_(
+                    db.Project.folder == norm_selected_folder,
+                    db.Project.folder == selected_folder,
+                )
+            )
+        else:
+            query = query.filter(
+                or_(
+                    db.Project.folder.is_(None),
+                    func.trim(db.Project.folder) == "",
+                )
+            )
 
     # 6. Full tenant search filtering (matching display_title, print_title, author, or slug)
     if search_query:
@@ -453,9 +474,6 @@ def index():
     )
 
     all_display_projects = list(paginated_projects)
-    for dp in folder_contents["direct_projects"]:
-        if dp.id not in [p.id for p in all_display_projects]:
-            all_display_projects.append(dp)
 
     all_display_project_ids = [p.id for p in all_display_projects]
     if all_display_project_ids:
@@ -574,6 +592,8 @@ def index():
         rendered = render_template("proofing/_projects_list.html", **template_kwargs)
         resp = make_response(rendered)
         resp.headers["X-Total-Projects"] = str(total_projects)
+        resp.headers["X-Total-Pages"] = str(total_pages)
+        resp.headers["X-Current-Page"] = str(page)
         resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         resp.headers["Pragma"] = "no-cache"
         resp.headers["Expires"] = "0"

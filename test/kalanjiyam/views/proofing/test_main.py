@@ -877,3 +877,112 @@ def test_delete_folder_safely_moves_manuscripts(rama_client):
     assert session.query(db.ProofFolder).filter_by(path="CategoryX").first() is None
     project = session.query(db.Project).filter_by(slug="test-project").first()
     assert project.folder == ""
+
+
+def test_workspace_pagination_at_root_and_in_folders(superadmin_client):
+    """Test pagination works properly at root and inside folders."""
+    from kalanjiyam import database as db
+    from kalanjiyam.queries import get_session
+
+    session = get_session()
+
+    # Create 5 root projects
+    for i in range(5):
+        p = db.Project(
+            slug=f"root-proj-{i}",
+            display_title=f"Root Book {i}",
+            folder="",
+            is_publicly_viewable=True,
+        )
+        session.add(p)
+
+    # Create folder Fiction with 4 direct projects and subfolder Fiction/Fantasy with 2 projects
+    superadmin_client.post(
+        "/proofing/folders/create",
+        json={"name": "Fiction", "parent_folder": ""},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    superadmin_client.post(
+        "/proofing/folders/create",
+        json={"name": "Fantasy", "parent_folder": "Fiction"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+
+    for i in range(4):
+        p = db.Project(
+            slug=f"fiction-proj-{i}",
+            display_title=f"Fiction Story {i}",
+            folder="Fiction",
+            is_publicly_viewable=True,
+        )
+        session.add(p)
+
+    for i in range(2):
+        p = db.Project(
+            slug=f"fantasy-proj-{i}",
+            display_title=f"Fantasy Epic {i}",
+            folder="Fiction/Fantasy",
+            is_publicly_viewable=True,
+        )
+        session.add(p)
+
+    session.commit()
+
+    # 1. Root pagination: total direct root projects should be 5 + 1 (existing test-project) = 6
+    resp_root_p1 = superadmin_client.get(
+        "/proofing/?per_page=2",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_root_p1.status_code == 200
+    assert resp_root_p1.headers.get("X-Total-Projects") == "6"
+    assert resp_root_p1.headers.get("X-Total-Pages") == "3"
+    assert resp_root_p1.headers.get("X-Current-Page") == "1"
+    assert "Showing 1 - 2 of 6 projects" in resp_root_p1.text
+    assert "Fiction" in resp_root_p1.text  # Subfolder listed
+
+    resp_root_p2 = superadmin_client.get(
+        "/proofing/?page=2&per_page=2",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_root_p2.status_code == 200
+    assert resp_root_p2.headers.get("X-Current-Page") == "2"
+    assert "Showing 3 - 4 of 6 projects" in resp_root_p2.text
+
+    # 2. Folder pagination: inside Fiction, 4 direct projects, subfolder Fantasy
+    resp_fict_p1 = superadmin_client.get(
+        "/proofing/?folder=Fiction&per_page=2",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_fict_p1.status_code == 200
+    assert resp_fict_p1.headers.get("X-Total-Projects") == "4"
+    assert resp_fict_p1.headers.get("X-Total-Pages") == "2"
+    assert resp_fict_p1.headers.get("X-Current-Page") == "1"
+    assert "Projects in this folder (4)" in resp_fict_p1.text
+    assert "Showing 1 - 2 of 4 projects" in resp_fict_p1.text
+    assert "Fantasy" in resp_fict_p1.text  # Subfolder listed
+
+    resp_fict_p2 = superadmin_client.get(
+        "/proofing/?folder=Fiction&page=2&per_page=2",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_fict_p2.status_code == 200
+    assert resp_fict_p2.headers.get("X-Current-Page") == "2"
+    assert "Showing 3 - 4 of 4 projects" in resp_fict_p2.text
+
+    # 3. Search inside Fiction: searches Fiction + Fiction/Fantasy (spans subfolders)
+    resp_search = superadmin_client.get(
+        "/proofing/?folder=Fiction&q=Epic",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_search.status_code == 200
+    assert resp_search.headers.get("X-Total-Projects") == "2"
+    assert "Search Results (2)" in resp_search.text
+
+    # 4. Search with no results shows friendly empty state
+    resp_empty = superadmin_client.get(
+        "/proofing/?q=nonexistent_query_xyz",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_empty.status_code == 200
+    assert resp_empty.headers.get("X-Total-Projects") == "0"
+    assert "No matching projects" in resp_empty.text
