@@ -1009,3 +1009,47 @@ def test_workspace_pagination_at_root_and_in_folders(superadmin_client):
     assert resp_empty.status_code == 200
     assert resp_empty.headers.get("X-Total-Projects") == "0"
     assert "No matching projects" in resp_empty.text
+
+
+def test_project_stats_sql_aggregation(superadmin_client):
+    """Test SQL aggregation properly calculates page counts and progress without loading ORM page trees."""
+    from kalanjiyam import database as db
+    from kalanjiyam.queries import get_session
+    from kalanjiyam.enums import SitePageStatus
+
+    session = get_session()
+    board = session.query(db.Board).first()
+    board_id = board.id if board else 1
+
+    r0_status = session.query(db.PageStatus).filter_by(name=SitePageStatus.R0.value).first()
+    r1_status = session.query(db.PageStatus).filter_by(name=SitePageStatus.R1.value).first()
+
+    # Create project with 4 pages (2 R0, 2 R1 -> 50% progress)
+    p = db.Project(
+        slug="stats-agg-test-project",
+        display_title="Stats Agg Test Project",
+        folder="StatsFolder",
+        board_id=board_id,
+        is_publicly_viewable=True,
+    )
+    session.add(p)
+    session.commit()
+
+    if r0_status and r1_status:
+        page1 = db.Page(slug="p1", order=1, project_id=p.id, status_id=r0_status.id)
+        page2 = db.Page(slug="p2", order=2, project_id=p.id, status_id=r0_status.id)
+        page3 = db.Page(slug="p3", order=3, project_id=p.id, status_id=r1_status.id)
+        page4 = db.Page(slug="p4", order=4, project_id=p.id, status_id=r1_status.id)
+        session.add_all([page1, page2, page3, page4])
+        session.commit()
+
+    resp = superadmin_client.get(
+        "/proofing/?folder=StatsFolder",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    assert "Stats Agg Test Project" in resp.text
+    if r0_status and r1_status:
+        assert "4 pages" in resp.text
+        assert "50%" in resp.text
+
