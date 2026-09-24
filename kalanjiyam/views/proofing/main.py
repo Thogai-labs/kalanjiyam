@@ -244,8 +244,7 @@ def index():
         page = 1
     try:
         per_page = int(request.args.get("per_page", 20))
-        if per_page not in (10, 20, 50, 100):
-            per_page = 20
+        per_page = max(1, min(100, per_page))
     except (ValueError, TypeError):
         per_page = 20
 
@@ -589,7 +588,13 @@ def index():
         or request.args.get("ajax") == "1"
     )
     if is_ajax:
-        rendered = render_template("proofing/_projects_list.html", **template_kwargs)
+        is_append = request.args.get("append") == "1"
+        template_name = (
+            "proofing/_project_cards.html"
+            if is_append
+            else "proofing/_projects_list.html"
+        )
+        rendered = render_template(template_name, **template_kwargs)
         resp = make_response(rendered)
         resp.headers["X-Total-Projects"] = str(total_projects)
         resp.headers["X-Total-Pages"] = str(total_pages)

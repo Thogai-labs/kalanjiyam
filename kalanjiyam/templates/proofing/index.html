@@ -823,6 +823,14 @@ function proofingDashboard() {
     order: {{ sort_order|tojson }},
     page: {{ page }},
     perPage: {{ per_page }},
+    totalPages: {{ total_pages }},
+    totalProjectsCount: {{ total_projects }},
+    loadedProjectsCount: {{ projects|length }},
+    isLoadingMore: false,
+    observer: null,
+    get hasMoreProjects() {
+      return this.page < this.totalPages;
+    },
     viewMode: 'folder',
     showCreateFolderModal: false,
     newFolderName: '',
@@ -1154,6 +1162,7 @@ function proofingDashboard() {
     },
 
     init() {
+      this.setupIntersectionObserver();
       window.addEventListener('popstate', () => {
         const params = new URLSearchParams(window.location.search);
         this.query = params.get('q') || params.get('query') || '';
@@ -1168,6 +1177,107 @@ function proofingDashboard() {
         this.perPage = parseInt(params.get('per_page') || '20', 10);
         this.fetchResults(this.page, false);
       });
+    },
+
+    setupIntersectionObserver() {
+      if (this.observer) {
+        this.observer.disconnect();
+        this.observer = null;
+      }
+      if (typeof IntersectionObserver === 'undefined') return;
+
+      const bindObserver = () => {
+        const sentinel = document.getElementById('infinite-scroll-sentinel');
+        if (!sentinel) return;
+        this.observer = new IntersectionObserver((entries) => {
+          if (entries[0] && entries[0].isIntersecting) {
+            if (this.hasMoreProjects && !this.isLoading && !this.isLoadingMore) {
+              this.loadMore();
+            }
+          }
+        }, { root: null, rootMargin: '300px', threshold: 0 });
+        this.observer.observe(sentinel);
+      };
+
+      if (this.$nextTick) {
+        this.$nextTick(bindObserver);
+      } else {
+        requestAnimationFrame(bindObserver);
+      }
+    },
+
+    async loadMore() {
+      if (!this.hasMoreProjects || this.isLoading || this.isLoadingMore) return;
+      this.isLoadingMore = true;
+      const nextPage = this.page + 1;
+
+      const params = new URLSearchParams();
+      if (this.query && this.query.trim()) params.set('q', this.query.trim());
+      if (this.mode && this.mode !== 'all') params.set('mode', this.mode);
+      if (this.org && this.org !== 'all') params.set('org', this.org);
+      if (this.issues && this.issues.length) {
+        this.issues.forEach(iss => params.append('issue', iss));
+      }
+      if (this.folder) params.set('folder', this.folder);
+      if (this.tag) params.set('tag', this.tag);
+      if (this.sort && this.sort !== 'created') params.set('sort', this.sort);
+      if (this.order && this.order !== 'desc') params.set('order', this.order);
+      params.set('page', nextPage);
+      if (this.perPage && this.perPage !== 20) params.set('per_page', this.perPage);
+      params.set('append', '1');
+
+      const qs = params.toString();
+      const baseUrl = '{{ url_for("proofing.index") }}';
+      const targetUrl = baseUrl + (qs ? '?' + qs : '');
+
+      try {
+        const response = await fetch(targetUrl, {
+          cache: 'no-store',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+
+        const html = await response.text();
+        const itemsContainer = document.getElementById('projects-list-items');
+        if (itemsContainer && html.trim()) {
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = html;
+          const newChildren = Array.from(tempDiv.children);
+          newChildren.forEach(child => {
+            itemsContainer.appendChild(child);
+            if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+              window.Alpine.initTree(child);
+            }
+          });
+          this.loadedProjectsCount += newChildren.length;
+        }
+
+        const totalHeader = response.headers.get('X-Total-Projects');
+        if (totalHeader !== null) {
+          this.totalProjectsCount = parseInt(totalHeader, 10);
+        }
+        const totalPagesHeader = response.headers.get('X-Total-Pages');
+        if (totalPagesHeader !== null) {
+          this.totalPages = parseInt(totalPagesHeader, 10);
+        }
+        const pageHeader = response.headers.get('X-Current-Page');
+        if (pageHeader !== null) {
+          this.page = parseInt(pageHeader, 10);
+        } else {
+          this.page = nextPage;
+        }
+      } catch (err) {
+        console.error('Failed to load more projects:', err);
+      } finally {
+        this.isLoadingMore = false;
+      }
     },
 
     async fetchResults(targetPage = 1, updateUrl = true) {
@@ -1235,12 +1345,24 @@ function proofingDashboard() {
         }
         if (totalHeader !== null) {
           const count = parseInt(totalHeader, 10);
+          this.totalProjectsCount = count;
           this.hasAnyItems = (count > 0 || this.availableFoldersList.length > 0);
+        }
+        const totalPagesHeader = response.headers.get('X-Total-Pages');
+        if (totalPagesHeader !== null) {
+          this.totalPages = parseInt(totalPagesHeader, 10);
         }
         const pageHeader = response.headers.get('X-Current-Page');
         if (pageHeader !== null) {
           this.page = parseInt(pageHeader, 10);
         }
+        const itemsContainer = document.getElementById('projects-list-items');
+        if (itemsContainer) {
+          this.loadedProjectsCount = itemsContainer.children.length;
+        } else {
+          this.loadedProjectsCount = 0;
+        }
+        this.setupIntersectionObserver();
       } catch (err) {
         if (err.name !== 'AbortError') {
           console.error('Failed to fetch proofing projects:', err);

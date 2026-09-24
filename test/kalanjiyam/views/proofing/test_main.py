@@ -137,6 +137,19 @@ def test_index_folder_and_tag_filters(client):
     assert "X-Total-Projects" in resp_tag_ajax.headers
 
 
+def test_index_append_ajax(client):
+    resp = client.get(
+        "/proofing/?append=1&page=1&per_page=10",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    assert "X-Total-Projects" in resp.headers
+    assert "X-Total-Pages" in resp.headers
+    assert "X-Current-Page" in resp.headers
+    # When append=1, only card elements are returned, not the outer folder breadcrumb or sentinel
+    assert "infinite-scroll-sentinel" not in resp.text
+
+
 def test_project_model_folder_and_tags():
     from kalanjiyam import database as db
 
@@ -880,11 +893,13 @@ def test_delete_folder_safely_moves_manuscripts(rama_client):
 
 
 def test_workspace_pagination_at_root_and_in_folders(superadmin_client):
-    """Test pagination works properly at root and inside folders."""
+    """Test pagination and infinite-scroll appending works properly at root and inside folders."""
     from kalanjiyam import database as db
     from kalanjiyam.queries import get_session
 
     session = get_session()
+    board = session.query(db.Board).first()
+    board_id = board.id if board else 1
 
     # Create 5 root projects
     for i in range(5):
@@ -892,6 +907,7 @@ def test_workspace_pagination_at_root_and_in_folders(superadmin_client):
             slug=f"root-proj-{i}",
             display_title=f"Root Book {i}",
             folder="",
+            board_id=board_id,
             is_publicly_viewable=True,
         )
         session.add(p)
@@ -913,6 +929,7 @@ def test_workspace_pagination_at_root_and_in_folders(superadmin_client):
             slug=f"fiction-proj-{i}",
             display_title=f"Fiction Story {i}",
             folder="Fiction",
+            board_id=board_id,
             is_publicly_viewable=True,
         )
         session.add(p)
@@ -922,6 +939,7 @@ def test_workspace_pagination_at_root_and_in_folders(superadmin_client):
             slug=f"fantasy-proj-{i}",
             display_title=f"Fantasy Epic {i}",
             folder="Fiction/Fantasy",
+            board_id=board_id,
             is_publicly_viewable=True,
         )
         session.add(p)
@@ -937,16 +955,19 @@ def test_workspace_pagination_at_root_and_in_folders(superadmin_client):
     assert resp_root_p1.headers.get("X-Total-Projects") == "6"
     assert resp_root_p1.headers.get("X-Total-Pages") == "3"
     assert resp_root_p1.headers.get("X-Current-Page") == "1"
-    assert "Showing 1 - 2 of 6 projects" in resp_root_p1.text
     assert "Fiction" in resp_root_p1.text  # Subfolder listed
+    assert "infinite-scroll-sentinel" in resp_root_p1.text
+    assert "Load more" in resp_root_p1.text
 
     resp_root_p2 = superadmin_client.get(
-        "/proofing/?page=2&per_page=2",
+        "/proofing/?page=2&per_page=2&append=1",
         headers={"X-Requested-With": "XMLHttpRequest"},
     )
     assert resp_root_p2.status_code == 200
     assert resp_root_p2.headers.get("X-Current-Page") == "2"
-    assert "Showing 3 - 4 of 6 projects" in resp_root_p2.text
+    assert resp_root_p2.headers.get("X-Total-Projects") == "6"
+    assert resp_root_p2.headers.get("X-Total-Pages") == "3"
+    assert "infinite-scroll-sentinel" not in resp_root_p2.text
 
     # 2. Folder pagination: inside Fiction, 4 direct projects, subfolder Fantasy
     resp_fict_p1 = superadmin_client.get(
@@ -958,16 +979,18 @@ def test_workspace_pagination_at_root_and_in_folders(superadmin_client):
     assert resp_fict_p1.headers.get("X-Total-Pages") == "2"
     assert resp_fict_p1.headers.get("X-Current-Page") == "1"
     assert "Projects in this folder (4)" in resp_fict_p1.text
-    assert "Showing 1 - 2 of 4 projects" in resp_fict_p1.text
     assert "Fantasy" in resp_fict_p1.text  # Subfolder listed
+    assert "infinite-scroll-sentinel" in resp_fict_p1.text
 
     resp_fict_p2 = superadmin_client.get(
-        "/proofing/?folder=Fiction&page=2&per_page=2",
+        "/proofing/?folder=Fiction&page=2&per_page=2&append=1",
         headers={"X-Requested-With": "XMLHttpRequest"},
     )
     assert resp_fict_p2.status_code == 200
     assert resp_fict_p2.headers.get("X-Current-Page") == "2"
-    assert "Showing 3 - 4 of 4 projects" in resp_fict_p2.text
+    assert resp_fict_p2.headers.get("X-Total-Projects") == "4"
+    assert resp_fict_p2.headers.get("X-Total-Pages") == "2"
+    assert "infinite-scroll-sentinel" not in resp_fict_p2.text
 
     # 3. Search inside Fiction: searches Fiction + Fiction/Fantasy (spans subfolders)
     resp_search = superadmin_client.get(
