@@ -12,6 +12,7 @@ import sentry_sdk
 from dotenv import load_dotenv
 from flask import Flask, redirect, render_template, request, session, url_for
 from flask_babel import Babel, pgettext
+from flask_compress import Compress
 from flask_login import current_user
 from flask_wtf.csrf import generate_csrf
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -131,10 +132,11 @@ def create_app(config_env: str):
     @app.context_processor
     def inject_globals():
         from kalanjiyam.utils.org_access import is_restricted_ocr_user
+
         return dict(
             csrf_token=generate_csrf(),
             is_restricted_ocr_user=is_restricted_ocr_user,
-             kalanjiyam_locales=LOCALES,
+            kalanjiyam_locales=LOCALES,
         )
 
     login_manager = auth_manager.create_login_manager()
@@ -149,9 +151,26 @@ def create_app(config_env: str):
     from kalanjiyam.utils.metrics import init_metrics_middleware
     from kalanjiyam.utils.otel import init_opentelemetry
     from kalanjiyam.utils.prometheus import init_prometheus
+
     init_opentelemetry(app)
     init_metrics_middleware(app)
     init_prometheus(app)
+
+    # Dynamic HTTP response compression
+    app.config.setdefault(
+        "COMPRESS_MIMETYPES",
+        [
+            "text/html",
+            "text/css",
+            "text/xml",
+            "application/json",
+            "application/javascript",
+            "text/plain",
+        ],
+    )
+    app.config.setdefault("COMPRESS_MIN_SIZE", 500)
+    app.config.setdefault("COMPRESS_LEVEL", 6)
+    Compress(app)
 
     # Route extensions
     app.url_map.converters["list"] = ListConverter
@@ -170,7 +189,10 @@ def create_app(config_env: str):
 
     @app.before_request
     def enforce_guest_access_restrictions():
-        if not app.config.get("ENABLE_GUEST_ACCESS", True) and not current_user.is_authenticated:
+        if (
+            not app.config.get("ENABLE_GUEST_ACCESS", True)
+            and not current_user.is_authenticated
+        ):
             bp = request.blueprint or ""
             path = request.path
             prefix = (config_spec.APPLICATION_URL_PREFIX or "").rstrip("/")
@@ -207,7 +229,6 @@ def create_app(config_env: str):
             "time_ago": filters.time_ago,
         }
     )
-    from flask_login import current_user
     app.jinja_env.globals.update(
         {
             "asset": assets.hashed_static,
