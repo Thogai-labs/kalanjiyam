@@ -1,4 +1,5 @@
-{% for p in docs_list %}
+{% set card_projects = docs_list if (docs_list is defined and docs_list is not none) else projects %}
+{% for p in (card_projects or []) %}
 {% set count = pages_per_project.get(p.id, 0) %}
 {% set progress = progress_per_project.get(p.id, 0) %}
 <div class="group flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 p-3.5 sm:p-4 bg-white hover:bg-slate-50/70 border border-slate-200/90 hover:border-royalblue/40 rounded-2xl shadow-xs hover:shadow-md transition-all relative">

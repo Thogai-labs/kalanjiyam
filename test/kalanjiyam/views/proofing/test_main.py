@@ -968,6 +968,7 @@ def test_workspace_pagination_at_root_and_in_folders(superadmin_client):
     assert resp_root_p2.headers.get("X-Total-Projects") == "6"
     assert resp_root_p2.headers.get("X-Total-Pages") == "3"
     assert "infinite-scroll-sentinel" not in resp_root_p2.text
+    assert "Root Book" in resp_root_p2.text
 
     # 2. Folder pagination: inside Fiction, 4 direct projects, subfolder Fantasy
     resp_fict_p1 = superadmin_client.get(
@@ -991,6 +992,7 @@ def test_workspace_pagination_at_root_and_in_folders(superadmin_client):
     assert resp_fict_p2.headers.get("X-Total-Projects") == "4"
     assert resp_fict_p2.headers.get("X-Total-Pages") == "2"
     assert "infinite-scroll-sentinel" not in resp_fict_p2.text
+    assert "Fiction Story" in resp_fict_p2.text
 
     # 3. Search inside Fiction: searches Fiction + Fiction/Fantasy (spans subfolders)
     resp_search = superadmin_client.get(

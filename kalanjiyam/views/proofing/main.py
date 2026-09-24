@@ -464,17 +464,28 @@ def index():
                     db.Project.slug.ilike(like_pattern),
                 )
             )
-        all_scope_projects = folder_scope_query.all()
         if selected_tag:
+            folder_tag_rows = folder_scope_query.with_entities(
+                db.Project.folder, db.Project.tags
+            ).all()
             sel_tag_lower = selected_tag.lower()
-            all_scope_projects = [
-                p
-                for p in all_scope_projects
-                if any(t.lower() == sel_tag_lower for t in (p.tag_list or []))
-            ]
+            folder_counts_dict = {}
+            for f_val, t_val in folder_tag_rows:
+                t_list = project_utils.normalize_tags(t_val)
+                if any(t.lower() == sel_tag_lower for t in t_list):
+                    folder_counts_dict[f_val] = folder_counts_dict.get(f_val, 0) + 1
+            folder_counts_data = list(folder_counts_dict.items())
+        else:
+            folder_counts_data = (
+                folder_scope_query.with_entities(
+                    db.Project.folder, func.count(db.Project.id)
+                )
+                .group_by(db.Project.folder)
+                .all()
+            )
 
         folder_contents = project_utils.get_folder_contents(
-            all_scope_projects,
+            folder_counts_data,
             current_folder=selected_folder,
             all_known_folders=available_folders,
         )
@@ -594,6 +605,7 @@ def index():
 
     template_kwargs = {
         "projects": paginated_projects,
+        "docs_list": paginated_projects,
         "statuses_per_project": statuses_per_project,
         "progress_per_project": progress_per_project,
         "pages_per_project": pages_per_project,

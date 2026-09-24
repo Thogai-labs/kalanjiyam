@@ -829,7 +829,7 @@ function proofingDashboard() {
     isLoadingMore: false,
     observer: null,
     get hasMoreProjects() {
-      return this.page < this.totalPages;
+      return parseInt(this.page, 10) < parseInt(this.totalPages, 10);
     },
     viewMode: 'folder',
     showCreateFolderModal: false,
@@ -1246,17 +1246,19 @@ function proofingDashboard() {
 
         const html = await response.text();
         const itemsContainer = document.getElementById('projects-list-items');
+        let newChildrenCount = 0;
         if (itemsContainer && html.trim()) {
           const tempDiv = document.createElement('div');
           tempDiv.innerHTML = html;
           const newChildren = Array.from(tempDiv.children);
+          newChildrenCount = newChildren.length;
           newChildren.forEach(child => {
             itemsContainer.appendChild(child);
             if (window.Alpine && typeof window.Alpine.initTree === 'function') {
               window.Alpine.initTree(child);
             }
           });
-          this.loadedProjectsCount += newChildren.length;
+          this.loadedProjectsCount += newChildrenCount;
         }
 
         const totalHeader = response.headers.get('X-Total-Projects');
@@ -1273,10 +1275,25 @@ function proofingDashboard() {
         } else {
           this.page = nextPage;
         }
+
+        if (newChildrenCount === 0) {
+          this.totalPages = this.page;
+        }
       } catch (err) {
         console.error('Failed to load more projects:', err);
       } finally {
         this.isLoadingMore = false;
+        if (this.$nextTick) {
+          this.$nextTick(() => {
+            if (this.hasMoreProjects && this.observer) {
+              const sentinel = document.getElementById('infinite-scroll-sentinel');
+              if (sentinel) {
+                this.observer.unobserve(sentinel);
+                this.observer.observe(sentinel);
+              }
+            }
+          });
+        }
       }
     },
 
