@@ -414,27 +414,36 @@ def get_folder_contents(
                     if sub_seg not in subfolders_dict:
                         subfolders_dict[sub_seg] = 0
 
-    for project in all_projects:
-        p_folder = getattr(project, "folder_path", None)
-        if p_folder is None:
-            p_folder = normalize_folder_path(getattr(project, "folder", ""))
+    for item in all_projects:
+        if isinstance(item, tuple) and len(item) == 2:
+            p_folder = normalize_folder_path(item[0] or "")
+            item_count = item[1]
+            project = None
+        else:
+            p_folder = getattr(item, "folder_path", None)
+            if p_folder is None:
+                p_folder = normalize_folder_path(getattr(item, "folder", ""))
+            item_count = 1
+            project = item
 
         if norm_current == "":
-            total_projects_in_scope += 1
+            total_projects_in_scope += item_count
             if not p_folder:
-                direct_projects.append(project)
+                if project is not None:
+                    direct_projects.append(project)
             else:
                 top_seg = p_folder.split("/")[0]
-                subfolders_dict[top_seg] = subfolders_dict.get(top_seg, 0) + 1
+                subfolders_dict[top_seg] = subfolders_dict.get(top_seg, 0) + item_count
         else:
             if p_folder == norm_current:
-                direct_projects.append(project)
-                total_projects_in_scope += 1
+                if project is not None:
+                    direct_projects.append(project)
+                total_projects_in_scope += item_count
             elif p_folder.startswith(norm_current + "/"):
-                total_projects_in_scope += 1
+                total_projects_in_scope += item_count
                 rel = p_folder[len(norm_current) + 1 :]
                 sub_seg = rel.split("/")[0]
-                subfolders_dict[sub_seg] = subfolders_dict.get(sub_seg, 0) + 1
+                subfolders_dict[sub_seg] = subfolders_dict.get(sub_seg, 0) + item_count
 
     subfolders = [
         {

@@ -435,50 +435,62 @@ def index():
             .all()
         )
 
-    # Build folder contents tree for Folder View
-    folder_scope_query = base_query
-    if selected_org and selected_org != "all":
-        folder_scope_query = folder_scope_query.filter(
-            db.Project.groups.any(db.Group.slug == selected_org)
-        )
-    if selected_mode and selected_mode != "all":
-        folder_scope_query = folder_scope_query.filter(
-            db.Project.creator_mode == selected_mode
-        )
-    if search_query:
-        like_pattern = f"%{search_query}%"
-        folder_scope_query = folder_scope_query.filter(
-            or_(
-                db.Project.display_title.ilike(like_pattern),
-                db.Project.print_title.ilike(like_pattern),
-                db.Project.author.ilike(like_pattern),
-                db.Project.slug.ilike(like_pattern),
-            )
-        )
-    all_scope_projects = folder_scope_query.options(
-        orm.selectinload(db.Project.groups)
-    ).all()
-    if selected_tag:
-        sel_tag_lower = selected_tag.lower()
-        all_scope_projects = [
-            p
-            for p in all_scope_projects
-            if any(t.lower() == sel_tag_lower for t in (p.tag_list or []))
-        ]
-
-    folder_contents = project_utils.get_folder_contents(
-        all_scope_projects,
-        current_folder=selected_folder,
-        all_known_folders=available_folders,
+    is_ajax = (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or request.args.get("ajax") == "1"
     )
+    is_append = is_ajax and request.args.get("append") == "1"
+
+    if is_append:
+        folder_contents = {"current_folder": norm_selected_folder}
+    else:
+        # Build folder contents tree for Folder View
+        folder_scope_query = base_query
+        if selected_org and selected_org != "all":
+            folder_scope_query = folder_scope_query.filter(
+                db.Project.groups.any(db.Group.slug == selected_org)
+            )
+        if selected_mode and selected_mode != "all":
+            folder_scope_query = folder_scope_query.filter(
+                db.Project.creator_mode == selected_mode
+            )
+        if search_query:
+            like_pattern = f"%{search_query}%"
+            folder_scope_query = folder_scope_query.filter(
+                or_(
+                    db.Project.display_title.ilike(like_pattern),
+                    db.Project.print_title.ilike(like_pattern),
+                    db.Project.author.ilike(like_pattern),
+                    db.Project.slug.ilike(like_pattern),
+                )
+            )
+        if selected_tag:
+            folder_tag_rows = folder_scope_query.with_entities(
+                db.Project.folder, db.Project.tags
+            ).all()
+            sel_tag_lower = selected_tag.lower()
+            folder_counts_dict = {}
+            for f_val, t_val in folder_tag_rows:
+                t_list = project_utils.normalize_tags(t_val)
+                if any(t.lower() == sel_tag_lower for t in t_list):
+                    folder_counts_dict[f_val] = folder_counts_dict.get(f_val, 0) + 1
+            folder_counts_data = list(folder_counts_dict.items())
+        else:
+            folder_counts_data = (
+                folder_scope_query.with_entities(
+                    db.Project.folder, func.count(db.Project.id)
+                )
+                .group_by(db.Project.folder)
+                .all()
+            )
+
+        folder_contents = project_utils.get_folder_contents(
+            folder_counts_data,
+            current_folder=selected_folder,
+            all_known_folders=available_folders,
+        )
 
     all_display_projects = list(paginated_projects)
-
-    all_display_project_ids = [p.id for p in all_display_projects]
-    if all_display_project_ids:
-        session.query(db.Project).options(
-            orm.selectinload(db.Project.pages).joinedload(db.Page.status)
-        ).filter(db.Project.id.in_(all_display_project_ids)).all()
 
     status_classes = {
         SitePageStatus.R2: "bg-green-200",
@@ -501,6 +513,9 @@ def index():
     progress_per_project = {}
     pages_per_project = {}
 
+    missing_stat_projects = []
+
+    # Check Redis cache first to avoid database queries when possible
     for project in all_display_projects:
         updated_ts = (
             int(project.updated_at.timestamp())
@@ -519,45 +534,78 @@ def index():
                 cached_data = None
 
         if cached_data:
-            statuses_per_project[project.id] = cached_data["statuses"]
-            progress_per_project[project.id] = cached_data["progress"]
-            pages_per_project[project.id] = cached_data["pages"]
-            continue
-
-        page_statuses = [p.status.name for p in project.pages]
-
-        if not page_statuses:
-            statuses_per_project[project.id] = {}
-            pages_per_project[project.id] = 0
-            progress_per_project[project.id] = 0
-            cached_payload = {"statuses": {}, "progress": 0, "pages": 0}
+            statuses_per_project[project.id] = cached_data.get("statuses", {})
+            progress_per_project[project.id] = cached_data.get("progress", 0)
+            pages_per_project[project.id] = cached_data.get("pages", 0)
         else:
-            num_pages = len(page_statuses)
-            project_counts = {}
-            progress_val = 0
-            for enum_value, class_ in status_classes.items():
-                fraction = page_statuses.count(enum_value) / num_pages
-                project_counts[class_] = fraction
-                if enum_value == SitePageStatus.R0:
-                    progress_val = 1 - fraction
+            missing_stat_projects.append((project, cache_key))
 
-            statuses_per_project[project.id] = project_counts
+    # Strategy 2: Fast SQL GROUP BY aggregation for cache misses (no ORM Page objects instantiated)
+    if missing_stat_projects:
+        missing_ids = [p.id for p, _ in missing_stat_projects]
+
+        page_counts = (
+            session.query(
+                db.Page.project_id,
+                db.PageStatus.name,
+                func.count(db.Page.id),
+            )
+            .join(db.PageStatus, db.Page.status_id == db.PageStatus.id)
+            .filter(db.Page.project_id.in_(missing_ids))
+            .group_by(db.Page.project_id, db.PageStatus.name)
+            .all()
+        )
+
+        project_status_counts = {}
+        project_total_pages = {}
+        for proj_id, status_name, cnt in page_counts:
+            if proj_id not in project_status_counts:
+                project_status_counts[proj_id] = {}
+                project_total_pages[proj_id] = 0
+            project_status_counts[proj_id][status_name] = cnt
+            project_total_pages[proj_id] += cnt
+
+        for project, cache_key in missing_stat_projects:
+            num_pages = project_total_pages.get(project.id, 0)
             pages_per_project[project.id] = num_pages
-            progress_per_project[project.id] = progress_val
-            cached_payload = {
-                "statuses": project_counts,
-                "progress": progress_val,
-                "pages": num_pages,
-            }
 
-        if r_client:
-            try:
-                r_client.setex(cache_key, 3600, json.dumps(cached_payload))
-            except Exception:
-                pass
+            if not num_pages:
+                statuses_per_project[project.id] = {}
+                progress_per_project[project.id] = 0
+                cached_payload = {"statuses": {}, "progress": 0, "pages": 0}
+            else:
+                p_status_counts = project_status_counts.get(project.id, {})
+                project_counts = {}
+                progress_val = 0
+                for enum_value, class_ in status_classes.items():
+                    enum_name = (
+                        enum_value.value
+                        if hasattr(enum_value, "value")
+                        else str(enum_value)
+                    )
+                    status_cnt = p_status_counts.get(enum_name, 0)
+                    fraction = status_cnt / num_pages
+                    project_counts[class_] = fraction
+                    if enum_value == SitePageStatus.R0:
+                        progress_val = 1 - fraction
+
+                statuses_per_project[project.id] = project_counts
+                progress_per_project[project.id] = progress_val
+                cached_payload = {
+                    "statuses": project_counts,
+                    "progress": progress_val,
+                    "pages": num_pages,
+                }
+
+            if r_client:
+                try:
+                    r_client.setex(cache_key, 3600, json.dumps(cached_payload))
+                except Exception:
+                    pass
 
     template_kwargs = {
         "projects": paginated_projects,
+        "docs_list": paginated_projects,
         "statuses_per_project": statuses_per_project,
         "progress_per_project": progress_per_project,
         "pages_per_project": pages_per_project,
@@ -583,12 +631,7 @@ def index():
         "folder_contents": folder_contents,
     }
 
-    is_ajax = (
-        request.headers.get("X-Requested-With") == "XMLHttpRequest"
-        or request.args.get("ajax") == "1"
-    )
     if is_ajax:
-        is_append = request.args.get("append") == "1"
         template_name = (
             "proofing/_project_cards.html"
             if is_append
