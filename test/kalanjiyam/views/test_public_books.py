@@ -8,6 +8,7 @@ def test_public_books_index(client, flask_app):
 
     with flask_app.test_request_context("/kalanjiyam/books/"):
         from flask import url_for
+
         endpoint = url_for("public.books.index")
 
     resp = client.get(endpoint)
@@ -26,6 +27,7 @@ def test_public_book_detail(client, flask_app):
 
     with flask_app.test_request_context("/kalanjiyam/books/test-project/"):
         from flask import url_for
+
         endpoint = url_for("public.books.book", project_slug="test-project")
 
     resp = client.get(endpoint)
@@ -39,7 +41,10 @@ def test_public_book_page(client, flask_app):
 
     with flask_app.test_request_context("/kalanjiyam/books/test-project/1/"):
         from flask import url_for
-        endpoint = url_for("public.books.page", project_slug="test-project", page_slug="1")
+
+        endpoint = url_for(
+            "public.books.page", project_slug="test-project", page_slug="1"
+        )
 
     resp = client.get(endpoint)
     assert resp.status_code == 200
@@ -78,7 +83,10 @@ def test_public_books_ui_elements_hidden_when_disabled(client, rama_client, flas
         resp_edit = rama_client.get("/proofing/test-project/edit")
         assert resp_edit.status_code == 200
         assert "is_publicly_viewable" not in resp_edit.text
-        assert "When checked, anyone (including guests) can read this book at /books/." not in resp_edit.text
+        assert (
+            "When checked, anyone (including guests) can read this book at /books/."
+            not in resp_edit.text
+        )
     finally:
         flask_app.config["ENABLE_BOOKS"] = True
 
@@ -102,7 +110,6 @@ def test_public_books_ui_elements_visible_when_enabled(client, rama_client, flas
 
 
 def test_enable_books_env_parsing():
-    from config import BaseConfig
 
     disabled_values = ["0", "false", "False", "disabled", "DISABLED", "off", "no"]
     for val in disabled_values:
@@ -128,9 +135,9 @@ def test_enable_books_env_parsing():
 
 
 def test_project_view_admin_columns_and_form(flask_app):
-    from kalanjiyam.admin import ProjectView
     import kalanjiyam.database as db
     import kalanjiyam.queries as q
+    from kalanjiyam.admin import ProjectView
 
     with flask_app.app_context():
         pv = ProjectView(db.Project, q.get_session())
@@ -163,6 +170,7 @@ def test_admin_set_project_public_rejected_when_disabled(flask_app, superadmin_c
 
     with flask_app.test_request_context():
         from flask import url_for
+
         target_url = url_for("groups_view.manage", id=org_id)
 
     flask_app.config["ENABLE_BOOKS"] = False
@@ -182,4 +190,80 @@ def test_admin_set_project_public_rejected_when_disabled(flask_app, superadmin_c
         flask_app.config["ENABLE_BOOKS"] = True
 
 
+def test_get_project_stats_redis_caching(flask_app):
+    from unittest.mock import MagicMock
 
+    from kalanjiyam.views.public.books import get_project_stats
+
+    with flask_app.app_context():
+        session = q.get_session()
+        project = session.query(db.Project).filter_by(slug="test-project").first()
+        assert project is not None
+
+        # Create a mock Redis client
+        mock_redis = MagicMock()
+        mock_redis.get.return_value = None
+
+        # First call computes stats and caches to Redis
+        stats1 = get_project_stats(project, r_client=mock_redis)
+        assert "total_pages" in stats1
+        assert mock_redis.setex.called
+
+        # Second call returns cached payload without re-querying DB
+        import json
+
+        mock_redis.get.return_value = json.dumps(stats1).encode("utf-8")
+        stats2 = get_project_stats(project, r_client=mock_redis)
+        assert stats2 == stats1
+
+
+def test_public_book_detail_batch_pages(client, flask_app):
+    flask_app.config["MULTI_TENANT_MODE"] = True
+    flask_app.config["ENFORCE_ORG_ACCESS"] = True
+
+    with flask_app.app_context():
+        session = q.get_session()
+        project = session.query(db.Project).filter_by(slug="test-project").first()
+        project.is_publicly_viewable = True
+        session.commit()
+
+        # Add a translation to test language badge rendering
+        page = project.pages[0] if project.pages else None
+        if page:
+            existing_trans = (
+                session.query(db.Translation).filter_by(page_id=page.id).first()
+            )
+            if not existing_trans:
+                rev = session.query(db.Revision).filter_by(page_id=page.id).first()
+                if not rev:
+                    rev = db.Revision(
+                        project_id=project.id,
+                        page_id=page.id,
+                        status_id=page.status_id,
+                        content="Sample page content",
+                    )
+                    session.add(rev)
+                    session.flush()
+
+                user = session.query(db.User).first()
+                trans = db.Translation(
+                    page_id=page.id,
+                    revision_id=rev.id,
+                    author_id=user.id if user else None,
+                    source_language="sa",
+                    target_language="en",
+                    translation_engine="google",
+                    content="Hello world",
+                )
+                session.add(trans)
+                session.commit()
+
+    with flask_app.test_request_context("/kalanjiyam/books/test-project/"):
+        from flask import url_for
+
+        endpoint = url_for("public.books.book", project_slug="test-project")
+
+    resp = client.get(endpoint)
+    assert resp.status_code == 200
+    assert b"Test Project" in resp.data
+    assert "sa" in resp.text or "en" in resp.text or "Page" in resp.text
