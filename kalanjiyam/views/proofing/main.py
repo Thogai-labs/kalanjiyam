@@ -1304,21 +1304,31 @@ def create_project():
                 p_slug = slugify(p_title) or f"project-{idx}"
                 if p_slug in seen_slugs:
                     conflicts.append(f'"{p_title}" (duplicate in upload)')
+                elif session.query(db.Project).filter_by(slug=p_slug).first():
+                    conflicts.append(f'"{p_title}" (already exists in database)')
                 else:
                     seen_slugs.add(p_slug)
-                    if session.query(db.Project).filter_by(slug=p_slug).first():
-                        conflicts.append(f'"{p_title}" (already exists in database)')
-                batch_projects_preview.append((p_title, p_slug, f))
+                    batch_projects_preview.append((p_title, p_slug, f))
 
-            if conflicts:
+            if not batch_projects_preview:
                 flash(
                     _l(
-                        "Cannot create projects due to naming conflicts: %(conflicts)s. Please rename the files.",
+                        "All uploaded files were skipped due to naming conflicts: %(conflicts)s. No projects were created.",
                         conflicts=", ".join(conflicts),
                     ),
                     "error",
                 )
                 return _render_create_project()
+
+            if conflicts:
+                flash(
+                    _l(
+                        "Skipped %(count)s duplicate file(s): %(conflicts)s.",
+                        count=len(conflicts),
+                        conflicts=", ".join(conflicts),
+                    ),
+                    "warning",
+                )
 
             if not current_user.is_authenticated:
                 from datetime import datetime, timedelta
@@ -1338,11 +1348,11 @@ def create_project():
                     .count()
                 )
                 limit = settings.unregistered_user_project_limit
-                if existing_count + len(uploaded_files) > limit:
+                if existing_count + len(batch_projects_preview) > limit:
                     flash(
                         _l(
                             "Creating %(count)s projects would exceed your limit (%(remaining)s remaining today).",
-                            count=len(uploaded_files),
+                            count=len(batch_projects_preview),
                             remaining=max(0, limit - existing_count),
                         ),
                         "error",
@@ -1357,7 +1367,12 @@ def create_project():
                     )
 
         upload_size = 0
-        for f in uploaded_files:
+        target_files = (
+            [f for _, _, f in batch_projects_preview]
+            if is_batch_mode
+            else uploaded_files
+        )
+        for f in target_files:
             if hasattr(f, "stream"):
                 cur_pos = f.stream.tell()
                 f.stream.seek(0, 2)
