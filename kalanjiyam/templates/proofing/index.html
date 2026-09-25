@@ -827,6 +827,7 @@ function proofingDashboard() {
     totalProjectsCount: {{ total_projects }},
     loadedProjectsCount: {{ projects|length }},
     isLoadingMore: false,
+    _loadingLock: false,
     observer: null,
     get hasMoreProjects() {
       return parseInt(this.page, 10) < parseInt(this.totalPages, 10);
@@ -1191,11 +1192,11 @@ function proofingDashboard() {
         if (!sentinel) return;
         this.observer = new IntersectionObserver((entries) => {
           if (entries[0] && entries[0].isIntersecting) {
-            if (this.hasMoreProjects && !this.isLoading && !this.isLoadingMore) {
+            if (this.hasMoreProjects && !this.isLoading && !this.isLoadingMore && !this._loadingLock) {
               this.loadMore();
             }
           }
-        }, { root: null, rootMargin: '300px', threshold: 0 });
+        }, { root: null, rootMargin: '150px', threshold: 0.05 });
         this.observer.observe(sentinel);
       };
 
@@ -1207,7 +1208,8 @@ function proofingDashboard() {
     },
 
     async loadMore() {
-      if (!this.hasMoreProjects || this.isLoading || this.isLoadingMore) return;
+      if (this._loadingLock || !this.hasMoreProjects || this.isLoading || this.isLoadingMore) return;
+      this._loadingLock = true;
       this.isLoadingMore = true;
       const nextPage = this.page + 1;
 
@@ -1225,6 +1227,7 @@ function proofingDashboard() {
       params.set('page', nextPage);
       if (this.perPage && this.perPage !== 20) params.set('per_page', this.perPage);
       params.set('append', '1');
+      params.set('ajax', '1');
 
       const qs = params.toString();
       const baseUrl = '{{ url_for("proofing.index") }}';
@@ -1233,6 +1236,7 @@ function proofingDashboard() {
       try {
         const response = await fetch(targetUrl, {
           cache: 'no-store',
+          credentials: 'same-origin',
           headers: {
             'X-Requested-With': 'XMLHttpRequest',
             'Cache-Control': 'no-cache',
@@ -1254,8 +1258,12 @@ function proofingDashboard() {
           newChildrenCount = newChildren.length;
           newChildren.forEach(child => {
             itemsContainer.appendChild(child);
-            if (window.Alpine && typeof window.Alpine.initTree === 'function') {
-              window.Alpine.initTree(child);
+            try {
+              if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+                window.Alpine.initTree(child);
+              }
+            } catch (initErr) {
+              console.warn('Alpine child initTree notice:', initErr);
             }
           });
           this.loadedProjectsCount += newChildrenCount;
@@ -1283,17 +1291,7 @@ function proofingDashboard() {
         console.error('Failed to load more projects:', err);
       } finally {
         this.isLoadingMore = false;
-        if (this.$nextTick) {
-          this.$nextTick(() => {
-            if (this.hasMoreProjects && this.observer) {
-              const sentinel = document.getElementById('infinite-scroll-sentinel');
-              if (sentinel) {
-                this.observer.unobserve(sentinel);
-                this.observer.observe(sentinel);
-              }
-            }
-          });
-        }
+        this._loadingLock = false;
       }
     },
 
@@ -1348,7 +1346,11 @@ function proofingDashboard() {
           resultsEl.innerHTML = html;
           if (window.Alpine && typeof window.Alpine.initTree === 'function') {
             this.$nextTick(() => {
-              window.Alpine.initTree(resultsEl);
+              try {
+                window.Alpine.initTree(resultsEl);
+              } catch (initErr) {
+                console.warn('Alpine results initTree notice:', initErr);
+              }
             });
           }
         } else {

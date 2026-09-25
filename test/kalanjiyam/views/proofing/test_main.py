@@ -146,8 +146,16 @@ def test_index_append_ajax(client):
     assert "X-Total-Projects" in resp.headers
     assert "X-Total-Pages" in resp.headers
     assert "X-Current-Page" in resp.headers
+    assert "Access-Control-Expose-Headers" in resp.headers
+    assert "X-Total-Projects" in resp.headers["Access-Control-Expose-Headers"]
     # When append=1, only card elements are returned, not the outer folder breadcrumb or sentinel
     assert "infinite-scroll-sentinel" not in resp.text
+
+    # Also test append=1 without X-Requested-With header (e.g. reverse proxy stripping it)
+    resp_no_header = client.get("/proofing/?append=1&page=1&per_page=10")
+    assert resp_no_header.status_code == 200
+    assert "X-Total-Projects" in resp_no_header.headers
+    assert "infinite-scroll-sentinel" not in resp_no_header.text
 
 
 def test_project_model_folder_and_tags():
