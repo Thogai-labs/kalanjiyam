@@ -213,25 +213,26 @@
       id="infinite-scroll-sentinel"
       class="py-4 text-center"
       x-show="hasMoreProjects"
+      x-cloak
     >
-      <div x-show="isLoadingMore" class="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 py-2 px-4 rounded-full bg-slate-100 border border-slate-200 shadow-xs">
-        <svg class="animate-spin w-4 h-4 text-royalblue" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <span>{{ _('Loading more projects…') }}</span>
-      </div>
-
       <button
         type="button"
-        x-show="!isLoadingMore && hasMoreProjects"
+        :disabled="isLoadingMore"
         @click.prevent.stop="loadMore()"
-        class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-semibold text-xs transition-all shadow-xs cursor-pointer"
+        class="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-semibold text-xs transition-all shadow-xs cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
       >
-        <span>{{ _('Load more') }}</span>
-        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-        </svg>
+        <template x-if="isLoadingMore">
+          <svg class="animate-spin w-4 h-4 text-royalblue" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </template>
+        <span x-text="isLoadingMore ? '{{ _('Loading more projects…') }}' : '{{ _('Load more') }}'">{{ _('Load more') }}</span>
+        <template x-if="!isLoadingMore">
+          <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </template>
       </button>
     </div>
 

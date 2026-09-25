@@ -435,11 +435,12 @@ def index():
             .all()
         )
 
+    is_append = request.args.get("append") == "1"
     is_ajax = (
-        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        is_append
+        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
         or request.args.get("ajax") == "1"
     )
-    is_append = is_ajax and request.args.get("append") == "1"
 
     if is_append:
         folder_contents = {"current_folder": norm_selected_folder}
@@ -642,6 +643,9 @@ def index():
         resp.headers["X-Total-Projects"] = str(total_projects)
         resp.headers["X-Total-Pages"] = str(total_pages)
         resp.headers["X-Current-Page"] = str(page)
+        resp.headers["Access-Control-Expose-Headers"] = (
+            "X-Total-Projects, X-Total-Pages, X-Current-Page"
+        )
         resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         resp.headers["Pragma"] = "no-cache"
         resp.headers["Expires"] = "0"
