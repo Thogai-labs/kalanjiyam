@@ -1196,7 +1196,7 @@ function proofingDashboard() {
               this.loadMore();
             }
           }
-        }, { root: null, rootMargin: '150px', threshold: 0.05 });
+        }, { root: null, rootMargin: '300px', threshold: 0 });
         this.observer.observe(sentinel);
       };
 
@@ -1284,7 +1284,8 @@ function proofingDashboard() {
           this.page = nextPage;
         }
 
-        if (newChildrenCount === 0) {
+        if (newChildrenCount === 0 && totalPagesHeader === null) {
+          // Only override totalPages if the server didn't send headers
           this.totalPages = this.page;
         }
       } catch (err) {
@@ -1292,6 +1293,18 @@ function proofingDashboard() {
       } finally {
         this.isLoadingMore = false;
         this._loadingLock = false;
+        // Re-arm IntersectionObserver so it fires again for continuous scrolling.
+        // Without this, the observer only fires once because the sentinel's
+        // intersection state doesn't change after cards are appended.
+        this.$nextTick(() => {
+          if (this.hasMoreProjects && this.observer) {
+            const sentinel = document.getElementById('infinite-scroll-sentinel');
+            if (sentinel) {
+              this.observer.unobserve(sentinel);
+              this.observer.observe(sentinel);
+            }
+          }
+        });
       }
     },
 

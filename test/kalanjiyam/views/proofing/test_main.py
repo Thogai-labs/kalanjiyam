@@ -466,9 +466,29 @@ def test_create_project_with_images_post_separate_projects(rama_client):
         assert projects_data[1]["slug"] == "chapter-two"
 
 
-def test_create_project_with_images_post_duplicate_slugs_fails(rama_client):
-    """Test that uploading multiple images producing duplicate project slugs fails validation."""
+def test_create_project_with_images_post_all_duplicate_slugs_fails(rama_client):
+    """Test that uploading multiple images producing only duplicate project slugs fails validation."""
     import io
+    import kalanjiyam.database as db
+    import kalanjiyam.queries as q
+
+    session = q.get_session()
+    tenant = q.get_or_create_open_tenant()
+    user = session.query(db.User).filter_by(username="u-basic").first()
+    if user:
+        user.organization_id = tenant.id
+        session.commit()
+    board = session.query(db.Board).first()
+    board_id = board.id if board else 1
+    # Create existing project with slug 'scan-01'
+    if not session.query(db.Project).filter_by(slug="scan-01").first():
+        proj = db.Project(
+            display_title="Scan 01",
+            slug="scan-01",
+            board_id=board_id,
+        )
+        session.add(proj)
+        session.commit()
 
     data = {
         "pdf_source": "local",
@@ -480,13 +500,92 @@ def test_create_project_with_images_post_duplicate_slugs_fails(rama_client):
         ],
     }
 
-    resp = rama_client.post(
-        "/proofing/create-project",
-        data=data,
-        content_type="multipart/form-data",
-    )
-    assert resp.status_code == 200
-    assert "Cannot create projects due to naming conflicts" in resp.text
+    try:
+        resp = rama_client.post(
+            "/proofing/create-project",
+            data=data,
+            content_type="multipart/form-data",
+        )
+        assert resp.status_code == 200
+        assert "All uploaded files were skipped due to naming conflicts" in resp.text
+    finally:
+        p = session.query(db.Project).filter_by(slug="scan-01").first()
+        if p:
+            session.delete(p)
+            session.commit()
+
+
+def test_create_project_with_multiple_pdfs_post_skips_duplicates(rama_client):
+    """Test that uploading multiple PDFs with duplicates skips duplicates and creates valid projects with a warning toast."""
+    import io
+    from unittest.mock import Mock, patch
+
+    import kalanjiyam.database as db
+    import kalanjiyam.queries as q
+    from kalanjiyam.tasks import PRIORITY_BATCH
+
+    session = q.get_session()
+    tenant = q.get_or_create_open_tenant()
+    user = session.query(db.User).filter_by(username="u-basic").first()
+    user.organization_id = tenant.id
+    board = session.query(db.Board).first()
+    board_id = board.id if board else 1
+
+    # Create an existing project to test DB duplicate detection
+    if not session.query(db.Project).filter_by(slug="existing-book").first():
+        existing_proj = db.Project(
+            display_title="Existing Book",
+            slug="existing-book",
+            board_id=board_id,
+        )
+        session.add(existing_proj)
+        session.commit()
+
+    data = {
+        "pdf_source": "local",
+        "license": "public",
+        "local_file": [
+            (io.BytesIO(b"%PDF-1.4 dummy 1"), "new_book_one.pdf"),
+            (io.BytesIO(b"%PDF-1.4 dummy 2"), "existing_book.pdf"),  # Already in DB
+            (io.BytesIO(b"%PDF-1.4 dummy 3"), "new-book-one.pdf"),   # Duplicate of new_book_one in upload
+            (io.BytesIO(b"%PDF-1.4 dummy 4"), "new_book_two.pdf"),
+        ],
+    }
+
+    try:
+        with (
+            patch("kalanjiyam.utils.storage.LocalStorage.save"),
+            patch(
+                "kalanjiyam.tasks.projects.create_batch_pdf_projects.apply_async"
+            ) as mock_batch_task,
+        ):
+            mock_batch_task.return_value = Mock(id="mock-batch-pdf-id", status="PENDING")
+
+            resp = rama_client.post(
+                "/proofing/create-project",
+                data=data,
+                content_type="multipart/form-data",
+            )
+            assert resp.status_code == 200
+
+            # Warning toast should inform about skipped duplicates
+            assert "Skipped 2 duplicate file(s)" in resp.text
+
+            # Celery task should be dispatched with only the 2 valid projects
+            mock_batch_task.assert_called_once()
+            call_kwargs = mock_batch_task.call_args.kwargs
+            assert call_kwargs["priority"] == PRIORITY_BATCH
+            projects_data = call_kwargs["kwargs"]["projects_data"]
+            assert len(projects_data) == 2
+            assert projects_data[0]["display_title"] == "New book one"
+            assert projects_data[0]["slug"] == "new-book-one"
+            assert projects_data[1]["display_title"] == "New book two"
+            assert projects_data[1]["slug"] == "new-book-two"
+    finally:
+        p = session.query(db.Project).filter_by(slug="existing-book").first()
+        if p:
+            session.delete(p)
+            session.commit()
 
 
 def test_create_project_with_multiple_pdfs_post(rama_client):

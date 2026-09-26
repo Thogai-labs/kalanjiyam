@@ -112,6 +112,16 @@
          const base = name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim();
          return base ? base.charAt(0).toUpperCase() + base.slice(1) : name;
        },
+       isDuplicateTitle(list, name, idx) {
+         if (!list || idx === 0) return false;
+         const title = this.getProjectTitle(name).toLowerCase();
+         for (let i = 0; i < idx; i++) {
+           if (this.getProjectTitle(list[i]).toLowerCase() === title) {
+             return true;
+           }
+         }
+         return false;
+       },
        getGlossaryDisplayName(name) {
          const lookup = {
            'agri': 'Agriculture',
@@ -336,11 +346,14 @@
                   <div class="flex items-center justify-between text-slate-600 font-mono py-0.5 border-b border-slate-50 last:border-0 text-[11px]">
                     <div class="flex items-center truncate">
                       <span class="w-7 text-slate-400 font-semibold" x-text="`${idx + 1}.`"></span>
-                      <span class="truncate" x-text="name"></span>
+                      <span class="truncate" :class="!groupImages && isDuplicateTitle(imageFileNames, name, idx) ? 'line-through text-slate-400' : ''" x-text="name"></span>
+                      <span x-show="!groupImages && isDuplicateTitle(imageFileNames, name, idx)" class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shrink-0 font-sans">
+                        {{ _('Duplicate (will be skipped)') }}
+                      </span>
                     </div>
                     <div x-show="!groupImages" class="ml-2 shrink-0 font-sans text-right">
                       <span class="text-[10px] text-slate-400">{{ _('Project:') }}</span>
-                      <span class="font-bold text-slate-800 text-xs ml-0.5" x-text="getProjectTitle(name)"></span>
+                      <span class="font-bold text-slate-800 text-xs ml-0.5" :class="isDuplicateTitle(imageFileNames, name, idx) ? 'line-through text-slate-400' : ''" x-text="getProjectTitle(name)"></span>
                     </div>
                   </div>
                 </template>
@@ -352,17 +365,20 @@
               <div class="mt-3 text-xs text-slate-600 bg-white border border-slate-200 rounded-xl p-3 max-h-48 overflow-y-auto space-y-1">
                 <div class="font-bold text-slate-700 mb-1 flex items-center justify-between">
                   <span>{{ _('Projects to be created (1 per PDF):') }}</span>
-                  <span class="text-[11px] text-slate-400 font-medium" x-text="`${pdfFileNames.length} projects`"></span>
+                  <span class="text-[11px] text-slate-400 font-medium" x-text="`${pdfFileNames.length} selected`"></span>
                 </div>
                 <template x-for="(name, idx) in pdfFileNames" :key="name">
                   <div class="flex items-center justify-between text-slate-600 font-mono py-0.5 border-b border-slate-50 last:border-0 text-[11px]">
                     <div class="flex items-center truncate">
                       <span class="w-7 text-slate-400 font-semibold" x-text="`${idx + 1}.`"></span>
-                      <span class="truncate" x-text="name"></span>
+                      <span class="truncate" :class="isDuplicateTitle(pdfFileNames, name, idx) ? 'line-through text-slate-400' : ''" x-text="name"></span>
+                      <span x-show="isDuplicateTitle(pdfFileNames, name, idx)" class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shrink-0 font-sans">
+                        {{ _('Duplicate (will be skipped)') }}
+                      </span>
                     </div>
                     <div class="ml-2 shrink-0 font-sans text-right">
                       <span class="text-[10px] text-slate-400">{{ _('Project:') }}</span>
-                      <span class="font-bold text-slate-800 text-xs ml-0.5" x-text="getProjectTitle(name)"></span>
+                      <span class="font-bold text-slate-800 text-xs ml-0.5" :class="isDuplicateTitle(pdfFileNames, name, idx) ? 'line-through text-slate-400' : ''" x-text="getProjectTitle(name)"></span>
                     </div>
                   </div>
                 </template>
