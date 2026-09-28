@@ -3246,8 +3246,11 @@ class OrgAdminView(AdminBaseView):
             elif action == "add_user":
                 user_id = request.form.get("user_id", type=int)
                 if user_id:
-                    q.add_user_to_group(user_id=user_id, group_id=org.id)
-                    flash("User added to organization.", "success")
+                    if q.user_belongs_to_any_organization(user_id):
+                        flash("Cannot add a user who already belongs to an organization.", "error")
+                    else:
+                        q.add_user_to_group(user_id=user_id, group_id=org.id)
+                        flash("User added to organization.", "success")
             elif action == "remove_user":
                 user_id = request.form.get("user_id", type=int)
                 if user_id and user_id != org.admin_user_id:
@@ -3328,7 +3331,7 @@ class OrgAdminView(AdminBaseView):
 
         users = q.users_in_group(org.id)
         projects, _ = q.projects_in_group(org.id, page=1, per_page=1000)
-        all_users = q.all_users_for_group_select()
+        orphan_users = q.orphan_and_registered_users_for_group_select()
         orphan_projects = q.orphan_projects_for_group_select()
         users_in_group_ids = {u.id for u in users}
         projects_in_group_ids = {p.id for p in projects}
@@ -3342,7 +3345,8 @@ class OrgAdminView(AdminBaseView):
             users=users,
             projects=projects,
             projects_json=projects_json,
-            all_users=all_users,
+            all_users=orphan_users,
+            orphan_users=orphan_users,
             all_projects=orphan_projects,
             orphan_projects=orphan_projects,
             users_in_group_ids=users_in_group_ids,

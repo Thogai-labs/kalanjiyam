@@ -443,6 +443,13 @@ def texts_in_group(
 def add_user_to_group(user_id: int, group_id: int) -> None:
     """Add a user to a group. Idempotent. Syncs users.organization_id."""
     session = get_session()
+    target_group = session.query(db.Group).filter_by(id=group_id).first()
+    if target_group and target_group.slug != "open-tenant":
+        open_tenant = session.query(db.Group).filter_by(slug="open-tenant").first()
+        if open_tenant:
+            session.query(db.UserGroups).filter_by(
+                user_id=user_id, group_id=open_tenant.id
+            ).delete()
     existing = (
         session.query(db.UserGroups)
         .filter_by(user_id=user_id, group_id=group_id)
@@ -503,6 +510,63 @@ def all_users_for_group_select() -> list[db.User]:
         .order_by(db.User.username)
         .all()
     )
+
+
+def orphan_and_registered_users_for_group_select() -> list[db.User]:
+    """All non-deleted, non-banned users who do not belong to any organization
+    (excluding open-tenant), ordered by username, for dropdowns.
+    """
+    session = get_session()
+    has_org_via_id = (
+        session.query(db.Group.id)
+        .filter(
+            db.Group.id == db.User.organization_id,
+            db.Group.slug != "open-tenant",
+        )
+        .exists()
+    )
+    has_org_via_membership = (
+        session.query(db.UserGroups.user_id)
+        .join(db.Group, db.Group.id == db.UserGroups.group_id)
+        .filter(
+            db.UserGroups.user_id == db.User.id,
+            db.Group.slug != "open-tenant",
+        )
+        .exists()
+    )
+    return (
+        session.query(db.User)
+        .filter(
+            db.User.is_deleted == False,
+            db.User.is_banned == False,
+            ~has_org_via_id,
+            ~has_org_via_membership,
+        )
+        .order_by(db.User.username)
+        .all()
+    )
+
+
+def user_belongs_to_any_organization(user_id: int) -> bool:
+    """Return True if the user belongs to any organization other than open-tenant."""
+    session = get_session()
+    user = session.query(db.User).filter_by(id=user_id).first()
+    if user is None:
+        return False
+    if user.organization_id is not None:
+        org = session.query(db.Group).filter_by(id=user.organization_id).first()
+        if org and org.slug != "open-tenant":
+            return True
+    row = (
+        session.query(db.UserGroups.user_id)
+        .join(db.Group, db.Group.id == db.UserGroups.group_id)
+        .filter(
+            db.UserGroups.user_id == user_id,
+            db.Group.slug != "open-tenant",
+        )
+        .first()
+    )
+    return row is not None
 
 
 def _text_ids_in_any_group() -> set[int]:
