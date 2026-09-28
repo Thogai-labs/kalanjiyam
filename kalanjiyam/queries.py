@@ -706,3 +706,28 @@ def all_projects_for_group_select() -> list[db.Project]:
     """All projects ordered by slug, for dropdowns (e.g. add project to group)."""
     session = get_session()
     return session.query(db.Project).order_by(db.Project.slug).all()
+
+
+def orphan_projects_for_group_select() -> list[db.Project]:
+    """All orphan projects (projects not assigned to any organization/group), ordered by slug."""
+    session = get_session()
+    has_group = (
+        session.query(db.ProjectGroups.project_id)
+        .join(db.Group, db.Group.id == db.ProjectGroups.group_id)
+        .filter(db.ProjectGroups.project_id == db.Project.id)
+        .exists()
+    )
+    return session.query(db.Project).filter(~has_group).order_by(db.Project.slug).all()
+
+
+def project_belongs_to_any_group(project_id: int) -> bool:
+    """Return True if the project is associated with any organization/group."""
+    session = get_session()
+    row = (
+        session.query(db.ProjectGroups.project_id)
+        .join(db.Group, db.Group.id == db.ProjectGroups.group_id)
+        .filter(db.ProjectGroups.project_id == project_id)
+        .first()
+    )
+    return row is not None
+

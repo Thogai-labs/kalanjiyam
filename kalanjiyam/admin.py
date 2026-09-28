@@ -3290,8 +3290,11 @@ class OrgAdminView(AdminBaseView):
             elif action == "add_project":
                 project_id = request.form.get("project_id", type=int)
                 if project_id:
-                    q.add_project_to_group(project_id=project_id, group_id=org.id)
-                    flash("Book added to organization.", "success")
+                    if q.project_belongs_to_any_group(project_id):
+                        flash("Cannot add a book that already belongs to an organization.", "error")
+                    else:
+                        q.add_project_to_group(project_id=project_id, group_id=org.id)
+                        flash("Book added to organization.", "success")
             elif action == "remove_project":
                 project_id = request.form.get("project_id", type=int)
                 if project_id:
@@ -3326,7 +3329,7 @@ class OrgAdminView(AdminBaseView):
         users = q.users_in_group(org.id)
         projects, _ = q.projects_in_group(org.id, page=1, per_page=200)
         all_users = q.all_users_for_group_select()
-        all_projects = q.all_projects_for_group_select()
+        orphan_projects = q.orphan_projects_for_group_select()
         users_in_group_ids = {u.id for u in users}
         projects_in_group_ids = {p.id for p in projects}
         return render_template(
@@ -3335,7 +3338,8 @@ class OrgAdminView(AdminBaseView):
             users=users,
             projects=projects,
             all_users=all_users,
-            all_projects=all_projects,
+            all_projects=orphan_projects,
+            orphan_projects=orphan_projects,
             users_in_group_ids=users_in_group_ids,
             projects_in_group_ids=projects_in_group_ids,
             csrf_token=generate_csrf(),

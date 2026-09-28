@@ -376,7 +376,7 @@
       <select name="project_id"
               class="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-xs max-w-sm" required>
         <option value="">{{ _('Add book to organization…') }}</option>
-        {% for p in all_projects %}
+        {% for p in orphan_projects|default(all_projects) %}
         {% if p.id not in projects_in_group_ids %}
         <option value="{{ p.id }}">{{ p.slug }} — {{ p.display_title[:60] }}</option>
         {% endif %}
