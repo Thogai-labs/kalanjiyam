@@ -3327,16 +3327,21 @@ class OrgAdminView(AdminBaseView):
             return redirect(url_for("org_admin_view.index"))
 
         users = q.users_in_group(org.id)
-        projects, _ = q.projects_in_group(org.id, page=1, per_page=200)
+        projects, _ = q.projects_in_group(org.id, page=1, per_page=1000)
         all_users = q.all_users_for_group_select()
         orphan_projects = q.orphan_projects_for_group_select()
         users_in_group_ids = {u.id for u in users}
         projects_in_group_ids = {p.id for p in projects}
+        projects_json = [
+            {"id": p.id, "slug": p.slug, "title": p.display_title}
+            for p in projects
+        ]
         return render_template(
             "admin/org_dashboard.html",
             org=org,
             users=users,
             projects=projects,
+            projects_json=projects_json,
             all_users=all_users,
             all_projects=orphan_projects,
             orphan_projects=orphan_projects,

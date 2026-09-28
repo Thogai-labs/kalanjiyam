@@ -159,6 +159,14 @@ def test_org_admin_books_dropdown_only_shows_orphan_books(flask_app):
         option_org1 = f'<option value="{book_in_org1.id}">{book_in_org1.slug}'.encode()
         assert option_org1 not in resp.data
 
+        # Check inline table features: search input, separate scroll container, pagination
+        assert b'x-model="search"' in resp.data
+        assert b'max-h-[460px]' in resp.data
+        assert b'x-ref="tableContainer"' in resp.data
+        assert b'id="org-books-data"' in resp.data
+        assert b'booksCatalogTable' in resp.data
+
+
 
 def test_org_admin_cannot_add_non_orphan_book(flask_app):
     with flask_app.app_context():
