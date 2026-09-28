@@ -91,6 +91,76 @@ class ProofFolder(Base):
         return f"<ProofFolder {self.path}>"
 
 
+class ProofFolderAccess(Base):
+    """Maps a user in an organization to a folder they are permitted to access."""
+
+    __tablename__ = "proof_folder_access"
+    __table_args__ = (
+        UniqueConstraint(
+            "folder_path", "organization_id", "user_id", name="uq_proof_folder_access"
+        ),
+    )
+
+    #: Primary key.
+    id = pk()
+    #: Normalized full path of the folder, e.g. "Literature" or "Literature/Poetry".
+    folder_path = Column(String, nullable=False, index=True)
+    #: Organization that owns this folder access rule.
+    organization_id = Column(
+        Integer, ForeignKey("groups.id"), nullable=False, index=True
+    )
+    #: User granted access to this folder.
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    #: Timestamp.
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    organization = relationship("Group")
+    user = relationship("User")
+
+    def __repr__(self):
+        return f"<ProofFolderAccess {self.folder_path} user_id={self.user_id} org_id={self.organization_id}>"
+
+
+class UserFolderRestriction(Base):
+    """Tracks whether a user within an organization has folder access restrictions enabled.
+
+    When is_restricted is True, the user can only view folders explicitly granted to them
+    via ProofFolderAccess (or subfolders/ancestors of those folders).
+    Root folder is the buffer zone and remains viewable by everyone.
+    When is_restricted is False (or no record exists), the user is in default mode
+    and can view all folders in the organization.
+    """
+
+    __tablename__ = "user_folder_restrictions"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "user_id", name="uq_user_folder_restriction"
+        ),
+    )
+
+    #: Primary key.
+    id = pk()
+    #: Organization.
+    organization_id = Column(
+        Integer, ForeignKey("groups.id"), nullable=False, index=True
+    )
+    #: User.
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    #: Whether this user is restricted to specific folders.
+    is_restricted = Column(Boolean, nullable=False, default=True)
+    #: Timestamps.
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    organization = relationship("Group")
+    user = relationship("User")
+
+    def __repr__(self):
+        return f"<UserFolderRestriction org_id={self.organization_id} user_id={self.user_id} restricted={self.is_restricted}>"
+
+
 class Genre(Base):
     """A text genre.
 

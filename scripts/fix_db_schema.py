@@ -36,6 +36,26 @@ statements = [
     );""",
     "CREATE INDEX IF NOT EXISTS ix_proof_folders_path ON proof_folders (path);",
     "CREATE INDEX IF NOT EXISTS ix_proof_folders_parent_path ON proof_folders (parent_path);",
+    """CREATE TABLE IF NOT EXISTS proof_folder_access (
+        id SERIAL PRIMARY KEY,
+        folder_path VARCHAR NOT NULL,
+        organization_id INTEGER NOT NULL REFERENCES groups(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_proof_folder_access UNIQUE (folder_path, organization_id, user_id)
+    );""",
+    "CREATE INDEX IF NOT EXISTS ix_proof_folder_access_folder_path ON proof_folder_access (folder_path);",
+    "CREATE INDEX IF NOT EXISTS ix_proof_folder_access_org_user ON proof_folder_access (organization_id, user_id);",
+    """CREATE TABLE IF NOT EXISTS user_folder_restrictions (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER NOT NULL REFERENCES groups(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        is_restricted BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_user_folder_restriction UNIQUE (organization_id, user_id)
+    );""",
+    "CREATE INDEX IF NOT EXISTS ix_user_folder_restrictions_org_user ON user_folder_restrictions (organization_id, user_id);",
 ]
 
 def main():

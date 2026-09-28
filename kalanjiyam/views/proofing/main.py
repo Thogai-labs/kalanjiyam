@@ -311,6 +311,7 @@ def index():
         fingerprint_id=device_fp if not current_user.is_authenticated else None,
         is_super_admin=getattr(current_user, "is_super_admin", False)
         and (not selected_org or selected_org == "all"),
+        user=current_user,
     )
     has_any_folders = len(available_folders) > 0
     has_any_items = has_any_projects or has_any_folders
@@ -338,6 +339,18 @@ def index():
 
     # 5b. Filter by folder if specified
     norm_selected_folder = project_utils.normalize_folder_path(selected_folder)
+    if norm_selected_folder:
+        if not project_utils.user_can_access_folder(
+            current_user, norm_selected_folder, target_org_id, session=session
+        ):
+            if (
+                request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                or request.args.get("ajax") == "1"
+            ):
+                return jsonify({"error": _l("You do not have access to this folder.")}), 403
+            flash(_l("You do not have access to this folder."), "warning")
+            return redirect(url_for("proofing.index"))
+
     is_searching_or_filtering = bool(search_query or selected_tag or selected_issues)
 
     if is_searching_or_filtering:
@@ -489,6 +502,9 @@ def index():
             folder_counts_data,
             current_folder=selected_folder,
             all_known_folders=available_folders,
+            user=current_user,
+            organization_id=target_org_id,
+            session=session,
         )
 
     all_display_projects = list(paginated_projects)
@@ -630,6 +646,11 @@ def index():
         "has_any_folders": has_any_folders,
         "has_any_items": has_any_items,
         "folder_contents": folder_contents,
+        "is_org_admin": current_user.is_authenticated
+        and (
+            getattr(current_user, "is_org_admin", False)
+            or getattr(current_user, "is_super_admin", False)
+        ),
     }
 
     if is_ajax:
@@ -691,6 +712,22 @@ def create_folder():
 
     org_id = _current_org_id()
     session = q.get_session()
+
+    if raw_parent:
+        if not project_utils.user_can_access_folder(
+            current_user, raw_parent, org_id, session=session
+        ):
+            if (
+                request.headers.get("X-Requested-With") == "XMLHttpRequest"
+                or request.is_json
+            ):
+                return (
+                    jsonify({"success": False, "error": "Access denied to parent folder."}),
+                    403,
+                )
+            flash(_l("Access denied to parent folder."), "danger")
+            return redirect(url_for("proofing.index"))
+
     existing = (
         session.query(db.ProofFolder)
         .filter_by(path=full_path, organization_id=org_id)
@@ -727,6 +764,12 @@ def create_folder():
         fingerprint_id=fingerprint_id,
         organization_id=org_id,
     )
+    if current_user.is_authenticated and project_utils.is_user_folder_restricted(
+        current_user, org_id, session=session
+    ):
+        project_utils.grant_user_folder_access(
+            session, org_id, current_user.id, full_path
+        )
     session.commit()
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
@@ -864,6 +907,22 @@ def rename_folder():
             remainder = p.folder[len(old_path) + 1 :]
             p.folder = f"{new_path}/{remainder}"
 
+    # Update ProofFolderAccess records
+    fa_query = session.query(db.ProofFolderAccess).filter(
+        or_(
+            db.ProofFolderAccess.folder_path == old_path,
+            db.ProofFolderAccess.folder_path.like(f"{escaped_old}/%", escape="\\"),
+        )
+    )
+    if org_id is not None:
+        fa_query = fa_query.filter(db.ProofFolderAccess.organization_id == org_id)
+    for fa in fa_query.all():
+        if fa.folder_path == old_path:
+            fa.folder_path = new_path
+        elif fa.folder_path.startswith(old_path + "/"):
+            remainder = fa.folder_path[len(old_path) + 1 :]
+            fa.folder_path = f"{new_path}/{remainder}"
+
     session.commit()
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json:
@@ -926,6 +985,19 @@ def delete_folder():
         synchronize_session=False
     )
 
+    # Delete ProofFolderAccess records for this folder and subfolders
+    access_del_filter = or_(
+        db.ProofFolderAccess.folder_path == target_path,
+        db.ProofFolderAccess.folder_path.like(f"{escaped_target}/%", escape="\\"),
+    )
+    if org_id is not None:
+        access_del_filter = and_(
+            access_del_filter, db.ProofFolderAccess.organization_id == org_id
+        )
+    session.query(db.ProofFolderAccess).filter(access_del_filter).delete(
+        synchronize_session=False
+    )
+
     # Safely move projects to parent_path (scoped to user's accessible projects)
     device_fp = request.cookies.get("device_fingerprint")
     base_query = q.accessible_proofing_projects_query(
@@ -954,6 +1026,156 @@ def delete_folder():
 
     flash(_l("Folder deleted successfully."), "success")
     return redirect(url_for("proofing.index", folder=parent_path))
+
+
+@bp.route("/folders/access", methods=["GET"])
+def get_folder_access():
+    """Retrieve access configuration for a folder within an organization.
+
+    Only accessible by org_admin or super_admin.
+    Root folder is the buffer zone and cannot have access restrictions.
+    """
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "error": "Authentication required."}), 401
+
+    is_admin = getattr(current_user, "is_org_admin", False) or getattr(
+        current_user, "is_super_admin", False
+    )
+    if not is_admin:
+        return (
+            jsonify({"success": False, "error": "Access denied. Org Admin required."}),
+            403,
+        )
+
+    folder_raw = (request.args.get("folder") or "").strip()
+    norm_folder = project_utils.normalize_folder_path(folder_raw)
+    if not norm_folder:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Root folder is the buffer zone and cannot have access restrictions.",
+                }
+            ),
+            400,
+        )
+
+    session = q.get_session()
+    org_id = _current_org_id()
+    if not org_id:
+        return jsonify({"success": False, "error": "No active organization found."}), 400
+
+    org = session.query(db.Group).filter_by(id=org_id).first()
+    org_name = org.name if org else ""
+
+    summary = project_utils.get_folder_users_access_summary(
+        session, org_id, norm_folder
+    )
+
+    return jsonify(
+        {
+            "success": True,
+            "folder": norm_folder,
+            "folder_name": norm_folder.split("/")[-1],
+            "organization_id": org_id,
+            "organization_name": org_name,
+            "users": summary,
+        }
+    )
+
+
+@bp.route("/folders/access", methods=["POST"])
+def update_folder_access():
+    """Update access configuration for a folder within an organization.
+
+    Only accessible by org_admin or super_admin.
+    Root folder is the buffer zone and cannot have access restrictions.
+    """
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "error": "Authentication required."}), 401
+
+    is_admin = getattr(current_user, "is_org_admin", False) or getattr(
+        current_user, "is_super_admin", False
+    )
+    if not is_admin:
+        return (
+            jsonify({"success": False, "error": "Access denied. Org Admin required."}),
+            403,
+        )
+
+    data = request.get_json(silent=True) or request.form
+    folder_raw = (data.get("folder") or "").strip()
+    norm_folder = project_utils.normalize_folder_path(folder_raw)
+    if not norm_folder:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Root folder is the buffer zone and cannot have access restrictions.",
+                }
+            ),
+            400,
+        )
+
+    session = q.get_session()
+    org_id = _current_org_id()
+    if not org_id:
+        return jsonify({"success": False, "error": "No active organization found."}), 400
+
+    # Ensure folder exists in ProofFolder
+    project_utils.ensure_proof_folder(
+        session,
+        norm_folder,
+        creator_id=current_user.id,
+        organization_id=org_id,
+    )
+
+    users_payload = data.get("users", [])
+    if isinstance(users_payload, str):
+        try:
+            users_payload = json.loads(users_payload)
+        except Exception:
+            users_payload = []
+
+    for item in users_payload:
+        user_id = item.get("user_id") or item.get("id")
+        if not user_id:
+            continue
+        user_id = int(user_id)
+        is_restricted = bool(item.get("is_restricted"))
+        has_access = bool(item.get("has_access") or item.get("has_folder_access"))
+
+        # Update restriction mode
+        project_utils.set_user_folder_restriction(
+            session, org_id, user_id, is_restricted
+        )
+
+        # Update access grant for this folder
+        if is_restricted:
+            if has_access:
+                project_utils.grant_user_folder_access(
+                    session, org_id, user_id, norm_folder
+                )
+            else:
+                project_utils.revoke_user_folder_access(
+                    session, org_id, user_id, norm_folder
+                )
+        else:
+            # When unrestricted (default mode), revoke any individual folder grant
+            # because they can access all folders
+            project_utils.revoke_user_folder_access(
+                session, org_id, user_id, norm_folder
+            )
+
+    session.commit()
+
+    return jsonify(
+        {
+            "success": True,
+            "message": _l("Folder access permissions updated successfully."),
+            "folder": norm_folder,
+        }
+    )
 
 
 @bp.route("/help")
