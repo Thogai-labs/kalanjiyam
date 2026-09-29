@@ -260,7 +260,8 @@ def assign_org_admin(org_slug, username, email):
         if org_admin_role not in user.roles:
             user.roles.append(org_admin_role)
         user.organization_id = org.id
-        org.admin_user_id = user.id
+        if not org.admin_user_id:
+            org.admin_user_id = user.id
         session.query(db.UserGroups).filter_by(user_id=user.id).delete()
         session.add(db.UserGroups(user_id=user.id, group_id=org.id))
         session.add_all([user, org])

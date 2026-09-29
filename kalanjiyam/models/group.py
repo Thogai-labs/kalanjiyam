@@ -86,6 +86,34 @@ class Group(Base):
     )
     admin_user = relationship("User", foreign_keys=[admin_user_id])
 
+    @property
+    def admin_users(self):
+        """All active org admin users belonging to this organization."""
+        admins = []
+        seen_ids = set()
+        if self.admin_user and not self.admin_user.is_deleted and not self.admin_user.is_banned:
+            admins.append(self.admin_user)
+            seen_ids.add(self.admin_user.id)
+        for u in self.users:
+            if (
+                u.id not in seen_ids
+                and not u.is_deleted
+                and not u.is_banned
+                and getattr(u, "is_org_admin", False)
+            ):
+                admins.append(u)
+                seen_ids.add(u.id)
+        return admins
+
+    @property
+    def org_admins(self):
+        """Alias for admin_users."""
+        return self.admin_users
+
+    def has_admin(self, user_id: int) -> bool:
+        """Check if user_id is an org admin for this organization."""
+        return any(u.id == user_id for u in self.admin_users)
+
     def __str__(self):
         return self.name
 

@@ -166,6 +166,16 @@ def user_can_view_proofing_project(user, project: db.Project) -> bool:
     if getattr(user, "is_super_admin", False):
         return True
 
+    # Check folder-level access restrictions
+    if getattr(project, "folder", None):
+        from kalanjiyam.utils import project_utils
+
+        org_id = user_organization_id(user)
+        if not project_utils.user_can_access_folder(
+            user, project.folder, org_id
+        ):
+            return False
+
     if not is_multi_tenant_enabled():
         return user_can_access_project(user, project)
 
@@ -202,7 +212,29 @@ def accessible_proofing_projects_query(
     session, user, device_fingerprint: str | None = None
 ):
     """Return a SQLAlchemy Query for proofing projects viewable by the user."""
-    from sqlalchemy import false, or_
+    from sqlalchemy import false, func, or_
+
+    def _esc(val):
+        return val.replace("%", r"\%").replace("_", r"\_")
+
+    def _apply_folder_restriction(q):
+        if getattr(user, "is_authenticated", False):
+            from kalanjiyam.utils import project_utils
+
+            primary_org = user_organization_id(user)
+            allowed_folders = project_utils.get_user_accessible_folder_paths(
+                user, primary_org, session=session
+            )
+            if allowed_folders is not None:
+                folder_conds = [
+                    db.Project.folder.is_(None),
+                    func.trim(db.Project.folder) == "",
+                ]
+                for af in allowed_folders:
+                    folder_conds.append(db.Project.folder == af)
+                    folder_conds.append(db.Project.folder.like(f"{_esc(af)}/%"))
+                return q.filter(or_(*folder_conds))
+        return q
 
     if device_fingerprint is None:
         try:
@@ -222,7 +254,7 @@ def accessible_proofing_projects_query(
     # 2. Legacy / single-tenant mode
     if not is_multi_tenant_enabled():
         if getattr(user, "is_admin", False):
-            return query
+            return _apply_folder_restriction(query)
 
         conditions = [
             db.Project.is_publicly_viewable.is_(True),
@@ -243,7 +275,8 @@ def accessible_proofing_projects_query(
                 ]
             if g_ids:
                 conditions.append(db.Project.groups.any(db.Group.id.in_(g_ids)))
-        return query.filter(or_(*conditions))
+        query = query.filter(or_(*conditions))
+        return _apply_folder_restriction(query)
 
     # 3. Multi-tenant mode:
     # In proofing context, creator or enterprise org members can access.
@@ -256,7 +289,8 @@ def accessible_proofing_projects_query(
                     db.Group.id.in_(user_orgs) & (db.Group.slug != "open-tenant")
                 )
             )
-        return query.filter(or_(*conditions))
+        query = query.filter(or_(*conditions))
+        return _apply_folder_restriction(query)
 
     # 4. Guest user: device fingerprint check
     if device_fingerprint:

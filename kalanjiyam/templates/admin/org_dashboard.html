@@ -225,7 +225,7 @@
         <select name="user_id"
                 class="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-xs max-w-xs" required>
           <option value="">{{ _('Add existing user…') }}</option>
-          {% for u in all_users %}
+          {% for u in orphan_users|default(all_users) %}
           {% if u.id not in users_in_group_ids %}
           <option value="{{ u.id }}">{{ u.username }} ({{ u.email }})</option>
           {% endif %}
@@ -272,6 +272,10 @@
                     <span class="inline-flex px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                       {{ _('Primary Admin') }}
                     </span>
+                    {% elif u.is_org_admin %}
+                    <span class="inline-flex px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-50 text-royalblue border border-blue-200">
+                      {{ _('Org Admin') }}
+                    </span>
                     {% endif %}
                   </div>
                 </div>
@@ -292,7 +296,7 @@
                           class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors shadow-xs">
                     <span x-text="editing ? 'Close' : 'Manage'"></span>
                   </button>
-                  {% if u.id != org.admin_user_id %}
+                  {% if u.id != org.admin_user_id and u.id != current_user.id %}
                   <form method="post" action="{{ url_for('org_admin_view.index') }}" onsubmit="return confirm('Remove {{ u.username }} from organization?');">
                     {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
                     <input type="hidden" name="action" value="remove_user">
@@ -331,6 +335,7 @@
                           <option value="p1">{{ _('P1 — Basic proofer') }}</option>
                           <option value="p2">{{ _('P2 — Advanced proofer') }}</option>
                           <option value="moderator">{{ _('Moderator') }}</option>
+                          <option value="org_admin">{{ _('Org Admin') }}</option>
                         </select>
                         <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 shrink-0">
                           {{ _('Update') }}
@@ -338,6 +343,20 @@
                       </div>
                     </form>
                   </div>
+
+                  {% if u.is_org_admin and u.id != org.admin_user_id %}
+                  <div class="pt-2 border-t border-slate-200/80 flex items-center justify-between">
+                    <span class="text-[11px] text-slate-500 font-medium">{{ _('Designate this user as the primary administrator for %(org_name)s.', org_name=org.name) }}</span>
+                    <form method="post" action="{{ url_for('org_admin_view.index') }}">
+                      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+                      <input type="hidden" name="action" value="set_primary_admin">
+                      <input type="hidden" name="user_id" value="{{ u.id }}">
+                      <button type="submit" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold border border-amber-200 transition-colors">
+                        {{ _('Make Primary Admin') }}
+                      </button>
+                    </form>
+                  </div>
+                  {% endif %}
                 </div>
               </td>
             </tr>
@@ -353,7 +372,8 @@
 </div>
 
 <!-- Books & Catalog Portfolio Card -->
-<div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 mb-8">
+<div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 mb-8"
+     x-data="booksCatalogTable()">
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-100">
     <div>
       <div class="flex items-center gap-2">
@@ -376,7 +396,7 @@
       <select name="project_id"
               class="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-xs max-w-sm" required>
         <option value="">{{ _('Add book to organization…') }}</option>
-        {% for p in all_projects %}
+        {% for p in orphan_projects|default(all_projects) %}
         {% if p.id not in projects_in_group_ids %}
         <option value="{{ p.id }}">{{ p.slug }} — {{ p.display_title[:60] }}</option>
         {% endif %}
@@ -393,9 +413,50 @@
   </div>
 
   {% if projects %}
-  <div class="overflow-x-auto rounded-xl border border-slate-100">
+  <!-- Search & Page Size Controls Bar -->
+  <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-3">
+    <!-- Search Input -->
+    <div class="relative flex-1 max-w-md">
+      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        </svg>
+      </div>
+      <input type="text"
+             x-model="search"
+             placeholder="{{ _('Search assigned books by title or slug…') }}"
+             class="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none text-slate-800 placeholder:text-slate-400 font-medium transition-all shadow-2xs">
+      <button type="button"
+              x-show="search.length > 0"
+              @click="search = ''"
+              class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+              title="{{ _('Clear search') }}">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Per-Page Selector -->
+    <div class="flex items-center justify-between sm:justify-end gap-3 text-xs text-slate-500">
+      <div class="flex items-center gap-1.5 font-medium">
+        <span>{{ _('Show') }}:</span>
+        <select x-model.number="perPage"
+                class="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-2xs">
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <span>{{ _('per page') }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inline Table with Dedicated Separate Scroll Container -->
+  <div x-ref="tableContainer" class="overflow-x-auto overflow-y-auto max-h-[460px] rounded-xl border border-slate-100 shadow-2xs bg-white">
     <table class="min-w-full text-xs sm:text-sm text-left">
-      <thead class="bg-slate-50/80 text-slate-500 uppercase tracking-wider font-bold text-[10px] border-b border-slate-100">
+      <thead class="sticky top-0 bg-slate-50/95 backdrop-blur-xs text-slate-500 uppercase tracking-wider font-bold text-[10px] border-b border-slate-100 z-10 shadow-2xs">
         <tr>
           <th class="px-4 py-3.5">{{ _('Book Title & Slug') }}</th>
           {% if config.ENABLE_BOOKS %}
@@ -406,7 +467,8 @@
       </thead>
       <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
         {% for p in projects %}
-        <tr class="hover:bg-slate-50/70 transition-colors">
+        <tr x-show="isRowVisible({{ p.id }})"
+            class="hover:bg-slate-50/70 transition-colors">
           <td class="px-4 py-3.5">
             <span class="font-bold text-slate-900 block text-xs sm:text-sm">{{ p.display_title }}</span>
             <span class="font-mono text-[11px] text-slate-400 block">{{ p.slug }}</span>
@@ -474,7 +536,167 @@
         {% endfor %}
       </tbody>
     </table>
+
+    <!-- Empty Search Results Message -->
+    <div x-show="filteredBooks.length === 0" class="text-center py-10 px-4 bg-slate-50/50">
+      <div class="w-9 h-9 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        </svg>
+      </div>
+      <p class="text-xs font-semibold text-slate-700">
+        {{ _('No books found matching') }} "<span x-text="search" class="text-slate-900 font-bold"></span>"
+      </p>
+      <button type="button" @click="search = ''" class="mt-2 text-xs text-royalblue hover:text-blue-700 font-semibold inline-flex items-center gap-1 transition-colors">
+        <span>{{ _('Clear search') }}</span>
+      </button>
+    </div>
   </div>
+
+  <!-- Pagination Controls Footer -->
+  <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 text-xs text-slate-500">
+    <div>
+      <span x-show="filteredBooks.length > 0">
+        {{ _('Showing') }}
+        <span class="font-bold text-slate-800" x-text="startIndex"></span>
+        {{ _('to') }}
+        <span class="font-bold text-slate-800" x-text="endIndex"></span>
+        {{ _('of') }}
+        <span class="font-bold text-slate-800" x-text="filteredBooks.length"></span>
+        {{ _('books') }}
+        <span x-show="search.trim().length > 0 && filteredBooks.length !== books.length" class="text-slate-400">
+          ({{ _('filtered from') }} <span x-text="books.length"></span> {{ _('total') }})
+        </span>
+      </span>
+    </div>
+
+    <!-- Navigation Buttons & Page Selection -->
+    <div x-show="totalPages > 1" class="flex items-center gap-1.5">
+      <button type="button"
+              @click="prevPage()"
+              :disabled="currentPage <= 1"
+              :class="currentPage <= 1 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-100 hover:text-slate-800 text-slate-700'"
+              class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold transition-colors shadow-2xs inline-flex items-center gap-1">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+        </svg>
+        <span>{{ _('Previous') }}</span>
+      </button>
+
+      <div class="flex items-center gap-1 px-1">
+        <span class="font-medium text-slate-600">{{ _('Page') }}</span>
+        <select x-model.number="page"
+                @change="scrollToTop()"
+                class="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-2xs">
+          <template x-for="pNum in pageNumbers" :key="pNum">
+            <option :value="pNum" x-text="pNum" :selected="pNum === currentPage"></option>
+          </template>
+        </select>
+        <span class="font-medium text-slate-600">{{ _('of') }} <span class="font-bold text-slate-800" x-text="totalPages"></span></span>
+      </div>
+
+      <button type="button"
+              @click="nextPage()"
+              :disabled="currentPage >= totalPages"
+              :class="currentPage >= totalPages ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-100 hover:text-slate-800 text-slate-700'"
+              class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold transition-colors shadow-2xs inline-flex items-center gap-1">
+        <span>{{ _('Next') }}</span>
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <script id="org-books-data" type="application/json">
+    {{ (projects_json if projects_json is defined else [])|tojson }}
+  </script>
+
+  <script>
+    function booksCatalogTable() {
+      let initialBooks = [];
+      const el = document.getElementById('org-books-data');
+      if (el && el.textContent) {
+        try {
+          initialBooks = JSON.parse(el.textContent);
+        } catch (e) {
+          console.error('Failed to parse org books data', e);
+        }
+      }
+      return {
+        books: initialBooks,
+        search: '',
+        page: 1,
+        perPage: 10,
+        get filteredBooks() {
+          const q = this.search.toLowerCase().trim();
+          if (!q) return this.books;
+          return this.books.filter(b =>
+            (b.slug && b.slug.toLowerCase().includes(q)) ||
+            (b.title && b.title.toLowerCase().includes(q))
+          );
+        },
+        get totalPages() {
+          return Math.max(1, Math.ceil(this.filteredBooks.length / this.perPage));
+        },
+        get currentPage() {
+          if (this.page > this.totalPages) return this.totalPages;
+          if (this.page < 1) return 1;
+          return this.page;
+        },
+        get pageNumbers() {
+          const pages = [];
+          for (let i = 1; i <= this.totalPages; i++) {
+            pages.push(i);
+          }
+          return pages;
+        },
+        get paginatedBooks() {
+          const p = this.currentPage;
+          const start = (p - 1) * this.perPage;
+          return this.filteredBooks.slice(start, start + this.perPage);
+        },
+        get paginatedIds() {
+          return new Set(this.paginatedBooks.map(b => b.id));
+        },
+        get startIndex() {
+          if (this.filteredBooks.length === 0) return 0;
+          return (this.currentPage - 1) * this.perPage + 1;
+        },
+        get endIndex() {
+          return Math.min(this.currentPage * this.perPage, this.filteredBooks.length);
+        },
+        isRowVisible(id) {
+          return this.paginatedIds.has(id);
+        },
+        prevPage() {
+          if (this.currentPage > 1) {
+            this.page = this.currentPage - 1;
+            this.scrollToTop();
+          }
+        },
+        nextPage() {
+          if (this.currentPage < this.totalPages) {
+            this.page = this.currentPage + 1;
+            this.scrollToTop();
+          }
+        },
+        scrollToTop() {
+          if (this.$refs && this.$refs.tableContainer) {
+            this.$refs.tableContainer.scrollTop = 0;
+          }
+        },
+        init() {
+          this.$watch('search', () => {
+            this.page = 1;
+          });
+          this.$watch('perPage', () => {
+            this.page = 1;
+          });
+        }
+      };
+    }
+  </script>
   {% else %}
   <div class="text-center py-12 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
     <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">

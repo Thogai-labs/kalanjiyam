@@ -363,12 +363,18 @@ def get_folder_contents(
     all_projects: list,
     current_folder: str = "",
     all_known_folders: list[str] | set[str] | None = None,
+    user=None,
+    organization_id: int | None = None,
+    session=None,
 ) -> dict:
     """Calculate breadcrumbs, immediate subfolders with project counts, and direct projects for the given folder level.
 
     :param all_projects: list of Project models or objects with folder_path/folder attributes.
     :param current_folder: normalized folder path of the current level ('' for root).
     :param all_known_folders: optional list or set of known folder paths (including empty folders).
+    :param user: optional current user to filter restricted subfolders.
+    :param organization_id: optional organization id for permission checks.
+    :param session: optional db session.
     :return: dict with:
         - 'current_folder': normalized current path
         - 'breadcrumbs': list of dicts [{'name': '...', 'path': '...'}] from root to current_folder
@@ -454,6 +460,14 @@ def get_folder_contents(
         for seg, count in sorted(subfolders_dict.items(), key=lambda x: x[0].lower())
     ]
 
+    # Filter out subfolders that a restricted user does not have permission to access
+    if user and organization_id:
+        subfolders = [
+            s
+            for s in subfolders
+            if user_can_access_folder(user, s["path"], organization_id, session=session)
+        ]
+
     return {
         "current_folder": norm_current,
         "breadcrumbs": breadcrumbs,
@@ -471,6 +485,7 @@ def get_all_available_folders(
     creator_id=None,
     fingerprint_id=None,
     is_super_admin=False,
+    user=None,
 ) -> list[str]:
     """Collect all normalized folder paths from both ProofFolder and Project.folder.
 
@@ -478,6 +493,7 @@ def get_all_available_folders(
     :param creator_id: optional user id filter.
     :param fingerprint_id: optional guest device fingerprint filter.
     :param is_super_admin: if True, returns all ProofFolder records across organizations.
+    :param user: optional user to filter by access permissions if restricted.
     """
     folders = set()
     from sqlalchemy import false, or_
@@ -542,7 +558,15 @@ def get_all_available_folders(
     except Exception:
         pass
 
-    return sorted(folders, key=lambda s: s.lower())
+    all_folders = sorted(folders, key=lambda s: s.lower())
+    if user and organization_id:
+        if is_user_folder_restricted(user, organization_id, session=session):
+            all_folders = [
+                f
+                for f in all_folders
+                if user_can_access_folder(user, f, organization_id, session=session)
+            ]
+    return all_folders
 
 
 def ensure_proof_folder(
@@ -591,3 +615,234 @@ def ensure_proof_folder(
             if i == len(parts):
                 target_folder = existing
     return target_folder
+
+
+def is_user_folder_restricted(
+    user, organization_id: int | None, session=None
+) -> bool:
+    """Check if the user is subject to folder access restrictions within the organization.
+
+    Default mode: False (user with no access restriction can view all folders).
+    Super admins and org admins for this org are never restricted.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_super_admin", False):
+        return False
+    if getattr(user, "is_org_admin", False) and getattr(
+        user, "organization_id", None
+    ) == organization_id:
+        return False
+    if not organization_id:
+        return False
+
+    if session is None:
+        from kalanjiyam import queries as q
+
+        session = q.get_session()
+
+    from kalanjiyam import database as db
+
+    try:
+        record = (
+            session.query(db.UserFolderRestriction)
+            .filter_by(organization_id=organization_id, user_id=user.id)
+            .first()
+        )
+        if record is not None:
+            return bool(record.is_restricted)
+    except Exception:
+        pass
+
+    return False
+
+
+def get_user_accessible_folder_paths(
+    user, organization_id: int | None, session=None
+) -> set[str] | None:
+    """Return the set of normalized folder paths accessible by the user within an organization.
+
+    Returns None if the user has NO access restrictions (can view all folders in default mode).
+    Returns a set of allowed folder paths if the user is restricted.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return None
+    if getattr(user, "is_super_admin", False):
+        return None
+    if getattr(user, "is_org_admin", False) and getattr(
+        user, "organization_id", None
+    ) == organization_id:
+        return None
+    if not organization_id:
+        return None
+
+    if not is_user_folder_restricted(user, organization_id, session=session):
+        return None
+
+    if session is None:
+        from kalanjiyam import queries as q
+
+        session = q.get_session()
+
+    from kalanjiyam import database as db
+
+    try:
+        records = (
+            session.query(db.ProofFolderAccess.folder_path)
+            .filter_by(organization_id=organization_id, user_id=user.id)
+            .all()
+        )
+        return {normalize_folder_path(r[0]) for r in records if r[0]}
+    except Exception:
+        return set()
+
+
+def user_can_access_folder(
+    user, folder_path: str, organization_id: int | None, session=None
+) -> bool:
+    """Check if the user has permission to access the specified folder.
+
+    Root folder ("") is the buffer zone and is ALWAYS accessible to all users.
+    Users with no access restrictions can access all folders.
+    Restricted users can only access their granted folders, subfolders thereof,
+    or ancestors needed to navigate to their granted folders.
+    """
+    norm = normalize_folder_path(folder_path)
+    if not norm:
+        # Root is the buffer zone and is never restricted
+        return True
+
+    allowed = get_user_accessible_folder_paths(
+        user, organization_id, session=session
+    )
+    if allowed is None:
+        # Default mode: user with no access restriction can view all folders
+        return True
+
+    for p in allowed:
+        if norm == p or norm.startswith(f"{p}/") or p.startswith(f"{norm}/"):
+            return True
+
+    return False
+
+
+def set_user_folder_restriction(
+    session, organization_id: int, user_id: int, is_restricted: bool
+):
+    """Update or create a user's folder restriction mode."""
+    from kalanjiyam import database as db
+
+    rec = (
+        session.query(db.UserFolderRestriction)
+        .filter_by(organization_id=organization_id, user_id=user_id)
+        .first()
+    )
+    if rec:
+        rec.is_restricted = is_restricted
+    else:
+        rec = db.UserFolderRestriction(
+            organization_id=organization_id,
+            user_id=user_id,
+            is_restricted=is_restricted,
+        )
+        session.add(rec)
+
+
+def grant_user_folder_access(
+    session, organization_id: int, user_id: int, folder_path: str
+):
+    """Grant a user access to a specific non-root folder."""
+    norm = normalize_folder_path(folder_path)
+    if not norm:
+        raise ValueError("Root folder cannot be assigned via access control.")
+    from kalanjiyam import database as db
+
+    existing = (
+        session.query(db.ProofFolderAccess)
+        .filter_by(
+            organization_id=organization_id, user_id=user_id, folder_path=norm
+        )
+        .first()
+    )
+    if not existing:
+        new_fa = db.ProofFolderAccess(
+            organization_id=organization_id,
+            user_id=user_id,
+            folder_path=norm,
+        )
+        session.add(new_fa)
+
+
+def revoke_user_folder_access(
+    session, organization_id: int, user_id: int, folder_path: str
+):
+    """Revoke a user's access to a specific folder."""
+    norm = normalize_folder_path(folder_path)
+    if not norm:
+        return
+    from kalanjiyam import database as db
+
+    session.query(db.ProofFolderAccess).filter_by(
+        organization_id=organization_id, user_id=user_id, folder_path=norm
+    ).delete(synchronize_session=False)
+
+
+def get_folder_users_access_summary(
+    session, organization_id: int, folder_path: str
+) -> list[dict]:
+    """Get list of users in organization with their access settings for this folder."""
+    norm_folder = normalize_folder_path(folder_path)
+    from sqlalchemy import func
+
+    from kalanjiyam import database as db
+    from kalanjiyam import queries as q
+
+    users = q.users_in_group(organization_id)
+
+    restrictions = {
+        r.user_id: r.is_restricted
+        for r in session.query(db.UserFolderRestriction)
+        .filter_by(organization_id=organization_id)
+        .all()
+    }
+
+    folder_accesses = {
+        fa.user_id
+        for fa in session.query(db.ProofFolderAccess.user_id)
+        .filter_by(organization_id=organization_id, folder_path=norm_folder)
+        .all()
+    }
+
+    counts = dict(
+        session.query(
+            db.ProofFolderAccess.user_id, func.count(db.ProofFolderAccess.id)
+        )
+        .filter_by(organization_id=organization_id)
+        .group_by(db.ProofFolderAccess.user_id)
+        .all()
+    )
+
+    summary = []
+    for u in users:
+        is_restr = restrictions.get(u.id, False)
+        has_access = u.id in folder_accesses
+        can_access = (not is_restr) or has_access
+        is_adm = (
+            getattr(u, "is_org_admin", False)
+            and getattr(u, "organization_id", None) == organization_id
+        ) or getattr(u, "is_super_admin", False)
+
+        summary.append(
+            {
+                "id": u.id,
+                "username": u.username,
+                "email": u.email,
+                "is_restricted": is_restr,
+                "has_folder_access": has_access,
+                "can_access_folder": can_access,
+                "is_admin": is_adm,
+                "accessible_folders_count": counts.get(u.id, 0),
+            }
+        )
+
+    return summary

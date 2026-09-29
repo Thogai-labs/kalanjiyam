@@ -75,10 +75,22 @@ def validate_user_deletable(model: db.User) -> None:
 def soft_delete_user(model: db.User, session) -> None:
     """Mark user deleted and free username/email for reuse."""
     ts = int(time.time())
-    session.query(db.Group).filter_by(admin_user_id=model.id).update(
-        {db.Group.admin_user_id: None},
-        synchronize_session=False,
-    )
+    for org in session.query(db.Group).filter_by(admin_user_id=model.id).all():
+        other_admin = (
+            session.query(db.User)
+            .join(db.UserGroups, db.User.id == db.UserGroups.user_id)
+            .join(db.User.roles)
+            .filter(
+                db.UserGroups.group_id == org.id,
+                db.Role.name == SiteRole.ORG_ADMIN.value,
+                db.User.id != model.id,
+                db.User.is_deleted.is_(False),
+                db.User.is_banned.is_(False),
+            )
+            .first()
+        )
+        org.admin_user_id = other_admin.id if other_admin else None
+        session.add(org)
     model.username = f"{model.username[:48]}-del-{ts}"
     model.email = f"deleted-{model.id}-{ts}@deleted.invalid"
     model.set_is_deleted(True)
@@ -141,5 +153,28 @@ def sync_user_org_and_roles(form, model: db.User, session, *, is_created: bool) 
     if any(r.name == SiteRole.ORG_ADMIN.value for r in model.roles) and model.organization_id:
         org = session.query(db.Group).filter_by(id=model.organization_id).first()
         if org is not None:
-            org.admin_user_id = model.id
+            if not org.admin_user_id:
+                org.admin_user_id = model.id
             session.add(org)
+
+    # If this user was previously admin_user_id for an org they no longer admin:
+    for prev_org in session.query(db.Group).filter_by(admin_user_id=model.id).all():
+        if (
+            not any(r.name == SiteRole.ORG_ADMIN.value for r in model.roles)
+            or model.organization_id != prev_org.id
+        ):
+            other_admin = (
+                session.query(db.User)
+                .join(db.UserGroups, db.User.id == db.UserGroups.user_id)
+                .join(db.User.roles)
+                .filter(
+                    db.UserGroups.group_id == prev_org.id,
+                    db.Role.name == SiteRole.ORG_ADMIN.value,
+                    db.User.id != model.id,
+                    db.User.is_deleted.is_(False),
+                    db.User.is_banned.is_(False),
+                )
+                .first()
+            )
+            prev_org.admin_user_id = other_admin.id if other_admin else None
+            session.add(prev_org)

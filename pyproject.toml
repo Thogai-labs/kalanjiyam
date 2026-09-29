@@ -94,3 +94,8 @@ ignore = [
 ]
 
 # Cache invalidation to resolve 0-byte corrupt virtualenv files after OS crash
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["test"]
+addopts = "--import-mode=importlib"

@@ -35,6 +35,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
 {% elif name == 'gauge' or name == 'speedometer' %}
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
+{% elif name == 'shield' %}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+{% elif name == 'folder' %}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
 {% endif %}
 {% endmacro %}
 
@@ -93,6 +97,7 @@
   <ul class="space-y-1">
     {{ _nav_link('org_admin_view.index', 'org', _('My organization'), active == 'org', icon_name='building-2') }}
     {{ _nav_link('org_admin_view.create_user', 'create_user', _('Create new user'), active == 'create_user', icon_name='user-plus') }}
+    {{ _nav_link('org_admin_view.access_control', 'access_control', _('Access Control'), active == 'access_control', icon_name='shield') }}
     {{ _nav_link('org_admin_view.user_analytics', 'user_analytics', _('User Analytics'), active == 'user_analytics', icon_name='bar-chart-3') }}
     {{ _nav_link('org_admin_view.cli_batch_ocr', 'cli_batch_ocr', _('OCR & TR Metrics'), active == 'cli_batch_ocr', icon_name='gauge') }}
     {{ _nav_link('org_admin_view.metadata_metrics', 'metadata_metrics', _('Extraction Metrics'), active == 'metadata_metrics', icon_name='gauge') }}

@@ -675,6 +675,11 @@ def move_folder(slug):
         project_org_id = user_organization_id(current_user)
 
     session = q.get_session()
+    if norm_folder and not project_utils.user_can_access_folder(
+        current_user, norm_folder, project_org_id, session=session
+    ):
+        abort(403)
+
     project_.folder = norm_folder
     if norm_folder:
         project_utils.ensure_proof_folder(
