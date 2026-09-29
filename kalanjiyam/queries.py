@@ -425,6 +425,24 @@ def users_in_group(group_id: int) -> list[db.User]:
     )
 
 
+def org_admins_for_group(group_id: int) -> list[db.User]:
+    """Return users with org_admin role that belong to the given group."""
+    session = get_session()
+    return (
+        session.query(db.User)
+        .join(db.UserGroups, db.User.id == db.UserGroups.user_id)
+        .join(db.User.roles)
+        .filter(
+            db.UserGroups.group_id == group_id,
+            db.Role.name == db.SiteRole.ORG_ADMIN.value,
+            db.User.is_deleted.is_(False),
+            db.User.is_banned.is_(False),
+        )
+        .order_by(db.User.username)
+        .all()
+    )
+
+
 def texts_in_group(
     group_id: int, page: int = 1, per_page: int = 20
 ) -> tuple[list[db.Text], int]:

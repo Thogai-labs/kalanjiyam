@@ -272,6 +272,10 @@
                     <span class="inline-flex px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                       {{ _('Primary Admin') }}
                     </span>
+                    {% elif u.is_org_admin %}
+                    <span class="inline-flex px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-50 text-royalblue border border-blue-200">
+                      {{ _('Org Admin') }}
+                    </span>
                     {% endif %}
                   </div>
                 </div>
@@ -292,7 +296,7 @@
                           class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors shadow-xs">
                     <span x-text="editing ? 'Close' : 'Manage'"></span>
                   </button>
-                  {% if u.id != org.admin_user_id %}
+                  {% if u.id != org.admin_user_id and u.id != current_user.id %}
                   <form method="post" action="{{ url_for('org_admin_view.index') }}" onsubmit="return confirm('Remove {{ u.username }} from organization?');">
                     {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
                     <input type="hidden" name="action" value="remove_user">
@@ -331,6 +335,7 @@
                           <option value="p1">{{ _('P1 — Basic proofer') }}</option>
                           <option value="p2">{{ _('P2 — Advanced proofer') }}</option>
                           <option value="moderator">{{ _('Moderator') }}</option>
+                          <option value="org_admin">{{ _('Org Admin') }}</option>
                         </select>
                         <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 shrink-0">
                           {{ _('Update') }}
@@ -338,6 +343,20 @@
                       </div>
                     </form>
                   </div>
+
+                  {% if u.is_org_admin and u.id != org.admin_user_id %}
+                  <div class="pt-2 border-t border-slate-200/80 flex items-center justify-between">
+                    <span class="text-[11px] text-slate-500 font-medium">{{ _('Designate this user as the primary administrator for %(org_name)s.', org_name=org.name) }}</span>
+                    <form method="post" action="{{ url_for('org_admin_view.index') }}">
+                      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+                      <input type="hidden" name="action" value="set_primary_admin">
+                      <input type="hidden" name="user_id" value="{{ u.id }}">
+                      <button type="submit" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold border border-amber-200 transition-colors">
+                        {{ _('Make Primary Admin') }}
+                      </button>
+                    </form>
+                  </div>
+                  {% endif %}
                 </div>
               </td>
             </tr>

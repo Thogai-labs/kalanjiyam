@@ -83,19 +83,42 @@
             {{ u.username[:1] }}
           </div>
           <div class="min-w-0 flex-1">
-            <span class="font-bold text-slate-900 block truncate" title="{{ u.username }}">{{ u.username }}</span>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="font-bold text-slate-900 block truncate" title="{{ u.username }}">{{ u.username }}</span>
+              {% if u.id == group.admin_user_id %}
+              <span class="inline-flex px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                {{ _('Primary Admin') }}
+              </span>
+              {% elif u.is_org_admin %}
+              <span class="inline-flex px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-50 text-royalblue border border-blue-200 shrink-0">
+                {{ _('Org Admin') }}
+              </span>
+              {% endif %}
+            </div>
             <span class="text-slate-400 text-[11px] truncate block" title="{{ u.email }}">{{ u.email }}</span>
           </div>
         </div>
 
-        <form method="post" action="{{ url_for('groups_view.manage', id=group.id) }}" class="shrink-0">
-          {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
-          <input type="hidden" name="action" value="remove_user">
-          <input type="hidden" name="user_id" value="{{ u.id }}">
-          <button type="submit" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-[11px] transition-colors border border-rose-100">
-            {{ _('Remove') }}
-          </button>
-        </form>
+        <div class="flex items-center gap-1.5 shrink-0">
+          {% if u.is_org_admin and u.id != group.admin_user_id %}
+          <form method="post" action="{{ url_for('groups_view.manage', id=group.id) }}" class="shrink-0">
+            {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+            <input type="hidden" name="action" value="set_primary_admin">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+            <button type="submit" class="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-[11px] transition-colors border border-amber-100" title="{{ _('Set as primary admin') }}">
+              {{ _('Make Primary') }}
+            </button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('groups_view.manage', id=group.id) }}" class="shrink-0">
+            {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+            <input type="hidden" name="action" value="remove_user">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+            <button type="submit" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-[11px] transition-colors border border-rose-100">
+              {{ _('Remove') }}
+            </button>
+          </form>
+        </div>
       </div>
       {% endfor %}
     </div>

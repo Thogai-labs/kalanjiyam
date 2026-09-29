@@ -2942,20 +2942,24 @@ class GroupsView(AdminBaseView):
             storage_quota_mb = request.form.get("storage_quota_mb", type=int)
             ocr_credit_limit = request.form.get("ocr_credit_limit", type=int)
             translation_credit_limit = request.form.get("translation_credit_limit", type=int)
+            admin_user_ids = [int(uid) for uid in request.form.getlist("admin_user_ids") if uid]
             admin_user_id = request.form.get("admin_user_id", type=int)
+            if not admin_user_ids and admin_user_id:
+                admin_user_ids = [admin_user_id]
+            primary_admin_id = admin_user_ids[0] if admin_user_ids else None
             has_custom_storage = bool(request.form.get("has_custom_storage"))
             if not name:
                 flash("Name is required.", "error")
-                return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
+                return render_template("admin/group_form.html", group=None, all_users=all_users, admin_user_ids=admin_user_ids, csrf_token=generate_csrf())
             if storage_quota_mb is not None and storage_quota_mb < 0:
                 flash("Storage quota cannot be negative.", "error")
-                return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
+                return render_template("admin/group_form.html", group=None, all_users=all_users, admin_user_ids=admin_user_ids, csrf_token=generate_csrf())
             if ocr_credit_limit is not None and ocr_credit_limit < 0:
                 flash("OCR credit limit cannot be negative.", "error")
-                return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
+                return render_template("admin/group_form.html", group=None, all_users=all_users, admin_user_ids=admin_user_ids, csrf_token=generate_csrf())
             if translation_credit_limit is not None and translation_credit_limit < 0:
                 flash("Translation credit limit cannot be negative.", "error")
-                return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
+                return render_template("admin/group_form.html", group=None, all_users=all_users, admin_user_ids=admin_user_ids, csrf_token=generate_csrf())
 
             # Custom storage fields
             s3_bucket = None
@@ -2981,7 +2985,7 @@ class GroupsView(AdminBaseView):
                 storage_quota_bytes=(storage_quota_mb * 1024 * 1024) if storage_quota_mb else None,
                 ocr_credit_limit=ocr_credit_limit,
                 translation_credit_limit=translation_credit_limit,
-                admin_user_id=admin_user_id,
+                admin_user_id=primary_admin_id,
                 has_custom_storage=has_custom_storage,
                 s3_bucket=s3_bucket,
                 s3_endpoint_url=s3_endpoint_url,
@@ -2991,7 +2995,8 @@ class GroupsView(AdminBaseView):
             )
             session.add(group)
             session.flush()
-            _promote_org_admin(session, group, admin_user_id)
+            for uid in admin_user_ids:
+                _promote_org_admin(session, group, uid)
             session.commit()
 
             # Provision the dedicated S3 bucket after commit so the Group
@@ -3007,7 +3012,7 @@ class GroupsView(AdminBaseView):
 
             flash("Group created.", "success")
             return redirect(url_for("groups_view.manage", id=group.id))
-        return render_template("admin/group_form.html", group=None, all_users=all_users, csrf_token=generate_csrf())
+        return render_template("admin/group_form.html", group=None, all_users=all_users, admin_user_ids=[], csrf_token=generate_csrf())
 
     @expose("/edit/<int:id>", methods=["GET", "POST"])
     def edit(self, id):
@@ -3023,20 +3028,27 @@ class GroupsView(AdminBaseView):
             storage_quota_mb = request.form.get("storage_quota_mb", type=int)
             ocr_credit_limit = request.form.get("ocr_credit_limit", type=int)
             translation_credit_limit = request.form.get("translation_credit_limit", type=int)
+            admin_user_ids = [int(uid) for uid in request.form.getlist("admin_user_ids") if uid]
             admin_user_id = request.form.get("admin_user_id", type=int)
+            if not admin_user_ids and admin_user_id:
+                admin_user_ids = [admin_user_id]
+            if admin_user_ids:
+                primary_admin_id = group.admin_user_id if group.admin_user_id in admin_user_ids else admin_user_ids[0]
+            else:
+                primary_admin_id = None
             has_custom_storage = bool(request.form.get("has_custom_storage"))
             if not name:
                 flash("Name is required.", "error")
-                return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())
+                return render_template("admin/group_form.html", group=group, all_users=all_users, admin_user_ids=admin_user_ids, csrf_token=generate_csrf())
             if not storage_quota_mb is None and storage_quota_mb < 0:
                 flash("Storage quota cannot be negative.", "error")
-                return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())
+                return render_template("admin/group_form.html", group=group, all_users=all_users, admin_user_ids=admin_user_ids, csrf_token=generate_csrf())
             if not ocr_credit_limit is None and ocr_credit_limit < 0:
                 flash("OCR credit limit cannot be negative.", "error")
-                return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())   
+                return render_template("admin/group_form.html", group=group, all_users=all_users, admin_user_ids=admin_user_ids, csrf_token=generate_csrf())   
             if not translation_credit_limit is None and translation_credit_limit < 0:
                 flash("Translation credit limit cannot be negative.", "error")
-                return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())   
+                return render_template("admin/group_form.html", group=group, all_users=all_users, admin_user_ids=admin_user_ids, csrf_token=generate_csrf())   
 
             old_slug = group.slug
             was_custom = group.has_custom_storage
@@ -3047,7 +3059,7 @@ class GroupsView(AdminBaseView):
             group.storage_quota_bytes = (storage_quota_mb * 1024 * 1024) if storage_quota_mb else None
             group.ocr_credit_limit = ocr_credit_limit
             group.translation_credit_limit = translation_credit_limit
-            group.admin_user_id = admin_user_id
+            group.admin_user_id = primary_admin_id
             group.has_custom_storage = has_custom_storage
 
             if has_custom_storage:
@@ -3068,7 +3080,17 @@ class GroupsView(AdminBaseView):
             session = q.get_session()
             session.add(group)
             session.flush()
-            _promote_org_admin(session, group, admin_user_id)
+            for uid in admin_user_ids:
+                _promote_org_admin(session, group, uid)
+
+            # Demote any members of this group who had ORG_ADMIN role but were unselected
+            org_admin_role = session.query(db.Role).filter_by(name=db.SiteRole.ORG_ADMIN.value).first()
+            if org_admin_role:
+                for member in group.users:
+                    if member.id not in admin_user_ids and org_admin_role in member.roles:
+                        member.roles.remove(org_admin_role)
+                        session.add(member)
+
             session.commit()
 
             # Invalidate cached storage instances for both old and new slugs.
@@ -3088,7 +3110,8 @@ class GroupsView(AdminBaseView):
 
             flash("Group updated.", "success")
             return redirect(url_for("groups_view.index"))
-        return render_template("admin/group_form.html", group=group, all_users=all_users, csrf_token=generate_csrf())
+        admin_user_ids = [u.id for u in group.admin_users]
+        return render_template("admin/group_form.html", group=group, all_users=all_users, admin_user_ids=admin_user_ids, csrf_token=generate_csrf())
 
     @expose("/delete/<int:id>", methods=["POST"])
     def delete(self, id):
@@ -3122,8 +3145,39 @@ class GroupsView(AdminBaseView):
             elif action == "remove_user":
                 user_id = request.form.get("user_id", type=int)
                 if user_id:
+                    session = q.get_session()
+                    if user_id == group.admin_user_id:
+                        other_admin = (
+                            session.query(db.User)
+                            .join(db.UserGroups, db.User.id == db.UserGroups.user_id)
+                            .join(db.User.roles)
+                            .filter(
+                                db.UserGroups.group_id == id,
+                                db.Role.name == db.SiteRole.ORG_ADMIN.value,
+                                db.User.id != user_id,
+                                db.User.is_deleted.is_(False),
+                                db.User.is_banned.is_(False),
+                            )
+                            .first()
+                        )
+                        group.admin_user_id = other_admin.id if other_admin else None
+                        session.add(group)
+                        session.commit()
                     q.remove_user_from_group(user_id=user_id, group_id=id)
                     flash("User removed from group.", "success")
+            elif action == "set_primary_admin":
+                user_id = request.form.get("user_id", type=int)
+                if user_id:
+                    session = q.get_session()
+                    target_user = session.query(db.User).filter_by(id=user_id).first()
+                    in_group = session.query(db.UserGroups).filter_by(user_id=user_id, group_id=id).first()
+                    if target_user and in_group and target_user.is_org_admin:
+                        group.admin_user_id = target_user.id
+                        session.add(group)
+                        session.commit()
+                        flash(f'"{target_user.username}" is now designated as the primary admin.', "success")
+                    else:
+                        flash("User must be an organization admin in this group.", "error")
             elif action == "add_project":
                 project_id = request.form.get("project_id", type=int)
                 if project_id:
@@ -3256,9 +3310,20 @@ class OrgAdminView(AdminBaseView):
                         flash("User added to organization.", "success")
             elif action == "remove_user":
                 user_id = request.form.get("user_id", type=int)
-                if user_id and user_id != org.admin_user_id:
-                    q.remove_user_from_group(user_id=user_id, group_id=org.id)
-                    flash("User removed from organization.", "success")
+                if user_id:
+                    if user_id == org.admin_user_id:
+                        flash("Cannot remove the primary organization administrator.", "error")
+                    elif user_id == current_user.id:
+                        flash("You cannot remove yourself from the organization.", "error")
+                    else:
+                        target_user = session.query(db.User).filter_by(id=user_id).first()
+                        if target_user:
+                            org_role = session.query(db.Role).filter_by(name=db.SiteRole.ORG_ADMIN.value).first()
+                            if org_role and org_role in target_user.roles:
+                                target_user.roles.remove(org_role)
+                                session.add(target_user)
+                        q.remove_user_from_group(user_id=user_id, group_id=org.id)
+                        flash("User removed from organization.", "success")
             elif action == "change_password":
                 user_id = request.form.get("user_id", type=int)
                 new_password = (request.form.get("new_password") or "").strip()
@@ -3277,7 +3342,12 @@ class OrgAdminView(AdminBaseView):
             elif action == "change_role":
                 user_id = request.form.get("user_id", type=int)
                 role_name = (request.form.get("role_name") or "").strip()
-                allowed_roles = {db.SiteRole.P1.value, db.SiteRole.P2.value, db.SiteRole.MODERATOR.value}
+                allowed_roles = {
+                    db.SiteRole.P1.value,
+                    db.SiteRole.P2.value,
+                    db.SiteRole.MODERATOR.value,
+                    db.SiteRole.ORG_ADMIN.value,
+                }
                 if not user_id or role_name not in allowed_roles:
                     flash("Invalid role.", "error")
                 else:
@@ -3288,11 +3358,45 @@ class OrgAdminView(AdminBaseView):
                         if new_role:
                             user.roles = [r for r in user.roles if r.name not in allowed_roles]
                             user.roles.append(new_role)
+                            if role_name == db.SiteRole.ORG_ADMIN.value:
+                                user.organization_id = org.id
+                                if not org.admin_user_id:
+                                    org.admin_user_id = user.id
+                                    session.add(org)
+                            elif user.id == org.admin_user_id:
+                                # Primary admin demoted; reassign to another org admin if available
+                                other_admin = (
+                                    session.query(db.User)
+                                    .join(db.UserGroups, db.User.id == db.UserGroups.user_id)
+                                    .join(db.User.roles)
+                                    .filter(
+                                        db.UserGroups.group_id == org.id,
+                                        db.Role.name == db.SiteRole.ORG_ADMIN.value,
+                                        db.User.id != user.id,
+                                        db.User.is_deleted.is_(False),
+                                        db.User.is_banned.is_(False),
+                                    )
+                                    .first()
+                                )
+                                org.admin_user_id = other_admin.id if other_admin else None
+                                session.add(org)
                             session.add(user)
                             session.commit()
                             flash(f'Role updated for "{user.username}".', "success")
                     else:
                         flash("User not found in this organization.", "error")
+            elif action == "set_primary_admin":
+                user_id = request.form.get("user_id", type=int)
+                if user_id:
+                    target_user = session.query(db.User).filter_by(id=user_id).first()
+                    in_org = session.query(db.UserGroups).filter_by(user_id=user_id, group_id=org.id).first()
+                    if target_user and in_org and target_user.is_org_admin:
+                        org.admin_user_id = target_user.id
+                        session.add(org)
+                        session.commit()
+                        flash(f'"{target_user.username}" is now designated as primary admin.', "success")
+                    else:
+                        flash("Target user must be an organization admin in this organization.", "error")
             elif action == "add_project":
                 project_id = request.form.get("project_id", type=int)
                 if project_id:
@@ -3370,7 +3474,12 @@ class OrgAdminView(AdminBaseView):
             password = (request.form.get("password") or "").strip()
             role_name = (request.form.get("role_name") or db.SiteRole.P1.value).strip()
 
-            allowed_roles = {db.SiteRole.P1.value, db.SiteRole.P2.value, db.SiteRole.MODERATOR.value}
+            allowed_roles = {
+                db.SiteRole.P1.value,
+                db.SiteRole.P2.value,
+                db.SiteRole.MODERATOR.value,
+                db.SiteRole.ORG_ADMIN.value,
+            }
             if role_name not in allowed_roles:
                 role_name = db.SiteRole.P1.value
 
@@ -3392,6 +3501,9 @@ class OrgAdminView(AdminBaseView):
                     role = session.query(db.Role).filter_by(name=role_name).first()
                     if role:
                         user.roles.append(role)
+                    if role_name == db.SiteRole.ORG_ADMIN.value and not org.admin_user_id:
+                        org.admin_user_id = user.id
+                        session.add(org)
                     session.add(user)
                     session.flush()
                     session.add(db.UserGroups(user_id=user.id, group_id=org.id))
