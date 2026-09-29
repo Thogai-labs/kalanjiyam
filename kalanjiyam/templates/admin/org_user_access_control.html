@@ -74,78 +74,29 @@
     <input type="hidden" name="folders" :value="f">
   </template>
 
-  <!-- 1. Restriction Mode Selection Card -->
-  <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 mb-6">
-    <div class="pb-3 mb-4 border-b border-slate-100">
-      <h2 class="text-sm font-bold text-slate-900">{{ _('Folder Access Mode') }}</h2>
-      <p class="text-xs text-slate-500 font-medium mt-0.5">
-        {{ _('Choose whether this user has unrestricted access to all organization folders or is restricted to specific folders.') }}
-      </p>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <!-- Default Mode Option -->
-      <label class="relative flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all duration-150"
-             :class="mode === 'default' ? 'border-royalblue bg-blue-50/40 shadow-xs' : 'border-slate-200 hover:border-slate-300 bg-white'">
-        <div class="flex items-center justify-between gap-3 mb-1.5">
-          <div class="flex items-center gap-2.5">
-            <input type="radio"
-                   name="restriction_mode"
-                   value="default"
-                   x-model="mode"
-                   class="w-4 h-4 text-royalblue border-slate-300 focus:ring-royalblue">
-            <span class="font-bold text-slate-900 text-sm">{{ _('Default Mode (All Folders)') }}</span>
-          </div>
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            {{ _('Unrestricted') }}
-          </span>
-        </div>
-        <p class="text-xs text-slate-500 pl-6.5 leading-relaxed">
-          {{ _('User can view and work within all folders across the organization. Root directory and all subfolders are open.') }}
-        </p>
-      </label>
-
-      <!-- Restricted Mode Option -->
-      <label class="relative flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all duration-150"
-             :class="mode === 'restricted' ? 'border-royalblue bg-blue-50/40 shadow-xs' : 'border-slate-200 hover:border-slate-300 bg-white'">
-        <div class="flex items-center justify-between gap-3 mb-1.5">
-          <div class="flex items-center gap-2.5">
-            <input type="radio"
-                   name="restriction_mode"
-                   value="restricted"
-                   x-model="mode"
-                   class="w-4 h-4 text-royalblue border-slate-300 focus:ring-royalblue">
-            <span class="font-bold text-slate-900 text-sm">{{ _('Restricted Mode (Specific Folders)') }}</span>
-          </div>
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-            {{ _('Restricted') }}
-          </span>
-        </div>
-        <p class="text-xs text-slate-500 pl-6.5 leading-relaxed">
-          {{ _('User can ONLY access folders explicitly checked in the list below. Root folder remains open as a navigation buffer zone.') }}
-        </p>
-      </label>
-    </div>
-  </div>
-
-  <!-- 2. Folder Permissions Selection Card -->
+  <!-- Folder Permissions Selection Card -->
   <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 mb-6">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-100">
       <div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2.5">
           <h2 class="text-sm font-bold text-slate-900">{{ _('Folder Permissions') }}</h2>
-          <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600">
-            <span x-text="selectedFolders.length"></span> / <span x-text="folders.length"></span> {{ _('selected') }}
+          <!-- Dynamic Mode Status Badge -->
+          <span x-show="mode === 'default'"
+                class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            {{ _('Default Mode (All Folders)') }}
+          </span>
+          <span x-show="mode === 'restricted'"
+                class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            {{ _('Restricted Mode') }} (<span x-text="selectedFolders.length"></span> {{ _('selected') }})
           </span>
         </div>
-        <p class="text-xs text-slate-500 font-medium mt-0.5" x-show="mode === 'restricted'">
-          {{ _('Check the box next to each folder %(username)s should be authorized to access.', username=target_user.username) }}
+        <p class="text-xs text-slate-500 font-medium mt-1" x-show="mode === 'default'">
+          {{ _('No folders checked. %(username)s has unrestricted access to all organization folders.', username=target_user.username) }}
         </p>
-        <p class="text-xs text-slate-400 font-medium mt-0.5" x-show="mode === 'default'">
-          <span class="text-emerald-600 font-semibold">{{ _('Default Mode active:') }}</span>
-          {{ _('All folders are accessible. Checkboxes below will define specific access if switched to Restricted Mode.') }}
+        <p class="text-xs text-slate-500 font-medium mt-1" x-show="mode === 'restricted'">
+          {{ _('%(username)s will be restricted to only access the checked folder(s) below. Uncheck all to restore Default Mode.', username=target_user.username) }}
         </p>
       </div>
 
@@ -413,15 +364,15 @@
       }
     }
 
-    const serverMode = {{ ('restricted' if is_restricted else 'default')|tojson }};
-
     return {
-      mode: serverMode,
       selectedFolders: initialGranted,
       folders: initialFolders,
       search: '',
       page: 1,
       perPage: 10,
+      get mode() {
+        return this.selectedFolders.length > 0 ? 'restricted' : 'default';
+      },
       toggleFolder(path) {
         const idx = this.selectedFolders.indexOf(path);
         if (idx > -1) {

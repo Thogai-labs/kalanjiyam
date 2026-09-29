@@ -68,8 +68,11 @@ def _promote_org_admin(session, org: db.Group, admin_user_id: int | None) -> Non
     if org_admin_role and org_admin_role not in user.roles:
         user.roles.append(org_admin_role)
     user.organization_id = org.id
-    session.query(db.UserGroups).filter_by(user_id=user.id).delete()
-    session.add(db.UserGroups(user_id=user.id, group_id=org.id))
+    open_tenant = session.query(db.Group).filter_by(slug="open-tenant").first()
+    if open_tenant and org.slug != "open-tenant":
+        session.query(db.UserGroups).filter_by(user_id=user.id, group_id=open_tenant.id).delete()
+    if not session.query(db.UserGroups).filter_by(user_id=user.id, group_id=org.id).first():
+        session.add(db.UserGroups(user_id=user.id, group_id=org.id))
     session.add(user)
 
 
@@ -3495,21 +3498,20 @@ class OrgAdminView(AdminBaseView):
             abort(404)
 
         if request.method == "POST":
-            restriction_mode = (request.form.get("restriction_mode") or "default").strip().lower()
             selected_folders = request.form.getlist("folders")
+            valid_paths = set()
+            for p in selected_folders:
+                norm = project_utils.normalize_folder_path(p)
+                if norm:
+                    valid_paths.add(norm)
 
-            if restriction_mode == "restricted":
+            if valid_paths:
+                # Dynamic: Any checkbox checked -> Restricted Mode (Specific Folders)
                 project_utils.set_user_folder_restriction(session, org.id, target_user.id, True)
 
                 session.query(db.ProofFolderAccess).filter_by(
                     organization_id=org.id, user_id=target_user.id
                 ).delete(synchronize_session=False)
-
-                valid_paths = set()
-                for p in selected_folders:
-                    norm = project_utils.normalize_folder_path(p)
-                    if norm:
-                        valid_paths.add(norm)
 
                 for norm in sorted(valid_paths):
                     session.add(
@@ -3525,13 +3527,14 @@ class OrgAdminView(AdminBaseView):
                     "success",
                 )
             else:
+                # Dynamic: None checked -> Default Mode (All Folders)
                 project_utils.set_user_folder_restriction(session, org.id, target_user.id, False)
                 session.query(db.ProofFolderAccess).filter_by(
                     organization_id=org.id, user_id=target_user.id
                 ).delete(synchronize_session=False)
                 session.commit()
                 flash(
-                    f'"{target_user.username}" reset to Default Mode (access to All Folders).',
+                    f'"{target_user.username}" set to Default Mode (access to All Folders).',
                     "success",
                 )
 

@@ -128,15 +128,15 @@ def test_org_admin_user_access_control_get_and_post_flows(flask_app):
         assert resp.status_code == 200
         html = resp.data.decode("utf-8")
         assert "target_member" in html
-        assert "Folder Access Mode" in html
+        assert "Folder Permissions" in html
+        assert "Default Mode (All Folders)" in html
         assert "literature/poetry" in html
         assert "history/ancient" in html
 
-        # 2. POST to set restricted mode with literature/poetry
+        # 2. POST with folder checked -> dynamically activates Restricted Mode
         post_resp = client.post(
             url,
             data={
-                "restriction_mode": "restricted",
                 "folders": ["literature/poetry"],
             },
             follow_redirects=True,
@@ -148,12 +148,10 @@ def test_org_admin_user_access_control_get_and_post_flows(flask_app):
         granted = project_utils.get_user_accessible_folder_paths(target_user, org.id, session=session)
         assert granted == {"literature/poetry"}
 
-        # 3. POST to switch back to default mode
+        # 3. POST with no folders checked -> dynamically reverts to Default Mode
         post_resp2 = client.post(
             url,
-            data={
-                "restriction_mode": "default",
-            },
+            data={},
             follow_redirects=True,
         )
         assert post_resp2.status_code == 200
