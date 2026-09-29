@@ -883,7 +883,7 @@
             </svg>
             <div class="space-y-0.5 leading-relaxed">
               <span class="font-bold text-blue-950">{{ _('Buffer Zone & Default Mode:') }}</span>
-              <span>{{ _('Root folder is the buffer zone and remains accessible to everyone. Users with default mode (no restriction) can view all folders. Set a user to "Restricted" to grant access only to specific folders.') }}</span>
+              <span>{{ _('Root folder is the buffer zone and remains accessible to everyone. Users with default mode (no restriction) can view all folders. Set a user to "This folder" to grant access only to specific folders.') }}</span>
             </div>
           </div>
         </div>
@@ -956,7 +956,7 @@
                       class="text-xs font-semibold rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700 focus:outline-none focus:border-royalblue"
                     >
                       <option value="default">{{ _('Default (All Folders)') }}</option>
-                      <option value="restricted">{{ _('Restricted Mode') }}</option>
+                      <option value="restricted">{{ _('This folder') }}</option>
                     </select>
 
                     <!-- Folder Access Checkbox (Active when Restricted) -->
