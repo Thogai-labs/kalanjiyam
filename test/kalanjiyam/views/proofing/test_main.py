@@ -252,8 +252,34 @@ def test_admin_dashboard_redis_cache(moderator_client, monkeypatch):
 
 
 def test_create_project__unauth(client):
+    # Guest user can access create-project and see workspace link when guest access is enabled
     resp = client.get("/proofing/create-project")
-    assert resp.status_code in (200, 302)
+    assert resp.status_code == 200
+
+    workspace_resp = client.get("/proofing/")
+    assert resp.status_code == 200
+    assert b"/proofing/create-project" in workspace_resp.data
+
+
+def test_create_project__registered_user(flask_app):
+    # Self-registered user under open-tenant gets REGISTERED_USER role and can create projects
+    from kalanjiyam import queries as q
+
+    with flask_app.app_context():
+        user = q.create_user(
+            username="registered_creator",
+            email="regcreator@example.com",
+            raw_password="pass123",
+        )
+        assert user.is_registered_user
+        assert user.can_create_project
+
+        reg_client = flask_app.test_client(user=user)
+        resp = reg_client.get("/proofing/create-project")
+        assert resp.status_code == 200
+
+        workspace_resp = reg_client.get("/proofing/")
+        assert b"/proofing/create-project" in workspace_resp.data
 
 
 def test_create_project__auth(rama_client, moderator_client):

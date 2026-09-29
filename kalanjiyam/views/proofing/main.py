@@ -1228,14 +1228,10 @@ def create_project():
     settings = q.get_system_settings()
     guest_upload_limit = getattr(settings, "unregistered_user_upload_limit", 10)
 
-    # Authorization checks: only moderators, org admins, master users, and super admins can create projects
+    # Authorization checks: moderators, org admins, master users, super admins,
+    # registered users, and guest users (when enabled) can create projects.
     if current_user.is_authenticated:
-        allowed = getattr(current_user, "can_create_project", False) or (
-            getattr(current_user, "is_moderator", False)
-            or getattr(current_user, "is_master_user", False)
-            or getattr(current_user, "is_org_admin", False)
-            or getattr(current_user, "is_super_admin", False)
-        )
+        allowed = getattr(current_user, "can_create_project", False)
     else:
         allowed = bool(current_app.config.get("ENABLE_GUEST_ACCESS", True))
 

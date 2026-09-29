@@ -21,6 +21,7 @@ def p2_required(func: Callable):
             or getattr(current_user, "is_master_user", False)
             or getattr(current_user, "is_org_admin", False)
             or getattr(current_user, "is_super_admin", False)
+            or getattr(current_user, "is_registered_user", False)
         )
         if is_p2_or_admin:
             return current_app.ensure_sync(func)(*args, **kwargs)

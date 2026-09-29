@@ -155,6 +155,10 @@ def _make_role_form(roles, user_):
         SiteRole.P2: _l("Proofreading 2 (can make pages green)"),
         SiteRole.MODERATOR: _l("Moderator"),
         SiteRole.MASTER_USER: _l("Master User (multi-organization access)"),
+        SiteRole.ORG_ADMIN: _l("Organization Administrator"),
+        SiteRole.SUPER_ADMIN: _l("Super Administrator"),
+        SiteRole.GUEST: _l("Guest"),
+        SiteRole.REGISTERED_USER: _l("Registered User (Open Tenant)"),
     }
     # We're mutating a global object, but this is safe because we're doing so
     # in an idempotent way.

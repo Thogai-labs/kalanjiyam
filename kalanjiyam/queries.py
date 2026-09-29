@@ -319,11 +319,15 @@ def create_user(*, username: str, email: str, raw_password: str) -> db.User:
     session.add(user)
     session.flush()
 
-    # Allow all users to be proofreaders
-    proofreader_role = (
-        session.query(db.Role).filter_by(name=db.SiteRole.P1.value).first()
+    # Assign registered user role under open tenant
+    registered_role = (
+        session.query(db.Role).filter_by(name=db.SiteRole.REGISTERED_USER.value).first()
     )
-    user_role = db.UserRoles(user_id=user.id, role_id=proofreader_role.id)
+    if not registered_role:
+        registered_role = db.Role(name=db.SiteRole.REGISTERED_USER.value)
+        session.add(registered_role)
+        session.flush()
+    user_role = db.UserRoles(user_id=user.id, role_id=registered_role.id)
     session.add(user_role)
 
     # Also add user to the default tenant group
@@ -478,6 +482,22 @@ def add_user_to_group(user_id: int, group_id: int) -> None:
     user = session.query(db.User).filter_by(id=user_id).first()
     if user is not None:
         user.organization_id = group_id
+        # When moving an open-tenant registered user into an organization, migrate their role to P1 (proofreader)
+        if target_group and target_group.slug != "open-tenant":
+            reg_role = (
+                session.query(db.Role)
+                .filter_by(name=db.SiteRole.REGISTERED_USER.value)
+                .first()
+            )
+            if reg_role and reg_role in user.roles:
+                user.roles.remove(reg_role)
+                p1_role = (
+                    session.query(db.Role)
+                    .filter_by(name=db.SiteRole.P1.value)
+                    .first()
+                )
+                if p1_role and p1_role not in user.roles:
+                    user.roles.append(p1_role)
         session.add(user)
     session.commit()
 

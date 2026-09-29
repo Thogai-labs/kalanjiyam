@@ -544,6 +544,7 @@
               {% if current_user.is_super_admin %}Super Admin
               {% elif current_user.is_org_admin %}Org Admin
               {% elif current_user.is_moderator %}Moderator
+              {% elif current_user.is_registered_user %}Registered User
               {% else %}Member{% endif %}
             </div>
           </div>

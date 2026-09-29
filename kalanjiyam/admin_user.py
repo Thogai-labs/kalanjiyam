@@ -19,6 +19,7 @@ WEB_ASSIGNABLE_ROLES = (
     SiteRole.MODERATOR.value,
     SiteRole.MASTER_USER.value,
     SiteRole.ORG_ADMIN.value,
+    SiteRole.REGISTERED_USER.value,
 )
 
 

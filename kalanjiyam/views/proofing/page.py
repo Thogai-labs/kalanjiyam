@@ -30,7 +30,7 @@ from wtforms.widgets import TextArea
 
 from kalanjiyam import database as db
 from kalanjiyam import queries as q
-from kalanjiyam.enums import SitePageStatus
+from kalanjiyam.enums import SitePageStatus, SiteRole
 from kalanjiyam.utils import project_utils
 from kalanjiyam.utils.assets import get_page_image_filepath
 from kalanjiyam.utils.diff import revision_diff
@@ -252,6 +252,10 @@ def get_version_display_name(version_key: str) -> str:
                     role_str = "Moderator"
                 elif u.is_p2:
                     role_str = "P2"
+                elif u.has_role(SiteRole.P1):
+                    role_str = "P1"
+                elif u.is_registered_user:
+                    role_str = "Registered User"
                 elif u.is_p1:
                     role_str = "P1"
                 else:

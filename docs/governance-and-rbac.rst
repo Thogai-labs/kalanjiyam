@@ -17,8 +17,10 @@ User Roles
 
 The system defines the following roles (configured in :class:`kalanjiyam.enums.SiteRole`):
 
-* **P1 (Basic Proofer)**: Entry-level proofreader. Can mark page proofing state as reviewed-1 (Yellow / R1).
-* **P2 (Advanced Proofer)**: Senior proofreader. Can mark page state as reviewed-2 (Green / R2) and perform batch operations across project pages.
+* **GUEST**: Unregistered visitor under open-tenant. Can browse public projects, proofread their own guest projects, and create projects under open-tenant when guest access is enabled.
+* **REGISTERED_USER**: Self-registered individual user under open-tenant (without enterprise organization membership). Can proofread pages, edit text, and create projects within open-tenant.
+* **P1 (Basic Proofer)**: Organization entry-level proofreader. Can mark page proofing state as reviewed-1 (Yellow / R1). Cannot create projects.
+* **P2 (Advanced Proofer)**: Organization senior proofreader. Can mark page state as reviewed-2 (Green / R2) and perform batch operations across project pages. Cannot create projects.
 * **MODERATOR**: Proofing effort coordinator. Can create and upload projects, manage project deletion, promote or restrict users within proofing scope, and run global batch operations.
 * **ADMIN**: Organization administrator. Has full access to database records, project lifecycle management, and organization settings within assigned tenant scope.
 * **ORG_ADMIN**: Dedicated organization manager. Manages tenant-specific users, project creation/allocations, and organization settings.
@@ -27,35 +29,38 @@ The system defines the following roles (configured in :class:`kalanjiyam.enums.S
 RBAC Permissions Matrix
 -----------------------
 
-+-------------------------------------+----+----+-----------+-------+-----------+-------------+
-| Capability / Feature                | P1 | P2 | MODERATOR | ADMIN | ORG_ADMIN | SUPER_ADMIN |
-+=====================================+====+====+===========+=======+===========+=============+
-| View Public Projects & Pages        | Yes| Yes| Yes       | Yes   | Yes       | Yes         |
-+-------------------------------------+----+----+-----------+-------+-----------+-------------+
-| Edit OCR Text (R0 -> R1)            | Yes| Yes| Yes       | Yes   | Yes       | Yes         |
-+-------------------------------------+----+----+-----------+-------+-----------+-------------+
-| Verify & Lock Proofing (R1 -> R2)   | No | Yes| Yes       | Yes   | Yes       | Yes         |
-+-------------------------------------+----+----+-----------+-------+-----------+-------------+
-| Upload New Books / PDF Projects     | No | No | Yes       | Yes   | Yes       | Yes         |
-+-------------------------------------+----+----+-----------+-------+-----------+-------------+
-| Trigger OCR Batch Re-processing     | No | Yes| Yes       | Yes   | Yes       | Yes         |
-+-------------------------------------+----+----+-----------+-------+-----------+-------------+
-| Delete Projects / Pages             | No | No | Yes       | Yes   | Yes       | Yes         |
-+-------------------------------------+----+----+-----------+-------+-----------+-------------+
-| Manage Organization Users           | No | No | No        | Yes   | Yes       | Yes         |
-+-------------------------------------+----+----+-----------+-------+-----------+-------------+
-| Configure Tenant Quotas & Storage   | No | No | No        | No    | No        | Yes         |
-+-------------------------------------+----+----+-----------+-------+-----------+-------------+
-| Access System Metrics & Logs        | No | No | No        | Yes   | Yes       | Yes         |
-+-------------------------------------+----+----+-----------+-------+-----------+-------------+
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
+| Capability / Feature                | GUEST | REGISTERED_USER | P1 | P2 | MODERATOR | ADMIN | ORG_ADMIN | SUPER_ADMIN |
++=====================================+=======+=================+====+====+===========+=======+===========+=============+
+| View Public Projects & Pages        | Yes   | Yes             | Yes| Yes| Yes       | Yes   | Yes       | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
+| Edit OCR Text (R0 -> R1)            | Own*  | Yes             | Yes| Yes| Yes       | Yes   | Yes       | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
+| Verify & Lock Proofing (R1 -> R2)   | No    | No              | No | Yes| Yes       | Yes   | Yes       | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
+| Upload New Books / PDF Projects     | Yes*  | Yes             | No | No | Yes       | Yes   | Yes       | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
+| Trigger OCR Batch Re-processing     | No    | No              | No | Yes| Yes       | Yes   | Yes       | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
+| Delete Projects / Pages             | Own*  | No              | No | No | Yes       | Yes   | Yes       | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
+| Manage Organization Users           | No    | No              | No | No | No        | Yes   | Yes       | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
+| Configure Tenant Quotas & Storage   | No    | No              | No | No | No        | No    | No        | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
+| Access System Metrics & Logs        | No    | No              | No | No | No        | Yes   | Yes       | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
+
+\* *For Guest users, permissions apply to their own guest-created projects (device fingerprint matched) and project creation is subject to platform guest access enablement and daily guest limits.*
 
 Tenant Governance Rules
 -----------------------
 
 1. **Multi-Tenant Data Isolation**: Users assigned to an organization can only read/modify resources (books, OCR tasks, analytics) belonging to their tenant organization unless explicitly granted system-wide `SUPER_ADMIN` privileges.
-2. **Proofing Integrity Standard**: Pages marked as `R2` (reviewed-2) require validation from a user with at least `P2` role to ensure quality standards for published catalog items.
-3. **Resource & Quota Limits**: OCR processing jobs and cloud storage allocations per organization are governed by tenant quotas enforced at the `SUPER_ADMIN` level.
-4. **Source File Retention Policy**: Uploaded source `.pdf`, `.docx`, and `.doc` files are stored upon upload. When `AUTO_UPLOADED_FILES_CLEANUP` is enabled in `.env`, uploaded source document files older than 7 days are automatically purged to optimize storage, as all extracted pages and textual data are permanently persisted in the database.
+2. **Open Tenant Scope**: Self-registered users and guest users operate under the open-tenant. They enjoy community creation and proofreading features without access to enterprise organization resources.
+3. **Proofing Integrity Standard**: Pages marked as `R2` (reviewed-2) require validation from a user with at least `P2` role to ensure quality standards for published catalog items.
+4. **Resource & Quota Limits**: OCR processing jobs and cloud storage allocations per organization are governed by tenant quotas enforced at the `SUPER_ADMIN` level.
+5. **Source File Retention Policy**: Uploaded source `.pdf`, `.docx`, and `.doc` files are stored upon upload. When `AUTO_UPLOADED_FILES_CLEANUP` is enabled in `.env`, uploaded source document files older than 7 days are automatically purged to optimize storage, as all extracted pages and textual data are permanently persisted in the database.
 
 Governance & Rule Change Log
 ----------------------------
@@ -72,4 +77,7 @@ This section records all modifications to access control rules, role definitions
 +------------+----------------------+------------------------------------+---------------------------------------------------+--------------+
 | 2026-09-29 | P1, P2, Moderator,   | Restrict project creation to       | Protect org quotas & catalog structure; P1/P2 are | Architecture |
 |            | Org Admin            | Moderator, Org Admin, Super Admin  | proofreaders and reviewers, not upload managers   |              |
++------------+----------------------+------------------------------------+---------------------------------------------------+--------------+
+| 2026-09-29 | Guest, Registered    | Introduce explicit Guest and       | Separate open-tenant community users from org     | Architecture |
+|            | User Roles           | Registered User roles              | proofreaders; retain open-tenant project creation |              |
 +------------+----------------------+------------------------------------+---------------------------------------------------+--------------+

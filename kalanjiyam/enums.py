@@ -18,6 +18,10 @@ class SiteRole(str, Enum):
     SUPER_ADMIN = "super_admin"
     #: Organization-level administrator.
     ORG_ADMIN = "org_admin"
+    #: Guest user (unauthenticated visitor under open-tenant).
+    GUEST = "guest"
+    #: Registered user (self-registered user under open-tenant).
+    REGISTERED_USER = "registered_user"
 
 
 class SitePageStatus(str, Enum):
