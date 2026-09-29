@@ -1,0 +1,524 @@
+{% extends 'admin/master.html' %}
+{% import 'macros/admin.html' as admin %}
+
+{% block title %}{{ target_user.username }} - {{ _('Access Control') }} | {{ org.name }} | {{ _('Admin Console') }}{% endblock %}
+
+{% block admin_sidebar %}
+{{ admin.nav('access_control', current_user) }}
+{% endblock %}
+
+{% block content %}
+<!-- Header & Breadcrumbs -->
+<div class="mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200/80">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0">
+        {{ admin.icon('shield', class='w-5 h-5') }}
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+            {{ target_user.username }}
+          </h1>
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-royalblue border border-blue-200">
+            {{ org.name }}
+          </span>
+          {% if target_user.id == org.admin_user_id %}
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+            {{ _('Primary Admin') }}
+          </span>
+          {% elif is_admin %}
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-royalblue border border-blue-200">
+            {{ _('Org Admin') }}
+          </span>
+          {% endif %}
+        </div>
+        <p class="text-xs text-slate-500 font-medium mt-0.5">
+          {{ target_user.email }} &bull; {{ _('Configure folder restriction mode and access permissions.') }}
+        </p>
+      </div>
+    </div>
+
+    <div>
+      <a href="{{ url_for('org_admin_view.access_control') }}"
+         class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-royalblue text-xs font-semibold transition-all shadow-xs">
+        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        <span>{{ _('Back to Members List') }}</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+{% if is_admin %}
+<div class="mb-6 p-4 rounded-xl bg-blue-50/60 border border-blue-100 flex items-start gap-3 text-xs text-slate-700">
+  <svg class="w-4 h-4 text-royalblue shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+  </svg>
+  <div>
+    <span class="font-bold text-slate-900">{{ _('Note regarding Organization Administrators:') }}</span>
+    {{ _('This user is an administrator and inherently has full access to all organization projects and folders.') }}
+  </div>
+</div>
+{% endif %}
+
+<!-- Access Control Form Card -->
+<form method="post"
+      action="{{ url_for('org_admin_view.user_access_control', user_id=target_user.id) }}"
+      x-data="userFolderAccessManager()">
+  {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
+
+  <!-- Hidden inputs to submit all selected folders regardless of pagination or active search -->
+  <template x-for="f in selectedFolders" :key="f">
+    <input type="hidden" name="folders" :value="f">
+  </template>
+
+  <!-- 1. Restriction Mode Selection Card -->
+  <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 mb-6">
+    <div class="pb-3 mb-4 border-b border-slate-100">
+      <h2 class="text-sm font-bold text-slate-900">{{ _('Folder Access Mode') }}</h2>
+      <p class="text-xs text-slate-500 font-medium mt-0.5">
+        {{ _('Choose whether this user has unrestricted access to all organization folders or is restricted to specific folders.') }}
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Default Mode Option -->
+      <label class="relative flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all duration-150"
+             :class="mode === 'default' ? 'border-royalblue bg-blue-50/40 shadow-xs' : 'border-slate-200 hover:border-slate-300 bg-white'">
+        <div class="flex items-center justify-between gap-3 mb-1.5">
+          <div class="flex items-center gap-2.5">
+            <input type="radio"
+                   name="restriction_mode"
+                   value="default"
+                   x-model="mode"
+                   class="w-4 h-4 text-royalblue border-slate-300 focus:ring-royalblue">
+            <span class="font-bold text-slate-900 text-sm">{{ _('Default Mode (All Folders)') }}</span>
+          </div>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            {{ _('Unrestricted') }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 pl-6.5 leading-relaxed">
+          {{ _('User can view and work within all folders across the organization. Root directory and all subfolders are open.') }}
+        </p>
+      </label>
+
+      <!-- Restricted Mode Option -->
+      <label class="relative flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all duration-150"
+             :class="mode === 'restricted' ? 'border-royalblue bg-blue-50/40 shadow-xs' : 'border-slate-200 hover:border-slate-300 bg-white'">
+        <div class="flex items-center justify-between gap-3 mb-1.5">
+          <div class="flex items-center gap-2.5">
+            <input type="radio"
+                   name="restriction_mode"
+                   value="restricted"
+                   x-model="mode"
+                   class="w-4 h-4 text-royalblue border-slate-300 focus:ring-royalblue">
+            <span class="font-bold text-slate-900 text-sm">{{ _('Restricted Mode (Specific Folders)') }}</span>
+          </div>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            {{ _('Restricted') }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 pl-6.5 leading-relaxed">
+          {{ _('User can ONLY access folders explicitly checked in the list below. Root folder remains open as a navigation buffer zone.') }}
+        </p>
+      </label>
+    </div>
+  </div>
+
+  <!-- 2. Folder Permissions Selection Card -->
+  <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200 mb-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-100">
+      <div>
+        <div class="flex items-center gap-2">
+          <h2 class="text-sm font-bold text-slate-900">{{ _('Folder Permissions') }}</h2>
+          <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600">
+            <span x-text="selectedFolders.length"></span> / <span x-text="folders.length"></span> {{ _('selected') }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 font-medium mt-0.5" x-show="mode === 'restricted'">
+          {{ _('Check the box next to each folder %(username)s should be authorized to access.', username=target_user.username) }}
+        </p>
+        <p class="text-xs text-slate-400 font-medium mt-0.5" x-show="mode === 'default'">
+          <span class="text-emerald-600 font-semibold">{{ _('Default Mode active:') }}</span>
+          {{ _('All folders are accessible. Checkboxes below will define specific access if switched to Restricted Mode.') }}
+        </p>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div class="flex flex-wrap items-center gap-2">
+        <button type="button"
+                @click="selectAllFiltered()"
+                class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors shadow-2xs">
+          {{ _('Select All Filtered') }}
+        </button>
+        <button type="button"
+                @click="clearAllSelected()"
+                class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors shadow-2xs">
+          {{ _('Deselect All') }}
+        </button>
+      </div>
+    </div>
+
+    {% if folders %}
+    <!-- Search Bar & Per-Page Controls -->
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-3">
+      <!-- Search Input -->
+      <div class="relative flex-1 max-w-md">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+        </div>
+        <input type="text"
+               x-model="search"
+               placeholder="{{ _('Search folders by path or name…') }}"
+               class="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none text-slate-800 placeholder:text-slate-400 font-medium transition-all shadow-2xs">
+        <button type="button"
+                x-show="search.length > 0"
+                @click="search = ''"
+                class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                title="{{ _('Clear search') }}">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Per-Page Selector -->
+      <div class="flex items-center justify-between sm:justify-end gap-3 text-xs text-slate-500">
+        <div class="flex items-center gap-1.5 font-medium">
+          <span>{{ _('Show') }}:</span>
+          <select x-model.number="perPage"
+                  class="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-2xs">
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <span>{{ _('per page') }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inline Separate Scroll Window for Folders -->
+    <div x-ref="foldersContainer" class="overflow-x-auto overflow-y-auto max-h-[480px] rounded-xl border border-slate-100 shadow-2xs bg-white">
+      <table class="min-w-full text-xs sm:text-sm text-left">
+        <thead class="sticky top-0 bg-slate-50/95 backdrop-blur-xs text-slate-500 uppercase tracking-wider font-bold text-[10px] border-b border-slate-100 z-10 shadow-2xs">
+          <tr>
+            <th class="px-4 py-3.5 w-12 text-center">
+              <input type="checkbox"
+                     @change="toggleSelectAllFiltered()"
+                     :checked="isAllFilteredSelected"
+                     class="w-4 h-4 text-royalblue rounded border-slate-300 focus:ring-royalblue"
+                     title="{{ _('Toggle all filtered') }}">
+            </th>
+            <th class="px-4 py-3.5">{{ _('Folder Path') }}</th>
+            <th class="px-4 py-3.5">{{ _('Hierarchy') }}</th>
+            <th class="px-4 py-3.5 text-right">{{ _('Access Status') }}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+          <template x-for="folder in paginatedFolders" :key="folder.path">
+            <tr class="hover:bg-slate-50/70 transition-colors cursor-pointer"
+                @click="toggleFolder(folder.path)">
+              <!-- Checkbox -->
+              <td class="px-4 py-3.5 text-center" @click.stop>
+                <input type="checkbox"
+                       :value="folder.path"
+                       x-model="selectedFolders"
+                       class="w-4 h-4 text-royalblue rounded border-slate-300 focus:ring-royalblue">
+              </td>
+
+              <!-- Folder Path -->
+              <td class="px-4 py-3.5">
+                <div class="flex items-center gap-2">
+                  <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                  </svg>
+                  <div class="font-mono text-xs">
+                    <span x-show="folder.parent" class="text-slate-400" x-text="folder.parent + '/'"></span><span class="font-bold text-slate-900" x-text="folder.name"></span>
+                  </div>
+                </div>
+              </td>
+
+              <!-- Hierarchy info -->
+              <td class="px-4 py-3.5">
+                <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600">
+                  <span x-text="folder.depth === 1 ? '{{ _('Top-level') }}' : '{{ _('Subfolder') }} (depth ' + folder.depth + ')'"></span>
+                </span>
+              </td>
+
+              <!-- Access status pill -->
+              <td class="px-4 py-3.5 text-right">
+                <span x-show="selectedFolders.includes(folder.path)"
+                      class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  {{ _('Granted') }}
+                </span>
+                <span x-show="!selectedFolders.includes(folder.path)"
+                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-slate-400 bg-slate-50 border border-slate-200">
+                  {{ _('No Access') }}
+                </span>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+
+      <!-- Empty Search Results Message -->
+      <div x-show="filteredFolders.length === 0" class="text-center py-10 px-4 bg-slate-50/50">
+        <div class="w-9 h-9 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+        </div>
+        <p class="text-xs font-semibold text-slate-700">
+          {{ _('No folders found matching') }} "<span x-text="search" class="text-slate-900 font-bold"></span>"
+        </p>
+        <button type="button" @click="search = ''" class="mt-2 text-xs text-royalblue hover:text-blue-700 font-semibold inline-flex items-center gap-1 transition-colors">
+          <span>{{ _('Clear search') }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Pagination Controls Footer -->
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 text-xs text-slate-500">
+      <div>
+        <span x-show="filteredFolders.length > 0">
+          {{ _('Showing') }}
+          <span class="font-bold text-slate-800" x-text="startIndex"></span>
+          {{ _('to') }}
+          <span class="font-bold text-slate-800" x-text="endIndex"></span>
+          {{ _('of') }}
+          <span class="font-bold text-slate-800" x-text="filteredFolders.length"></span>
+          {{ _('folders') }}
+          <span x-show="search.trim().length > 0 && filteredFolders.length !== folders.length" class="text-slate-400">
+            ({{ _('filtered from') }} <span x-text="folders.length"></span> {{ _('total') }})
+          </span>
+        </span>
+      </div>
+
+      <!-- Navigation Buttons & Page Selection -->
+      <div x-show="totalPages > 1" class="flex items-center gap-1.5">
+        <button type="button"
+                @click="prevPage()"
+                :disabled="currentPage <= 1"
+                :class="currentPage <= 1 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-100 hover:text-slate-800 text-slate-700'"
+                class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold transition-colors shadow-2xs inline-flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+          </svg>
+          <span>{{ _('Previous') }}</span>
+        </button>
+
+        <div class="flex items-center gap-1 px-1">
+          <span class="font-medium text-slate-600">{{ _('Page') }}</span>
+          <select x-model.number="page"
+                  @change="scrollToTop()"
+                  class="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-royalblue/20 shadow-2xs">
+            <template x-for="pNum in pageNumbers" :key="pNum">
+              <option :value="pNum" x-text="pNum" :selected="pNum === currentPage"></option>
+            </template>
+          </select>
+          <span class="font-medium text-slate-600">{{ _('of') }} <span class="font-bold text-slate-800" x-text="totalPages"></span></span>
+        </div>
+
+        <button type="button"
+                @click="nextPage()"
+                :disabled="currentPage >= totalPages"
+                :class="currentPage >= totalPages ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-100 hover:text-slate-800 text-slate-700'"
+                class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold transition-colors shadow-2xs inline-flex items-center gap-1">
+          <span>{{ _('Next') }}</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    {% else %}
+    <div class="text-center py-12 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+      <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+        </svg>
+      </div>
+      <h3 class="text-slate-800 font-bold text-xs">{{ _('No folders exist in this organization yet.') }}</h3>
+      <p class="text-xs text-slate-400 mt-1">{{ _('Folders are created when books or documents are assigned to folders.') }}</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- 3. Sticky / Prominent Save Actions Bar -->
+  <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div class="text-xs text-slate-600">
+      <span x-show="mode === 'default'">
+        <strong class="text-emerald-700 font-bold">{{ _('Default Mode:') }}</strong>
+        {{ _('%(username)s will have access to all organization folders.', username=target_user.username) }}
+      </span>
+      <span x-show="mode === 'restricted'">
+        <strong class="text-amber-700 font-bold">{{ _('Restricted Mode:') }}</strong>
+        {{ _('%(username)s will only have access to', username=target_user.username) }}
+        <strong class="text-slate-900" x-text="selectedFolders.length"></strong>
+        {{ _('selected folder(s).') }}
+      </span>
+    </div>
+
+    <div class="flex items-center gap-3 shrink-0">
+      <a href="{{ url_for('org_admin_view.access_control') }}"
+         class="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors">
+        {{ _('Cancel') }}
+      </a>
+      <button type="submit"
+              class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-royalblue hover:bg-blue-700 text-white font-semibold text-xs transition-all shadow-md shadow-royalblue/20">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        <span>{{ _('Save Access Permissions') }}</span>
+      </button>
+    </div>
+  </div>
+</form>
+
+<script id="user-folders-data" type="application/json">
+  {{ (folders_json if folders_json is defined else [])|tojson }}
+</script>
+<script id="user-granted-folders-data" type="application/json">
+  {{ (granted_folders if granted_folders is defined else [])|tojson }}
+</script>
+
+<script>
+  function userFolderAccessManager() {
+    let initialFolders = [];
+    const fEl = document.getElementById('user-folders-data');
+    if (fEl && fEl.textContent) {
+      try {
+        initialFolders = JSON.parse(fEl.textContent);
+      } catch (e) {
+        console.error('Failed to parse folders data', e);
+      }
+    }
+
+    let initialGranted = [];
+    const gEl = document.getElementById('user-granted-folders-data');
+    if (gEl && gEl.textContent) {
+      try {
+        initialGranted = JSON.parse(gEl.textContent);
+      } catch (e) {
+        console.error('Failed to parse granted folders data', e);
+      }
+    }
+
+    const serverMode = {{ ('restricted' if is_restricted else 'default')|tojson }};
+
+    return {
+      mode: serverMode,
+      selectedFolders: initialGranted,
+      folders: initialFolders,
+      search: '',
+      page: 1,
+      perPage: 10,
+      toggleFolder(path) {
+        const idx = this.selectedFolders.indexOf(path);
+        if (idx > -1) {
+          this.selectedFolders.splice(idx, 1);
+        } else {
+          this.selectedFolders.push(path);
+        }
+      },
+      get filteredFolders() {
+        const q = this.search.toLowerCase().trim();
+        if (!q) return this.folders;
+        return this.folders.filter(f =>
+          (f.path && f.path.toLowerCase().includes(q)) ||
+          (f.name && f.name.toLowerCase().includes(q))
+        );
+      },
+      get totalPages() {
+        return Math.max(1, Math.ceil(this.filteredFolders.length / this.perPage));
+      },
+      get currentPage() {
+        if (this.page > this.totalPages) return this.totalPages;
+        if (this.page < 1) return 1;
+        return this.page;
+      },
+      get pageNumbers() {
+        const pages = [];
+        for (let i = 1; i <= this.totalPages; i++) {
+          pages.push(i);
+        }
+        return pages;
+      },
+      get paginatedFolders() {
+        const p = this.currentPage;
+        const start = (p - 1) * this.perPage;
+        return this.filteredFolders.slice(start, start + this.perPage);
+      },
+      get startIndex() {
+        if (this.filteredFolders.length === 0) return 0;
+        return (this.currentPage - 1) * this.perPage + 1;
+      },
+      get endIndex() {
+        return Math.min(this.currentPage * this.perPage, this.filteredFolders.length);
+      },
+      get isAllFilteredSelected() {
+        if (this.filteredFolders.length === 0) return false;
+        return this.filteredFolders.every(f => this.selectedFolders.includes(f.path));
+      },
+      toggleSelectAllFiltered() {
+        if (this.isAllFilteredSelected) {
+          // Deselect all filtered folders
+          const filteredPaths = new Set(this.filteredFolders.map(f => f.path));
+          this.selectedFolders = this.selectedFolders.filter(p => !filteredPaths.has(p));
+        } else {
+          // Select all filtered folders
+          const current = new Set(this.selectedFolders);
+          for (const f of this.filteredFolders) {
+            current.add(f.path);
+          }
+          this.selectedFolders = Array.from(current);
+        }
+      },
+      selectAllFiltered() {
+        const current = new Set(this.selectedFolders);
+        for (const f of this.filteredFolders) {
+          current.add(f.path);
+        }
+        this.selectedFolders = Array.from(current);
+      },
+      clearAllSelected() {
+        this.selectedFolders = [];
+      },
+      prevPage() {
+        if (this.currentPage > 1) {
+          this.page = this.currentPage - 1;
+          this.scrollToTop();
+        }
+      },
+      nextPage() {
+        if (this.currentPage < this.totalPages) {
+          this.page = this.currentPage + 1;
+          this.scrollToTop();
+        }
+      },
+      scrollToTop() {
+        if (this.$refs && this.$refs.foldersContainer) {
+          this.$refs.foldersContainer.scrollTop = 0;
+        }
+      },
+      init() {
+        this.$watch('search', () => {
+          this.page = 1;
+        });
+        this.$watch('perPage', () => {
+          this.page = 1;
+        });
+      }
+    };
+  }
+</script>
+{% endblock %}

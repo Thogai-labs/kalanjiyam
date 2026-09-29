@@ -3402,6 +3402,217 @@ class OrgAdminView(AdminBaseView):
             csrf_token=generate_csrf(),
         )
 
+    @expose("/access_control")
+    def access_control(self):
+        org_id = require_org_admin()
+        org = q.group(org_id)
+        if org is None:
+            abort(404)
+
+        session = q.get_session()
+        from kalanjiyam.utils import project_utils
+
+        users = q.users_in_group(org.id)
+        user_ids = {u.id for u in users}
+        for extra_u in session.query(db.User).filter_by(organization_id=org.id).all():
+            if extra_u.id not in user_ids:
+                users.append(extra_u)
+                user_ids.add(extra_u.id)
+
+        # Batch load restrictions for all users in this org
+        restrictions_map = {
+            r.user_id: bool(r.is_restricted)
+            for r in session.query(db.UserFolderRestriction)
+            .filter_by(organization_id=org.id)
+            .all()
+        }
+
+        # Batch load granted folders for all users in this org
+        folder_access_rows = (
+            session.query(db.ProofFolderAccess.user_id, db.ProofFolderAccess.folder_path)
+            .filter_by(organization_id=org.id)
+            .all()
+        )
+        granted_folders_map = {}
+        for uid, f_path in folder_access_rows:
+            if f_path:
+                norm_f = project_utils.normalize_folder_path(f_path)
+                if norm_f:
+                    granted_folders_map.setdefault(uid, set()).add(norm_f)
+
+        users_data = []
+        for u in users:
+            is_adm = (
+                (getattr(u, "is_org_admin", False) and getattr(u, "organization_id", None) == org.id)
+                or getattr(u, "is_super_admin", False)
+            )
+            is_restricted = restrictions_map.get(u.id, False) if not is_adm else False
+            user_folders = sorted(list(granted_folders_map.get(u.id, set())))
+
+            if not is_restricted:
+                tags = ["All Folders"]
+            else:
+                tags = user_folders if user_folders else []
+
+            users_data.append({
+                "id": u.id,
+                "username": u.username,
+                "email": u.email,
+                "is_primary_admin": u.id == org.admin_user_id,
+                "is_admin": is_adm,
+                "roles": [r.name for r in u.roles],
+                "is_restricted": is_restricted,
+                "tags": tags,
+                "folders_count": len(user_folders),
+            })
+
+        return render_template(
+            "admin/org_access_control.html",
+            org=org,
+            users=users_data,
+            users_json=users_data,
+        )
+
+    @expose("/access_control/user/<int:user_id>", methods=["GET", "POST"])
+    def user_access_control(self, user_id):
+        org_id = require_org_admin()
+        org = q.group(org_id)
+        if org is None:
+            abort(404)
+
+        session = q.get_session()
+        from kalanjiyam.utils import project_utils
+
+        target_user = session.query(db.User).get(user_id)
+        if not target_user:
+            abort(404)
+
+        is_member = (
+            target_user.organization_id == org.id
+            or any(g.id == org.id for g in target_user.groups)
+        )
+        if not is_member:
+            abort(404)
+
+        if request.method == "POST":
+            restriction_mode = (request.form.get("restriction_mode") or "default").strip().lower()
+            selected_folders = request.form.getlist("folders")
+
+            if restriction_mode == "restricted":
+                project_utils.set_user_folder_restriction(session, org.id, target_user.id, True)
+
+                session.query(db.ProofFolderAccess).filter_by(
+                    organization_id=org.id, user_id=target_user.id
+                ).delete(synchronize_session=False)
+
+                valid_paths = set()
+                for p in selected_folders:
+                    norm = project_utils.normalize_folder_path(p)
+                    if norm:
+                        valid_paths.add(norm)
+
+                for norm in sorted(valid_paths):
+                    session.add(
+                        db.ProofFolderAccess(
+                            organization_id=org.id,
+                            user_id=target_user.id,
+                            folder_path=norm,
+                        )
+                    )
+                session.commit()
+                flash(
+                    f'Access permissions updated for "{target_user.username}". Restricted mode active with {len(valid_paths)} folder(s).',
+                    "success",
+                )
+            else:
+                project_utils.set_user_folder_restriction(session, org.id, target_user.id, False)
+                session.query(db.ProofFolderAccess).filter_by(
+                    organization_id=org.id, user_id=target_user.id
+                ).delete(synchronize_session=False)
+                session.commit()
+                flash(
+                    f'"{target_user.username}" reset to Default Mode (access to All Folders).',
+                    "success",
+                )
+
+            return redirect(url_for("org_admin_view.user_access_control", user_id=target_user.id))
+
+        is_restricted = project_utils.is_user_folder_restricted(
+            target_user, org.id, session=session
+        )
+
+        granted_rows = (
+            session.query(db.ProofFolderAccess.folder_path)
+            .filter_by(organization_id=org.id, user_id=target_user.id)
+            .all()
+        )
+        granted_folders = {
+            project_utils.normalize_folder_path(r[0])
+            for r in granted_rows
+            if r[0] and project_utils.normalize_folder_path(r[0])
+        }
+
+        org_project_ids = [
+            pg.project_id
+            for pg in session.query(db.ProjectGroups.project_id).filter_by(group_id=org.id).all()
+        ]
+        base_query = (
+            session.query(db.Project).filter(db.Project.id.in_(org_project_ids))
+            if org_project_ids
+            else session.query(db.Project).filter(False)
+        )
+        folders_list = project_utils.get_all_available_folders(
+            session,
+            base_query=base_query,
+            organization_id=org.id,
+            user=None,
+        )
+        folders_set = set(folders_list)
+
+        access_folder_rows = (
+            session.query(db.ProofFolderAccess.folder_path)
+            .filter_by(organization_id=org.id)
+            .distinct()
+            .all()
+        )
+        for (af,) in access_folder_rows:
+            if af:
+                norm_af = project_utils.normalize_folder_path(af)
+                if norm_af:
+                    folders_set.add(norm_af)
+
+        all_folders = sorted(folders_set, key=lambda s: s.lower())
+
+        folders_data = []
+        for f in all_folders:
+            parts = f.split("/")
+            name = parts[-1]
+            parent = "/".join(parts[:-1]) if len(parts) > 1 else ""
+            folders_data.append({
+                "path": f,
+                "name": name,
+                "parent": parent,
+                "depth": len(parts),
+                "is_granted": f in granted_folders,
+            })
+
+        is_adm = (
+            (getattr(target_user, "is_org_admin", False) and getattr(target_user, "organization_id", None) == org.id)
+            or getattr(target_user, "is_super_admin", False)
+        )
+
+        return render_template(
+            "admin/org_user_access_control.html",
+            org=org,
+            target_user=target_user,
+            is_restricted=is_restricted,
+            is_admin=is_adm,
+            folders=folders_data,
+            folders_json=folders_data,
+            granted_folders=sorted(list(granted_folders)),
+            csrf_token=generate_csrf(),
+        )
+
     @expose("/analytics")
     def user_analytics(self):
         org_id = require_org_admin()
