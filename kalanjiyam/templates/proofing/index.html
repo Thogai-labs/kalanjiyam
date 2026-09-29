@@ -164,6 +164,7 @@
           </button>
 
           <!-- New Project Action Button -->
+          {% if current_user.can_create_project %}
           <a
             :href="'{{ url_for('proofing.create_project') }}' + (folder ? '?folder=' + encodeURIComponent(folder) : '')"
             href="{{ url_for('proofing.create_project') }}"
@@ -175,6 +176,7 @@
             </svg>
             <span>{{ _('New Project') }}</span>
           </a>
+          {% endif %}
         </div>
       </div>
 

@@ -44,6 +44,10 @@ class KalanjiyamAnonymousUser(AnonymousUserMixin):
         return False
 
     @property
+    def can_create_project(self) -> bool:
+        return False
+
+    @property
     def is_ok(self) -> bool:
         return True
 
@@ -88,6 +92,15 @@ class KalanjiyamUserMixin(UserMixin):
     def is_org_admin(self) -> bool:
         return self.has_role(SiteRole.ORG_ADMIN) and bool(
             getattr(self, "organization_id", None)
+        )
+
+    @property
+    def can_create_project(self) -> bool:
+        return (
+            self.is_moderator
+            or self.is_org_admin
+            or self.is_master_user
+            or self.is_super_admin
         )
 
     @property

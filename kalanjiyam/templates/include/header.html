@@ -216,6 +216,7 @@
             </span>
             {% if is_workspace %}<span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>{% endif %}
           </a>
+          {% if current_user.can_create_project %}
           {% set is_create = request.endpoint == 'proofing.create_project' %}
           <a href="{{ url_for('proofing.create_project') }}"
             class="flex items-center justify-between px-4 py-2.5 text-xs font-semibold {% if is_create %}text-royalblue bg-blue-50/70 font-bold{% else %}text-slate-700 hover:bg-slate-50 hover:text-royalblue{% endif %} transition-colors">
@@ -227,6 +228,7 @@
             </span>
             {% if is_create %}<span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>{% endif %}
           </a>
+          {% endif %}
           {% set is_changes = request.endpoint == 'proofing.recent_changes' %}
           <a href="{{ url_for('proofing.recent_changes') }}"
             class="flex items-center justify-between px-4 py-2.5 text-xs font-semibold {% if is_changes %}text-royalblue bg-blue-50/70 font-bold{% else %}text-slate-700 hover:bg-slate-50 hover:text-royalblue{% endif %} transition-colors">
@@ -657,6 +659,7 @@
                 </span>
                 {% if is_workspace %}<span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>{% endif %}
               </a>
+              {% if current_user.can_create_project %}
               {% set is_create = request.endpoint == 'proofing.create_project' %}
               <a href="{{ url_for('proofing.create_project') }}"
                 class="flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg {% if is_create %}text-royalblue bg-blue-50/70 font-bold{% else %}text-slate-600 hover:bg-slate-50 hover:text-royalblue{% endif %} transition-colors">
@@ -668,6 +671,7 @@
                 </span>
                 {% if is_create %}<span class="w-1.5 h-1.5 rounded-full bg-royalblue"></span>{% endif %}
               </a>
+              {% endif %}
               {% set is_changes = request.endpoint == 'proofing.recent_changes' %}
               <a href="{{ url_for('proofing.recent_changes') }}"
                 class="flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg {% if is_changes %}text-royalblue bg-blue-50/70 font-bold{% else %}text-slate-600 hover:bg-slate-50 hover:text-royalblue{% endif %} transition-colors">

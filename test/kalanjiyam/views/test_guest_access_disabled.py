@@ -105,7 +105,7 @@ def test_ui_elements_hidden_for_unregistered_when_disabled(flask_app, client):
         flask_app.config["ENABLE_GUEST_ACCESS"] = True
 
 
-def test_authenticated_users_can_access_when_guest_disabled(flask_app, rama_client):
+def test_authenticated_users_can_access_when_guest_disabled(flask_app, rama_client, moderator_client):
     """Registered / logged-in users still have full access when guest access is disabled."""
     flask_app.config["ENABLE_GUEST_ACCESS"] = False
     try:
@@ -117,8 +117,13 @@ def test_authenticated_users_can_access_when_guest_disabled(flask_app, rama_clie
         resp_proofing = rama_client.get("/proofing/")
         assert resp_proofing.status_code == 200
 
+        # P1/P2 user cannot access create-project (redirected)
         resp_create = rama_client.get("/proofing/create-project")
-        assert resp_create.status_code == 200
+        assert resp_create.status_code == 302
+
+        # Moderator can access create-project
+        resp_create_mod = moderator_client.get("/proofing/create-project")
+        assert resp_create_mod.status_code == 200
 
         # Home page shows search and proofing for authenticated users
         resp_home = rama_client.get("/")

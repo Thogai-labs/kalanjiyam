@@ -94,6 +94,7 @@
           <span>{{ _('Proofreading Workspace') }}</span>
         </a>
 
+        {% if current_user.can_create_project %}
         <a href="{{ url_for('proofing.create_project') }}"
            class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue text-xs sm:text-sm font-semibold transition-all shadow-xs">
           <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -101,6 +102,7 @@
           </svg>
           <span>{{ _('Upload Scans / PDF') }}</span>
         </a>
+        {% endif %}
 
         <a href="{{ url_for('proofing.help_index') }}"
            class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue text-xs sm:text-sm font-semibold transition-all shadow-xs">

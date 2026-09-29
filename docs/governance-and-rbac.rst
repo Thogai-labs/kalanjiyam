@@ -17,11 +17,11 @@ User Roles
 
 The system defines the following roles (configured in :class:`kalanjiyam.enums.SiteRole`):
 
-* **P1 (Basic Proofer)**: Entry-level proofreader. Can mark page proofing state as reviewed-1 (Yellow / R1) and work on basic project uploads.
-* **P2 (Advanced Proofer)**: Senior proofreader. Can mark page state as reviewed-2 (Green / R2), upload complex PDFs, and perform batch operations across project pages.
-* **MODERATOR**: Proofing effort coordinator. Can manage project deletion, promote or restrict users within proofing scope, and run global batch operations.
+* **P1 (Basic Proofer)**: Entry-level proofreader. Can mark page proofing state as reviewed-1 (Yellow / R1).
+* **P2 (Advanced Proofer)**: Senior proofreader. Can mark page state as reviewed-2 (Green / R2) and perform batch operations across project pages.
+* **MODERATOR**: Proofing effort coordinator. Can create and upload projects, manage project deletion, promote or restrict users within proofing scope, and run global batch operations.
 * **ADMIN**: Organization administrator. Has full access to database records, project lifecycle management, and organization settings within assigned tenant scope.
-* **ORG_ADMIN**: Dedicated organization manager. Manages tenant-specific users, project allocations, and organization settings.
+* **ORG_ADMIN**: Dedicated organization manager. Manages tenant-specific users, project creation/allocations, and organization settings.
 * **SUPER_ADMIN**: Platform owner / System administrator. Has unrestricted cross-tenant access, quota control, organization lifecycle management, and system configuration capabilities.
 
 RBAC Permissions Matrix
@@ -36,7 +36,7 @@ RBAC Permissions Matrix
 +-------------------------------------+----+----+-----------+-------+-----------+-------------+
 | Verify & Lock Proofing (R1 -> R2)   | No | Yes| Yes       | Yes   | Yes       | Yes         |
 +-------------------------------------+----+----+-----------+-------+-----------+-------------+
-| Upload New Books / PDF Projects     | Basic|Yes| Yes      | Yes   | Yes       | Yes         |
+| Upload New Books / PDF Projects     | No | No | Yes       | Yes   | Yes       | Yes         |
 +-------------------------------------+----+----+-----------+-------+-----------+-------------+
 | Trigger OCR Batch Re-processing     | No | Yes| Yes       | Yes   | Yes       | Yes         |
 +-------------------------------------+----+----+-----------+-------+-----------+-------------+
@@ -69,4 +69,7 @@ This section records all modifications to access control rules, role definitions
 +------------+----------------------+------------------------------------+---------------------------------------------------+--------------+
 | 2026-07-24 | Source File Storage  | Add Auto Uploaded Files Cleanup    | Delete source PDF/DOC files > 7 days as database  | Architecture |
 |            |                      | policy (`AUTO_UPLOADED_FILES_CLEANUP`) | stores all page text & image records          |              |
++------------+----------------------+------------------------------------+---------------------------------------------------+--------------+
+| 2026-09-29 | P1, P2, Moderator,   | Restrict project creation to       | Protect org quotas & catalog structure; P1/P2 are | Architecture |
+|            | Org Admin            | Moderator, Org Admin, Super Admin  | proofreaders and reviewers, not upload managers   |              |
 +------------+----------------------+------------------------------------+---------------------------------------------------+--------------+

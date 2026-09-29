@@ -1228,15 +1228,20 @@ def create_project():
     settings = q.get_system_settings()
     guest_upload_limit = getattr(settings, "unregistered_user_upload_limit", 10)
 
-    # Authorization checks
-    is_p2_or_admin = (
-        getattr(current_user, "is_p1", False)
-        or getattr(current_user, "is_p2", False)
-        or getattr(current_user, "is_moderator", False)
-        or getattr(current_user, "is_master_user", False)
-        or getattr(current_user, "is_org_admin", False)
-        or getattr(current_user, "is_super_admin", False)
-    )
+    # Authorization checks: only moderators, org admins, master users, and super admins can create projects
+    if current_user.is_authenticated:
+        allowed = getattr(current_user, "can_create_project", False) or (
+            getattr(current_user, "is_moderator", False)
+            or getattr(current_user, "is_master_user", False)
+            or getattr(current_user, "is_org_admin", False)
+            or getattr(current_user, "is_super_admin", False)
+        )
+    else:
+        allowed = bool(current_app.config.get("ENABLE_GUEST_ACCESS", True))
+
+    if not allowed:
+        flash(_l("Sorry, you aren't authorized to use this feature."), "error")
+        return redirect(url_for("proofing.index"))
 
     session = q.get_session()
     user_organizations = []
@@ -1250,27 +1255,6 @@ def create_project():
                 .filter(db.UserGroups.user_id == current_user.id)
                 .all()
             )
-
-    is_open_tenant = False
-    if current_user.is_authenticated:
-        from kalanjiyam.utils.org_access import user_organization_id
-
-        try:
-            open_tenant = q.get_or_create_open_tenant()
-            is_open_tenant = user_organization_id(current_user) == open_tenant.id
-        except Exception:
-            pass
-
-    allowed = (
-        not current_user.is_authenticated  # Guest
-        or (
-            current_user.is_authenticated and is_open_tenant
-        )  # Registered in open-tenant
-        or is_p2_or_admin  # Enterprise P2 or Admin
-    )
-    if not allowed:
-        flash(_l("Sorry, you aren't authorized to use this feature."), "error")
-        return redirect(url_for("proofing.index"))
 
     # Rate limiting for guest users
     if not current_user.is_authenticated:

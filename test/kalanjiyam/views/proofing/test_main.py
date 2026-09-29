@@ -256,12 +256,25 @@ def test_create_project__unauth(client):
     assert resp.status_code in (200, 302)
 
 
-def test_create_project__auth(rama_client):
+def test_create_project__auth(rama_client, moderator_client):
+    # P1/P2 user cannot access create-project and is redirected
     resp = rama_client.get("/proofing/create-project")
-    assert resp.status_code == 200
+    assert resp.status_code == 302
+
+    # Moderator is authorized to access create-project
+    resp_mod = moderator_client.get("/proofing/create-project")
+    assert resp_mod.status_code == 200
+
+    # UI check: P1/P2 user does not see New Project / Create project links
+    workspace_resp = rama_client.get("/proofing/")
+    assert b"/proofing/create-project" not in workspace_resp.data
+
+    # UI check: Moderator sees Create project / New Project button
+    mod_workspace_resp = moderator_client.get("/proofing/")
+    assert b"/proofing/create-project" in mod_workspace_resp.data
 
 
-def test_create_project_with_images_post(rama_client):
+def test_create_project_with_images_post(moderator_client):
     """Test project creation with multiple JPG images."""
     import io
     from unittest.mock import Mock, patch
@@ -271,7 +284,7 @@ def test_create_project_with_images_post(rama_client):
 
     session = q.get_session()
     tenant = q.get_or_create_open_tenant()
-    user = session.query(db.User).filter_by(username="u-basic").first()
+    user = session.query(db.User).filter_by(username="u-moderator").first()
     user.organization_id = tenant.id
     session.commit()
 
@@ -291,7 +304,7 @@ def test_create_project_with_images_post(rama_client):
     ):
         mock_task.return_value = Mock(id="mock-create-task-id", status="PENDING")
 
-        resp = rama_client.post(
+        resp = moderator_client.post(
             "/proofing/create-project",
             data=data,
             content_type="multipart/form-data",
@@ -310,7 +323,7 @@ def test_create_project_with_images_post(rama_client):
         assert "2.jpg" in kwargs["image_keys"][1]
 
 
-def test_create_project_with_mixed_files_fails(rama_client):
+def test_create_project_with_mixed_files_fails(moderator_client):
     """Test that mixing PDF with JPG images fails validation."""
     import io
 
@@ -324,7 +337,7 @@ def test_create_project_with_mixed_files_fails(rama_client):
         ],
     }
 
-    resp = rama_client.post(
+    resp = moderator_client.post(
         "/proofing/create-project",
         data=data,
         content_type="multipart/form-data",
@@ -420,7 +433,7 @@ def test_is_group_images_enabled():
     assert main.is_group_images_enabled({}) is True
 
 
-def test_create_project_with_images_post_separate_projects(rama_client):
+def test_create_project_with_images_post_separate_projects(moderator_client):
     """Test project creation with multiple JPG images when group_images is unchecked."""
     import io
     from unittest.mock import Mock, patch
@@ -430,7 +443,7 @@ def test_create_project_with_images_post_separate_projects(rama_client):
 
     session = q.get_session()
     tenant = q.get_or_create_open_tenant()
-    user = session.query(db.User).filter_by(username="u-basic").first()
+    user = session.query(db.User).filter_by(username="u-moderator").first()
     user.organization_id = tenant.id
     session.commit()
 
@@ -452,7 +465,7 @@ def test_create_project_with_images_post_separate_projects(rama_client):
     ):
         mock_batch_task.return_value = Mock(id="mock-batch-task-id", status="PENDING")
 
-        resp = rama_client.post(
+        resp = moderator_client.post(
             "/proofing/create-project",
             data=data,
             content_type="multipart/form-data",
@@ -470,7 +483,7 @@ def test_create_project_with_images_post_separate_projects(rama_client):
         assert projects_data[1]["slug"] == "chapter-two"
 
 
-def test_create_project_with_images_post_all_duplicate_slugs_fails(rama_client):
+def test_create_project_with_images_post_all_duplicate_slugs_fails(moderator_client):
     """Test that uploading multiple images producing only duplicate project slugs fails validation."""
     import io
     import kalanjiyam.database as db
@@ -478,7 +491,7 @@ def test_create_project_with_images_post_all_duplicate_slugs_fails(rama_client):
 
     session = q.get_session()
     tenant = q.get_or_create_open_tenant()
-    user = session.query(db.User).filter_by(username="u-basic").first()
+    user = session.query(db.User).filter_by(username="u-moderator").first()
     if user:
         user.organization_id = tenant.id
         session.commit()
@@ -505,7 +518,7 @@ def test_create_project_with_images_post_all_duplicate_slugs_fails(rama_client):
     }
 
     try:
-        resp = rama_client.post(
+        resp = moderator_client.post(
             "/proofing/create-project",
             data=data,
             content_type="multipart/form-data",
@@ -519,7 +532,7 @@ def test_create_project_with_images_post_all_duplicate_slugs_fails(rama_client):
             session.commit()
 
 
-def test_create_project_with_multiple_pdfs_post_skips_duplicates(rama_client):
+def test_create_project_with_multiple_pdfs_post_skips_duplicates(moderator_client):
     """Test that uploading multiple PDFs with duplicates skips duplicates and creates valid projects with a warning toast."""
     import io
     from unittest.mock import Mock, patch
@@ -530,7 +543,7 @@ def test_create_project_with_multiple_pdfs_post_skips_duplicates(rama_client):
 
     session = q.get_session()
     tenant = q.get_or_create_open_tenant()
-    user = session.query(db.User).filter_by(username="u-basic").first()
+    user = session.query(db.User).filter_by(username="u-moderator").first()
     user.organization_id = tenant.id
     board = session.query(db.Board).first()
     board_id = board.id if board else 1
@@ -565,7 +578,7 @@ def test_create_project_with_multiple_pdfs_post_skips_duplicates(rama_client):
         ):
             mock_batch_task.return_value = Mock(id="mock-batch-pdf-id", status="PENDING")
 
-            resp = rama_client.post(
+            resp = moderator_client.post(
                 "/proofing/create-project",
                 data=data,
                 content_type="multipart/form-data",
@@ -592,7 +605,7 @@ def test_create_project_with_multiple_pdfs_post_skips_duplicates(rama_client):
             session.commit()
 
 
-def test_create_project_with_multiple_pdfs_post(rama_client):
+def test_create_project_with_multiple_pdfs_post(moderator_client):
     """Test that uploading multiple PDFs creates separate projects and dispatches Celery task with PRIORITY_BATCH."""
     import io
     from unittest.mock import Mock, patch
@@ -603,7 +616,7 @@ def test_create_project_with_multiple_pdfs_post(rama_client):
 
     session = q.get_session()
     tenant = q.get_or_create_open_tenant()
-    user = session.query(db.User).filter_by(username="u-basic").first()
+    user = session.query(db.User).filter_by(username="u-moderator").first()
     user.organization_id = tenant.id
     session.commit()
 
@@ -624,7 +637,7 @@ def test_create_project_with_multiple_pdfs_post(rama_client):
     ):
         mock_batch_task.return_value = Mock(id="mock-batch-pdf-id", status="PENDING")
 
-        resp = rama_client.post(
+        resp = moderator_client.post(
             "/proofing/create-project",
             data=data,
             content_type="multipart/form-data",

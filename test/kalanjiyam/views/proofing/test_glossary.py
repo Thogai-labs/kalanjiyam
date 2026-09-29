@@ -136,7 +136,7 @@ def test_project_batch_translate_with_glossary(rama_client):
         assert kwargs["glossary"] == "administrative"
 
 
-def test_create_project_direct_docx_translate_with_glossary(rama_client):
+def test_create_project_direct_docx_translate_with_glossary(moderator_client):
     """Test that direct docx translation workflow in create_project route extracts glossary and triggers Celery task."""
     import io
 
@@ -157,7 +157,7 @@ def test_create_project_direct_docx_translate_with_glossary(rama_client):
         mock_redis_class.return_value = mock_redis
         mock_celery_task.return_value.id = "mock-task-id"
 
-        r = rama_client.post(
+        r = moderator_client.post(
             "/proofing/create-project",
             data=data,
             content_type="multipart/form-data"

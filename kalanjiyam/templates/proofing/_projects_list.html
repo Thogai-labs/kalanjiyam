@@ -148,6 +148,7 @@
                 <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                 <span>{{ _('Rename…') }}</span>
               </button>
+              {% if current_user.can_create_project %}
               <a
                 href="{{ url_for('proofing.create_project') }}?folder={{ sub.path|urlencode }}"
                 class="flex items-center gap-2.5 px-3.5 py-2 text-slate-700 hover:bg-slate-50 hover:text-royalblue"
@@ -155,6 +156,7 @@
                 <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 <span>{{ _('New project here') }}</span>
               </a>
+              {% endif %}
               <div class="h-px bg-slate-100 my-1"></div>
               <button
                 type="button"
@@ -260,12 +262,14 @@
         </svg>
         <span>{{ _('Create Subfolder') if folder_contents.current_folder else _('New Folder') }}</span>
       </button>
+      {% if current_user.can_create_project %}
       <a
         href="{{ url_for('proofing.create_project') }}{% if folder_contents.current_folder %}?folder={{ folder_contents.current_folder|urlencode }}{% endif %}"
         class="btn-premium !text-xs !py-1.5 !px-3.5"
       >
         {{ _('New in folder') if folder_contents.current_folder else _('New Project') }}
       </a>
+      {% endif %}
     </div>
   </div>
   {% endif %}
@@ -321,12 +325,14 @@
       </svg>
       <span>{{ _('New Folder') }}</span>
     </button>
+    {% if current_user.can_create_project %}
     <a href="{{ url_for('proofing.create_project') }}" class="btn-premium">
       <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
       </svg>
       {{ _('Create project') }}
     </a>
+    {% endif %}
   </div>
 </div>
 {% endif %}
