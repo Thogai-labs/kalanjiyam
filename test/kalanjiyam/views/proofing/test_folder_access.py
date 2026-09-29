@@ -321,3 +321,33 @@ def test_folder_access_api_get_and_post(flask_app, org_setup):
     assert users_map[org_setup["user_a_id"]]["is_restricted"] is True
     assert users_map[org_setup["user_a_id"]]["has_folder_access"] is True
     assert users_map[org_setup["user_b_id"]]["is_restricted"] is False
+
+    # Org admin switches User A BACK to Default mode (both boolean False and string "false")
+    switch_back_data = {
+        "folder": "Folder-A",
+        "users": [
+            {
+                "user_id": org_setup["user_a_id"],
+                "is_restricted": False,
+                "has_access": False,
+            }
+        ],
+    }
+    resp_switch = admin_client.post(
+        "/proofing/folders/access",
+        json=switch_back_data,
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp_switch.status_code == 200
+    assert resp_switch.get_json()["success"] is True
+
+    # Verify through GET that User A is back in default mode
+    resp_verify_back = admin_client.get("/proofing/folders/access?folder=Folder-A")
+    users_map_back = {u["id"]: u for u in resp_verify_back.get_json()["users"]}
+    assert users_map_back[org_setup["user_a_id"]]["is_restricted"] is False
+    assert users_map_back[org_setup["user_a_id"]]["can_access_folder"] is True
+
+    # In workspace view, User A can now access Folder-B (default mode sees all folders)
+    resp_user_b_folder = user_client.get("/proofing/?folder=Folder-B")
+    assert resp_user_b_folder.status_code == 200
+    assert "Project in Folder B" in resp_user_b_folder.text

@@ -1142,8 +1142,17 @@ def update_folder_access():
         if not user_id:
             continue
         user_id = int(user_id)
-        is_restricted = bool(item.get("is_restricted"))
-        has_access = bool(item.get("has_access") or item.get("has_folder_access"))
+        val_restr = item.get("is_restricted")
+        if isinstance(val_restr, str):
+            is_restricted = val_restr.strip().lower() in ("true", "1", "restricted")
+        else:
+            is_restricted = bool(val_restr)
+
+        val_access = item.get("has_access") or item.get("has_folder_access")
+        if isinstance(val_access, str):
+            has_access = val_access.strip().lower() in ("true", "1", "granted")
+        else:
+            has_access = bool(val_access)
 
         # Update restriction mode
         project_utils.set_user_folder_restriction(
@@ -1161,13 +1170,13 @@ def update_folder_access():
                     session, org_id, user_id, norm_folder
                 )
         else:
-            # When unrestricted (default mode), revoke any individual folder grant
-            # because they can access all folders
-            project_utils.revoke_user_folder_access(
-                session, org_id, user_id, norm_folder
-            )
+            # When unrestricted (default mode), revoke folder grants for this user in this org
+            # because they have full access to all folders
+            session.query(db.ProofFolderAccess).filter_by(
+                organization_id=org_id, user_id=user_id
+            ).delete(synchronize_session=False)
 
-    session.commit()
+        session.commit()
 
     return jsonify(
         {

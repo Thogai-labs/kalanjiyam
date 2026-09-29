@@ -951,12 +951,12 @@
                   <div class="flex items-center gap-2">
                     <!-- Mode Selector: Default vs Restricted -->
                     <select
-                      x-model="user.is_restricted"
-                      @change="onUserRestrictionModeChange(user)"
+                      :value="user.is_restricted ? 'restricted' : 'default'"
+                      @change="user.is_restricted = ($event.target.value === 'restricted'); onUserRestrictionModeChange(user)"
                       class="text-xs font-semibold rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700 focus:outline-none focus:border-royalblue"
                     >
-                      <option :value="false">{{ _('Default (All Folders)') }}</option>
-                      <option :value="true">{{ _('Restricted Mode') }}</option>
+                      <option value="default">{{ _('Default (All Folders)') }}</option>
+                      <option value="restricted">{{ _('Restricted Mode') }}</option>
                     </select>
 
                     <!-- Folder Access Checkbox (Active when Restricted) -->
@@ -1136,9 +1136,12 @@ function proofingDashboard() {
     },
 
     onUserRestrictionModeChange(user) {
-      // If switching to restricted mode and user doesn't have access, grant access to this folder
-      if (user.is_restricted && !user.has_folder_access) {
-        user.has_folder_access = true;
+      if (user.is_restricted) {
+        if (!user.has_folder_access) {
+          user.has_folder_access = true;
+        }
+      } else {
+        user.has_folder_access = false;
       }
     },
 
@@ -1151,7 +1154,7 @@ function proofingDashboard() {
           folder: this.accessControlFolder,
           users: this.accessControlUsers.map(u => ({
             user_id: u.id,
-            is_restricted: Boolean(u.is_restricted),
+            is_restricted: u.is_restricted === true || u.is_restricted === 'true' || u.is_restricted === 'restricted',
             has_access: Boolean(u.has_folder_access)
           }))
         };
