@@ -253,9 +253,7 @@ def index():
     # 2. Collect available organizations for filtering
     user_organizations = []
     if current_user.is_authenticated:
-        if getattr(current_user, "is_super_admin", False):
-            user_organizations = list(q.groups())
-        elif getattr(current_user, "is_master_user", False):
+        if getattr(current_user, "is_master_user", False):
             if getattr(current_user, "groups", None):
                 user_organizations = list(current_user.groups)
             elif getattr(current_user, "id", None):

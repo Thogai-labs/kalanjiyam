@@ -381,6 +381,46 @@ def test_admin_project_list__auth_admin(admin_client):
     assert edit_resp.status_code == 302
     assert "/admin/project/" in edit_resp.headers.get("Location", "")
 
+    # Check search and filter UI elements moved from proofing
+    assert 'name="search"' in resp.text
+    assert 'id="org-select"' in resp.text
+    assert 'id="mode-select"' in resp.text
+    assert "All Orgs" in resp.text
+    assert "All Modes" in resp.text
+    assert "Unregistered" in resp.text
+    assert "Registered" in resp.text
+    assert "Enterprise" in resp.text
+
+
+def test_admin_project_list_filtering(admin_client, flask_app):
+    # Filter by mode=unregistered (should return 0 since test-project has creator u-admin)
+    resp_unreg = admin_client.get("/admin/project/?mode=unregistered")
+    assert resp_unreg.status_code == 200
+    assert "test-project" not in resp_unreg.text
+
+    # Filter by mode=registered (test-project is not assigned to enterprise orgs)
+    resp_reg = admin_client.get("/admin/project/?mode=registered")
+    assert resp_reg.status_code == 200
+    assert "test-project" in resp_reg.text
+
+    # Search filter
+    resp_search = admin_client.get("/admin/project/?search=test-project")
+    assert resp_search.status_code == 200
+    assert "test-project" in resp_search.text
+
+    resp_search_none = admin_client.get("/admin/project/?search=nonexistent_project_xyz")
+    assert resp_search_none.status_code == 200
+    assert "test-project" not in resp_search_none.text
+
+
+def test_proofing_superadmin_clean_up(superadmin_client):
+    # On proofing dashboard, mode filter should be cleaned up
+    resp = superadmin_client.get("/proofing/")
+    assert resp.status_code == 200
+    assert 'id="mode-select"' not in resp.text
+    assert 'name="mode"' not in resp.text
+
+
 
 
 def test_header_proofing_nav_hidden_for_superadmin(superadmin_client, moderator_client, client):

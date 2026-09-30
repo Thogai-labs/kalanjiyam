@@ -34,18 +34,12 @@
         <!-- Date -->
         <span>{{ p.created_at.strftime('%b %d, %Y') }}</span>
 
-        {% if (current_user.is_super_admin or current_user.is_master_user) and p.groups %}
+        {% if current_user.is_master_user and p.groups %}
           {% for g in p.groups %}
           <span class="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-200/80 rounded" title="{{ _('Organization: %(name)s', name=g.name) }}">
             {{ g.name }}
           </span>
           {% endfor %}
-        {% endif %}
-
-        {% if current_user.is_super_admin and p.creator_mode %}
-        <span class="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded uppercase tracking-wider">
-          {{ p.creator_mode }}
-        </span>
         {% endif %}
 
         <!-- Folder badge if viewing search results or outside current folder -->

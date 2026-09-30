@@ -11,3 +11,88 @@
 {{ admin.page_header(_('Projects'), _('Proofing books registered on the platform.')) }}
 {{ super() }}
 {% endblock %}
+
+{% block list_header %}
+<div class="mb-5 space-y-3">
+  <!-- Google-Style Omni Search & Filter Bar (moved from proofing workspace for superadmin) -->
+  <form method="GET" action="{{ return_url }}" class="w-full space-y-3">
+    <!-- Omni Search Bar -->
+    <div class="flex items-center px-4 py-2 sm:py-2.5 bg-slate-50 border border-slate-200 rounded-full focus-within:border-royalblue focus-within:bg-white focus-within:ring-2 focus-within:ring-royalblue/10 transition-all shadow-xs">
+      <svg class="w-5 h-5 text-slate-400 shrink-0 mr-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+      </svg>
+      <input
+        type="text"
+        name="search"
+        value="{{ search or '' }}"
+        placeholder="{{ _('Search by project title, slug, or author…') }}"
+        class="w-full bg-transparent text-slate-800 placeholder-slate-400 text-sm sm:text-base focus:outline-none font-medium"
+      />
+      {% if search %}
+      <a href="{{ clear_search_url }}" class="text-slate-400 hover:text-slate-600 transition-colors p-1 ml-1" title="{{ _('Clear search') }}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </a>
+      {% endif %}
+      <button type="submit" class="px-5 py-2 bg-royalblue hover:bg-blue-600 text-white font-semibold rounded-full text-xs sm:text-sm transition-all shadow-xs shrink-0 flex items-center gap-1.5 ml-2">
+        <span>{{ _('Search') }}</span>
+      </button>
+    </div>
+
+    <!-- Filter Controls Row -->
+    <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+      <div class="flex flex-wrap items-center gap-3">
+        <!-- Organization Filter -->
+        <div class="flex items-center gap-1.5 text-xs sm:text-sm">
+          <label for="org-select" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Org:') }}</label>
+          <select
+            id="org-select"
+            name="org"
+            class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
+            onchange="this.form.submit()"
+          >
+            <option value="all" {% if selected_org == 'all' or not selected_org %}selected{% endif %}>{{ _('All Orgs') }}</option>
+            <option value="open-tenant" {% if selected_org == 'open-tenant' %}selected{% endif %}>{{ _('Open Tenant') }}</option>
+            {% for org in user_organizations %}
+            <option value="{{ org.slug }}" {% if selected_org == org.slug %}selected{% endif %}>{{ org.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Mode Filter -->
+        <div class="flex items-center gap-1.5 text-xs sm:text-sm">
+          <label for="mode-select" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Mode:') }}</label>
+          <select
+            id="mode-select"
+            name="mode"
+            class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
+            onchange="this.form.submit()"
+          >
+            <option value="all" {% if selected_mode == 'all' or not selected_mode %}selected{% endif %}>{{ _('All Modes') }}</option>
+            <option value="unregistered" {% if selected_mode == 'unregistered' %}selected{% endif %}>{{ _('Unregistered') }}</option>
+            <option value="registered" {% if selected_mode == 'registered' %}selected{% endif %}>{{ _('Registered') }}</option>
+            <option value="enterprise" {% if selected_mode == 'enterprise' %}selected{% endif %}>{{ _('Enterprise') }}</option>
+          </select>
+        </div>
+
+        {% if search or (selected_org and selected_org != 'all') or (selected_mode and selected_mode != 'all') %}
+        <a href="{{ url_for('.index_view') }}" class="inline-flex items-center gap-1 text-xs text-rose-600 hover:text-rose-700 font-semibold px-2.5 py-1 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors" title="{{ _('Reset filters') }}">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          <span>{{ _('Reset') }}</span>
+        </a>
+        {% endif %}
+      </div>
+
+      <!-- Count Indicator -->
+      <p class="text-xs sm:text-sm font-semibold text-slate-500">
+        {% if count > 0 and page_size %}
+          {{ _('Showing %(start)d–%(end)d of %(total)d projects', start=(page * page_size) + 1, end=[(page + 1) * page_size, count]|min, total=count) }}
+        {% else %}
+          {{ count }} {{ _('projects') }}
+        {% endif %}
+      </p>
+    </div>
+  </form>
+</div>
+{% endblock %}

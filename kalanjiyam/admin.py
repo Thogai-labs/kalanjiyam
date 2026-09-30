@@ -5555,7 +5555,7 @@ class ProjectView(BaseView):
         "total_pages": "Total Pages",
         "total_storage_size": "Total Storage Size",
     }
-    column_searchable_list = ["slug", "display_title"]
+    column_searchable_list = ["slug", "display_title", "author"]
     column_sortable_list = ["slug", "created_at"]
     column_default_sort = ("created_at", True)
 
@@ -5598,10 +5598,42 @@ class ProjectView(BaseView):
     form_columns = ["slug", "display_title", "is_publicly_viewable", "description"]
     form_excluded_columns = ["creator", "board", "pages", "created_at", "updated_at"]
 
+    def _apply_custom_filters(self, query):
+        from sqlalchemy import not_, or_
+
+        selected_mode = (request.args.get("mode") or "all").strip().lower()
+        if selected_mode and selected_mode != "all":
+            if selected_mode == "unregistered":
+                query = query.filter(db.Project.fingerprint_id.isnot(None))
+            elif selected_mode == "enterprise":
+                query = query.filter(
+                    db.Project.fingerprint_id.is_(None),
+                    db.Project.groups.any(db.Group.slug != "open-tenant"),
+                )
+            elif selected_mode == "registered":
+                query = query.filter(
+                    db.Project.fingerprint_id.is_(None),
+                    not_(db.Project.groups.any(db.Group.slug != "open-tenant")),
+                )
+
+        selected_org = (request.args.get("org") or "all").strip()
+        if selected_org and selected_org != "all":
+            if selected_org == "open-tenant":
+                query = query.filter(
+                    or_(
+                        not_(db.Project.groups.any()),
+                        db.Project.groups.any(db.Group.slug == "open-tenant"),
+                    )
+                )
+            else:
+                query = query.filter(db.Project.groups.any(db.Group.slug == selected_org))
+
+        return query
+
     def get_query(self):
         from sqlalchemy import orm
 
-        return (
+        query = (
             super()
             .get_query()
             .options(
@@ -5615,6 +5647,20 @@ class ProjectView(BaseView):
                 orm.selectinload(db.Project.groups),
             )
         )
+        return self._apply_custom_filters(query)
+
+    def get_count_query(self):
+        query = super().get_count_query()
+        return self._apply_custom_filters(query)
+
+    def render(self, template, **kwargs):
+        if template == self.list_template:
+            from kalanjiyam import queries as q
+
+            kwargs["user_organizations"] = list(q.groups())
+            kwargs["selected_org"] = (request.args.get("org") or "all").strip()
+            kwargs["selected_mode"] = (request.args.get("mode") or "all").strip().lower()
+        return super().render(template, **kwargs)
 
     def get_list(self, page, sort_field, sort_desc, search, filters, page_size=None):
         count, data = super().get_list(

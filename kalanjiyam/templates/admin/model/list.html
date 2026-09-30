@@ -12,6 +12,7 @@
 
 {% block content %}
 <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-50">
+{% block list_header %}
   <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
     <div class="flex items-center gap-4">
       <p class="text-sm font-semibold text-slate-500">
@@ -37,6 +38,7 @@
       {% endif %}
     </div>
   </div>
+{% endblock %}
 
   <div class="overflow-x-auto rounded-xl border border-slate-100">
   <table class="min-w-full text-sm">

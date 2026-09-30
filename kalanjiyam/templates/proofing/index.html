@@ -222,8 +222,8 @@
         <!-- Filter Controls Row -->
         <div class="flex flex-wrap items-center justify-between gap-2.5 pt-1">
           <div class="flex flex-wrap items-center gap-2.5">
-            <!-- Organization Filter (superadmin & master user) -->
-            {% if (current_user.is_master_user or current_user.is_super_admin) and user_organizations %}
+            <!-- Organization Filter (master user) -->
+            {% if current_user.is_master_user and user_organizations %}
             <div class="flex items-center gap-1.5 text-xs sm:text-sm">
               <label for="org-select" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Org:') }}</label>
               <select
@@ -237,25 +237,6 @@
                 {% for org in user_organizations %}
                 <option value="{{ org.slug }}" {% if selected_org == org.slug %}selected{% endif %}>{{ org.name }}</option>
                 {% endfor %}
-              </select>
-            </div>
-            {% endif %}
-
-            <!-- Mode Filter (superadmin) -->
-            {% if current_user.is_super_admin %}
-            <div class="flex items-center gap-1.5 text-xs sm:text-sm">
-              <label for="mode-select" class="font-bold text-slate-600 whitespace-nowrap">{{ _('Mode:') }}</label>
-              <select
-                id="mode-select"
-                name="mode"
-                x-model="mode"
-                class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer"
-                @change="fetchResults(1)"
-              >
-                <option value="all" {% if selected_mode == 'all' %}selected{% endif %}>{{ _('All Modes') }}</option>
-                <option value="unregistered" {% if selected_mode == 'unregistered' %}selected{% endif %}>{{ _('Unregistered') }}</option>
-                <option value="registered" {% if selected_mode == 'registered' %}selected{% endif %}>{{ _('Registered') }}</option>
-                <option value="enterprise" {% if selected_mode == 'enterprise' %}selected{% endif %}>{{ _('Enterprise') }}</option>
               </select>
             </div>
             {% endif %}
