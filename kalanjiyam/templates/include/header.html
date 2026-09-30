@@ -165,6 +165,7 @@
           href="{{ url_for('search.index') }}">{{ _('Search') }}</a>
       </li>
 
+      {% if not current_user.is_super_admin %}
       <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
         x-data="{ open: false }"
         @click.outside="open = false"
@@ -240,6 +241,7 @@
           </a>
         </div>
       </li>
+      {% endif %}
 
       <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
         @mouseenter="moveCursor($el)">
@@ -614,6 +616,7 @@
           </li>
 
           <!-- Proofing Item with Accordion Submenu -->
+          {% if not current_user.is_super_admin %}
           <li>
             <button
               type="button"
@@ -679,6 +682,7 @@
               </a>
             </div>
           </li>
+          {% endif %}
 
           <!-- Help Link -->
           <li>

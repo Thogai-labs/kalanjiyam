@@ -374,5 +374,27 @@ def test_admin_project_list__auth_admin(admin_client):
     assert "test-project" in resp.text
 
 
+def test_header_proofing_nav_hidden_for_superadmin(superadmin_client, moderator_client, client):
+    # For superadmin, proofing dropdown is hidden in the header
+    resp_super = superadmin_client.get("/")
+    assert resp_super.status_code == 200
+    assert "Proofing Navigation" not in resp_super.text
+    assert "mobileProofingOpen = !mobileProofingOpen" not in resp_super.text
+
+    # For moderator, proofing navigation dropdown is visible
+    resp_mod = moderator_client.get("/")
+    assert resp_mod.status_code == 200
+    assert "Proofing Navigation" in resp_mod.text
+    assert "mobileProofingOpen = !mobileProofingOpen" in resp_mod.text
+
+    # For anonymous user, proofing navigation dropdown is visible
+    resp_anon = client.get("/")
+    assert resp_anon.status_code == 200
+    assert "Proofing Navigation" in resp_anon.text
+    assert "mobileProofingOpen = !mobileProofingOpen" in resp_anon.text
+
+
+
+
 
 
