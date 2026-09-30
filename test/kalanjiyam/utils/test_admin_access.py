@@ -49,3 +49,41 @@ def test_org_admin_redirected_from_platform(flask_app):
         assert r.status_code == 302
         assert "/admin/org" in r.headers["Location"]
 
+
+def test_meta_analyst_access_helpers(flask_app):
+    with flask_app.app_context():
+        from kalanjiyam.utils.admin_access import (
+            can_access_meta_analytics,
+            is_meta_analyst,
+            is_platform_super_admin,
+        )
+
+        session = q.get_session()
+        meta_user = _make_user(session, "meta1", [SiteRole.META_ANALYST.value])
+        super_user = _make_user(session, "super_meta1", [SiteRole.SUPER_ADMIN.value])
+        org_user = _make_user(session, "org_meta1", [SiteRole.ORG_ADMIN.value])
+        session.commit()
+
+        assert is_meta_analyst(meta_user) is True
+        assert is_meta_analyst(super_user) is False
+        assert is_meta_analyst(org_user) is False
+
+        assert can_access_meta_analytics(meta_user) is True
+        assert can_access_meta_analytics(super_user) is True
+        assert can_access_meta_analytics(org_user) is False
+
+        assert is_platform_super_admin(meta_user) is False
+
+
+def test_meta_analyst_redirected_from_platform(flask_app):
+    with flask_app.app_context():
+        session = q.get_session()
+        user = _make_user(session, "metaonly", [SiteRole.META_ANALYST.value])
+        session.commit()
+
+        meta_client = flask_app.test_client(user=user)
+        r = meta_client.get("/admin/platform/")
+        assert r.status_code == 302
+        assert "/admin/meta-analytics" in r.headers["Location"]
+
+

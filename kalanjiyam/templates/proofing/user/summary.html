@@ -44,6 +44,10 @@
           <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
             {{ _('Moderator') }}
           </span>
+          {% elif user.is_meta_analyst %}
+          <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-teal-100 text-teal-800 border border-teal-200">
+            {{ _('Meta Analyst') }}
+          </span>
           {% elif user.is_registered_user %}
           <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
             {{ _('Registered User') }}

@@ -230,34 +230,35 @@ def test_meta_analytics_csv_export(flask_app):
         assert data["org2"].name in csv_str
 
 
-def test_meta_analytics_access_control(flask_app, superadmin_client, moderator_client, rama_client, client):
+def test_meta_analytics_access_control(flask_app, superadmin_client, meta_analyst_client, moderator_client, rama_client, client):
     with flask_app.app_context():
         session = q.get_session()
         data = _setup_multi_tenant_data(session)
         org1_id = data["org1"].id
 
-    # 1. Super Admin access: MUST succeed (200 OK)
-    r_overview = superadmin_client.get("/admin/meta-analytics/")
-    assert r_overview.status_code == 200
-    assert "Cross-Organization Meta-Analytics" in r_overview.text
+    # 1. Privileged access (Super Admin & Meta Analyst): MUST succeed (200 OK)
+    for privileged_client in (superadmin_client, meta_analyst_client):
+        r_overview = privileged_client.get("/admin/meta-analytics/")
+        assert r_overview.status_code == 200
+        assert "Cross-Organization Meta-Analytics" in r_overview.text
 
-    r_org = superadmin_client.get(f"/admin/meta-analytics/org/{org1_id}")
-    assert r_org.status_code == 200
-    assert data["org1"].name in r_org.text
+        r_org = privileged_client.get(f"/admin/meta-analytics/org/{org1_id}")
+        assert r_org.status_code == 200
+        assert data["org1"].name in r_org.text
 
-    r_api_vel = superadmin_client.get("/admin/meta-analytics/api/velocity?days=7")
-    assert r_api_vel.status_code == 200
-    assert "revisions" in r_api_vel.json
+        r_api_vel = privileged_client.get("/admin/meta-analytics/api/velocity?days=7")
+        assert r_api_vel.status_code == 200
+        assert "revisions" in r_api_vel.json
 
-    r_api_ev = superadmin_client.get("/admin/meta-analytics/api/events")
-    assert r_api_ev.status_code == 200
-    assert "events" in r_api_ev.json
+        r_api_ev = privileged_client.get("/admin/meta-analytics/api/events")
+        assert r_api_ev.status_code == 200
+        assert "events" in r_api_ev.json
 
-    r_export = superadmin_client.get("/admin/meta-analytics/export/csv")
-    assert r_export.status_code == 200
-    assert "text/csv" in r_export.headers["Content-Type"]
+        r_export = privileged_client.get("/admin/meta-analytics/export/csv")
+        assert r_export.status_code == 200
+        assert "text/csv" in r_export.headers["Content-Type"]
 
-    # 2. Non-super admin roles (moderator, regular proofer, anonymous) MUST be blocked
+    # 2. Non-authorized roles (moderator, regular proofer, anonymous) MUST be blocked
     for blocked_client in (moderator_client, rama_client, client):
         r = blocked_client.get("/admin/meta-analytics/")
         assert r.status_code in (302, 404)
@@ -267,6 +268,30 @@ def test_meta_analytics_access_control(flask_app, superadmin_client, moderator_c
 
         r_api_blocked = blocked_client.get("/admin/meta-analytics/api/velocity")
         assert r_api_blocked.status_code in (302, 404)
+
+
+def test_meta_analyst_role_isolation(flask_app, meta_analyst_client):
+    """Verify that a Meta Analyst has access ONLY to meta analytics and is blocked everywhere else."""
+    # 1. Admin root redirects meta-analyst straight to meta-analytics
+    r_admin = meta_analyst_client.get("/admin/", follow_redirects=False)
+    assert r_admin.status_code == 302
+    assert "/admin/meta-analytics" in r_admin.headers["Location"]
+
+    # 2. Platform admin view redirects back to meta-analytics (access denied)
+    r_platform = meta_analyst_client.get("/admin/platform/", follow_redirects=False)
+    assert r_platform.status_code == 302
+    assert "/admin/meta-analytics" in r_platform.headers["Location"]
+
+    # 3. Model views return 404
+    r_user_admin = meta_analyst_client.get("/admin/user/")
+    assert r_user_admin.status_code == 404
+
+    r_project_admin = meta_analyst_client.get("/admin/project/")
+    assert r_project_admin.status_code == 404
+
+    # 4. Proofing project creation is forbidden
+    r_create_project = meta_analyst_client.get("/proofing/create-project", follow_redirects=False)
+    assert r_create_project.status_code == 302
 
 
 def test_meta_analytics_zero_content_guarantee(flask_app, superadmin_client):

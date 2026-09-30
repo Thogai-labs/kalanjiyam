@@ -22,6 +22,8 @@ class SiteRole(str, Enum):
     GUEST = "guest"
     #: Registered user (self-registered user under open-tenant).
     REGISTERED_USER = "registered_user"
+    #: Meta-analytics viewer. Can only view cross-organization meta-analytics.
+    META_ANALYST = "meta_analyst"
 
 
 class SitePageStatus(str, Enum):

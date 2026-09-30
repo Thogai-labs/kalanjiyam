@@ -159,6 +159,7 @@ def _make_role_form(roles, user_):
         SiteRole.SUPER_ADMIN: _l("Super Administrator"),
         SiteRole.GUEST: _l("Guest"),
         SiteRole.REGISTERED_USER: _l("Registered User (Open Tenant)"),
+        SiteRole.META_ANALYST: _l("Meta Analyst (cross-organization meta-analytics view)"),
     }
     # We're mutating a global object, but this is safe because we're doing so
     # in an idempotent way.

@@ -15,7 +15,7 @@
 {% set is_search_active = request.blueprint == 'search' %}
 {% set is_help_active = request.endpoint in ['proofing.help_index', 'proofing.beginners_guide', 'proofing.complete_guide', 'proofing.editor_guide'] %}
 {% set is_proofing_active = request.blueprint and request.blueprint.startswith('proofing') and request.endpoint != 'proofing.user.summary' and not is_help_active %}
-{% set is_admin_active = request.endpoint and ('admin' in request.endpoint or 'platform_view' in request.endpoint or 'groups_view' in request.endpoint or 'org_admin_view' in request.endpoint or 'master_metrics_view' in request.endpoint) %}
+{% set is_admin_active = request.endpoint and ('admin' in request.endpoint or 'platform_view' in request.endpoint or 'groups_view' in request.endpoint or 'org_admin_view' in request.endpoint or 'master_metrics_view' in request.endpoint or 'meta_analytics_view' in request.endpoint) %}
 {% set current_locale_str = (get_locale() | string) if get_locale() else (session.get('locale', 'en')) %}
 {% set current_lang = kalanjiyam_locales | selectattr('code', 'equalto', current_locale_str) | list | first or kalanjiyam_locales | selectattr('slug', 'equalto', current_locale_str.split('_')[0]) | list | first %}
 
@@ -283,6 +283,13 @@
           if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
           href="{{ url_for('master_metrics_view.cli_batch_ocr') }}">{{ _('Metrics') }}</a>
       </li>
+      {% elif current_user.is_meta_analyst %}
+      <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+        @mouseenter="moveCursor($el)">
+        <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
+          if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+          href="{{ url_for('meta_analytics_view.index') }}">{{ _('Meta-Analytics') }}</a>
+      </li>
       {% elif current_user.is_admin %}
       <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
         @mouseenter="moveCursor($el)">
@@ -544,6 +551,7 @@
               {% if current_user.is_super_admin %}Super Admin
               {% elif current_user.is_org_admin %}Org Admin
               {% elif current_user.is_moderator %}Moderator
+              {% elif current_user.is_meta_analyst %}Meta Analyst
               {% elif current_user.is_registered_user %}Registered User
               {% else %}Member{% endif %}
             </div>
@@ -743,6 +751,17 @@
                 <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
               </svg>
               <span>{{ _('Metrics') }}</span>
+            </a>
+          </li>
+          {% elif current_user.is_meta_analyst %}
+          <li>
+            <a href="{{ url_for('meta_analytics_view.index') }}"
+               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
+               {% if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
+              <svg class="w-4 h-4 shrink-0 {% if is_admin_active %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+              </svg>
+              <span>{{ _('Meta-Analytics') }}</span>
             </a>
           </li>
           {% elif current_user.is_admin %}

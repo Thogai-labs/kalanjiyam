@@ -24,32 +24,35 @@ The system defines the following roles (configured in :class:`kalanjiyam.enums.S
 * **MODERATOR**: Proofing effort coordinator. Can create and upload projects, manage project deletion, promote or restrict users within proofing scope, and run global batch operations.
 * **ADMIN**: Organization administrator. Has full access to database records, project lifecycle management, and organization settings within assigned tenant scope.
 * **ORG_ADMIN**: Dedicated organization manager. Manages tenant-specific users, project creation/allocations, and organization settings.
+* **META_ANALYST**: Cross-organization analytics reviewer. Has read-only access exclusively to the meta-analytics dashboard (`/admin/meta-analytics/`), velocity, events, and metrics export. Cannot view or edit projects, pages, users, or platform settings, and cannot create projects.
 * **SUPER_ADMIN**: Platform owner / System administrator. Has unrestricted cross-tenant access, quota control, organization lifecycle management, and system configuration capabilities.
 
 RBAC Permissions Matrix
 -----------------------
 
-+-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
-| Capability / Feature                | GUEST | REGISTERED_USER | P1 | P2 | MODERATOR | ADMIN | ORG_ADMIN | SUPER_ADMIN |
-+=====================================+=======+=================+====+====+===========+=======+===========+=============+
-| View Public Projects & Pages        | Yes   | Yes             | Yes| Yes| Yes       | Yes   | Yes       | Yes         |
-+-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
-| Edit OCR Text (R0 -> R1)            | Own*  | Yes             | Yes| Yes| Yes       | Yes   | Yes       | Yes         |
-+-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
-| Verify & Lock Proofing (R1 -> R2)   | No    | No              | No | Yes| Yes       | Yes   | Yes       | Yes         |
-+-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
-| Upload New Books / PDF Projects     | Yes*  | Yes             | No | No | Yes       | Yes   | Yes       | Yes         |
-+-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
-| Trigger OCR Batch Re-processing     | No    | No              | No | Yes| Yes       | Yes   | Yes       | Yes         |
-+-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
-| Delete Projects / Pages             | Own*  | No              | No | No | Yes       | Yes   | Yes       | Yes         |
-+-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
-| Manage Organization Users           | No    | No              | No | No | No        | Yes   | Yes       | Yes         |
-+-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
-| Configure Tenant Quotas & Storage   | No    | No              | No | No | No        | No    | No        | Yes         |
-+-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
-| Access System Metrics & Logs        | No    | No              | No | No | No        | Yes   | Yes       | Yes         |
-+-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+-------------+
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+--------------+-------------+
+| Capability / Feature                | GUEST | REGISTERED_USER | P1 | P2 | MODERATOR | ADMIN | ORG_ADMIN | META_ANALYST | SUPER_ADMIN |
++=====================================+=======+=================+====+====+===========+=======+===========+==============+=============+
+| View Public Projects & Pages        | Yes   | Yes             | Yes| Yes| Yes       | Yes   | Yes       | No           | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+--------------+-------------+
+| Edit OCR Text (R0 -> R1)            | Own*  | Yes             | Yes| Yes| Yes       | Yes   | Yes       | No           | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+--------------+-------------+
+| Verify & Lock Proofing (R1 -> R2)   | No    | No              | No | Yes| Yes       | Yes   | Yes       | No           | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+--------------+-------------+
+| Upload New Books / PDF Projects     | Yes*  | Yes             | No | No | Yes       | Yes   | Yes       | No           | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+--------------+-------------+
+| Trigger OCR Batch Re-processing     | No    | No              | No | Yes| Yes       | Yes   | Yes       | No           | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+--------------+-------------+
+| Delete Projects / Pages             | Own*  | No              | No | No | Yes       | Yes   | Yes       | No           | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+--------------+-------------+
+| Manage Organization Users           | No    | No              | No | No | No        | Yes   | Yes       | No           | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+--------------+-------------+
+| Configure Tenant Quotas & Storage   | No    | No              | No | No | No        | No    | No        | No           | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+--------------+-------------+
+| Access System Metrics & Logs        | No    | No              | No | No | No        | Yes   | Yes       | No           | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+--------------+-------------+
+| Access Meta-Analytics Dashboard     | No    | No              | No | No | No        | No    | No        | Yes          | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+--------------+-------------+
 
 \* *For Guest users, permissions apply to their own guest-created projects (device fingerprint matched) and project creation is subject to platform guest access enablement and daily guest limits.*
 
@@ -80,4 +83,8 @@ This section records all modifications to access control rules, role definitions
 +------------+----------------------+------------------------------------+---------------------------------------------------+--------------+
 | 2026-09-29 | Guest, Registered    | Introduce explicit Guest and       | Separate open-tenant community users from org     | Architecture |
 |            | User Roles           | Registered User roles              | proofreaders; retain open-tenant project creation |              |
++------------+----------------------+------------------------------------+---------------------------------------------------+--------------+
+| 2026-09-30 | Meta Analyst Role    | Introduce dedicated META_ANALYST   | Provide isolated cross-tenant analytics access    | Architecture |
+|            |                      | role restricted to meta-analytics  | without granting admin, project, or proofing      |              |
+|            |                      | dashboard and exports              | privileges                                        |              |
 +------------+----------------------+------------------------------------+---------------------------------------------------+--------------+

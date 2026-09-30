@@ -45,8 +45,10 @@ from kalanjiyam.admin_user import (
 )
 from kalanjiyam.enums import SiteRole
 from kalanjiyam.utils.admin_access import (
+    can_access_meta_analytics,
     is_platform_super_admin,
     platform_admin_inaccessible,
+    require_meta_analytics_access,
     require_org_admin,
     require_platform_super_admin,
 )
@@ -110,6 +112,7 @@ class KalanjiyamIndexView(AdminIndexView):
             getattr(current_user, "is_moderator", False)
             or getattr(current_user, "is_org_admin", False)
             or getattr(current_user, "is_master_user", False)
+            or getattr(current_user, "is_meta_analyst", False)
         )
     
     def inaccessible_callback(self, name, **kwargs):
@@ -119,6 +122,8 @@ class KalanjiyamIndexView(AdminIndexView):
     def index(self):
         if is_platform_super_admin():
             return redirect(url_for("platform_view.index"))
+        if getattr(current_user, "is_meta_analyst", False):
+            return redirect(url_for("meta_analytics_view.index"))
         if current_user.is_org_admin:
             return redirect(url_for("org_admin_view.index"))
         if getattr(current_user, "is_master_user", False):
@@ -2814,17 +2819,17 @@ def _metadata_metrics_csv_response(
 
 
 class MetaAnalyticsView(AdminBaseView):
-    """Super-admin multi-tenant meta-analytics view (strictly zero document content)."""
+    """Super-admin and meta-analyst multi-tenant meta-analytics view (strictly zero document content)."""
 
     def is_accessible(self):
-        return is_platform_super_admin()
+        return can_access_meta_analytics()
 
     def inaccessible_callback(self, name, **kwargs):
         return platform_admin_inaccessible()
 
     @expose("/")
     def index(self):
-        require_platform_super_admin()
+        require_meta_analytics_access()
         time_window = request.args.get("window", 30, type=int)
         if time_window not in (1, 7, 30, 90, 365):
             time_window = 30
@@ -2847,7 +2852,7 @@ class MetaAnalyticsView(AdminBaseView):
 
     @expose("/org/<int:org_id>")
     def org_detail(self, org_id):
-        require_platform_super_admin()
+        require_meta_analytics_access()
         from kalanjiyam.services.meta_analytics import MetaAnalyticsService
 
         profile = MetaAnalyticsService.get_org_meta_profile(org_id)
@@ -2860,7 +2865,7 @@ class MetaAnalyticsView(AdminBaseView):
 
     @expose("/api/velocity")
     def api_velocity(self):
-        require_platform_super_admin()
+        require_meta_analytics_access()
         from kalanjiyam.services.meta_analytics import MetaAnalyticsService
 
         days = request.args.get("days", 30, type=int)
@@ -2872,7 +2877,7 @@ class MetaAnalyticsView(AdminBaseView):
 
     @expose("/api/events")
     def api_events(self):
-        require_platform_super_admin()
+        require_meta_analytics_access()
         from kalanjiyam.services.meta_analytics import MetaAnalyticsService
 
         limit = request.args.get("limit", 40, type=int)
@@ -2887,7 +2892,7 @@ class MetaAnalyticsView(AdminBaseView):
 
     @expose("/export/csv")
     def export_csv(self):
-        require_platform_super_admin()
+        require_meta_analytics_access()
         from flask import Response
         from kalanjiyam.services.meta_analytics import MetaAnalyticsService
 

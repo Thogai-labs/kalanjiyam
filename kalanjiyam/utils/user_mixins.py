@@ -53,6 +53,10 @@ class KalanjiyamAnonymousUser(AnonymousUserMixin):
         return True
 
     @property
+    def is_meta_analyst(self) -> bool:
+        return False
+
+    @property
     def can_create_project(self) -> bool:
         try:
             from flask import current_app
@@ -123,6 +127,10 @@ class KalanjiyamUserMixin(UserMixin):
     @property
     def is_guest(self) -> bool:
         return False
+
+    @property
+    def is_meta_analyst(self) -> bool:
+        return self.has_role(SiteRole.META_ANALYST)
 
     @property
     def can_create_project(self) -> bool:

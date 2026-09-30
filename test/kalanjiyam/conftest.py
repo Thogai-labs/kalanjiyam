@@ -105,8 +105,12 @@ def initialize_test_db():
     banned.set_password("pass_banned")
     banned.set_is_banned(True)
 
+    meta_analyst = db.User(username="u-meta-analyst", email="u_meta_analyst@siddhasagaram.in")
+    meta_analyst.set_password("pass_meta_analyst")
+
     session.add(deleted_admin)
     session.add(banned)
+    session.add(meta_analyst)
     session.flush()
 
     # Roles
@@ -115,12 +119,14 @@ def initialize_test_db():
     moderator_role = session.query(db.Role).filter_by(name="moderator").one()
     master_user_role = session.query(db.Role).filter_by(name="master_user").one()
     super_admin_role = session.query(db.Role).filter_by(name="super_admin").one()
+    meta_analyst_role = session.query(db.Role).filter_by(name="meta_analyst").one()
 
     session.add(p1_role)
     session.add(p2_role)
     session.add(moderator_role)
     session.add(master_user_role)
     session.add(super_admin_role)
+    session.add(meta_analyst_role)
     session.flush()
 
     u_basic.roles = [p1_role, p2_role]
@@ -129,12 +135,14 @@ def initialize_test_db():
     super_admin.roles = [p1_role, p2_role, super_admin_role]
     deleted_admin.roles = [p1_role, p2_role, super_admin_role]
     banned.roles = [p1_role]
+    meta_analyst.roles = [meta_analyst_role]
     session.add(u_basic)
     session.add(moderator)
     session.add(admin)
     session.add(super_admin)
     session.add(deleted_admin)
     session.add(banned)
+    session.add(meta_analyst)
     session.flush()
 
     # Blog
@@ -245,3 +253,11 @@ def banned_client(flask_app):
     session = get_session()
     user = session.query(db.User).filter_by(username="u-banned").first()
     return flask_app.test_client(user=user)
+
+
+@pytest.fixture()
+def meta_analyst_client(flask_app):
+    session = get_session()
+    user = session.query(db.User).filter_by(username="u-meta-analyst").first()
+    return flask_app.test_client(user=user)
+

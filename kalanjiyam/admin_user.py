@@ -20,6 +20,7 @@ WEB_ASSIGNABLE_ROLES = (
     SiteRole.MASTER_USER.value,
     SiteRole.ORG_ADMIN.value,
     SiteRole.REGISTERED_USER.value,
+    SiteRole.META_ANALYST.value,
 )
 
 
