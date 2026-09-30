@@ -24,7 +24,7 @@ The system defines the following roles (configured in :class:`kalanjiyam.enums.S
 * **MODERATOR**: Proofing effort coordinator. Can create and upload projects, manage project deletion, promote or restrict users within proofing scope, and run global batch operations.
 * **ADMIN**: Organization administrator. Has full access to database records, project lifecycle management, and organization settings within assigned tenant scope.
 * **ORG_ADMIN**: Dedicated organization manager. Manages tenant-specific users, project creation/allocations, and organization settings.
-* **META_ANALYST**: Cross-organization analytics reviewer. Has read-only access exclusively to the meta-analytics dashboard (`/admin/meta-analytics/`), velocity, events, and metrics export. Cannot view or edit projects, pages, users, or platform settings, and cannot create projects.
+* **META_ANALYST**: Cross-organization analytics reviewer. Has read-only access to the meta-analytics dashboard (`/admin/meta-analytics/`), velocity, events, metrics export, and user-submitted contact us / reported issue requests. Cannot view or edit projects, pages, users, or platform settings, and cannot create projects.
 * **SUPER_ADMIN**: Platform owner / System administrator. Has unrestricted cross-tenant access, quota control, organization lifecycle management, and system configuration capabilities.
 
 RBAC Permissions Matrix
@@ -52,6 +52,8 @@ RBAC Permissions Matrix
 | Access System Metrics & Logs        | No    | No              | No | No | No        | Yes   | Yes       | No           | Yes         |
 +-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+--------------+-------------+
 | Access Meta-Analytics Dashboard     | No    | No              | No | No | No        | No    | No        | Yes          | Yes         |
++-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+--------------+-------------+
+| View / Triage Contact Requests      | No    | No              | No | No | No        | Yes   | No        | Yes          | Yes         |
 +-------------------------------------+-------+-----------------+----+----+-----------+-------+-----------+--------------+-------------+
 
 \* *For Guest users, permissions apply to their own guest-created projects (device fingerprint matched) and project creation is subject to platform guest access enablement and daily guest limits.*
@@ -87,4 +89,7 @@ This section records all modifications to access control rules, role definitions
 | 2026-09-30 | Meta Analyst Role    | Introduce dedicated META_ANALYST   | Provide isolated cross-tenant analytics access    | Architecture |
 |            |                      | role restricted to meta-analytics  | without granting admin, project, or proofing      |              |
 |            |                      | dashboard and exports              | privileges                                        |              |
++------------+----------------------+------------------------------------+---------------------------------------------------+--------------+
+| 2026-09-30 | Meta Analyst Role    | Add Contact Us Requests View       | Allow meta analyst to view and triage contact us  | Architecture |
+|            |                      | to META_ANALYST role               | and reported issues like super admin              |              |
 +------------+----------------------+------------------------------------+---------------------------------------------------+--------------+

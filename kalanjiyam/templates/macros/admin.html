@@ -125,6 +125,24 @@
     {{ _nav_link('site.index', 'home', _('Home'), active == 'home', icon_name='home') }}
   </ul>
 </nav>
+{% elif current_user.is_meta_analyst %}
+<nav class="mb-6">
+  <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Meta Analytics') }}</h2>
+  <ul class="space-y-1">
+    {{ _nav_link('meta_analytics_view.index', 'meta_analytics', _('Meta-Analytics'), active == 'meta_analytics', icon_name='bar-chart-3') }}
+    {{ _nav_link('meta_analytics_view.reported_issues', 'reported_issues', _('Reported Issues'), active == 'reported_issues', icon_name='help-circle') }}
+  </ul>
+</nav>
+<nav>
+  <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Site') }}</h2>
+  <ul class="space-y-1">
+    {% if config.ENABLE_BOOKS %}
+    {{ _nav_link('public.books.index', 'books', _('Books'), active == 'books', icon_name='book') }}
+    {% endif %}
+    {{ _nav_link('proofing.index', 'proofing', _('Proofing'), active == 'proofing', icon_name='check-square') }}
+    {{ _nav_link('site.index', 'home', _('Home'), active == 'home', icon_name='home') }}
+  </ul>
+</nav>
 {% endif %}
 {% endmacro %}
 

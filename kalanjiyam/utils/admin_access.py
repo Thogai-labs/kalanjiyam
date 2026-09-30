@@ -1,6 +1,6 @@
 """Access control for platform vs organization admin views."""
 
-from flask import abort, redirect, url_for
+from flask import abort, redirect, request, url_for
 from flask_login import current_user
 
 from kalanjiyam.enums import SiteRole
@@ -44,6 +44,8 @@ def platform_admin_inaccessible():
         if is_org_scoped_admin():
             return redirect(url_for("org_admin_view.index"))
         if is_meta_analyst():
+            if request.path.rstrip("/").endswith("/reported-issues"):
+                return redirect(url_for("meta_analytics_view.reported_issues"))
             return redirect(url_for("meta_analytics_view.index"))
     abort(404)
 

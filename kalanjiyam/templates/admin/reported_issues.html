@@ -101,7 +101,7 @@
 
           <!-- Status Dropdown Select -->
           <td class="px-4 py-3.5">
-            <form method="POST" action="{{ url_for('platform_view.update_issue_status') }}" class="inline-block">
+            <form method="POST" action="{{ update_url or url_for('platform_view.update_issue_status') }}" class="inline-block">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
               <input type="hidden" name="issue_id" value="{{ issue.id }}"/>
               <select 

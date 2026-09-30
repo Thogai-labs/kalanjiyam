@@ -2907,6 +2907,43 @@ class MetaAnalyticsView(AdminBaseView):
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
 
+    @expose("/reported-issues")
+    def reported_issues(self):
+        require_meta_analytics_access()
+        session = q.get_session()
+        issues = (
+            session.query(db.ReportedIssue)
+            .order_by(db.ReportedIssue.created_at.desc())
+            .all()
+        )
+        return render_template(
+            "admin/reported_issues.html",
+            issues=issues,
+            csrf_token=generate_csrf(),
+            update_url=url_for(".update_issue_status"),
+        )
+
+    @expose("/reported-issues/update-status", methods=["POST"])
+    def update_issue_status(self):
+        require_meta_analytics_access()
+        issue_id = request.form.get("issue_id", type=int)
+        status = request.form.get("status", "").strip()
+
+        valid_statuses = ["pending", "resolved", "not_applicable"]
+        if issue_id and status in valid_statuses:
+            session = q.get_session()
+            issue = session.query(db.ReportedIssue).filter_by(id=issue_id).first()
+            if issue:
+                issue.status = status
+                session.commit()
+                flash("Issue status updated successfully.", "success")
+            else:
+                flash("Issue not found.", "error")
+        else:
+            flash("Invalid status or issue ID.", "error")
+
+        return redirect(url_for(".reported_issues"))
+
 
 class GroupsView(AdminBaseView):
     """Super-admin group management: list/create/edit/delete groups, manage users and books."""
@@ -5515,6 +5552,11 @@ class ReportedIssueView(BaseView):
     column_editable_list = ["status"]
     column_default_sort = ("created_at", True)
     form_columns = ["name", "email", "category", "message", "status"]
+
+    def inaccessible_callback(self, name, **kw):
+        if getattr(current_user, "is_meta_analyst", False):
+            return redirect(url_for("meta_analytics_view.reported_issues"))
+        abort(404)
 
 
 def create_admin_manager(app):

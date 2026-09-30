@@ -258,6 +258,10 @@ def test_meta_analytics_access_control(flask_app, superadmin_client, meta_analys
         assert r_export.status_code == 200
         assert "text/csv" in r_export.headers["Content-Type"]
 
+        r_issues = privileged_client.get("/admin/meta-analytics/reported-issues")
+        assert r_issues.status_code == 200
+        assert "Reported Issues & Feedback" in r_issues.text
+
     # 2. Non-authorized roles (moderator, regular proofer, anonymous) MUST be blocked
     for blocked_client in (moderator_client, rama_client, client):
         r = blocked_client.get("/admin/meta-analytics/")
@@ -268,6 +272,9 @@ def test_meta_analytics_access_control(flask_app, superadmin_client, meta_analys
 
         r_api_blocked = blocked_client.get("/admin/meta-analytics/api/velocity")
         assert r_api_blocked.status_code in (302, 404)
+
+        r_issues_blocked = blocked_client.get("/admin/meta-analytics/reported-issues")
+        assert r_issues_blocked.status_code in (302, 404)
 
 
 def test_meta_analyst_role_isolation(flask_app, meta_analyst_client):
@@ -282,6 +289,16 @@ def test_meta_analyst_role_isolation(flask_app, meta_analyst_client):
     assert r_platform.status_code == 302
     assert "/admin/meta-analytics" in r_platform.headers["Location"]
 
+    # Platform reported-issues redirects meta-analyst straight to meta-analytics reported-issues
+    r_platform_issues = meta_analyst_client.get("/admin/platform/reported-issues", follow_redirects=False)
+    assert r_platform_issues.status_code == 302
+    assert "/admin/meta-analytics/reported-issues" in r_platform_issues.headers["Location"]
+
+    # Model view for reported issues redirects to meta-analytics reported-issues
+    r_reportedissue_model = meta_analyst_client.get("/admin/reportedissue/", follow_redirects=False)
+    assert r_reportedissue_model.status_code == 302
+    assert "/admin/meta-analytics/reported-issues" in r_reportedissue_model.headers["Location"]
+
     # 3. Model views return 404
     r_user_admin = meta_analyst_client.get("/admin/user/")
     assert r_user_admin.status_code == 404
@@ -292,6 +309,44 @@ def test_meta_analyst_role_isolation(flask_app, meta_analyst_client):
     # 4. Proofing project creation is forbidden
     r_create_project = meta_analyst_client.get("/proofing/create-project", follow_redirects=False)
     assert r_create_project.status_code == 302
+
+
+def test_meta_analyst_reported_issues_management(flask_app, meta_analyst_client):
+    """Verify that a Meta Analyst can view reported issues queue and update ticket status."""
+    with flask_app.app_context():
+        session = q.get_session()
+        issue = db.ReportedIssue(
+            name="Test Reporter",
+            email="reporter@example.com",
+            category="ocr",
+            message="OCR failed on Sanskrit palm leaf chapter 3.",
+            status="pending",
+        )
+        session.add(issue)
+        session.commit()
+        issue_id = issue.id
+
+    # 1. View reported issues list
+    r = meta_analyst_client.get("/admin/meta-analytics/reported-issues")
+    assert r.status_code == 200
+    assert "Test Reporter" in r.text
+    assert "reporter@example.com" in r.text
+    assert "OCR Processing" in r.text
+
+    # 2. Update status to resolved
+    r_update = meta_analyst_client.post(
+        "/admin/meta-analytics/reported-issues/update-status",
+        data={"issue_id": issue_id, "status": "resolved"},
+        follow_redirects=True,
+    )
+    assert r_update.status_code == 200
+    assert "Issue status updated successfully." in r_update.text
+
+    # Verify status changed in database
+    with flask_app.app_context():
+        session = q.get_session()
+        updated_issue = session.query(db.ReportedIssue).filter_by(id=issue_id).first()
+        assert updated_issue.status == "resolved"
 
 
 def test_meta_analytics_zero_content_guarantee(flask_app, superadmin_client):

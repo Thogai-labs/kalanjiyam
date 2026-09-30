@@ -756,12 +756,22 @@
           {% elif current_user.is_meta_analyst %}
           <li>
             <a href="{{ url_for('meta_analytics_view.index') }}"
-               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
-               {% if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
-              <svg class="w-4 h-4 shrink-0 {% if is_admin_active %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active and request.endpoint == 'meta_analytics_view.index' %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
+               {% if is_admin_active and request.endpoint == 'meta_analytics_view.index' %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
+              <svg class="w-4 h-4 shrink-0 {% if is_admin_active and request.endpoint == 'meta_analytics_view.index' %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
               </svg>
               <span>{{ _('Meta-Analytics') }}</span>
+            </a>
+          </li>
+          <li>
+            <a href="{{ url_for('meta_analytics_view.reported_issues') }}"
+               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active and request.endpoint == 'meta_analytics_view.reported_issues' %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
+               {% if is_admin_active and request.endpoint == 'meta_analytics_view.reported_issues' %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
+              <svg class="w-4 h-4 shrink-0 {% if is_admin_active and request.endpoint == 'meta_analytics_view.reported_issues' %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" x2="12.01" y1="17" y2="17"/>
+              </svg>
+              <span>{{ _('Contact Requests') }}</span>
             </a>
           </li>
           {% elif current_user.is_admin %}
