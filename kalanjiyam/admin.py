@@ -23,6 +23,7 @@ from flask_admin.contrib import sqla
 from flask_login import current_user, login_required
 from wtforms import PasswordField, SelectField, SelectMultipleField, validators
 from werkzeug.utils import secure_filename
+from markupsafe import Markup
 from slugify import slugify
 import json
 import zipfile
@@ -5517,28 +5518,172 @@ class UserView(BaseView):
         return True
 
 
+def _format_project_storage_size(size_bytes: int | None) -> str:
+    if not size_bytes:
+        return "0 B"
+    bytes_val = float(size_bytes)
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if abs(bytes_val) < 1024.0:
+            if unit in ["B", "KB"]:
+                return f"{bytes_val:.0f} {unit}"
+            return f"{bytes_val:.1f} {unit}"
+        bytes_val /= 1024.0
+    return f"{bytes_val:.1f} PB"
+
+
 class ProjectView(BaseView):
     """Super-admin list/edit for proofing projects (books)."""
 
     can_create = False
     list_template = "admin/project_list.html"
-    column_list = ["slug", "display_title", "is_publicly_viewable", "creator", "creator_mode"]
+    page_size = 20
+    column_list = [
+        "slug",
+        "creator",
+        "org_name",
+        "creator_mode",
+        "total_pages",
+        "total_storage_size",
+    ]
     column_labels = {
-        "is_publicly_viewable": "Public on /books/",
+        "slug": "Slug",
+        "creator": "Creator",
+        "org_name": "Org Name",
         "creator_mode": "Creation Mode",
+        "total_pages": "Total Pages",
+        "total_storage_size": "Total Storage Size",
     }
+    column_searchable_list = ["slug", "display_title"]
+    column_sortable_list = ["slug", "created_at"]
+    column_default_sort = ("created_at", True)
+
+    column_formatters = {
+        "slug": lambda v, c, m, p: Markup(
+            f'<div class="font-mono text-xs font-bold text-slate-900">{m.slug}</div>'
+            + (f'<div class="text-[11px] text-slate-500 font-sans mt-0.5">{m.display_title}</div>' if m.display_title else "")
+        ),
+        "creator": lambda v, c, m, p: (
+            Markup(f'<span class="font-semibold text-slate-900">{m.creator.username}</span>')
+            if m.creator
+            else (
+                Markup('<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600">Guest</span>')
+                if m.fingerprint_id
+                else Markup('<span class="text-slate-400">—</span>')
+            )
+        ),
+        "org_name": lambda v, c, m, p: (
+            Markup(f'<span class="font-medium text-slate-800">{", ".join(g.name for g in m.groups)}</span>')
+            if m.groups
+            else Markup('<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600">open-tenant</span>')
+        ),
+        "creator_mode": lambda v, c, m, p: (
+            Markup('<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">enterprise</span>')
+            if m.creator_mode == "enterprise"
+            else (
+                Markup('<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">registered</span>')
+                if m.creator_mode == "registered"
+                else Markup('<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">unregistered</span>')
+            )
+        ),
+        "total_pages": lambda v, c, m, p: Markup(
+            f'<span class="font-bold text-slate-800">{m.total_pages}</span>'
+        ),
+        "total_storage_size": lambda v, c, m, p: Markup(
+            f'<span class="font-semibold text-slate-800">{_format_project_storage_size(m.total_storage_size)}</span>'
+        ),
+    }
+
     form_columns = ["slug", "display_title", "is_publicly_viewable", "description"]
     form_excluded_columns = ["creator", "board", "pages", "created_at", "updated_at"]
 
-    def get_list_columns(self):
-        columns = super().get_list_columns()
-        if not current_app.config.get("ENABLE_BOOKS", True):
-            return [c for c in columns if c[0] != "is_publicly_viewable"]
-        return columns
+    def get_query(self):
+        from sqlalchemy import orm
+
+        return (
+            super()
+            .get_query()
+            .options(
+                orm.defer(db.Project.extracted_metadata),
+                orm.defer(db.Project.condition_tags),
+                orm.defer(db.Project.description),
+                orm.defer(db.Project.notes),
+                orm.defer(db.Project.page_numbers),
+                orm.defer(db.Project.tags),
+                orm.joinedload(db.Project.creator),
+                orm.selectinload(db.Project.groups),
+            )
+        )
+
+    def get_list(self, page, sort_field, sort_desc, search, filters, page_size=None):
+        count, data = super().get_list(
+            page, sort_field, sort_desc, search, filters, page_size=page_size
+        )
+        if not data:
+            return count, data
+
+        proj_ids = [p.id for p in data]
+
+        # 1. Batch query total pages in a single SQL count for current page
+        try:
+            from sqlalchemy import func
+
+            page_counts = dict(
+                self.session.query(db.Page.project_id, func.count(db.Page.id))
+                .filter(db.Page.project_id.in_(proj_ids))
+                .group_by(db.Page.project_id)
+                .all()
+            )
+            for p in data:
+                p._cached_total_pages = page_counts.get(p.id, 0)
+        except Exception as e:
+            log.warning("Failed to fetch project page counts in ProjectView: %s", e)
+            for p in data:
+                p._cached_total_pages = 0
+
+        # 2. Batch calculate storage size with optional Redis cache
+        try:
+            import os
+            import redis
+            from kalanjiyam.utils.storage import get_storage, project_prefix
+
+            storage = get_storage()
+            r_client = None
+            try:
+                r_client = redis.Redis.from_url(
+                    os.getenv("REDIS_URL", "redis://localhost:6379/0")
+                )
+                r_client.ping()
+            except Exception:
+                r_client = None
+
+            for p in data:
+                size_bytes = 0
+                cache_key = f"admin:project:storage_size:{p.slug}"
+                if r_client:
+                    try:
+                        cached_val = r_client.get(cache_key)
+                        if cached_val is not None:
+                            size_bytes = int(cached_val)
+                        else:
+                            size_bytes = storage.total_size(project_prefix(p.slug))
+                            r_client.setex(cache_key, 300, str(size_bytes))
+                    except Exception:
+                        size_bytes = storage.total_size(project_prefix(p.slug))
+                else:
+                    size_bytes = storage.total_size(project_prefix(p.slug))
+                p._cached_storage_size = size_bytes
+        except Exception as e:
+            log.warning("Failed to fetch project storage sizes in ProjectView: %s", e)
+            for p in data:
+                p._cached_storage_size = 0
+
+        return count, data
 
     def scaffold_form(self):
         form_class = super().scaffold_form()
-        if not current_app.config.get("ENABLE_BOOKS", True) and hasattr(form_class, "is_publicly_viewable"):
+        if not current_app.config.get("ENABLE_BOOKS", True) and hasattr(
+            form_class, "is_publicly_viewable"
+        ):
             delattr(form_class, "is_publicly_viewable")
         return form_class
 

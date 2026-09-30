@@ -357,4 +357,22 @@ def test_org_admin_cannot_add_user_belonging_to_another_org(flask_app):
         assert registered_user.id not in members_open_tenant
 
 
+def test_admin_project_list__unauth(client):
+    resp = client.get("/admin/project/")
+    assert resp.status_code == 404
+
+
+def test_admin_project_list__auth_admin(admin_client):
+    resp = admin_client.get("/admin/project/")
+    assert resp.status_code == 200
+    assert "Slug" in resp.text
+    assert "Creator" in resp.text
+    assert "Org Name" in resp.text
+    assert "Creation Mode" in resp.text
+    assert "Total Pages" in resp.text
+    assert "Total Storage Size" in resp.text
+    assert "test-project" in resp.text
+
+
+
 

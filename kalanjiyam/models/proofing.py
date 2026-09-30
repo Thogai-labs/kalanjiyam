@@ -310,6 +310,27 @@ class Project(Base):
 
         return "registered"
 
+    @property
+    def total_pages(self) -> int:
+        """Total number of pages in the project."""
+        if hasattr(self, "_cached_total_pages"):
+            return self._cached_total_pages
+        return len(self.pages) if self.pages else 0
+
+    @property
+    def total_storage_size(self) -> int:
+        """Total size in bytes of all project files in storage."""
+        if hasattr(self, "_cached_storage_size"):
+            return self._cached_storage_size
+        return 0
+
+    @property
+    def org_name(self) -> str:
+        """Name of the organization(s) owning this project."""
+        if self.groups:
+            return ", ".join(g.name for g in self.groups)
+        return "open-tenant"
+
 
 class Page(Base):
     """A page in a proofreading project.
