@@ -42,7 +42,9 @@
   <table class="min-w-full text-sm">
     <thead class="bg-slate-50 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
       <tr>
+        {% if admin_view.can_edit %}
         <th class="px-4 py-3 w-10"></th>
+        {% endif %}
         {% for c, name in list_columns %}
           <th class="px-4 py-3">{{ name }}</th>
         {% endfor %}
@@ -51,11 +53,13 @@
     <tbody class="divide-y divide-slate-100">
       {% for row in data %}
         <tr class="hover:bg-slate-50/80 transition-colors">
+          {% if admin_view.can_edit %}
           {% set row_id = get_pk_value(row) %}
           {% set edit_url = get_url(".edit_view", id=row_id) %}
           <td class="px-4 py-3 text-center">
             <a href="{{ edit_url }}" class="text-royalblue hover:text-royalblue/80 font-bold" title="{{ _('Edit') }}">&#x270E;</a>
           </td>
+          {% endif %}
         {% for c, name in list_columns %}
           <td class="px-4 py-3 text-slate-800">{{ get_value(row, c) if get_value is defined else row[c] }}</td>
         {% endfor %}

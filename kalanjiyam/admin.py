@@ -5532,9 +5532,11 @@ def _format_project_storage_size(size_bytes: int | None) -> str:
 
 
 class ProjectView(BaseView):
-    """Super-admin list/edit for proofing projects (books)."""
+    """Super-admin list view for proofing projects (books)."""
 
     can_create = False
+    can_edit = False
+    can_delete = False
     list_template = "admin/project_list.html"
     page_size = 20
     column_list = [

@@ -372,6 +372,15 @@ def test_admin_project_list__auth_admin(admin_client):
     assert "Total Pages" in resp.text
     assert "Total Storage Size" in resp.text
     assert "test-project" in resp.text
+    # Edit pencil icon (&#x270E;) and edit action links must not appear in project list
+    assert "&#x270E;" not in resp.text
+    assert "/admin/project/edit/" not in resp.text
+
+    # Directly visiting edit URL should redirect away
+    edit_resp = admin_client.get("/admin/project/edit/?id=1")
+    assert edit_resp.status_code == 302
+    assert "/admin/project/" in edit_resp.headers.get("Location", "")
+
 
 
 def test_header_proofing_nav_hidden_for_superadmin(superadmin_client, moderator_client, client):
