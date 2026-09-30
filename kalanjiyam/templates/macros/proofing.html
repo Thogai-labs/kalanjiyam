@@ -66,10 +66,6 @@
 {# Sub-horizontal nav bar shown across proofing pages. #}
 {% macro main_nav(active, current_user) %}
 <nav class="bg-white p-2 rounded-2xl shadow-sm border border-slate-200/80 flex flex-wrap items-center gap-1.5 overflow-x-auto">
-  {% if current_user.is_moderator %}
-    {{ _link('stats', "proofing.dashboard", _("Dashboard"), active, icon_name='layout-dashboard') }}
-    <span class="w-px h-5 bg-slate-200 mx-1 hidden sm:inline-block"></span>
-  {% endif %}
   {{ _link('projects', "proofing.index", _("Proofing Workspace"), active, icon_name='list') }}
   {% if current_user.can_create_project %}
   {{ _link('create', "proofing.create_project", _("Create project"), active, icon_name='plus-circle') }}

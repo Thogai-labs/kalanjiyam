@@ -207,50 +207,6 @@ def test_recent_changes_filters(client):
     assert "Activity Stream" in resp.text
 
 
-def test_admin_dashboard_moderator_required(client):
-    resp = client.get("/proofing/admin/dashboard/")
-    assert resp.status_code in (302, 403)
-
-
-def test_admin_dashboard(moderator_client):
-    resp = moderator_client.get("/proofing/admin/dashboard/")
-    assert resp.status_code == 200
-    assert "Proofing Analytics" in resp.text
-    assert "Revisions" in resp.text
-    assert "Contributors" in resp.text
-
-
-def test_admin_dashboard_redis_cache(moderator_client, monkeypatch):
-    import json
-    from unittest.mock import MagicMock
-
-    import redis
-
-    mock_redis = MagicMock()
-    mock_redis.get.return_value = None
-    monkeypatch.setattr(redis.Redis, "from_url", lambda *args, **kwargs: mock_redis)
-
-    resp = moderator_client.get("/proofing/admin/dashboard/")
-    assert resp.status_code == 200
-    assert mock_redis.setex.called
-
-    # When cache is populated, it returns cached template values directly
-    mock_redis.get.return_value = json.dumps(
-        {
-            "num_revisions_30d": 99,
-            "num_contributors_30d": 42,
-            "num_revisions_7d": 10,
-            "num_contributors_7d": 5,
-            "num_revisions_1d": 2,
-            "num_contributors_1d": 1,
-        }
-    ).encode("utf-8")
-    resp_cached = moderator_client.get("/proofing/admin/dashboard/")
-    assert resp_cached.status_code == 200
-    assert "99" in resp_cached.text
-    assert "42" in resp_cached.text
-
-
 def test_create_project__unauth(client):
     # Guest user can access create-project and see workspace link when guest access is enabled
     resp = client.get("/proofing/create-project")
