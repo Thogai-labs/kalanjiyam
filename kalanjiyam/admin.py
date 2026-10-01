@@ -5531,6 +5531,39 @@ def _format_project_storage_size(size_bytes: int | None) -> str:
     return f"{bytes_val:.1f} PB"
 
 
+_STORAGE_SIZE_CACHE: dict[str, tuple[int, float]] = {}
+_STORAGE_CACHE_TTL = 3600
+_REDIS_CLIENT = None
+_REDIS_CLIENT_CHECKED = 0.0
+
+
+def _get_project_view_redis_client():
+    global _REDIS_CLIENT, _REDIS_CLIENT_CHECKED
+    if _REDIS_CLIENT is not None:
+        return _REDIS_CLIENT
+    import time as _time
+
+    now = _time.time()
+    if now - _REDIS_CLIENT_CHECKED < 5.0:
+        return None
+    _REDIS_CLIENT_CHECKED = now
+    try:
+        import os
+        import redis
+
+        client = redis.Redis.from_url(
+            os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+            socket_connect_timeout=0.5,
+            socket_timeout=0.5,
+        )
+        client.ping()
+        _REDIS_CLIENT = client
+        return _REDIS_CLIENT
+    except Exception:
+        _REDIS_CLIENT = None
+        return None
+
+
 class ProjectView(BaseView):
     """Super-admin list view for proofing projects (books)."""
 
@@ -5655,9 +5688,12 @@ class ProjectView(BaseView):
 
     def render(self, template, **kwargs):
         if template == self.list_template:
-            from kalanjiyam import queries as q
-
-            kwargs["user_organizations"] = list(q.groups())
+            kwargs["user_organizations"] = (
+                self.session.query(db.Group.slug, db.Group.name)
+                .filter(db.Group.is_active.is_(True))
+                .order_by(db.Group.name)
+                .all()
+            )
             kwargs["selected_org"] = (request.args.get("org") or "all").strip()
             kwargs["selected_mode"] = (request.args.get("mode") or "all").strip().lower()
         return super().render(template, **kwargs)
@@ -5688,42 +5724,107 @@ class ProjectView(BaseView):
             for p in data:
                 p._cached_total_pages = 0
 
-        # 2. Batch calculate storage size with optional Redis cache
+        # 2. Batch calculate storage size with memory cache, Redis MGET and parallel fallback
         try:
-            import os
-            import redis
-            from kalanjiyam.utils.storage import get_storage, project_prefix
+            import time as _time
 
-            storage = get_storage()
-            r_client = None
-            try:
-                r_client = redis.Redis.from_url(
-                    os.getenv("REDIS_URL", "redis://localhost:6379/0")
-                )
-                r_client.ping()
-            except Exception:
-                r_client = None
+            now = _time.time()
+            missing_projects = []
+            r_client = _get_project_view_redis_client()
 
+            # Step A: Check in-memory process cache
             for p in data:
-                size_bytes = 0
-                cache_key = f"admin:project:storage_size:{p.slug}"
-                if r_client:
-                    try:
-                        cached_val = r_client.get(cache_key)
-                        if cached_val is not None:
-                            size_bytes = int(cached_val)
-                        else:
-                            size_bytes = storage.total_size(project_prefix(p.slug))
-                            r_client.setex(cache_key, 300, str(size_bytes))
-                    except Exception:
-                        size_bytes = storage.total_size(project_prefix(p.slug))
+                cached = _STORAGE_SIZE_CACHE.get(p.slug)
+                if cached and (now - cached[1] < _STORAGE_CACHE_TTL):
+                    p._cached_storage_size = cached[0]
                 else:
-                    size_bytes = storage.total_size(project_prefix(p.slug))
-                p._cached_storage_size = size_bytes
+                    missing_projects.append(p)
+
+            # Step B: Check Redis cache with a single MGET for missing projects
+            if missing_projects and r_client:
+                try:
+                    keys = [
+                        f"admin:project:storage_size:{p.slug}"
+                        for p in missing_projects
+                    ]
+                    cached_vals = r_client.mget(keys)
+                    still_missing = []
+                    for p, val in zip(missing_projects, cached_vals):
+                        if val is not None:
+                            size_bytes = int(val)
+                            p._cached_storage_size = size_bytes
+                            _STORAGE_SIZE_CACHE[p.slug] = (size_bytes, now)
+                        else:
+                            still_missing.append(p)
+                    missing_projects = still_missing
+                except Exception as e:
+                    log.warning("Redis mget failed in ProjectView: %s", e)
+
+            # Step C: For remaining missing projects, compute storage size in parallel without extra DB queries
+            if missing_projects:
+                try:
+                    from concurrent.futures import ThreadPoolExecutor
+                    from kalanjiyam.utils.storage import get_storage
+
+                    storage = get_storage()
+
+                    def _compute_size(p):
+                        try:
+                            org_slug = (
+                                p.groups[0].slug if p.groups else "open-tenant"
+                            )
+                            prefix = f"projects/{org_slug}/{p.slug}/"
+                            return p.slug, storage.total_size(prefix)
+                        except Exception as exc:
+                            log.warning(
+                                "Failed computing storage size for %s: %s",
+                                p.slug,
+                                exc,
+                            )
+                            return p.slug, 0
+
+                    max_workers = min(len(missing_projects), 8)
+                    computed_sizes = {}
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        for slug, size_bytes in executor.map(
+                            _compute_size, missing_projects
+                        ):
+                            computed_sizes[slug] = size_bytes
+
+                    for p in missing_projects:
+                        size_bytes = computed_sizes.get(p.slug, 0)
+                        p._cached_storage_size = size_bytes
+                        _STORAGE_SIZE_CACHE[p.slug] = (size_bytes, now)
+
+                    # Batch write to Redis via pipeline
+                    if r_client and computed_sizes:
+                        try:
+                            pipe = r_client.pipeline()
+                            for slug, size_bytes in computed_sizes.items():
+                                pipe.setex(
+                                    f"admin:project:storage_size:{slug}",
+                                    _STORAGE_CACHE_TTL,
+                                    str(size_bytes),
+                                )
+                            pipe.execute()
+                        except Exception as exc:
+                            log.warning(
+                                "Redis pipeline setex failed in ProjectView: %s",
+                                exc,
+                            )
+
+                except Exception as e:
+                    log.warning(
+                        "Failed to calculate project storage sizes in ProjectView: %s",
+                        e,
+                    )
+                    for p in missing_projects:
+                        p._cached_storage_size = 0
         except Exception as e:
             log.warning("Failed to fetch project storage sizes in ProjectView: %s", e)
             for p in data:
-                p._cached_storage_size = 0
+                if not hasattr(p, "_cached_storage_size"):
+                    p._cached_storage_size = 0
 
         return count, data
 

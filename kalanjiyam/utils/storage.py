@@ -363,6 +363,34 @@ class LocalStorage(Storage):
     def local_copy(self, key: str) -> Path:
         return self._path(key)
 
+    def total_size(self, prefix: str) -> int:
+        """Total size in bytes of all objects under `prefix` using fast scandir."""
+        base = self._path(prefix)
+        if not base.is_dir():
+            return 0
+        total = 0
+        try:
+            import os
+
+            stack = [str(base)]
+            while stack:
+                curr = stack.pop()
+                try:
+                    with os.scandir(curr) as it:
+                        for entry in it:
+                            try:
+                                if entry.is_dir(follow_symlinks=False):
+                                    stack.append(entry.path)
+                                elif entry.is_file(follow_symlinks=False):
+                                    total += entry.stat(follow_symlinks=False).st_size
+                            except OSError:
+                                pass
+                except OSError:
+                    pass
+        except Exception:
+            return 0
+        return total
+
     def serve(self, key: str, **send_file_kwargs):
         _apply_send_file_cache_defaults(send_file_kwargs)
         return send_file(self._path(key), **send_file_kwargs)
@@ -485,9 +513,19 @@ class S3Storage(Storage):
         paginator = self.client.get_paginator("list_objects_v2")
         for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
             for obj in page.get("Contents", []):
-                lm = obj.get("LastModified")
-                mtime = lm.timestamp() if lm else time.time()
                 yield obj["Key"], obj["Size"], mtime
+
+    def total_size(self, prefix: str) -> int:
+        """Total size in bytes of all objects under `prefix`."""
+        paginator = self.client.get_paginator("list_objects_v2")
+        total = 0
+        try:
+            for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+                for obj in page.get("Contents", []):
+                    total += obj.get("Size", 0)
+        except Exception:
+            pass
+        return total
 
     def delete_prefix(self, prefix: str) -> int:
         keys = [key for key, _ in self.list_keys(prefix)]
@@ -781,6 +819,9 @@ class MultiTenantStorage(Storage):
 
     def list_keys(self, prefix: str) -> Iterator[tuple[str, int]]:
         return self._backend_for_key(prefix).list_keys(prefix)
+
+    def total_size(self, prefix: str) -> int:
+        return self._backend_for_key(prefix).total_size(prefix)
 
     def list_keys_with_mtime(
         self, prefix: str = ""

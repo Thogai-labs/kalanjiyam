@@ -15,7 +15,7 @@
 {% set is_search_active = request.blueprint == 'search' %}
 {% set is_help_active = request.endpoint in ['proofing.help_index', 'proofing.beginners_guide', 'proofing.complete_guide', 'proofing.editor_guide'] %}
 {% set is_proofing_active = request.blueprint and request.blueprint.startswith('proofing') and request.endpoint != 'proofing.user.summary' and not is_help_active %}
-{% set is_admin_active = request.endpoint and ('admin' in request.endpoint or 'platform_view' in request.endpoint or 'groups_view' in request.endpoint or 'org_admin_view' in request.endpoint or 'master_metrics_view' in request.endpoint or 'meta_analytics_view' in request.endpoint) %}
+{% set is_admin_active = (request.path and ('/admin/' in request.path or request.path.endswith('/admin')) and not (request.blueprint and request.blueprint.startswith('proofing'))) or (request.endpoint and ('admin' in request.endpoint or 'platform_view' in request.endpoint or 'groups_view' in request.endpoint or 'org_admin_view' in request.endpoint or 'master_metrics_view' in request.endpoint or 'meta_analytics_view' in request.endpoint or request.endpoint.startswith('project.') or request.endpoint.startswith('user.') or request.endpoint.startswith('reportedissue.'))) %}
 {% set current_locale_str = (get_locale() | string) if get_locale() else (session.get('locale', 'en')) %}
 {% set current_lang = kalanjiyam_locales | selectattr('code', 'equalto', current_locale_str) | list | first or kalanjiyam_locales | selectattr('slug', 'equalto', current_locale_str.split('_')[0]) | list | first %}
 

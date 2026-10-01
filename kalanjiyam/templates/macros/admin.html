@@ -44,10 +44,11 @@
 
 
 {% macro _nav_link(route, label, text, active, icon_name=None, anchor=None, href=None) %}
+{% set is_active = active or (route and request.endpoint == route) %}
 <li>
   <a href="{{ href if href else (url_for(route, _anchor=anchor) if anchor else url_for(route)) }}"
-     class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 font-semibold text-sm {{ 'text-white shadow-md shadow-royalblue/20' if active else 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' }}"
-     {% if active %}style="background: linear-gradient(135deg, royalblue, #3f51b5);"{% endif %}>
+     class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 font-semibold text-sm {{ 'text-white shadow-md shadow-royalblue/20' if is_active else 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' }}"
+     {% if is_active %}style="background: linear-gradient(135deg, royalblue, #3f51b5);"{% endif %}>
     {% if icon_name %}
       {{ icon(icon_name, class='w-4 h-4 shrink-0') }}
     {% endif %}
@@ -58,27 +59,61 @@
 
 
 {% macro nav(active, current_user) %}
+{% set active_tab = active %}
+{% if request.endpoint %}
+  {% if request.endpoint.startswith('project.') or (request.path and ('/admin/project/' in request.path or request.path.endswith('/admin/project'))) %}
+    {% set active_tab = 'projects' %}
+  {% elif request.endpoint.startswith('user.') or (request.path and ('/admin/user/' in request.path or request.path.endswith('/admin/user'))) %}
+    {% set active_tab = 'users' %}
+  {% elif request.endpoint.startswith('groups_view.') or (request.path and ('/admin/groups/' in request.path or request.path.endswith('/admin/groups'))) %}
+    {% set active_tab = 'organizations' %}
+  {% elif request.endpoint.startswith('platform_view.') %}
+    {% if request.endpoint == 'platform_view.user_analytics' %}
+      {% set active_tab = 'user_analytics' %}
+    {% elif request.endpoint == 'platform_view.reported_issues' %}
+      {% set active_tab = 'reported_issues' %}
+    {% elif request.endpoint == 'platform_view.cli_batch_ocr' %}
+      {% set active_tab = 'cli_batch_ocr' %}
+    {% elif request.endpoint == 'platform_view.metadata_metrics' %}
+      {% set active_tab = 'metadata_metrics' %}
+    {% elif request.endpoint == 'platform_view.search_index' %}
+      {% set active_tab = 'search_index' %}
+    {% elif request.endpoint == 'platform_view.metrics' %}
+      {% set active_tab = 'metrics' %}
+    {% elif request.endpoint == 'platform_view.settings' %}
+      {% set active_tab = 'platform_settings' %}
+    {% elif request.endpoint == 'platform_view.index' %}
+      {% set active_tab = 'platform' %}
+    {% endif %}
+  {% elif request.endpoint.startswith('meta_analytics_view.') %}
+    {% if request.endpoint == 'meta_analytics_view.reported_issues' %}
+      {% set active_tab = 'reported_issues' %}
+    {% else %}
+      {% set active_tab = 'meta_analytics' %}
+    {% endif %}
+  {% endif %}
+{% endif %}
 {% if current_user.is_super_admin %}
 <nav class="mb-6">
   <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Platform') }}</h2>
   <ul class="space-y-1">
-    {{ _nav_link('platform_view.index', 'platform', _('Overview'), active == 'platform', icon_name='layout-dashboard') }}
-    {{ _nav_link('meta_analytics_view.index', 'meta_analytics', _('Meta-Analytics'), active == 'meta_analytics', icon_name='bar-chart-3') }}
-    {{ _nav_link('groups_view.index', 'organizations', _('Organizations'), active == 'organizations', icon_name='building-2') }}
-    {{ _nav_link('platform_view.user_analytics', 'user_analytics', _('User Analytics'), active == 'user_analytics', icon_name='bar-chart-3') }}
-    {{ _nav_link('platform_view.reported_issues', 'reported_issues', _('Reported Issues'), active == 'reported_issues', icon_name='help-circle') }}
-    {{ _nav_link('platform_view.cli_batch_ocr', 'cli_batch_ocr', _('OCR & TR Metrics'), active == 'cli_batch_ocr', icon_name='gauge') }}
-    {{ _nav_link('platform_view.metadata_metrics', 'metadata_metrics', _('Extraction Metrics'), active == 'metadata_metrics', icon_name='gauge') }}
-    {{ _nav_link('platform_view.search_index', 'search_index', _('Search Index'), active == 'search_index', icon_name='search') }}
-    {{ _nav_link('platform_view.metrics', 'metrics', _('Metrics & Logs'), active == 'metrics', icon_name='activity') }}
-    {{ _nav_link('platform_view.settings', 'platform_settings', _('Platform Settings'), active == 'platform_settings', icon_name='settings') }}
+    {{ _nav_link('platform_view.index', 'platform', _('Overview'), active_tab == 'platform', icon_name='layout-dashboard') }}
+    {{ _nav_link('meta_analytics_view.index', 'meta_analytics', _('Meta-Analytics'), active_tab == 'meta_analytics', icon_name='bar-chart-3') }}
+    {{ _nav_link('groups_view.index', 'organizations', _('Organizations'), active_tab == 'organizations', icon_name='building-2') }}
+    {{ _nav_link('platform_view.user_analytics', 'user_analytics', _('User Analytics'), active_tab == 'user_analytics', icon_name='bar-chart-3') }}
+    {{ _nav_link('platform_view.reported_issues', 'reported_issues', _('Reported Issues'), active_tab == 'reported_issues', icon_name='help-circle') }}
+    {{ _nav_link('platform_view.cli_batch_ocr', 'cli_batch_ocr', _('OCR & TR Metrics'), active_tab == 'cli_batch_ocr', icon_name='gauge') }}
+    {{ _nav_link('platform_view.metadata_metrics', 'metadata_metrics', _('Extraction Metrics'), active_tab == 'metadata_metrics', icon_name='gauge') }}
+    {{ _nav_link('platform_view.search_index', 'search_index', _('Search Index'), active_tab == 'search_index', icon_name='search') }}
+    {{ _nav_link('platform_view.metrics', 'metrics', _('Metrics & Logs'), active_tab == 'metrics', icon_name='activity') }}
+    {{ _nav_link('platform_view.settings', 'platform_settings', _('Platform Settings'), active_tab == 'platform_settings', icon_name='settings') }}
   </ul>
 </nav>
 <nav class="mb-6">
   <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 mb-3">{{ _('Data') }}</h2>
   <ul class="space-y-1">
-    {{ _nav_link('project.index_view', 'projects', _('Projects'), active == 'projects', icon_name='book-open') }}
-    {{ _nav_link('user.index_view', 'users', _('Users'), active == 'users', icon_name='users') }}
+    {{ _nav_link('project.index_view', 'projects', _('Projects'), active_tab == 'projects', icon_name='book-open') }}
+    {{ _nav_link('user.index_view', 'users', _('Users'), active_tab == 'users', icon_name='users') }}
   </ul>
 </nav>
 <nav class="mb-6">
