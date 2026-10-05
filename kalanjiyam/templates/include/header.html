@@ -147,6 +147,43 @@
             }
         }" @mouseleave="hideCursor()">
 
+      {% if current_user.is_super_admin %}
+      <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+        @mouseenter="moveCursor($el)">
+        <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
+          if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+          href="{{ url_for('platform_view.index') }}">{{ _('Dashboard') }}</a>
+      </li>
+      {% elif current_user.is_org_admin %}
+      <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+        @mouseenter="moveCursor($el)">
+        <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
+          if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+          href="{{ url_for('org_admin_view.index') }}">{{ _('Dashboard') }}</a>
+      </li>
+      {% elif current_user.is_master_user %}
+      <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+        @mouseenter="moveCursor($el)">
+        <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
+          if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+          href="{{ url_for('master_metrics_view.cli_batch_ocr') }}">{{ _('Metrics') }}</a>
+      </li>
+      {% elif current_user.is_meta_analyst %}
+      <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+        @mouseenter="moveCursor($el)">
+        <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
+          if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+          href="{{ url_for('meta_analytics_view.index') }}">{{ _('Meta-Analytics') }}</a>
+      </li>
+      {% elif current_user.is_admin %}
+      <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+        @mouseenter="moveCursor($el)">
+        <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
+          if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
+          href="{{ url_for('admin.index') }}">{{ _('Dashboard') }}</a>
+      </li>
+      {% endif %}
+
       {% if config.ENABLE_GUEST_ACCESS or current_user.is_authenticated %}
       {% if config.ENABLE_BOOKS %}
       {% set is_books_active = request.blueprint and request.blueprint.startswith('public') %}
@@ -248,43 +285,6 @@
         <a class="block px-4 py-2 rounded-full {% if is_help_active %}text-white{% else %}text-slate-900{% endif %}"
           {% if is_help_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
           href="{{ url_for('proofing.help_index') }}">{{ _('Help') }}</a>
-      </li>
-      {% endif %}
-
-      {% if current_user.is_super_admin %}
-      <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
-        @mouseenter="moveCursor($el)">
-        <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
-          if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
-          href="{{ url_for('platform_view.index') }}">{{ _('Dashboard') }}</a>
-      </li>
-      {% elif current_user.is_org_admin %}
-      <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
-        @mouseenter="moveCursor($el)">
-        <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
-          if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
-          href="{{ url_for('org_admin_view.index') }}">{{ _('Dashboard') }}</a>
-      </li>
-      {% elif current_user.is_master_user %}
-      <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
-        @mouseenter="moveCursor($el)">
-        <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
-          if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
-          href="{{ url_for('master_metrics_view.cli_batch_ocr') }}">{{ _('Metrics') }}</a>
-      </li>
-      {% elif current_user.is_meta_analyst %}
-      <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
-        @mouseenter="moveCursor($el)">
-        <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
-          if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
-          href="{{ url_for('meta_analytics_view.index') }}">{{ _('Meta-Analytics') }}</a>
-      </li>
-      {% elif current_user.is_admin %}
-      <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
-        @mouseenter="moveCursor($el)">
-        <a class="block px-4 py-2 rounded-full {% if is_admin_active %}text-white{% else %}text-slate-900{% endif %}" {%
-          if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
-          href="{{ url_for('admin.index') }}">{{ _('Dashboard') }}</a>
       </li>
       {% endif %}
 
@@ -587,6 +587,74 @@
           {{ _('Navigation') }}
         </div>
         <ul class="space-y-1 list-none p-0 m-0">
+          <!-- Admin / Dashboard Links -->
+          {% if current_user.is_super_admin %}
+          <li>
+            <a href="{{ url_for('platform_view.index') }}"
+               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
+               {% if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
+              <svg class="w-4 h-4 shrink-0 {% if is_admin_active %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="10" rx="1"/><rect width="7" height="5" x="3" y="14" rx="1"/>
+              </svg>
+              <span>{{ _('Dashboard') }}</span>
+            </a>
+          </li>
+          {% elif current_user.is_org_admin %}
+          <li>
+            <a href="{{ url_for('org_admin_view.index') }}"
+               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
+               {% if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
+              <svg class="w-4 h-4 shrink-0 {% if is_admin_active %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="10" rx="1"/><rect width="7" height="5" x="3" y="14" rx="1"/>
+              </svg>
+              <span>{{ _('Dashboard') }}</span>
+            </a>
+          </li>
+          {% elif current_user.is_master_user %}
+          <li>
+            <a href="{{ url_for('master_metrics_view.cli_batch_ocr') }}"
+               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
+               {% if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
+              <svg class="w-4 h-4 shrink-0 {% if is_admin_active %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+              <span>{{ _('Metrics') }}</span>
+            </a>
+          </li>
+          {% elif current_user.is_meta_analyst %}
+          <li>
+            <a href="{{ url_for('meta_analytics_view.index') }}"
+               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active and request.endpoint == 'meta_analytics_view.index' %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
+               {% if is_admin_active and request.endpoint == 'meta_analytics_view.index' %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
+              <svg class="w-4 h-4 shrink-0 {% if is_admin_active and request.endpoint == 'meta_analytics_view.index' %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+              </svg>
+              <span>{{ _('Meta-Analytics') }}</span>
+            </a>
+          </li>
+          <li>
+            <a href="{{ url_for('meta_analytics_view.reported_issues') }}"
+               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active and request.endpoint == 'meta_analytics_view.reported_issues' %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
+               {% if is_admin_active and request.endpoint == 'meta_analytics_view.reported_issues' %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
+              <svg class="w-4 h-4 shrink-0 {% if is_admin_active and request.endpoint == 'meta_analytics_view.reported_issues' %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" x2="12.01" y1="17" y2="17"/>
+              </svg>
+              <span>{{ _('Contact Requests') }}</span>
+            </a>
+          </li>
+          {% elif current_user.is_admin %}
+          <li>
+            <a href="{{ url_for('admin.index') }}"
+               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
+               {% if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
+              <svg class="w-4 h-4 shrink-0 {% if is_admin_active %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="10" rx="1"/><rect width="7" height="5" x="3" y="14" rx="1"/>
+              </svg>
+              <span>{{ _('Dashboard') }}</span>
+            </a>
+          </li>
+          {% endif %}
+
           {% if config.ENABLE_GUEST_ACCESS or current_user.is_authenticated %}
           {% if config.ENABLE_BOOKS %}
           <!-- Library Item -->
@@ -693,74 +761,6 @@
                 <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
               </svg>
               <span>{{ _('Help') }}</span>
-            </a>
-          </li>
-          {% endif %}
-
-          <!-- Admin / Dashboard Links -->
-          {% if current_user.is_super_admin %}
-          <li>
-            <a href="{{ url_for('platform_view.index') }}"
-               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
-               {% if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
-              <svg class="w-4 h-4 shrink-0 {% if is_admin_active %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="10" rx="1"/><rect width="7" height="5" x="3" y="14" rx="1"/>
-              </svg>
-              <span>{{ _('Dashboard') }}</span>
-            </a>
-          </li>
-          {% elif current_user.is_org_admin %}
-          <li>
-            <a href="{{ url_for('org_admin_view.index') }}"
-               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
-               {% if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
-              <svg class="w-4 h-4 shrink-0 {% if is_admin_active %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="10" rx="1"/><rect width="7" height="5" x="3" y="14" rx="1"/>
-              </svg>
-              <span>{{ _('Dashboard') }}</span>
-            </a>
-          </li>
-          {% elif current_user.is_master_user %}
-          <li>
-            <a href="{{ url_for('master_metrics_view.cli_batch_ocr') }}"
-               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
-               {% if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
-              <svg class="w-4 h-4 shrink-0 {% if is_admin_active %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
-              </svg>
-              <span>{{ _('Metrics') }}</span>
-            </a>
-          </li>
-          {% elif current_user.is_meta_analyst %}
-          <li>
-            <a href="{{ url_for('meta_analytics_view.index') }}"
-               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active and request.endpoint == 'meta_analytics_view.index' %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
-               {% if is_admin_active and request.endpoint == 'meta_analytics_view.index' %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
-              <svg class="w-4 h-4 shrink-0 {% if is_admin_active and request.endpoint == 'meta_analytics_view.index' %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-              </svg>
-              <span>{{ _('Meta-Analytics') }}</span>
-            </a>
-          </li>
-          <li>
-            <a href="{{ url_for('meta_analytics_view.reported_issues') }}"
-               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active and request.endpoint == 'meta_analytics_view.reported_issues' %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
-               {% if is_admin_active and request.endpoint == 'meta_analytics_view.reported_issues' %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
-              <svg class="w-4 h-4 shrink-0 {% if is_admin_active and request.endpoint == 'meta_analytics_view.reported_issues' %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" x2="12.01" y1="17" y2="17"/>
-              </svg>
-              <span>{{ _('Contact Requests') }}</span>
-            </a>
-          </li>
-          {% elif current_user.is_admin %}
-          <li>
-            <a href="{{ url_for('admin.index') }}"
-               class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_admin_active %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
-               {% if is_admin_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
-              <svg class="w-4 h-4 shrink-0 {% if is_admin_active %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="10" rx="1"/><rect width="7" height="5" x="3" y="14" rx="1"/>
-              </svg>
-              <span>{{ _('Dashboard') }}</span>
             </a>
           </li>
           {% endif %}
