@@ -1185,10 +1185,14 @@ def update_folder_access():
     )
 
 
+DEFAULT_DOCS_URL = "https://docs.google.com/document/d/1WUsPEK2lIeJnUm03FVTEpfcberfhMglh6C-DrB02EOw/edit?tab=t.0"
+
+
 @bp.route("/help")
 def help_index():
-    """Display index of all guidelines and manuals."""
-    return render_template("proofing/help.html")
+    """Directly redirect to the documentation / user manual."""
+    docs_url = current_app.config.get("DOCS_URL", DEFAULT_DOCS_URL)
+    return redirect(docs_url)
 
 
 @bp.route("/help/beginners-guide")

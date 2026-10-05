@@ -284,7 +284,7 @@
         @mouseenter="moveCursor($el)">
         <a class="block px-4 py-2 rounded-full {% if is_help_active %}text-white{% else %}text-slate-900{% endif %}"
           {% if is_help_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);" {% endif %}
-          href="{{ url_for('proofing.help_index') }}">{{ _('Help') }}</a>
+          href="{{ url_for('proofing.help_index') }}" target="_blank" rel="noopener noreferrer">{{ _('Help') }}</a>
       </li>
       {% endif %}
 
@@ -754,7 +754,7 @@
 
           <!-- Help Link -->
           <li>
-            <a href="{{ url_for('proofing.help_index') }}"
+            <a href="{{ url_for('proofing.help_index') }}" target="_blank" rel="noopener noreferrer"
                class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors {% if is_help_active %}text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100 hover:text-royalblue{% endif %}"
                {% if is_help_active %}style="background: linear-gradient(135deg, #0ea5e9, #6366f1);"{% endif %}>
               <svg class="w-4 h-4 shrink-0 {% if is_help_active %}text-white{% else %}text-slate-500{% endif %}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">

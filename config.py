@@ -227,6 +227,12 @@ class BaseConfig:
     #: URL prefix for the application. Set to "/kalanjiyam" for hosting at siddhasagaram.in/kalanjiyam
     APPLICATION_URL_PREFIX = _env("APPLICATION_URL_PREFIX", "")
 
+    #: Documentation and user manual URL.
+    DOCS_URL = _env(
+        "DOCS_URL",
+        "https://docs.google.com/document/d/1WUsPEK2lIeJnUm03FVTEpfcberfhMglh6C-DrB02EOw/edit?tab=t.0",
+    )
+
     # Flask-Mail
 
     #: URL for mail server.

@@ -337,13 +337,12 @@ def test_talk(client):
 
 
 def test_help_index(client):
-    resp = client.get("/proofing/help")
-    assert resp.status_code == 200
-    assert "How can we help you?" in resp.text
-    assert "User Manual" in resp.text
-    assert "https://docs.google.com/document/d/1WUsPEK2lIeJnUm03FVTEpfcberfhMglh6C-DrB02EOw/edit?tab=t.0" in resp.text
-    # Verify User Manual button/card appears before Beginner's Guide
-    assert resp.text.index("User Manual") < resp.text.index("Beginner's Guide")
+    resp = client.get("/proofing/help", follow_redirects=False)
+    assert resp.status_code == 302
+    assert (
+        resp.headers["Location"]
+        == "https://docs.google.com/document/d/1WUsPEK2lIeJnUm03FVTEpfcberfhMglh6C-DrB02EOw/edit?tab=t.0"
+    )
 
 
 def test_create_project_status_images_and_pdf(client):

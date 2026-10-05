@@ -132,6 +132,8 @@
           <a
             x-show="!folder"
             href="{{ url_for('proofing.help_index') }}"
+            target="_blank"
+            rel="noopener noreferrer"
             class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold text-xs sm:text-sm transition-all shadow-xs"
             title="{{ _('Help & Guidelines') }}"
           >
@@ -142,7 +144,7 @@
           </a>
           {% else %}
           <!-- Guidelines & Preparation Action Button (for non-org_admins) -->
-          <a href="{{ url_for('proofing.help_index') }}" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold text-xs sm:text-sm transition-all shadow-xs" title="{{ _('Help & Guidelines') }}">
+          <a href="{{ url_for('proofing.help_index') }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold text-xs sm:text-sm transition-all shadow-xs" title="{{ _('Help & Guidelines') }}">
             <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
             </svg>
