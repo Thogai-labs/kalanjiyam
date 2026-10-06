@@ -35,26 +35,26 @@ def test_nav_order_superadmin(superadmin_client):
     desktop_nav = _get_navbar_html(html)
     assert desktop_nav != ""
     idx_dashboard = desktop_nav.find("/admin/platform/")
-    idx_search = desktop_nav.find("/search/")
-    assert idx_dashboard != -1
-    assert idx_search != -1
-    assert idx_dashboard < idx_search, "Dashboard must appear before Search in desktop navbar"
-
-    if "/books/" in desktop_nav:
-        idx_books = desktop_nav.find("/books/")
-        assert idx_dashboard < idx_books, "Dashboard must appear before Library in desktop navbar"
+    assert idx_dashboard != -1, "Dashboard must appear in desktop navbar"
+    # Library, Search, Proofing, and Help must be hidden from super admin
+    assert "/books/" not in desktop_nav, "Library must be hidden for superadmin in desktop navbar"
+    assert "/search/" not in desktop_nav, "Search must be hidden for superadmin in desktop navbar"
+    assert "Help" not in desktop_nav, "Help must be hidden for superadmin in desktop navbar"
+    assert "Proofing" not in desktop_nav, "Proofing must be hidden for superadmin in desktop navbar"
 
     mobile_nav = _get_mobile_nav_html(html)
     assert mobile_nav != ""
     m_idx_dashboard = mobile_nav.find("/admin/platform/")
-    m_idx_search = mobile_nav.find("/search/")
-    assert m_idx_dashboard != -1
-    assert m_idx_search != -1
-    assert m_idx_dashboard < m_idx_search, "Dashboard must appear before Search in mobile nav"
+    assert m_idx_dashboard != -1, "Dashboard must appear in mobile nav"
+    assert "/books/" not in mobile_nav, "Library must be hidden for superadmin in mobile nav"
+    assert "/search/" not in mobile_nav, "Search must be hidden for superadmin in mobile nav"
+    assert "Help" not in mobile_nav, "Help must be hidden for superadmin in mobile nav"
+    assert "Proofing" not in mobile_nav, "Proofing must be hidden for superadmin in mobile nav"
 
-    if "/books/" in mobile_nav:
-        m_idx_books = mobile_nav.find("/books/")
-        assert m_idx_dashboard < m_idx_books, "Dashboard must appear before Library in mobile nav"
+    # Tasks (badge, dropdown, section) must be hidden for superadmin
+    assert 'title="Active Tasks"' not in html, "Active Tasks badge must be hidden for superadmin"
+    assert "Background Tasks" not in html, "Background Tasks section must be hidden for superadmin"
+    assert 'title="Tasks"' not in html, "Tasks dropdown must be hidden for superadmin"
 
 
 def test_nav_order_org_admin(flask_app):
@@ -103,6 +103,11 @@ def test_nav_order_org_admin(flask_app):
         assert m_idx_dashboard != -1
         assert m_idx_search != -1
         assert m_idx_dashboard < m_idx_search, "Dashboard must appear before Search in mobile nav"
+
+        # Verify Library/Search/Help/Tasks are retained for non-superadmin roles like org admin
+        assert "Help" in desktop_nav
+        assert "Background Tasks" in html
+        assert 'title="Tasks"' in html
 
 
 def test_nav_order_master_user(flask_app):
@@ -161,23 +166,30 @@ def test_nav_order_meta_analyst(meta_analyst_client):
 
 
 def test_nav_order_admin(admin_client):
+    # u-admin in test fixtures has super_admin role, so it behaves as superadmin
     resp = admin_client.get("/")
     assert resp.status_code == 200
     html = resp.text
 
     desktop_nav = _get_navbar_html(html)
-    idx_dashboard = desktop_nav.find("/admin/")
-    idx_search = desktop_nav.find("/search/")
-    assert idx_dashboard != -1
-    assert idx_search != -1
-    assert idx_dashboard < idx_search, "Dashboard must appear before Search in desktop navbar"
+    assert desktop_nav != ""
+    assert "/admin/platform/" in desktop_nav
+    assert "/search/" not in desktop_nav
+    assert "/books/" not in desktop_nav
+    assert "Help" not in desktop_nav
+    assert "Proofing" not in desktop_nav
 
     mobile_nav = _get_mobile_nav_html(html)
-    m_idx_dashboard = mobile_nav.find("/admin/")
-    m_idx_search = mobile_nav.find("/search/")
-    assert m_idx_dashboard != -1
-    assert m_idx_search != -1
-    assert m_idx_dashboard < m_idx_search, "Dashboard must appear before Search in mobile nav"
+    assert mobile_nav != ""
+    assert "/admin/platform/" in mobile_nav
+    assert "/search/" not in mobile_nav
+    assert "/books/" not in mobile_nav
+    assert "Help" not in mobile_nav
+    assert "Proofing" not in mobile_nav
+
+    assert 'title="Active Tasks"' not in html
+    assert "Background Tasks" not in html
+    assert 'title="Tasks"' not in html
 
 
 def test_nav_order_guest_and_proofer_no_dashboard(client, rama_client):

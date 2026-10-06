@@ -29,7 +29,7 @@
     activeCount: 0,
     pollTimer: null,
     fetchTasks() {
-      {% if config.ENABLE_GUEST_ACCESS or current_user.is_authenticated %}
+      {% if (config.ENABLE_GUEST_ACCESS or current_user.is_authenticated) and not current_user.is_super_admin %}
       fetch('{{ url_for('proofing.get_tasks_api') }}')
         .then(r => r.json())
         .then(data => {
@@ -70,7 +70,7 @@
       .catch(err => console.error('Error cancelling task:', err));
     },
     init() {
-      {% if config.ENABLE_GUEST_ACCESS or current_user.is_authenticated %}
+      {% if (config.ENABLE_GUEST_ACCESS or current_user.is_authenticated) and not current_user.is_super_admin %}
       this.fetchTasks();
       setInterval(() => {
         if (this.activeCount > 0) {
@@ -107,7 +107,7 @@
 
     <!-- Mobile Header Actions (Active Tasks Badge & Hamburger) -->
     <div class="flex items-center gap-2 md:hidden">
-      {% if config.ENABLE_GUEST_ACCESS or current_user.is_authenticated %}
+      {% if (config.ENABLE_GUEST_ACCESS or current_user.is_authenticated) and not current_user.is_super_admin %}
       <button
         type="button"
         x-show="activeCount > 0"
@@ -184,7 +184,7 @@
       </li>
       {% endif %}
 
-      {% if config.ENABLE_GUEST_ACCESS or current_user.is_authenticated %}
+      {% if (config.ENABLE_GUEST_ACCESS or current_user.is_authenticated) and not current_user.is_super_admin %}
       {% if config.ENABLE_BOOKS %}
       {% set is_books_active = request.blueprint and request.blueprint.startswith('public') %}
       <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
@@ -322,7 +322,7 @@
       </li>
 
       <!-- Desktop Task Dropdown -->
-      {% if config.ENABLE_GUEST_ACCESS or current_user.is_authenticated %}
+      {% if (config.ENABLE_GUEST_ACCESS or current_user.is_authenticated) and not current_user.is_super_admin %}
       <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
           x-show="tasks.length > 0 || {{ 'true' if current_user.is_authenticated else 'false' }}"
           x-cloak
@@ -655,7 +655,7 @@
           </li>
           {% endif %}
 
-          {% if config.ENABLE_GUEST_ACCESS or current_user.is_authenticated %}
+          {% if (config.ENABLE_GUEST_ACCESS or current_user.is_authenticated) and not current_user.is_super_admin %}
           {% if config.ENABLE_BOOKS %}
           <!-- Library Item -->
           {% set is_books_active = request.blueprint and request.blueprint.startswith('public') %}
@@ -768,7 +768,7 @@
       </div>
 
       <!-- Tasks Section (Mobile) -->
-      {% if config.ENABLE_GUEST_ACCESS or current_user.is_authenticated %}
+      {% if (config.ENABLE_GUEST_ACCESS or current_user.is_authenticated) and not current_user.is_super_admin %}
       <div class="pt-3" x-show="tasks.length > 0 || {{ 'true' if current_user.is_authenticated else 'false' }}" x-cloak>
         <button
           type="button"
