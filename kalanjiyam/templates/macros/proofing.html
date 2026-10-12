@@ -47,6 +47,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l4.58-4.58c.94-.94.94-2.48 0-3.42z"/><path d="M6 6h.01"/></svg>
 {% elif name == 'message-circle' %}
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+{% elif name == 'layers' %}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="{{ class }}"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
 {% endif %}
 {% endmacro %}
 
@@ -72,6 +74,7 @@
   {% endif %}
   {{ _link('changes', "proofing.recent_changes", _("Recent changes"), active, icon_name='clock') }}
   {{ _link('tagging', "proofing.tagging.index", _("Tagging"), active, icon_name='tag') }}
+  {{ _link('multi_batch', "proofing.multi_batch.index", _("Multi Batch Processes"), active, icon_name='layers') }}
 </nav>
 {% endmacro %}
 

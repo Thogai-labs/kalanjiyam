@@ -2352,3 +2352,8 @@ def docx_translate_download(docx_id):
         download_name = "translated_document.docx"
 
     return storage.serve(trans_key, as_attachment=True, download_name=download_name)
+
+
+@bp.route("/multi-batch")
+def multi_batch():
+    return redirect(url_for("proofing.multi_batch.index"))

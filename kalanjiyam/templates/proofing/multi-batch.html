@@ -1,0 +1,598 @@
+{% extends 'proofing/base.html' %}
+{% import "macros/components.html" as components %}
+{% import "macros/proofing.html" as m %}
+
+{% block extra_css %}
+<style>
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
+  }
+  .doc-card {
+    transition: all 0.15s ease-in-out;
+  }
+  .doc-card:hover {
+    border-color: #93c5fd;
+    background-color: #f8fafc;
+  }
+  .doc-card.selected {
+    border-color: #3b82f6;
+    background-color: #eff6ff;
+  }
+</style>
+{% endblock %}
+
+{% block title %}{{ _('Multi Batch Processes') }} | Kalanjiyam{% endblock %}
+
+{% block main %}
+<div x-data="multiBatchApp()" class="w-full pb-16">
+  <!-- Top Header -->
+  <header class="google-proofing-header py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl font-bold tracking-tight text-slate-900 leading-tight">
+              {{ _('Multi Batch Processes') }}
+            </h1>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+              {{ _('s3_batch Queue') }}
+            </span>
+          </div>
+          <p class="text-slate-500 text-xs font-medium mt-0.5">
+            {{ _('Run bulk OCR and/or Translation across multiple documents in background worker queue.') }}
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 text-xs">
+        <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs">
+          <span>{{ _('Proofing Workspace') }}</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sub-Nav -->
+  <div class="max-w-7xl mx-auto px-4 mb-6">
+    {{ m.main_nav(active='multi_batch', current_user=current_user) }}
+  </div>
+
+  <!-- Flash Messages -->
+  <div class="max-w-7xl mx-auto px-4 mb-4">
+    {{ components.flash_messages() }}
+  </div>
+
+  <!-- Main 2-Window Grid Layout -->
+  <div class="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+    <!-- ========================================== -->
+    <!-- WINDOW 1: DOCUMENT SELECTION & DATE FILTER -->
+    <!-- ========================================== -->
+    <section class="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <span class="w-6 h-6 rounded-lg bg-blue-100 text-royalblue font-bold text-xs flex items-center justify-center">1</span>
+            <span>{{ _('Select Documents') }}</span>
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">
+            {{ _('Filtered and sorted by uploaded date range (newest first).') }}
+          </p>
+        </div>
+        <div class="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+          <span x-text="filteredDocuments.length"></span> / {{ documents|length }} {{ _('documents') }}
+        </div>
+      </div>
+
+      <!-- Date Range Filter Pills -->
+      <div>
+        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+          {{ _('Uploaded Date Range:') }}
+        </label>
+        <div class="flex flex-wrap gap-1.5">
+          <button type="button" @click="setDateFilter('all')"
+            :class="dateFilter === 'all' ? 'bg-royalblue text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 font-semibold'"
+            class="px-3 py-1.5 rounded-xl text-xs transition-colors">
+            {{ _('All Time') }} ({{ bucket_counts.all }})
+          </button>
+          <button type="button" @click="setDateFilter('today')"
+            :class="dateFilter === 'today' ? 'bg-royalblue text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 font-semibold'"
+            class="px-3 py-1.5 rounded-xl text-xs transition-colors">
+            {{ _('Today') }} ({{ bucket_counts.today }})
+          </button>
+          <button type="button" @click="setDateFilter('yesterday')"
+            :class="dateFilter === 'yesterday' ? 'bg-royalblue text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 font-semibold'"
+            class="px-3 py-1.5 rounded-xl text-xs transition-colors">
+            {{ _('Yesterday') }} ({{ bucket_counts.yesterday }})
+          </button>
+          <button type="button" @click="setDateFilter('2_days')"
+            :class="dateFilter === '2_days' ? 'bg-royalblue text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 font-semibold'"
+            class="px-3 py-1.5 rounded-xl text-xs transition-colors">
+            {{ _('Last 2 Days') }} ({{ bucket_counts['2_days'] }})
+          </button>
+          <button type="button" @click="setDateFilter('1_week')"
+            :class="dateFilter === '1_week' ? 'bg-royalblue text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 font-semibold'"
+            class="px-3 py-1.5 rounded-xl text-xs transition-colors">
+            {{ _('1 Week Ago') }} ({{ bucket_counts['1_week'] }})
+          </button>
+          <button type="button" @click="setDateFilter('1_month')"
+            :class="dateFilter === '1_month' ? 'bg-royalblue text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 font-semibold'"
+            class="px-3 py-1.5 rounded-xl text-xs transition-colors">
+            {{ _('1 Month Ago') }} ({{ bucket_counts['1_month'] }})
+          </button>
+        </div>
+      </div>
+
+      <!-- Search & Bulk Selection Actions Bar -->
+      <div class="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+        <!-- Search Input -->
+        <div class="relative flex-1 min-w-[200px]">
+          <input type="text" x-model="searchQuery" placeholder="{{ _('Search documents by title or slug...') }}"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-royalblue focus:outline-none transition-all" />
+          <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+        </div>
+
+        <!-- Quick Select Buttons -->
+        <div class="flex items-center gap-1.5 text-xs">
+          <button type="button" @click="selectAll()" class="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 font-semibold text-slate-700 transition-colors">
+            {{ _('Select All') }}
+          </button>
+          <button type="button" @click="deselectAll()" class="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 font-semibold text-slate-700 transition-colors">
+            {{ _('Clear') }}
+          </button>
+          <button type="button" @click="selectUnOcred()" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 font-semibold text-amber-800 transition-colors" title="{{ _('Select documents that still have un-OCRed pages') }}">
+            {{ _('Un-OCRed') }}
+          </button>
+          <button type="button" @click="selectUnTranslated()" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 font-semibold text-emerald-800 transition-colors" title="{{ _('Select documents that still have untranslated pages') }}">
+            {{ _('Un-Translated') }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Selection Badge Bar -->
+      <div class="flex items-center justify-between text-xs py-1.5 px-3 bg-blue-50/70 border border-blue-100 rounded-xl text-royalblue font-semibold">
+        <span x-text="`${selectedIds.length} ${selectedIds.length === 1 ? '{{ _('document selected') }}' : '{{ _('documents selected') }}'}`"></span>
+        <span x-text="`${selectedTotalPages} {{ _('total pages') }}`"></span>
+      </div>
+
+      <!-- Document List (Scrollable) -->
+      <div class="space-y-2 max-h-[520px] overflow-y-auto pr-1">
+        <template x-for="doc in filteredDocuments" :key="doc.id">
+          <label :class="selectedIds.includes(doc.id) ? 'doc-card selected' : 'doc-card'"
+            class="flex items-start gap-3 p-3 rounded-xl border border-slate-200 bg-white cursor-pointer select-none">
+            <!-- Checkbox -->
+            <input type="checkbox" :value="doc.id" x-model="selectedIds"
+              class="mt-1 w-4 h-4 rounded text-royalblue focus:ring-royalblue border-slate-300 transition-colors" />
+
+            <!-- Info -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-bold text-sm text-slate-900 truncate" x-text="doc.display_title"></span>
+                <span class="text-[11px] font-semibold text-slate-500 whitespace-nowrap" x-text="doc.date_label"></span>
+              </div>
+              <div class="text-[11px] text-slate-400 font-mono truncate" x-text="doc.slug"></div>
+
+              <!-- Metadata Badges -->
+              <div class="flex flex-wrap items-center gap-1.5 mt-2">
+                <!-- Page Count -->
+                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
+                  <span x-text="`${doc.total_pages} {{ _('pages') }}`"></span>
+                </span>
+
+                <!-- OCR Status Badge -->
+                <template x-if="doc.is_fully_ocred">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800" title="{{ _('All pages already OCRed. Will be skipped during OCR.') }}">
+                    <span>✓ {{ _('OCRed') }} (100%)</span>
+                  </span>
+                </template>
+                <template x-if="doc.is_partially_ocred">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800" :title="`{{ _('Partially OCRed:') }} ${doc.ocred_pages}/${doc.total_pages} {{ _('pages') }}`">
+                    <span x-text="`⚡ OCR (${doc.ocred_pages}/${doc.total_pages})`"></span>
+                  </span>
+                </template>
+                <template x-if="doc.is_not_ocred">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600">
+                    {{ _('Not OCRed') }}
+                  </span>
+                </template>
+
+                <!-- Translation Status Badge -->
+                <template x-if="doc.is_fully_translated">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-100 text-teal-800" title="{{ _('All pages translated. Will be skipped during translation.') }}">
+                    <span>✓ {{ _('Translated') }} (100%)</span>
+                  </span>
+                </template>
+                <template x-if="doc.is_partially_translated">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-800" :title="`{{ _('Partially translated:') }} ${doc.trans_pages}/${doc.total_pages} {{ _('pages') }}`">
+                    <span x-text="`⚡ Trans (${doc.trans_pages}/${doc.total_pages})`"></span>
+                  </span>
+                </template>
+                <template x-if="doc.is_not_translated">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-500">
+                    {{ _('Not Translated') }}
+                  </span>
+                </template>
+              </div>
+            </div>
+          </label>
+        </template>
+
+        <div x-show="filteredDocuments.length === 0" class="p-8 text-center text-slate-400 text-xs italic">
+          {{ _('No documents match the selected date range and search filter.') }}
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- WINDOW 2: FUNCTIONS & EXECUTION MONITOR    -->
+    <!-- ========================================== -->
+    <section class="lg:col-span-5 space-y-4">
+
+      <!-- Operations Configuration Card -->
+      <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 space-y-5">
+        <div class="border-b border-slate-100 pb-3">
+          <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <span class="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center justify-center">2</span>
+            <span>{{ _('Batch Functions') }}</span>
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">
+            {{ _('Configure background processing operations. Both functions can be checked.') }}
+          </p>
+        </div>
+
+        <!-- FUNCTION 1: OCR CHECKBOX & OPTIONS -->
+        <div class="p-4 rounded-xl border transition-all"
+             :class="doOcr ? 'border-violet-300 bg-violet-50/20' : 'border-slate-200 bg-slate-50/40'">
+          <label class="flex items-start gap-3 cursor-pointer">
+            <input type="checkbox" x-model="doOcr" class="mt-1 w-4 h-4 rounded text-violet-600 focus:ring-violet-500 border-slate-300" />
+            <div class="flex-1">
+              <div class="flex items-center justify-between gap-1">
+                <span class="font-bold text-sm text-slate-900">{{ _('Run Optical Character Recognition (OCR)') }}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-800 border border-violet-200">
+                  {{ _('v2 contract only') }}
+                </span>
+              </div>
+              <p class="text-xs text-slate-500 mt-1">
+                {{ _('Runs layout and text recognition adhering strictly to the v2 OCR contract specification (future improvements in 31).') }}
+              </p>
+              <p class="text-[11px] font-semibold text-amber-700 mt-1 flex items-center gap-1">
+                <span>ℹ️</span>
+                <span>{{ _('Pages or books already OCRed are skipped automatically.') }}</span>
+              </p>
+            </div>
+          </label>
+
+          <!-- OCR Sub-options -->
+          <div x-show="doOcr" x-collapse class="mt-3 pt-3 border-t border-violet-100 space-y-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">{{ _('OCR Engine:') }}</label>
+              <select x-model="ocrEngine" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:border-royalblue focus:outline-none">
+                {% for choice in ocr_engines %}
+                <option value="{{ choice.value }}" {% if choice.value == default_ocr_engine %}selected{% endif %}>
+                  {{ choice.label }}{% if choice.is_recommended %} ({{ _('Recommended') }}){% endif %}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">{{ _('Language:') }}</label>
+              <select x-model="ocrLanguage" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:border-royalblue focus:outline-none">
+                <option value="auto" selected>{{ _('Auto-detect') }}</option>
+                <option value="sa">Sanskrit (sa)</option>
+                <option value="hi">Hindi (hi)</option>
+                <option value="ta">Tamil (ta)</option>
+                <option value="te">Telugu (te)</option>
+                <option value="kn">Kannada (kn)</option>
+                <option value="ml">Malayalam (ml)</option>
+                <option value="mr">Marathi (mr)</option>
+                <option value="bn">Bengali (bn)</option>
+                <option value="en">English (en)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- FUNCTION 2: TRANSLATION CHECKBOX & OPTIONS -->
+        <div class="p-4 rounded-xl border transition-all"
+             :class="doTranslate ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200 bg-slate-50/40'">
+          <label class="flex items-start gap-3 cursor-pointer">
+            <input type="checkbox" x-model="doTranslate" class="mt-1 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300" />
+            <div class="flex-1">
+              <div class="flex items-center justify-between gap-1">
+                <span class="font-bold text-sm text-slate-900">{{ _('Run Machine Translation') }}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  {{ _('Neural NMT') }}
+                </span>
+              </div>
+              <p class="text-xs text-slate-500 mt-1">
+                {{ _('Translates extracted and proofread page texts across languages using neural translation models.') }}
+              </p>
+              <p class="text-[11px] font-semibold text-amber-700 mt-1 flex items-center gap-1">
+                <span>ℹ️</span>
+                <span>{{ _('Pages or books already translated in target language are skipped automatically.') }}</span>
+              </p>
+            </div>
+          </label>
+
+          <!-- Translation Sub-options -->
+          <div x-show="doTranslate" x-collapse class="mt-3 pt-3 border-t border-emerald-100 space-y-3">
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">{{ _('Source Language:') }}</label>
+                <select x-model="sourceLang" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:border-royalblue focus:outline-none">
+                  <option value="auto">{{ _('Auto-detect') }}</option>
+                  {% for lang in languages %}
+                  <option value="{{ lang.code }}" {% if lang.code == 'sa' %}selected{% endif %}>{{ lang.name }} ({{ lang.code }})</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">{{ _('Target Language:') }}</label>
+                <select x-model="targetLang" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:border-royalblue focus:outline-none">
+                  {% for lang in languages %}
+                  <option value="{{ lang.code }}" {% if lang.code == 'en' %}selected{% endif %}>{{ lang.name }} ({{ lang.code }})</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">{{ _('Translation Engine:') }}</label>
+              <select x-model="transEngine" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:border-royalblue focus:outline-none">
+                {% for choice in trans_engines %}
+                <option value="{{ choice.value }}" {% if choice.value == default_trans_engine %}selected{% endif %}>
+                  {{ choice.label }}{% if choice.is_recommended %} ({{ _('Recommended') }}){% endif %}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- DUAL PIPELINE BANNER -->
+        <div x-show="doOcr && doTranslate" class="p-3 bg-gradient-to-r from-violet-50 to-emerald-50 border border-blue-200 rounded-xl text-xs space-y-1">
+          <div class="font-bold text-slate-800 flex items-center gap-1.5">
+            <span>🔗</span>
+            <span>{{ _('Dual Execution Pipeline Active') }}</span>
+          </div>
+          <p class="text-slate-600 text-[11px] leading-relaxed">
+            {{ _('Both OCR and Translation are selected. Un-OCRed pages will be recognized first, and newly generated text will immediately be translated into the selected target language.') }}
+          </p>
+        </div>
+
+        <!-- QUEUE NOTICE -->
+        <div class="flex items-center justify-between text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+          <span class="flex items-center gap-1.5 font-semibold">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>{{ _('Worker Queue:') }}</span>
+          </span>
+          <span class="font-mono font-bold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">s3_batch</span>
+        </div>
+
+        <!-- ACTION BUTTON -->
+        <button type="button" @click="startBatchProcess()"
+          :disabled="selectedIds.length === 0 || (!doOcr && !doTranslate) || isSubmitting"
+          class="w-full py-3 px-4 rounded-xl text-sm font-bold text-white transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          :class="selectedIds.length > 0 && (doOcr || doTranslate) ? 'bg-royalblue hover:bg-blue-700 active:scale-[0.99]' : 'bg-slate-400'">
+          <template x-if="isSubmitting">
+            <svg class="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </template>
+          <span x-text="isSubmitting ? '{{ _('Enqueuing Tasks...') }}' : `{{ _('Start Multi Batch Processing') }} (${selectedIds.length})`"></span>
+        </button>
+      </div>
+
+      <!-- LIVE PROGRESS MONITOR CARD -->
+      <div x-show="activeJobId" class="bg-white rounded-2xl border border-blue-200 shadow-md p-5 space-y-4" x-cloak>
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-royalblue animate-pulse"></span>
+            <h3 class="font-bold text-sm text-slate-900" x-text="`{{ _('Job #') }}${activeJobId} {{ _('Status:') }} ${jobStatus.status || 'IN_PROGRESS'}`"></h3>
+          </div>
+          <span class="text-xs font-bold text-royalblue" x-text="`${jobStatus.percent || 0}%`"></span>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+          <div class="bg-royalblue h-2.5 rounded-full transition-all duration-300" :style="`width: ${jobStatus.percent || 0}%`"></div>
+        </div>
+
+        <!-- Metrics Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+          <div class="p-2 rounded-xl bg-slate-50 border border-slate-100">
+            <div class="text-slate-400 font-semibold text-[10px] uppercase">{{ _('Processed') }}</div>
+            <div class="text-sm font-extrabold text-slate-900" x-text="`${jobStatus.processed_pages || 0} / ${jobStatus.total_pages || 0}`"></div>
+          </div>
+          <div class="p-2 rounded-xl bg-slate-50 border border-slate-100">
+            <div class="text-slate-400 font-semibold text-[10px] uppercase">{{ _('Skipped OCR') }}</div>
+            <div class="text-sm font-extrabold text-amber-600" x-text="jobStatus.skipped_ocr_pages || 0"></div>
+          </div>
+          <div class="p-2 rounded-xl bg-slate-50 border border-slate-100">
+            <div class="text-slate-400 font-semibold text-[10px] uppercase">{{ _('Skipped Trans') }}</div>
+            <div class="text-sm font-extrabold text-teal-600" x-text="jobStatus.skipped_trans_pages || 0"></div>
+          </div>
+          <div class="p-2 rounded-xl bg-slate-50 border border-slate-100">
+            <div class="text-slate-400 font-semibold text-[10px] uppercase">{{ _('Errors') }}</div>
+            <div class="text-sm font-extrabold text-rose-600" x-text="jobStatus.error_count || 0"></div>
+          </div>
+        </div>
+
+        <!-- Document Progress Breakdown -->
+        <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+          <template x-for="p in (jobStatus.projects || [])" :key="p.id">
+            <div class="p-2.5 rounded-xl border border-slate-100 bg-slate-50 text-xs flex items-center justify-between gap-2">
+              <span class="font-bold text-slate-800 truncate" x-text="p.title"></span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold shrink-0"
+                    :class="{
+                      'bg-emerald-100 text-emerald-800': p.status === 'COMPLETED',
+                      'bg-blue-100 text-blue-800 animate-pulse': p.status === 'IN_PROGRESS',
+                      'bg-amber-100 text-amber-800': p.status === 'SKIPPED',
+                      'bg-slate-200 text-slate-700': p.status === 'PENDING',
+                      'bg-rose-100 text-rose-800': p.status === 'FAILED'
+                    }"
+                    x-text="p.message || p.status">
+              </span>
+            </div>
+          </template>
+        </div>
+
+        <!-- Completion Alert -->
+        <div x-show="jobStatus.status === 'COMPLETED'" class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-semibold flex items-center justify-between">
+          <span>✓ {{ _('Batch processing has completed successfully!') }}</span>
+          <button type="button" @click="activeJobId = null" class="underline text-emerald-900 cursor-pointer">
+            {{ _('Dismiss') }}
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+</div>
+
+<script>
+function multiBatchApp() {
+  const allDocs = {{ documents|tojson }};
+  return {
+    documents: allDocs,
+    selectedIds: [],
+    dateFilter: 'all',
+    searchQuery: '',
+    doOcr: true,
+    ocrEngine: {{ default_ocr_engine|tojson }},
+    ocrLanguage: 'auto',
+    doTranslate: false,
+    transEngine: {{ default_trans_engine|tojson }},
+    sourceLang: 'sa',
+    targetLang: 'en',
+    isSubmitting: false,
+    activeJobId: null,
+    jobStatus: {},
+    pollTimer: null,
+
+    get filteredDocuments() {
+      return this.documents.filter(doc => {
+        // Date range filter
+        if (this.dateFilter === 'today' && doc.date_bucket !== 'today') return false;
+        if (this.dateFilter === 'yesterday' && doc.date_bucket !== 'yesterday') return false;
+        if (this.dateFilter === '2_days' && !['today', 'yesterday', '2_days'].includes(doc.date_bucket)) return false;
+        if (this.dateFilter === '1_week' && !['today', 'yesterday', '2_days', '1_week'].includes(doc.date_bucket)) return false;
+        if (this.dateFilter === '1_month' && doc.date_bucket === 'older') return false;
+
+        // Search text filter
+        if (this.searchQuery && this.searchQuery.trim()) {
+          const q = this.searchQuery.toLowerCase();
+          const matchTitle = (doc.display_title || '').toLowerCase().includes(q);
+          const matchSlug = (doc.slug || '').toLowerCase().includes(q);
+          if (!matchTitle && !matchSlug) return false;
+        }
+
+        return true;
+      });
+    },
+
+    get selectedTotalPages() {
+      const selectedSet = new Set(this.selectedIds);
+      return this.documents
+        .filter(d => selectedSet.has(d.id))
+        .reduce((sum, d) => sum + (d.total_pages || 0), 0);
+    },
+
+    setDateFilter(bucket) {
+      this.dateFilter = bucket;
+    },
+
+    selectAll() {
+      this.selectedIds = this.filteredDocuments.map(d => d.id);
+    },
+
+    deselectAll() {
+      this.selectedIds = [];
+    },
+
+    selectUnOcred() {
+      this.selectedIds = this.filteredDocuments.filter(d => !d.is_fully_ocred).map(d => d.id);
+    },
+
+    selectUnTranslated() {
+      this.selectedIds = this.filteredDocuments.filter(d => !d.is_fully_translated).map(d => d.id);
+    },
+
+    startBatchProcess() {
+      if (this.selectedIds.length === 0 || (!this.doOcr && !this.doTranslate)) return;
+
+      this.isSubmitting = true;
+      const payload = {
+        project_ids: this.selectedIds,
+        do_ocr: this.doOcr,
+        ocr_engine: this.ocrEngine,
+        ocr_language: this.ocrLanguage,
+        do_translate: this.doTranslate,
+        trans_engine: this.transEngine,
+        source_lang: this.sourceLang,
+        target_lang: this.targetLang,
+      };
+
+      fetch('{{ url_for("proofing.multi_batch.run") }}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{% if csrf_token is defined %}{% if csrf_token is callable %}{{ csrf_token() }}{% else %}{{ csrf_token }}{% endif %}{% endif %}'
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(res => res.json())
+      .then(data => {
+        this.isSubmitting = false;
+        if (data.success && data.job_id) {
+          this.activeJobId = data.job_id;
+          this.startPolling(data.job_id);
+        } else {
+          alert(data.error || '{{ _("Failed to start batch processing.") }}');
+        }
+      })
+      .catch(err => {
+        this.isSubmitting = false;
+        console.error('Error starting batch:', err);
+        alert('{{ _("Network error starting batch processing.") }}');
+      });
+    },
+
+    startPolling(jobId) {
+      if (this.pollTimer) clearInterval(this.pollTimer);
+      const pollUrl = '{{ url_for("proofing.multi_batch.status", job_id=999999) }}'.replace('999999', jobId);
+
+      const checkStatus = () => {
+        fetch(pollUrl)
+          .then(res => res.json())
+          .then(res => {
+            if (res.success && res.data) {
+              this.jobStatus = res.data;
+              if (res.data.status === 'COMPLETED' || res.data.status === 'FAILED') {
+                clearInterval(this.pollTimer);
+                this.pollTimer = null;
+              }
+            }
+          })
+          .catch(err => console.error('Error polling status:', err));
+      };
+
+      checkStatus();
+      this.pollTimer = setInterval(checkStatus, 2500);
+    }
+  };
+}
+</script>
+{% endblock %}
