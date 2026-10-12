@@ -585,17 +585,18 @@ class BharatGenTranslateEngine(TranslationEngine):
 
 
 class LlmGemmaTranslateEngine(TranslationEngine):
-    """Translation engine using llm-gemma via /v1/chat/completions or /v1/ocr."""
+    """Translation engine using gemma-4 via /v1/chat/completions or /v1/ocr."""
 
     def __init__(
         self,
+        model_name: str = "gemma-4",
         api_url: Optional[str] = None,
         api_key: Optional[str] = None,
         timeout: float = 300.0,
     ):
         self.engine_name = "llm_gemma"
-        self.model_name = "llm-gemma"
-        self.version = "llm-gemma"
+        self.model_name = model_name
+        self.version = model_name
         self._api_url = api_url
         self._api_key = api_key
         self._timeout = timeout
@@ -1050,7 +1051,7 @@ class TranslationEngineFactory:
             return GoogleTranslateEngine()
         if engine_name == "openai":
             return OpenAITranslateEngine(**kwargs)
-        if engine_name in ("llm_gemma", "llm-gemma", "gemma"):
+        if engine_name in ("llm_gemma", "llm-gemma", "gemma", "gemma-4", "gemma_4"):
             return LlmGemmaTranslateEngine(**kwargs)
         if (
             engine_name == "bharatgen"
@@ -1403,7 +1404,7 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
         seen_engines['llm_gemma'] = {
             'value': 'llm_gemma',
             'label': 'LLM Gemma',
-            'model_name': 'llm-gemma',
+            'model_name': 'gemma-4',
         }
         seen_engines['param_lc_translate_ep4'] = {
             'value': 'param_lc_translate_ep4',
@@ -1411,11 +1412,11 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
             'model_name': 'param_lc_translate_ep4',
         }
 
-    # Add llm-gemma model
+    # Add gemma-4 model
     llm_gemma_model = {
         'value': 'llm_gemma',
         'label': 'LLM Gemma',
-        'model_name': 'llm-gemma',
+        'model_name': 'gemma-4',
     }
     if llm_gemma_model['value'] not in seen_engines:
         seen_engines[llm_gemma_model['value']] = llm_gemma_model

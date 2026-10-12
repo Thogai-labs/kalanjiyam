@@ -516,7 +516,7 @@ def _interpret_transcript_with_llm(
     )
 
     req_body = {
-        "model": "llm-gemma",
+        "model": "gemma-4",
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -563,13 +563,13 @@ def _interpret_transcript_with_llm(
             language=language,
             intent="dictate",
             ops=[{"op": "append", "block_id": sel_id, "content": " " + transcript}],
-            model="llm-gemma-fallback",
+            model="gemma-4-fallback",
         )
 
     return VoiceResult(
         transcript=transcript,
         language=language,
         intent="noise",
-        model="llm-gemma-fallback",
+        model="gemma-4-fallback",
     )
 

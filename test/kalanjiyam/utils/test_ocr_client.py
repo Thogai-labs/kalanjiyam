@@ -393,7 +393,7 @@ def test_run_ocr_remote_fallback_to_chat_completions(flask_app, tmp_path):
         # Verify second call was to /v1/chat/completions
         assert client.post.call_args_list[1][0][0] == "http://10.195.100.51:4000/v1/chat/completions"
         chat_payload = client.post.call_args_list[1][1]["json"]
-        assert chat_payload["model"] == "llm-gemma"
+        assert chat_payload["model"] == "gemma-4"
         assert "Perform optical character recognition" in chat_payload["messages"][0]["content"][0]["text"]
 
 

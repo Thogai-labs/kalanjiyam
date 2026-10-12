@@ -86,7 +86,7 @@ class TestTranslationEngineFactory:
         """Test creating Gemma engine."""
         engine = TranslationEngineFactory.create("llm_gemma")
         assert isinstance(engine, LlmGemmaTranslateEngine)
-        assert engine.model_name == "llm-gemma"
+        assert engine.model_name == "gemma-4"
 
     def test_create_param_lc_translate_engine(self):
         """Test creating param_lc_translate_ep4 engine."""
@@ -604,7 +604,7 @@ class TestTranslationMaskingAndChoices:
 
         engine3 = TranslationEngineFactory.create("3")
         assert isinstance(engine3, LlmGemmaTranslateEngine)
-        assert engine3.model_name == "llm-gemma"
+        assert engine3.model_name == "gemma-4"
 
         engine4 = TranslationEngineFactory.create("4")
         assert isinstance(engine4, BharatGenTranslateEngine)
@@ -701,7 +701,7 @@ class TestLlmGemmaTranslateEngine:
             assert call_url == "http://ocr.test/v1/chat/completions"
             assert call_kwargs["headers"]["X-API-Key"] == "test-secret"
             assert call_kwargs["headers"]["Content-Type"] == "application/json"
-            assert call_kwargs["json"]["model"] == "llm-gemma"
+            assert call_kwargs["json"]["model"] == "gemma-4"
             assert "Translate the following text from Hindi to English" in call_kwargs["json"]["messages"][0]["content"]
             assert "नमस्ते दुनिया" in call_kwargs["json"]["messages"][0]["content"]
 

@@ -465,13 +465,13 @@ def _run_ocr_chat_completions(
     if norm == "chandra":
         model_id = "chandra"
     elif norm == "gemma_ocr":
-        model_id = "llm-gemma"
+        model_id = "gemma-4"
     elif norm == "dots_ocr":
         model_id = "dots-ocr"
     else:
         model_id = engine_name.replace("_", "-")
 
-    if model_id == "llm-gemma":
+    if model_id in ("gemma-4", "llm-gemma"):
         ocr_prompt = (
             "Perform optical character recognition (OCR) on this image. Detect all text blocks and layout elements. "
             "Extract all text verbatim preserving original layout, headings, and line breaks. "
@@ -517,19 +517,19 @@ def _run_ocr_chat_completions(
         except Exception:
             pass
 
-        # If the requested model is not permitted on this virtual key, fall back to llm-gemma
-        if res.status_code == 403 and "key not allowed to access model" in str(detail).lower() and model_id != "llm-gemma":
+        # If the requested model is not permitted on this virtual key, fall back to gemma-4
+        if res.status_code == 403 and "key not allowed to access model" in str(detail).lower() and model_id != "gemma-4":
             logger.warning(
-                "OCR model %s is not permitted on this API key (%s). Falling back to llm-gemma...",
+                "OCR model %s is not permitted on this API key (%s). Falling back to gemma-4...",
                 model_id,
                 detail,
             )
-            chat_payload["model"] = "llm-gemma"
+            chat_payload["model"] = "gemma-4"
             with httpx.Client(timeout=timeout, trust_env=False) as client:
                 res = client.post(chat_url, headers=chat_headers, json=chat_payload)
             if res.status_code < 400:
                 engine_name = "gemma_ocr"
-                model_id = "llm-gemma"
+                model_id = "gemma-4"
             else:
                 raise RuntimeError(f"OCR chat completion error ({res.status_code}): {detail}")
         else:
