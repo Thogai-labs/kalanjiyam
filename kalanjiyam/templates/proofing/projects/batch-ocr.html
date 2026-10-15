@@ -131,11 +131,11 @@
             </div>
           {% endif %}
           
-          <div>
+          <div id="language-field-wrapper" class="relative">
             <label for="language" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
               {{ _('Language') }}
             </label>
-            <select name="language" id="language" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all">
+            <select name="language" id="language" class="hidden">
               <option value="sa" selected>{{ _('Sanskrit (sa)') }}</option>
               <option value="hi">{{ _('Hindi (hi)') }}</option>
               <option value="te">{{ _('Telugu (te)') }}</option>
@@ -150,6 +150,16 @@
               <option value="ur">{{ _('Urdu (ur)') }}</option>
               <option value="en">{{ _('English (en)') }}</option>
             </select>
+            <button type="button" id="language-custom-trigger"
+                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm bg-white text-slate-800 flex items-center justify-between focus:border-royalblue focus:ring-2 focus:ring-royalblue/20 outline-none transition-all cursor-pointer">
+              <span id="language-custom-label" class="truncate font-semibold">{{ _('Sanskrit (sa)') }}</span>
+              <svg id="language-custom-chevron" class="w-4 h-4 text-slate-400 ml-2 shrink-0 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div id="language-custom-menu"
+                 class="hidden absolute left-0 top-full mt-1.5 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto z-50 p-1 text-left">
+            </div>
           </div>
         </div>
         
@@ -350,10 +360,12 @@ const localizedLanguageLabels = {
 function updateLanguageOptions() {
   const engineSelect = document.getElementById('engine');
   const languageSelect = document.getElementById('language');
+  const languageContainer = document.getElementById('language-field-wrapper') || (languageSelect ? languageSelect.closest('div') : null);
+  const customMenu = document.getElementById('language-custom-menu');
+  const customLabel = document.getElementById('language-custom-label');
   if (!engineSelect || !languageSelect) return;
 
   const selectedEngine = engineSelect.value;
-  const languageContainer = languageSelect.closest('div');
   const options = languageOptions[selectedEngine];
 
   if (!options || options.length === 0) {
@@ -361,6 +373,7 @@ function updateLanguageOptions() {
       languageContainer.style.display = 'none';
     }
     languageSelect.innerHTML = '';
+    if (customMenu) customMenu.innerHTML = '';
     return;
   }
 
@@ -369,16 +382,76 @@ function updateLanguageOptions() {
   }
 
   languageSelect.innerHTML = '';
+  if (customMenu) customMenu.innerHTML = '';
 
-  options.forEach(option => {
+  let selectedText = '';
+  options.forEach((option, idx) => {
+    const optionText = localizedLanguageLabels[option.value] || option.text;
     const optionElement = document.createElement('option');
     optionElement.value = option.value;
-    optionElement.textContent = localizedLanguageLabels[option.value] || option.text;
-    if (option.value === 'sa' || option.value === 'san') {
+    optionElement.textContent = optionText;
+    const isDefault = (option.value === 'sa' || option.value === 'san' || (!selectedText && idx === options.length - 1));
+    if (isDefault && !selectedText) {
       optionElement.selected = true;
+      selectedText = optionText;
     }
     languageSelect.appendChild(optionElement);
+
+    if (customMenu) {
+      const item = document.createElement('div');
+      item.className = 'px-3.5 py-2 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors ' +
+        (optionElement.selected ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium');
+      item.innerHTML = `<span class="truncate">${optionText}</span>${optionElement.selected ? '<span class="text-royalblue font-bold ml-1">✓</span>' : ''}`;
+      item.addEventListener('click', () => {
+        languageSelect.value = option.value;
+        if (customLabel) customLabel.textContent = optionText;
+        updateCustomMenuSelection(option.value);
+        closeCustomMenu();
+        languageSelect.dispatchEvent(new Event('change'));
+      });
+      customMenu.appendChild(item);
+    }
   });
+
+  if (customLabel) {
+    customLabel.textContent = selectedText || (options[0] ? (localizedLanguageLabels[options[0].value] || options[0].text) : '');
+  }
+}
+
+function updateCustomMenuSelection(val) {
+  const customMenu = document.getElementById('language-custom-menu');
+  const languageSelect = document.getElementById('language');
+  if (!customMenu || !languageSelect) return;
+  const items = customMenu.children;
+  for (let i = 0; i < items.length; i++) {
+    const optVal = languageSelect.options[i] ? languageSelect.options[i].value : null;
+    const isSelected = (optVal === val);
+    items[i].className = 'px-3.5 py-2 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors ' +
+      (isSelected ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium');
+    const span = items[i].querySelector('span');
+    items[i].innerHTML = `<span class="truncate">${span ? span.textContent : ''}</span>${isSelected ? '<span class="text-royalblue font-bold ml-1">✓</span>' : ''}`;
+  }
+}
+
+function toggleCustomMenu() {
+  const menu = document.getElementById('language-custom-menu');
+  const chevron = document.getElementById('language-custom-chevron');
+  if (!menu) return;
+  const isOpen = !menu.classList.contains('hidden');
+  if (isOpen) {
+    menu.classList.add('hidden');
+    if (chevron) chevron.classList.remove('rotate-180');
+  } else {
+    menu.classList.remove('hidden');
+    if (chevron) chevron.classList.add('rotate-180');
+  }
+}
+
+function closeCustomMenu() {
+  const menu = document.getElementById('language-custom-menu');
+  const chevron = document.getElementById('language-custom-chevron');
+  if (menu) menu.classList.add('hidden');
+  if (chevron) chevron.classList.remove('rotate-180');
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -386,6 +459,19 @@ document.addEventListener('DOMContentLoaded', function() {
   if (engineSelect) {
     engineSelect.addEventListener('change', updateLanguageOptions);
   }
+  const trigger = document.getElementById('language-custom-trigger');
+  if (trigger) {
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCustomMenu();
+    });
+  }
+  document.addEventListener('click', (e) => {
+    const wrapper = document.getElementById('language-field-wrapper');
+    if (wrapper && !wrapper.contains(e.target)) {
+      closeCustomMenu();
+    }
+  });
   updateLanguageOptions();
 });
 </script>

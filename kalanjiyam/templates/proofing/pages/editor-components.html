@@ -159,7 +159,7 @@ these components in our help text and documentation.
     {# Version Selector Dropdown #}
     <div class="relative" x-data="{ open: false }" @click.outside="open=false">
       <button type="button" class="{{ button_css }} flex items-center gap-1"
-              @click.prevent="open=!open; if(open && typeof fetchAvailableVersions === 'function') fetchAvailableVersions();"
+              @click.prevent="open=!open; if(open) { ocrDropdownOpen=false; enhancedOcrDropdownOpen=false; translationDropdownOpen=false; if(typeof fetchAvailableVersions === 'function') fetchAvailableVersions(); }"
               :title="'{{ _('Version History') }} (' + (getVersionDisplayName(activeVersion) || '') + ')'">
         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
@@ -208,7 +208,7 @@ these components in our help text and documentation.
     {# Page Download Dropdown #}
     <div class="relative" x-data="{ open: false }" @click.outside="open=false">
       <button type="button" class="{{ button_css }} flex items-center gap-1"
-              @click.prevent="open = !open"
+              @click.prevent="open = !open; if(open) { ocrDropdownOpen=false; enhancedOcrDropdownOpen=false; translationDropdownOpen=false; }"
               title="{{ _('Download Page') }}">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
@@ -312,9 +312,9 @@ these components in our help text and documentation.
 
 {% macro _book_ocr_controls(ocr_status, engine_choices, button_css) %}
 {% set is_restricted_ocr = is_restricted_ocr_user(current_user) %}
-<div class="relative" @click.outside="ocrDropdownOpen=false">
+<div class="relative" @click.outside="ocrDropdownOpen=false; openOcrLang=false; openAddLang=false">
   <button class="{{ button_css }}"
-     @click.prevent="ocrDropdownOpen=!ocrDropdownOpen; if (ocrDropdownOpen) updateLanguageOptions();"
+     @click.prevent="ocrDropdownOpen=!ocrDropdownOpen; if (ocrDropdownOpen) { enhancedOcrDropdownOpen=false; translationDropdownOpen=false; updateLanguageOptions(); } else { openOcrLang=false; openAddLang=false; }"
      title="{{ _('OCR') }}">
     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
@@ -324,8 +324,8 @@ these components in our help text and documentation.
       <text x="12" y="12" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="currentColor" stroke="none">OCR</text>
     </svg>
   </button>
-  <div x-show="ocrDropdownOpen" x-cloak class="dropdown-pane w-80 right-0 left-auto max-h-[85vh] flex flex-col shadow-2xl rounded-xl border border-slate-200 overflow-hidden bg-white">
-    <div class="overflow-y-auto flex-1 p-2.5 space-y-2">
+  <div x-show="ocrDropdownOpen" x-cloak class="dropdown-pane w-80 right-0 left-auto flex flex-col shadow-2xl rounded-xl border border-slate-200 bg-white z-50" x-data="{ openOcrLang: false, openAddLang: false }">
+    <div class="p-2.5 space-y-2">
       {% if is_restricted_ocr %}
       <div x-init="selectOcrEngine('{{ default_engine_value }}')"></div>
       {% else %}
@@ -353,21 +353,59 @@ these components in our help text and documentation.
       {% endif %}
 
       {# Language select input (hidden when model does not require/share languages) #}
-      <div x-show="showLanguageSelect" x-cloak>
+      <div x-show="showLanguageSelect" x-cloak class="relative" :class="openOcrLang ? 'z-30' : 'z-20'" @click.outside="openOcrLang = false">
         <label class="block text-[11px] text-slate-500 mb-1 font-medium">{{ _('Language') }}</label>
-        <select class="form-select-enhanced w-full py-1 text-xs ocr-primary-language-select" x-model="selectedLanguage" id="language-select" @change="saveSettings()" @click.stop></select>
+        <select class="hidden ocr-primary-language-select" x-model="selectedLanguage" id="language-select"></select>
+        <button type="button" @click.stop="openOcrLang = !openOcrLang; if (openOcrLang) openAddLang = false;"
+                class="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs font-semibold text-slate-700 flex justify-between items-center cursor-pointer select-none focus:outline-none focus:border-royalblue">
+          <span class="truncate" x-text="getOcrSelectedLanguageLabel()"></span>
+          <svg class="w-3.5 h-3.5 text-slate-400 ml-1.5 shrink-0 transition-transform duration-200" :class="openOcrLang ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div x-show="openOcrLang" class="absolute z-[120] left-0 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1 text-left" x-cloak x-transition>
+          <template x-for="lang in currentOcrLanguages" :key="lang.value">
+            <div @click="selectedLanguage = lang.value; saveSettings(); openOcrLang = false"
+                 class="px-2.5 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+                 :class="selectedLanguage === lang.value ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+              <span class="truncate" x-text="lang.text"></span>
+              <span x-show="selectedLanguage === lang.value" class="text-royalblue font-bold ml-1">✓</span>
+            </div>
+          </template>
+        </div>
       </div>
 
-      <div x-show="showLanguageSelect && (selectedEngine === '2' || selectedEngine === '3')" x-cloak>
+      <div x-show="showLanguageSelect && (selectedEngine === '2' || selectedEngine === '3')" x-cloak class="relative" :class="openAddLang ? 'z-30' : 'z-10'" @click.outside="openAddLang = false">
         <label class="block text-[11px] text-slate-500 mb-1 font-medium">{{ _('Additional language') }}</label>
-        <select class="form-select-enhanced w-full py-1 text-xs ocr-additional-language-select" x-model="additionalLanguage" id="additional-language-select" @change="saveSettings()" @click.stop>
-          <option value="">{{ _('None') }}</option>
-        </select>
+        <select class="hidden ocr-additional-language-select" x-model="additionalLanguage" id="additional-language-select"></select>
+        <button type="button" @click.stop="openAddLang = !openAddLang; if (openAddLang) openOcrLang = false;"
+                class="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs font-semibold text-slate-700 flex justify-between items-center cursor-pointer select-none focus:outline-none focus:border-royalblue">
+          <span class="truncate" x-text="getOcrAdditionalLanguageLabel()"></span>
+          <svg class="w-3.5 h-3.5 text-slate-400 ml-1.5 shrink-0 transition-transform duration-200" :class="openAddLang ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div x-show="openAddLang" class="absolute z-[120] left-0 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1 text-left" x-cloak x-transition>
+          <div @click="additionalLanguage = ''; saveSettings(); openAddLang = false"
+               class="px-2.5 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+               :class="!additionalLanguage ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+            <span>{{ _('None') }}</span>
+            <span x-show="!additionalLanguage" class="text-royalblue font-bold ml-1">✓</span>
+          </div>
+          <template x-for="lang in currentOcrLanguages" :key="lang.value">
+            <div @click="additionalLanguage = lang.value; saveSettings(); openAddLang = false"
+                 class="px-2.5 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+                 :class="additionalLanguage === lang.value ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+              <span class="truncate" x-text="lang.text"></span>
+              <span x-show="additionalLanguage === lang.value" class="text-royalblue font-bold ml-1">✓</span>
+            </div>
+          </template>
+        </div>
       </div>
     </div>
 
     <!-- Fixed Bottom Button -->
-    <div class="border-t border-slate-100 p-2.5 bg-white shrink-0">
+    <div class="border-t border-slate-100 p-2.5 bg-white shrink-0 rounded-b-xl">
       <button type="button"
               class="w-full bg-slate-800 text-white font-medium rounded-lg py-2 text-xs hover:bg-slate-700 transition-colors cursor-pointer"
               @click.prevent.stop="runOCR(); ocrDropdownOpen=false"
@@ -381,15 +419,15 @@ these components in our help text and documentation.
 
 {% macro _book_enhanced_ocr_controls(ocr_status, engine_choices, button_css) %}
 {% set is_restricted_ocr = is_restricted_ocr_user(current_user) %}
-<div class="relative" @click.outside="enhancedOcrDropdownOpen=false">
+<div class="relative" @click.outside="enhancedOcrDropdownOpen=false; openOcrLang=false; openAddLang=false">
   <button class="{{ button_css }} flex items-center justify-center text-royalblue hover:text-blue-700 hover:bg-royalblue/10 transition-colors"
-     @click.prevent="enhancedOcrDropdownOpen=!enhancedOcrDropdownOpen; if (enhancedOcrDropdownOpen) updateLanguageOptions();"
+     @click.prevent="enhancedOcrDropdownOpen=!enhancedOcrDropdownOpen; if (enhancedOcrDropdownOpen) { ocrDropdownOpen=false; translationDropdownOpen=false; updateLanguageOptions(); } else { openOcrLang=false; openAddLang=false; }"
      title="{{ _('Enhanced OCR') }}">
     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"></path>
     </svg>
   </button>
-  <div x-show="enhancedOcrDropdownOpen" x-cloak class="dropdown-pane w-80 right-0 left-auto max-h-[85vh] flex flex-col shadow-2xl rounded-xl border border-slate-200 overflow-hidden bg-white">
+  <div x-show="enhancedOcrDropdownOpen" x-cloak class="dropdown-pane w-80 right-0 left-auto flex flex-col shadow-2xl rounded-xl border border-slate-200 bg-white z-50" x-data="{ openOcrLang: false, openAddLang: false }">
     <!-- Header (Sticky Top) -->
     <div class="px-3 py-2 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/50">
       <div class="flex items-center gap-1.5 font-semibold text-xs text-slate-800">
@@ -401,7 +439,7 @@ these components in our help text and documentation.
     </div>
 
     <!-- Scrollable Body -->
-    <div class="overflow-y-auto flex-1 p-2.5 space-y-2">
+    <div class="p-2.5 space-y-2">
       <!-- Enhancement Profile 2x2 Compact Grid -->
       <div>
         <label class="block text-[11px] text-slate-500 mb-1 font-medium">{{ _('Enhancement Profile') }}</label>
@@ -472,16 +510,54 @@ these components in our help text and documentation.
       {% endif %}
 
       <!-- Language Selection (Hidden for v2+ or engines without language lists) -->
-      <div x-show="showLanguageSelect" x-cloak>
+      <div x-show="showLanguageSelect" x-cloak class="relative" :class="openOcrLang ? 'z-30' : 'z-20'" @click.outside="openOcrLang = false">
         <label class="block text-[11px] text-slate-500 mb-1 font-medium">{{ _('Language') }}</label>
-        <select class="form-select-enhanced w-full py-1 text-xs ocr-primary-language-select" x-model="selectedLanguage" id="enhanced-language-select" @change="saveSettings()" @click.stop></select>
+        <select class="hidden ocr-primary-language-select" x-model="selectedLanguage" id="enhanced-language-select"></select>
+        <button type="button" @click.stop="openOcrLang = !openOcrLang; if (openOcrLang) openAddLang = false;"
+                class="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs font-semibold text-slate-700 flex justify-between items-center cursor-pointer select-none focus:outline-none focus:border-royalblue">
+          <span class="truncate" x-text="getOcrSelectedLanguageLabel()"></span>
+          <svg class="w-3.5 h-3.5 text-slate-400 ml-1.5 shrink-0 transition-transform duration-200" :class="openOcrLang ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div x-show="openOcrLang" class="absolute z-[120] left-0 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1 text-left" x-cloak x-transition>
+          <template x-for="lang in currentOcrLanguages" :key="lang.value">
+            <div @click="selectedLanguage = lang.value; saveSettings(); openOcrLang = false"
+                 class="px-2.5 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+                 :class="selectedLanguage === lang.value ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+              <span class="truncate" x-text="lang.text"></span>
+              <span x-show="selectedLanguage === lang.value" class="text-royalblue font-bold ml-1">✓</span>
+            </div>
+          </template>
+        </div>
       </div>
 
-      <div x-show="showLanguageSelect && (selectedEngine === '2' || selectedEngine === '3')" x-cloak>
+      <div x-show="showLanguageSelect && (selectedEngine === '2' || selectedEngine === '3')" x-cloak class="relative" :class="openAddLang ? 'z-30' : 'z-10'" @click.outside="openAddLang = false">
         <label class="block text-[11px] text-slate-500 mb-1 font-medium">{{ _('Additional language') }}</label>
-        <select class="form-select-enhanced w-full py-1 text-xs ocr-additional-language-select" x-model="additionalLanguage" id="enhanced-additional-language-select" @change="saveSettings()" @click.stop>
-          <option value="">{{ _('None') }}</option>
-        </select>
+        <select class="hidden ocr-additional-language-select" x-model="additionalLanguage" id="enhanced-additional-language-select"></select>
+        <button type="button" @click.stop="openAddLang = !openAddLang; if (openAddLang) openOcrLang = false;"
+                class="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs font-semibold text-slate-700 flex justify-between items-center cursor-pointer select-none focus:outline-none focus:border-royalblue">
+          <span class="truncate" x-text="getOcrAdditionalLanguageLabel()"></span>
+          <svg class="w-3.5 h-3.5 text-slate-400 ml-1.5 shrink-0 transition-transform duration-200" :class="openAddLang ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div x-show="openAddLang" class="absolute z-[120] left-0 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1 text-left" x-cloak x-transition>
+          <div @click="additionalLanguage = ''; saveSettings(); openAddLang = false"
+               class="px-2.5 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+               :class="!additionalLanguage ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+            <span>{{ _('None') }}</span>
+            <span x-show="!additionalLanguage" class="text-royalblue font-bold ml-1">✓</span>
+          </div>
+          <template x-for="lang in currentOcrLanguages" :key="lang.value">
+            <div @click="additionalLanguage = lang.value; saveSettings(); openAddLang = false"
+                 class="px-2.5 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+                 :class="additionalLanguage === lang.value ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+              <span class="truncate" x-text="lang.text"></span>
+              <span x-show="additionalLanguage === lang.value" class="text-royalblue font-bold ml-1">✓</span>
+            </div>
+          </template>
+        </div>
       </div>
 
       <!-- Additional Processing: Closely Written Manuscript & Upscale Image -->
@@ -536,7 +612,7 @@ these components in our help text and documentation.
     </div>
 
     <!-- Pinned Footer Action Button (Always Visible) -->
-    <div class="border-t border-slate-100 p-2.5 bg-white shrink-0 space-y-1.5">
+    <div class="border-t border-slate-100 p-2.5 bg-white shrink-0 rounded-b-xl space-y-1.5">
       <button type="button"
               class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg py-1.5 text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               @click.prevent.stop="openEnhancementPreview(selectedEnhancementProfile)">
@@ -879,15 +955,15 @@ these components in our help text and documentation.
 
 
 {% macro _book_translation_controls(button_css, translation_engines=[], default_translation_value="1") %}
-<div class="relative" @click.outside="translationDropdownOpen=false">
+<div class="relative" @click.outside="translationDropdownOpen=false; openSrc=false; openTgt=false">
   <button class="{{ button_css }} flex items-center justify-center"
-     @click.prevent="translationDropdownOpen=!translationDropdownOpen"
+     @click.prevent="translationDropdownOpen=!translationDropdownOpen; if (translationDropdownOpen) { ocrDropdownOpen=false; enhancedOcrDropdownOpen=false; } else { openSrc=false; openTgt=false; }"
      title="{{ _('Translation') }}">
     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
     </svg>
   </button>
-  <div x-show="translationDropdownOpen" x-cloak class="dropdown-pane w-80 right-0 left-auto">
+  <div x-show="translationDropdownOpen" x-cloak class="dropdown-pane w-80 right-0 left-auto z-50" x-data="{ openSrc: false, openTgt: false }">
     <ul class="text-sm">
       <li class="mb-3 px-3 pt-2">
         <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Translation engine') }}</label>
@@ -927,19 +1003,47 @@ these components in our help text and documentation.
           {% endfor %}
         </div>
       </li>
-      <li class="mb-3 px-3">
+      <li class="mb-3 px-3 relative" :class="openSrc ? 'z-30' : 'z-20'" @click.outside="openSrc = false">
         <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Source Language') }}</label>
-        <select class="form-select-enhanced w-full" x-model="sourceLanguage" id="source-language-select" @change="saveSettings()" @click.stop>
-          {{ language_options(['hi', 'te', 'mr', 'bn', 'gu', 'kn', 'ml', 'ta', 'pa', 'or', 'ur', 'en', 'sa']) }}
-        </select>
+        <button type="button" @click.stop="openSrc = !openSrc; if (openSrc) openTgt = false;"
+                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[38px] select-none focus:outline-none focus:border-royalblue">
+          <span class="truncate" x-text="getLanguageDisplayName(sourceLanguage)"></span>
+          <svg class="w-3.5 h-3.5 text-slate-400 ml-2 shrink-0 transition-transform duration-200" :class="openSrc ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div x-show="openSrc" class="absolute z-[120] w-[calc(100%-1.5rem)] mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-1 text-left" x-cloak x-transition>
+          {% for code in ['hi', 'te', 'mr', 'bn', 'gu', 'kn', 'ml', 'ta', 'pa', 'or', 'ur', 'en', 'sa'] %}
+          <div @click="sourceLanguage = '{{ code }}'; saveSettings(); openSrc = false"
+               class="px-3 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+               :class="sourceLanguage === '{{ code }}' ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+            <span>{{ language_labels[code] }}</span>
+            <span x-show="sourceLanguage === '{{ code }}'" class="text-royalblue font-bold ml-1">✓</span>
+          </div>
+          {% endfor %}
+        </div>
       </li>
-      <li class="mb-3 px-3">
+      <li class="mb-3 px-3 relative" :class="openTgt ? 'z-30' : 'z-10'" @click.outside="openTgt = false">
         <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Target Language') }}</label>
-        <select class="form-select-enhanced w-full" x-model="targetLanguage" id="target-language-select" @change="saveSettings()" @click.stop>
-          {{ language_options(['en', 'sa', 'hi', 'te', 'mr', 'bn', 'gu', 'kn', 'ml', 'ta', 'pa', 'or', 'ur', 'fr', 'de', 'es', 'ja', 'ko', 'zh']) }}
-        </select>
+        <button type="button" @click.stop="openTgt = !openTgt; if (openTgt) openSrc = false;"
+                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[38px] select-none focus:outline-none focus:border-royalblue">
+          <span class="truncate" x-text="getLanguageDisplayName(targetLanguage)"></span>
+          <svg class="w-3.5 h-3.5 text-slate-400 ml-2 shrink-0 transition-transform duration-200" :class="openTgt ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div x-show="openTgt" class="absolute z-[120] w-[calc(100%-1.5rem)] mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-1 text-left" x-cloak x-transition>
+          {% for code in ['en', 'sa', 'hi', 'te', 'mr', 'bn', 'gu', 'kn', 'ml', 'ta', 'pa', 'or', 'ur', 'fr', 'de', 'es', 'ja', 'ko', 'zh'] %}
+          <div @click="targetLanguage = '{{ code }}'; saveSettings(); openTgt = false"
+               class="px-3 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+               :class="targetLanguage === '{{ code }}' ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+            <span>{{ language_labels[code] }}</span>
+            <span x-show="targetLanguage === '{{ code }}'" class="text-royalblue font-bold ml-1">✓</span>
+          </div>
+          {% endfor %}
+        </div>
       </li>
-      <li class="mb-3 px-3 relative" x-show="filteredGlossaries.length > 0" x-cloak x-data="{ open: false }" @click.outside="open = false">
+      <li class="mb-3 px-3 relative" :class="open ? 'z-30' : 'z-10'" x-show="filteredGlossaries.length > 0" x-cloak x-data="{ open: false }" @click.outside="open = false">
         <label class="block text-xs text-slate-500 mb-2 font-medium">{{ _('Select Glossaries (Optional)') }}</label>
         
         <!-- Selector trigger -->
@@ -969,7 +1073,7 @@ these components in our help text and documentation.
         </div>
 
         <!-- Dropdown menu -->
-        <div x-show="open" class="absolute z-[100] w-[calc(100%-1.5rem)] mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-2 space-y-1 text-left" x-cloak x-transition>
+        <div x-show="open" class="absolute z-[120] w-[calc(100%-1.5rem)] mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-2 space-y-1 text-left" x-cloak x-transition>
           <label class="flex items-center px-2 py-1.5 hover:bg-slate-50 rounded-lg cursor-pointer text-xs font-semibold text-slate-700 select-none">
             <input type="checkbox" value="all" x-model="selectedGlossaries" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-2 w-3.5 h-3.5">
             <span>{{ _("All Glossaries") }}</span>
@@ -1336,7 +1440,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
         </svg>
         {{ _('OCR') }}
       </button>
-      <div x-show="ocrDropdownOpen" x-cloak class="dropdown-pane w-80">
+      <div x-show="ocrDropdownOpen" x-cloak class="dropdown-pane w-80" x-data="{ openOcrLang: false, openAddLang: false }">
         <ul class="text-sm" @click.prevent="ocrDropdownOpen=false">
 
           <!-- OCR Section Header -->
@@ -1434,33 +1538,67 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
           {% endif %}
           
           <!-- Language Selection -->
-          <li class="mb-3">
-            <div class="dropdown-item-no-hover">
-              <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Primary Language:') }}</label>
-              <select class="form-select-enhanced" 
-                      x-model="selectedLanguage" 
-                      id="language-select"
-                      @click.stop>
-                <!-- Options will be populated by JavaScript -->
-              </select>
+          <li class="mb-3 px-3 relative" :class="openOcrLang ? 'z-30' : 'z-20'" @click.outside="openOcrLang = false">
+            <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Primary Language:') }}</label>
+            <select class="hidden form-select-enhanced" 
+                    x-model="selectedLanguage" 
+                    id="language-select"
+                    @click.stop>
+            </select>
+            <button type="button" @click.stop="openOcrLang = !openOcrLang; if (openOcrLang) openAddLang = false;"
+                    class="w-full bg-white border border-teal-200 rounded px-3 py-2 text-xs font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[38px] select-none focus:outline-none focus:border-royalblue">
+              <span class="truncate" x-text="getOcrSelectedLanguageLabel()"></span>
+              <svg class="w-3.5 h-3.5 text-slate-400 ml-2 shrink-0 transition-transform duration-200" :class="openOcrLang ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div x-show="openOcrLang" class="absolute z-[120] w-[calc(100%-1.5rem)] mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-1 text-left" x-cloak x-transition>
+              <template x-for="lang in currentOcrLanguages" :key="lang.value">
+                <div @click="selectedLanguage = lang.value; saveSettings(); openOcrLang = false"
+                     class="px-3 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+                     :class="selectedLanguage === lang.value ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+                  <span class="truncate" x-text="lang.text"></span>
+                  <span x-show="selectedLanguage === lang.value" class="text-royalblue font-bold ml-1">✓</span>
+                </div>
+              </template>
             </div>
           </li>
           
           <!-- Additional Language for Bilingual Support -->
-          <li class="mb-3" x-show="selectedEngine === '2' || selectedEngine === '3'">
-            <div class="dropdown-item-no-hover">
-              <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Additional Language (Optional):') }}</label>
-              <select class="form-select-enhanced" 
-                      id="additional-language-select"
-                      @click.stop>
-                <option value="">{{ _('None') }}</option>
-                <!-- Options will be populated by JavaScript -->
-              </select>
-              <p class="text-xs text-peacock-secondary mt-1">
-                <span x-show="selectedEngine === '2'">{{ _('For bilingual documents (e.g., Sanskrit + English)') }}</span>
-                <span x-show="selectedEngine === '3'">{{ _('Engine auto-detects languages, but you can specify additional ones') }}</span>
-              </p>
+          <li class="mb-3 px-3 relative" :class="openAddLang ? 'z-30' : 'z-10'" x-show="selectedEngine === '2' || selectedEngine === '3'" @click.outside="openAddLang = false">
+            <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Additional Language (Optional):') }}</label>
+            <select class="hidden form-select-enhanced" 
+                    id="additional-language-select"
+                    @click.stop>
+              <option value="">{{ _('None') }}</option>
+            </select>
+            <button type="button" @click.stop="openAddLang = !openAddLang; if (openAddLang) openOcrLang = false;"
+                    class="w-full bg-white border border-teal-200 rounded px-3 py-2 text-xs font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[38px] select-none focus:outline-none focus:border-royalblue">
+              <span class="truncate" x-text="getOcrAdditionalLanguageLabel()"></span>
+              <svg class="w-3.5 h-3.5 text-slate-400 ml-2 shrink-0 transition-transform duration-200" :class="openAddLang ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div x-show="openAddLang" class="absolute z-[120] w-[calc(100%-1.5rem)] mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-1 text-left" x-cloak x-transition>
+              <div @click="additionalLanguage = ''; saveSettings(); openAddLang = false"
+                   class="px-3 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+                   :class="!additionalLanguage ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+                <span>{{ _('None') }}</span>
+                <span x-show="!additionalLanguage" class="text-royalblue font-bold ml-1">✓</span>
+              </div>
+              <template x-for="lang in currentOcrLanguages" :key="lang.value">
+                <div @click="additionalLanguage = lang.value; saveSettings(); openAddLang = false"
+                     class="px-3 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+                     :class="additionalLanguage === lang.value ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+                  <span class="truncate" x-text="lang.text"></span>
+                  <span x-show="additionalLanguage === lang.value" class="text-royalblue font-bold ml-1">✓</span>
+                </div>
+              </template>
             </div>
+            <p class="text-xs text-peacock-secondary mt-1">
+              <span x-show="selectedEngine === '2'">{{ _('For bilingual documents (e.g., Sanskrit + English)') }}</span>
+              <span x-show="selectedEngine === '3'">{{ _('Engine auto-detects languages, but you can specify additional ones') }}</span>
+            </p>
           </li>
           
           <!-- Run OCR Button -->
@@ -1490,7 +1628,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
         </svg>
         {{ _('Translation') }}
       </button>
-      <div x-show="translationDropdownOpen" x-cloak class="dropdown-pane w-80">
+      <div x-show="translationDropdownOpen" x-cloak class="dropdown-pane w-80" x-data="{ openSrc: false, openTgt: false }">
         <ul class="text-sm" @click.prevent="translationDropdownOpen=false">
           
           <!-- Translation Section Header -->
@@ -1546,37 +1684,53 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
           </li>
           
           <!-- Source Language Selection -->
-          <li class="mb-3">
-            <div class="dropdown-item-no-hover">
-              <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Source Language:') }}</label>
-              <select class="form-select-enhanced" 
-                      x-model="sourceLanguage" 
-                      id="source-language-select"
-                      @change="saveSettings()"
-                      @click.stop>
-                {{ language_options(['hi', 'te', 'mr', 'bn', 'gu', 'kn', 'ml', 'ta', 'pa', 'or', 'ur', 'en']) }}
-              </select>
+          <li class="mb-3 px-3 relative" :class="openSrc ? 'z-30' : 'z-20'" @click.outside="openSrc = false">
+            <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Source Language:') }}</label>
+            <button type="button" @click.stop="openSrc = !openSrc; if (openSrc) openTgt = false;"
+                    class="w-full bg-white border border-teal-200 rounded px-3 py-2 text-xs font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[38px] select-none focus:outline-none focus:border-royalblue">
+              <span class="truncate" x-text="getLanguageDisplayName(sourceLanguage)"></span>
+              <svg class="w-3.5 h-3.5 text-slate-400 ml-2 shrink-0 transition-transform duration-200" :class="openSrc ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div x-show="openSrc" class="absolute z-[120] w-[calc(100%-1.5rem)] mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-1 text-left" x-cloak x-transition>
+              {% for code in ['hi', 'te', 'mr', 'bn', 'gu', 'kn', 'ml', 'ta', 'pa', 'or', 'ur', 'en', 'sa'] %}
+              <div @click="sourceLanguage = '{{ code }}'; saveSettings(); openSrc = false"
+                   class="px-3 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+                   :class="sourceLanguage === '{{ code }}' ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+                <span>{{ language_labels[code] }}</span>
+                <span x-show="sourceLanguage === '{{ code }}'" class="text-royalblue font-bold ml-1">✓</span>
+              </div>
+              {% endfor %}
             </div>
           </li>
           
           <!-- Target Language Selection -->
-          <li class="mb-3">
-            <div class="dropdown-item-no-hover">
-              <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Target Language:') }}</label>
-              <select class="form-select-enhanced" 
-                      x-model="targetLanguage" 
-                      id="target-language-select"
-                      @change="saveSettings()"
-                      @click.stop>
-                {{ language_options(['en', 'sa', 'hi', 'te', 'mr', 'bn', 'gu', 'kn', 'ml', 'ta', 'pa', 'or', 'ur', 'fr', 'de', 'es', 'ja', 'ko', 'zh']) }}
-              </select>
+          <li class="mb-3 px-3 relative" :class="openTgt ? 'z-30' : 'z-10'" @click.outside="openTgt = false">
+            <label class="block text-xs text-peacock-secondary mb-2 font-medium">{{ _('Target Language:') }}</label>
+            <button type="button" @click.stop="openTgt = !openTgt; if (openTgt) openSrc = false;"
+                    class="w-full bg-white border border-teal-200 rounded px-3 py-2 text-xs font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[38px] select-none focus:outline-none focus:border-royalblue">
+              <span class="truncate" x-text="getLanguageDisplayName(targetLanguage)"></span>
+              <svg class="w-3.5 h-3.5 text-slate-400 ml-2 shrink-0 transition-transform duration-200" :class="openTgt ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div x-show="openTgt" class="absolute z-[120] w-[calc(100%-1.5rem)] mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-1 text-left" x-cloak x-transition>
+              {% for code in ['en', 'sa', 'hi', 'te', 'mr', 'bn', 'gu', 'kn', 'ml', 'ta', 'pa', 'or', 'ur', 'fr', 'de', 'es', 'ja', 'ko', 'zh'] %}
+              <div @click="targetLanguage = '{{ code }}'; saveSettings(); openTgt = false"
+                   class="px-3 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+                   :class="targetLanguage === '{{ code }}' ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+                <span>{{ language_labels[code] }}</span>
+                <span x-show="targetLanguage === '{{ code }}'" class="text-royalblue font-bold ml-1">✓</span>
+              </div>
+              {% endfor %}
             </div>
           </li>
           <li class="px-4 py-2" x-show="filteredGlossaries.length > 0" x-cloak>
             <div class="flex flex-col">
               <label class="block text-xs text-slate-500 mb-1 font-medium">{{ _('Select Glossaries (Optional)') }}</label>
               
-              <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+              <div class="relative" :class="open ? 'z-30' : 'z-10'" x-data="{ open: false }" @click.outside="open = false">
                 <!-- Selector trigger -->
                 <div @click.stop="open = !open" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus-within:border-royalblue focus-within:ring-4 focus-within:ring-royalblue/5 outline-none transition-all font-semibold text-slate-700 flex justify-between items-center cursor-pointer min-h-[40px] select-none">
                   <div class="flex flex-wrap gap-1 items-center">
@@ -1604,7 +1758,7 @@ Pass `class` explicitly so that Tailwind can regex-find it when it compiles. #}
                 </div>
 
                 <!-- Dropdown menu -->
-                <div x-show="open" class="absolute z-[100] w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-2 space-y-1 text-left" x-cloak x-transition>
+                <div x-show="open" class="absolute z-[120] w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto p-2 space-y-1 text-left" x-cloak x-transition>
                   <label class="flex items-center px-2 py-1.5 hover:bg-slate-50 rounded-lg cursor-pointer text-xs font-semibold text-slate-700 select-none">
                     <input type="checkbox" value="all" x-model="selectedGlossaries" class="rounded text-royalblue border-slate-300 focus:ring-royalblue mr-2 w-3.5 h-3.5">
                     <span>{{ _("All Glossaries") }}</span>

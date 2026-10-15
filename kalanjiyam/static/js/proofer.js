@@ -2236,6 +2236,37 @@ export default () => ({
     return name.charAt(0).toUpperCase() + name.slice(1);
   },
 
+  getLanguageDisplayName(code) {
+    const lookup = {
+      'sa': 'Sanskrit (sa)', 'hi': 'Hindi (hi)', 'te': 'Telugu (te)',
+      'mr': 'Marathi (mr)', 'bn': 'Bengali (bn)', 'gu': 'Gujarati (gu)',
+      'kn': 'Kannada (kn)', 'ml': 'Malayalam (ml)', 'ta': 'Tamil (ta)',
+      'pa': 'Punjabi (pa)', 'or': 'Odia (or)', 'ur': 'Urdu (ur)',
+      'en': 'English (en)', 'fr': 'French (fr)', 'de': 'German (de)',
+      'es': 'Spanish (es)', 'ja': 'Japanese (ja)', 'ko': 'Korean (ko)',
+      'zh': 'Chinese (zh)'
+    };
+    return lookup[code] || code;
+  },
+
+  get currentOcrLanguages() {
+    const eng = this.ocrEngines && this.ocrEngines[this.selectedEngine];
+    return (eng && Array.isArray(eng.languages)) ? eng.languages : [];
+  },
+
+  getOcrSelectedLanguageLabel() {
+    const list = this.currentOcrLanguages;
+    const found = list.find(l => l.value === this.selectedLanguage);
+    return found ? found.text : (this.selectedLanguage || 'Select language');
+  },
+
+  getOcrAdditionalLanguageLabel() {
+    if (!this.additionalLanguage) return 'None';
+    const list = this.currentOcrLanguages;
+    const found = list.find(l => l.value === this.additionalLanguage);
+    return found ? found.text : this.additionalLanguage;
+  },
+
   // Show translation in the image box
   showTranslationInImageBox(translation, sourceLang, targetLang, engine) {
     console.log('=== DISPLAY DEBUG START ===');

@@ -299,7 +299,8 @@
       </li>
       {% endif %}
 
-      <li class="relative z-10 block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+      <li class="relative block cursor-pointer font-bold text-xs uppercase tracking-widest transition-colors"
+          :class="open ? 'z-[60]' : 'z-10'"
           x-data="{ open: false }"
           @click.outside="open = false"
           @mouseenter="moveCursor($el)">
@@ -318,7 +319,7 @@
         <ul
           x-show="open"
           x-transition
-          class="absolute right-0 mt-2 w-40 bg-white border border-slate-200 rounded-lg shadow-lg py-1 list-none m-0 p-0 z-50"
+          class="absolute right-0 mt-2 w-40 bg-white border border-slate-200 rounded-lg shadow-lg py-1 list-none m-0 p-0 z-50 max-h-60 overflow-y-auto"
           x-cloak>
           {% for L in kalanjiyam_locales %}
           <li>
