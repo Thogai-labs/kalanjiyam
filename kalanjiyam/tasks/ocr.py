@@ -197,7 +197,7 @@ def _run_ocr_for_page_inner(
                     if completed_count >= target_total:
                         batch_item.status = "COMPLETED"
                         batch_item.completed_at = datetime.utcnow()
-                        if batch_item.job:
+                        if batch_item.job and getattr(batch_item.job, "job_type", None) != "MULTI_BATCH":
                             batch_item.job.status = "COMPLETED"
                             batch_item.job.completed_at = datetime.utcnow()
 
@@ -414,7 +414,7 @@ def _run_ocr_for_page_inner(
                     if completed_count >= target_total:
                         batch_item.status = "COMPLETED"
                         batch_item.completed_at = datetime.utcnow()
-                        if batch_item.job:
+                        if batch_item.job and getattr(batch_item.job, "job_type", None) != "MULTI_BATCH":
                             batch_item.job.status = "COMPLETED"
                             batch_item.job.completed_at = datetime.utcnow()
 

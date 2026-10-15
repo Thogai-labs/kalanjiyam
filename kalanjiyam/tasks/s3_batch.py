@@ -925,217 +925,396 @@ def run_multi_batch_operation(
 ):
     """Execute multi-document batch OCR and/or translation on s3_batch queue with automatic skipping."""
     import redis
+    import traceback
 
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     r_client = redis.Redis.from_url(redis_url)
     redis_key = f"multi_batch_job:{batch_job_id}"
 
     with _get_app_context():
-        session = q.get_session()
-        batch_job = session.query(BatchJob).get(batch_job_id)
-        if not batch_job:
-            LOG.error(f"Multi-batch job {batch_job_id} not found.")
-            return
+        try:
+            session = q.get_session()
+            batch_job = session.query(BatchJob).get(batch_job_id)
+            if not batch_job:
+                LOG.error(f"Multi-batch job {batch_job_id} not found.")
+                return
 
-        batch_job.status = "IN_PROGRESS"
-        session.commit()
+            batch_job.status = "IN_PROGRESS"
+            session.commit()
 
-        projects = (
-            session.query(db.Project)
-            .filter(db.Project.id.in_(project_ids))
-            .all()
-        )
-        proj_by_id = {p.id: p for p in projects}
-        ordered_projects = [proj_by_id[pid] for pid in project_ids if pid in proj_by_id]
-        total_pages_all = sum(len(p.pages) for p in ordered_projects)
+            projects = (
+                session.query(db.Project)
+                .filter(db.Project.id.in_(project_ids))
+                .all()
+            )
+            proj_by_id = {p.id: p for p in projects}
+            ordered_projects = [proj_by_id[pid] for pid in project_ids if pid in proj_by_id]
+            total_pages_all = sum(len(p.pages) for p in ordered_projects)
 
-        state = {
-            "job_id": batch_job_id,
-            "status": "IN_PROGRESS",
-            "total_projects": len(ordered_projects),
-            "completed_projects": 0,
-            "total_pages": total_pages_all,
-            "processed_pages": 0,
-            "skipped_ocr_pages": 0,
-            "skipped_trans_pages": 0,
-            "skipped_ocr_books": 0,
-            "skipped_trans_books": 0,
-            "error_count": 0,
-            "percent": 0,
-            "started_at": datetime.utcnow().isoformat(),
-            "completed_at": None,
-            "projects": [
+            # Store project metadata snapshots to avoid holding detached ORM instances across iterations
+            project_metas = [
                 {
                     "id": p.id,
                     "slug": p.slug,
-                    "title": p.display_title,
+                    "title": p.display_title or p.slug,
                     "total_pages": len(p.pages),
-                    "status": "PENDING",
-                    "ocr_status": "PENDING" if do_ocr else "NOT_REQUESTED",
-                    "ocr_message": "",
-                    "trans_status": "PENDING" if do_translate else "NOT_REQUESTED",
-                    "trans_message": "",
-                    "message": "Queued",
                 }
                 for p in ordered_projects
-            ],
-            "logs": [f"Multi-batch task queued with {len(ordered_projects)} documents."],
-        }
-        r_client.setex(redis_key, 86400, json.dumps(state))
+            ]
 
-        def _update_redis_state(extra_log=None):
-            if extra_log:
-                state["logs"].append(f"[{datetime.utcnow().strftime('%H:%M:%S')}] {extra_log}")
-                if len(state["logs"]) > 50:
-                    state["logs"] = state["logs"][-50:]
+            state = {
+                "job_id": batch_job_id,
+                "status": "IN_PROGRESS",
+                "total_projects": len(project_metas),
+                "completed_projects": 0,
+                "total_pages": total_pages_all,
+                "processed_pages": 0,
+                "skipped_ocr_pages": 0,
+                "skipped_trans_pages": 0,
+                "skipped_ocr_books": 0,
+                "skipped_trans_books": 0,
+                "error_count": 0,
+                "percent": 0,
+                "started_at": datetime.utcnow().isoformat(),
+                "completed_at": None,
+                "projects": [
+                    {
+                        "id": p["id"],
+                        "slug": p["slug"],
+                        "title": p["title"],
+                        "total_pages": p["total_pages"],
+                        "status": "PENDING",
+                        "ocr_status": "PENDING" if do_ocr else "NOT_REQUESTED",
+                        "ocr_message": "",
+                        "trans_status": "PENDING" if do_translate else "NOT_REQUESTED",
+                        "trans_message": "",
+                        "message": "Queued",
+                    }
+                    for p in project_metas
+                ],
+                "logs": [f"Multi-batch task queued with {len(project_metas)} documents."],
+            }
             r_client.setex(redis_key, 86400, json.dumps(state))
 
-        app_env = os.environ.get("KALANJIYAM_DEPLOYMENT_ENV", os.environ.get("FLASK_ENV", "development"))
-        from kalanjiyam.tasks.ocr import _run_ocr_for_page_inner
-        from kalanjiyam.tasks.translation import _run_translation_for_page_inner
+            def _update_redis_state(extra_log=None):
+                if extra_log:
+                    state["logs"].append(f"[{datetime.utcnow().strftime('%H:%M:%S')}] {extra_log}")
+                    if len(state["logs"]) > 50:
+                        state["logs"] = state["logs"][-50:]
+                r_client.setex(redis_key, 86400, json.dumps(state))
 
-        for p_idx, project in enumerate(ordered_projects):
-            proj_item = session.query(BatchItem).filter_by(job_id=batch_job_id, project_id=project.id).first()
-            if proj_item:
-                proj_item.status = "IN_PROGRESS"
-                session.commit()
+            app_env = os.environ.get("KALANJIYAM_DEPLOYMENT_ENV", os.environ.get("FLASK_ENV", "development"))
+            from kalanjiyam.tasks.ocr import _run_ocr_for_page_inner
+            from kalanjiyam.tasks.translation import _run_translation_for_page_inner
 
-            proj_state = state["projects"][p_idx]
-            proj_state["status"] = "IN_PROGRESS"
-            _update_redis_state(f"Starting processing for '{project.display_title}' ({project.slug})")
+            for p_idx, p_meta in enumerate(project_metas):
+                proj_id = p_meta["id"]
+                proj_slug = p_meta["slug"]
+                proj_title = p_meta["title"]
+                proj_state = state["projects"][p_idx]
 
-            # Check which pages need OCR
-            pages_to_ocr = []
-            if do_ocr:
-                for pg in project.pages:
-                    has_boxes = bool(pg.ocr_bounding_boxes and pg.ocr_bounding_boxes.strip())
-                    has_version = any(v.version_key and v.version_key.startswith("ocr:") for v in (pg.versions or []))
-                    if not (has_boxes or has_version):
-                        pages_to_ocr.append(pg)
+                try:
+                    # Query fresh session and model to avoid DetachedInstanceError from nested app context teardown
+                    session = q.get_session()
+                    project = session.query(db.Project).get(proj_id)
+                    if not project:
+                        proj_state["status"] = "FAILED"
+                        proj_state["message"] = f"Document ID {proj_id} not found."
+                        _update_redis_state(f"Document ID {proj_id} not found.")
+                        continue
 
-                if len(pages_to_ocr) == 0:
-                    proj_state["ocr_status"] = "SKIPPED"
-                    proj_state["ocr_message"] = f"Skipped: all {len(project.pages)} pages already OCRed"
-                    state["skipped_ocr_books"] += 1
-                    state["skipped_ocr_pages"] += len(project.pages)
-                    _update_redis_state(f"'{project.display_title}': All pages already OCRed. Skipping book OCR.")
-                else:
-                    skipped_p = len(project.pages) - len(pages_to_ocr)
-                    if skipped_p > 0:
-                        state["skipped_ocr_pages"] += skipped_p
-                        _update_redis_state(f"'{project.display_title}': Skipping {skipped_p} already-OCRed pages.")
+                    proj_item = session.query(BatchItem).filter_by(job_id=batch_job_id, project_id=project.id).first()
+                    if proj_item:
+                        proj_item.status = "IN_PROGRESS"
+                        session.commit()
 
-            # Check which pages need Translation
-            pages_to_trans = []
-            if do_translate:
-                for pg in project.pages:
-                    has_trans = session.query(db.Translation).filter_by(
-                        page_id=pg.id,
-                        target_language=target_lang,
-                        status="completed"
-                    ).first() is not None
-                    has_ver = any(
-                        v.version_key and v.version_key.startswith("translation:") and f"->{target_lang}" in v.version_key
-                        for v in (pg.versions or [])
+                    proj_state["status"] = "IN_PROGRESS"
+                    _update_redis_state(f"Starting processing for '{proj_title}' ({proj_slug})")
+
+                    # Query pages and version status directly via session (avoids DetachedInstanceError on relationship access)
+                    project_pages = (
+                        session.query(db.Page)
+                        .filter_by(project_id=project.id)
+                        .order_by(db.Page.order.asc())
+                        .all()
                     )
-                    if not (has_trans or has_ver):
-                        pages_to_trans.append(pg)
+                    page_ids = [pg.id for pg in project_pages]
 
-                if len(pages_to_trans) == 0:
-                    proj_state["trans_status"] = "SKIPPED"
-                    proj_state["trans_message"] = f"Skipped: all {len(project.pages)} pages already translated ({target_lang})"
-                    state["skipped_trans_books"] += 1
-                    state["skipped_trans_pages"] += len(project.pages)
-                    _update_redis_state(f"'{project.display_title}': All pages already translated. Skipping book translation.")
-                else:
-                    skipped_p = len(project.pages) - len(pages_to_trans)
-                    if skipped_p > 0:
-                        state["skipped_trans_pages"] += skipped_p
-                        _update_redis_state(f"'{project.display_title}': Skipping {skipped_p} already-translated pages.")
+                    # Check which pages need OCR
+                    pages_to_ocr = []
+                    if do_ocr:
+                        page_ids_with_ocr = set()
+                        if page_ids:
+                            v_rows = session.query(db.PageVersion.page_id).filter(
+                                db.PageVersion.page_id.in_(page_ids),
+                                db.PageVersion.version_key.like("ocr:%"),
+                            ).all()
+                            page_ids_with_ocr = {r[0] for r in v_rows}
 
-            # Run OCR on pages needing it
-            ocr_errs = 0
-            if do_ocr and pages_to_ocr:
-                proj_state["ocr_status"] = "IN_PROGRESS"
-                _update_redis_state(f"Running OCR on {len(pages_to_ocr)} pages for '{project.display_title}'")
-                for pg in pages_to_ocr:
+                        for pg in project_pages:
+                            has_boxes = bool(pg.ocr_bounding_boxes and pg.ocr_bounding_boxes.strip())
+                            has_version = pg.id in page_ids_with_ocr
+                            if not (has_boxes or has_version):
+                                pages_to_ocr.append(pg)
+
+                        if len(pages_to_ocr) == 0:
+                            proj_state["ocr_status"] = "SKIPPED"
+                            proj_state["ocr_message"] = f"Skipped: all {len(project_pages)} pages already OCRed"
+                            state["skipped_ocr_books"] += 1
+                            state["skipped_ocr_pages"] += len(project_pages)
+                            _update_redis_state(f"'{proj_title}': All pages already OCRed. Skipping book OCR.")
+                        else:
+                            skipped_p = len(project_pages) - len(pages_to_ocr)
+                            if skipped_p > 0:
+                                state["skipped_ocr_pages"] += skipped_p
+                                _update_redis_state(f"'{proj_title}': Skipping {skipped_p} already-OCRed pages.")
+
+                    # Check which pages need Translation
+                    pages_to_trans = []
+                    if do_translate:
+                        page_ids_with_trans = set()
+                        if page_ids:
+                            t_rows = session.query(db.Translation.page_id).filter(
+                                db.Translation.page_id.in_(page_ids),
+                                db.Translation.target_language == target_lang,
+                                db.Translation.status == "completed",
+                            ).all()
+                            page_ids_with_trans = {r[0] for r in t_rows}
+
+                            tv_rows = session.query(db.PageVersion.page_id).filter(
+                                db.PageVersion.page_id.in_(page_ids),
+                                db.PageVersion.version_key.like(f"translation:%->{target_lang}%"),
+                            ).all()
+                            page_ids_with_trans.update(r[0] for r in tv_rows)
+
+                        for pg in project_pages:
+                            if pg.id not in page_ids_with_trans:
+                                pages_to_trans.append(pg)
+
+                        if len(pages_to_trans) == 0:
+                            proj_state["trans_status"] = "SKIPPED"
+                            proj_state["trans_message"] = f"Skipped: all {len(project_pages)} pages already translated ({target_lang})"
+                            state["skipped_trans_books"] += 1
+                            state["skipped_trans_pages"] += len(project_pages)
+                            _update_redis_state(f"'{proj_title}': All pages already translated. Skipping book translation.")
+                        else:
+                            skipped_p = len(project_pages) - len(pages_to_trans)
+                            if skipped_p > 0:
+                                state["skipped_trans_pages"] += skipped_p
+                                _update_redis_state(f"'{proj_title}': Skipping {skipped_p} already-translated pages.")
+
+                    # Run OCR on pages needing it
+                    ocr_errs = 0
+                    if do_ocr and pages_to_ocr:
+                        proj_state["ocr_status"] = "IN_PROGRESS"
+                        _update_redis_state(f"Running OCR on {len(pages_to_ocr)} pages for '{proj_title}'")
+                        for pg in pages_to_ocr:
+                            try:
+                                _run_ocr_for_page_inner(
+                                    app_env=app_env,
+                                    project_slug=proj_slug,
+                                    page_slug=pg.slug,
+                                    engine=ocr_engine,
+                                    language=ocr_language,
+                                )
+                            except Exception as ocr_ex:
+                                LOG.error(f"OCR failed for {proj_slug}/{pg.slug}: {ocr_ex}")
+                                ocr_errs += 1
+                                state["error_count"] += 1
+                                try:
+                                    from kalanjiyam.utils.metrics import record_metric
+                                    record_metric(
+                                        category="error",
+                                        name="multi_batch.ocr_failed",
+                                        status="FAILED",
+                                        error_level="ERROR",
+                                        error_message=str(ocr_ex),
+                                        traceback_str=traceback.format_exc(),
+                                        details={
+                                            "batch_job_id": batch_job_id,
+                                            "project_slug": proj_slug,
+                                            "page_slug": pg.slug,
+                                            "engine": ocr_engine,
+                                            "language": ocr_language,
+                                        },
+                                    )
+                                except Exception:
+                                    pass
+                            state["processed_pages"] += 1
+                            progress_total = max(1, total_pages_all)
+                            state["percent"] = min(99, int((state["processed_pages"] / progress_total) * 100))
+                            _update_redis_state()
+
+                        if ocr_errs == 0:
+                            proj_state["ocr_status"] = "COMPLETED"
+                            proj_state["ocr_message"] = f"Completed {len(pages_to_ocr)} pages"
+                        else:
+                            proj_state["ocr_status"] = "COMPLETED_WITH_ERRORS"
+                            proj_state["ocr_message"] = f"Completed {len(pages_to_ocr) - ocr_errs} pages, {ocr_errs} failed"
+
+                    # Run Translation on pages needing it
+                    trans_errs = 0
+                    if do_translate and pages_to_trans:
+                        proj_state["trans_status"] = "IN_PROGRESS"
+                        _update_redis_state(f"Running Translation on {len(pages_to_trans)} pages for '{proj_title}'")
+                        for pg in pages_to_trans:
+                            try:
+                                _run_translation_for_page_inner(
+                                    app_env=app_env,
+                                    project_slug=proj_slug,
+                                    page_slug=pg.slug,
+                                    source_lang=source_lang,
+                                    target_lang=target_lang,
+                                    engine=trans_engine,
+                                )
+                            except Exception as trans_ex:
+                                LOG.error(f"Translation failed for {proj_slug}/{pg.slug}: {trans_ex}")
+                                trans_errs += 1
+                                state["error_count"] += 1
+                                try:
+                                    from kalanjiyam.utils.metrics import record_metric
+                                    record_metric(
+                                        category="error",
+                                        name="multi_batch.translation_failed",
+                                        status="FAILED",
+                                        error_level="ERROR",
+                                        error_message=str(trans_ex),
+                                        traceback_str=traceback.format_exc(),
+                                        details={
+                                            "batch_job_id": batch_job_id,
+                                            "project_slug": proj_slug,
+                                            "page_slug": pg.slug,
+                                            "engine": trans_engine,
+                                            "source_lang": source_lang,
+                                            "target_lang": target_lang,
+                                        },
+                                    )
+                                except Exception:
+                                    pass
+                            _update_redis_state()
+
+                        if trans_errs == 0:
+                            proj_state["trans_status"] = "COMPLETED"
+                            proj_state["trans_message"] = f"Completed {len(pages_to_trans)} pages"
+                        else:
+                            proj_state["trans_status"] = "COMPLETED_WITH_ERRORS"
+                            proj_state["trans_message"] = f"Completed {len(pages_to_trans) - trans_errs} pages, {trans_errs} failed"
+
+                    # If this document's pages were completely skipped, account for them in processed_pages
+                    if (do_ocr and not pages_to_ocr) or (not do_ocr and do_translate and not pages_to_trans):
+                        state["processed_pages"] += len(project_pages)
+                        progress_total = max(1, total_pages_all)
+                        state["percent"] = min(99, int((state["processed_pages"] / progress_total) * 100))
+                        _update_redis_state()
+
+                    # Finalize per-project status
+                    all_ocr_skipped = (not do_ocr or proj_state["ocr_status"] == "SKIPPED")
+                    all_trans_skipped = (not do_translate or proj_state["trans_status"] == "SKIPPED")
+
+                    if all_ocr_skipped and all_trans_skipped and (do_ocr or do_translate):
+                        proj_state["status"] = "SKIPPED"
+                        proj_state["message"] = "Skipped (all pages already completed)"
+                    elif (not do_ocr or proj_state["ocr_status"] in ("COMPLETED", "SKIPPED")) and (not do_translate or proj_state["trans_status"] in ("COMPLETED", "SKIPPED")):
+                        if ocr_errs > 0 or trans_errs > 0:
+                            proj_state["status"] = "COMPLETED_WITH_ERRORS"
+                            proj_state["message"] = f"Completed with errors ({ocr_errs + trans_errs} pages failed)"
+                        else:
+                            proj_state["status"] = "COMPLETED"
+                            proj_state["message"] = "Done"
+                    else:
+                        proj_state["status"] = "COMPLETED_WITH_ERRORS"
+                        proj_state["message"] = "Completed with some page errors"
+
+                    session = q.get_session()
+                    proj_item = session.query(BatchItem).filter_by(job_id=batch_job_id, project_id=proj_id).first()
+                    if proj_item:
+                        proj_item.status = proj_state["status"]
+                        proj_item.completed_at = datetime.utcnow()
+                        session.commit()
+
+                    state["completed_projects"] += 1
+                    _update_redis_state(f"Finished processing for '{proj_title}'")
+
+                except Exception as proj_err:
+                    LOG.error(f"Error processing project {proj_slug} in multi-batch: {proj_err}", exc_info=True)
                     try:
-                        _run_ocr_for_page_inner(
-                            app_env=app_env,
-                            project_slug=project.slug,
-                            page_slug=pg.slug,
-                            engine=ocr_engine,
-                            language=ocr_language,
+                        from kalanjiyam.utils.metrics import record_metric
+                        record_metric(
+                            category="error",
+                            name="multi_batch.project_failed",
+                            status="FAILED",
+                            error_level="ERROR",
+                            error_message=str(proj_err),
+                            traceback_str=traceback.format_exc(),
+                            details={"batch_job_id": batch_job_id, "project_id": proj_id, "project_slug": proj_slug},
                         )
-                    except Exception as ocr_ex:
-                        LOG.error(f"OCR failed for {project.slug}/{pg.slug}: {ocr_ex}")
-                        ocr_errs += 1
-                        state["error_count"] += 1
-                    state["processed_pages"] += 1
-                    state["percent"] = min(99, int((state["processed_pages"] / max(1, total_pages_all)) * 100))
-                    _update_redis_state()
-
-                if ocr_errs == 0:
-                    proj_state["ocr_status"] = "COMPLETED"
-                    proj_state["ocr_message"] = f"Completed {len(pages_to_ocr)} pages"
-                else:
-                    proj_state["ocr_status"] = "COMPLETED_WITH_ERRORS"
-                    proj_state["ocr_message"] = f"Completed {len(pages_to_ocr) - ocr_errs} pages, {ocr_errs} failed"
-
-            # Run Translation on pages needing it
-            trans_errs = 0
-            if do_translate and pages_to_trans:
-                proj_state["trans_status"] = "IN_PROGRESS"
-                _update_redis_state(f"Running Translation on {len(pages_to_trans)} pages for '{project.display_title}'")
-                for pg in pages_to_trans:
+                    except Exception:
+                        pass
+                    proj_state["status"] = "FAILED"
+                    proj_state["message"] = f"Failed: {str(proj_err)}"
+                    state["error_count"] += 1
+                    _update_redis_state(f"Error processing '{proj_title}': {proj_err}")
                     try:
-                        _run_translation_for_page_inner(
-                            app_env=app_env,
-                            project_slug=project.slug,
-                            page_slug=pg.slug,
-                            source_lang=source_lang,
-                            target_lang=target_lang,
-                            engine=trans_engine,
-                        )
-                    except Exception as trans_ex:
-                        LOG.error(f"Translation failed for {project.slug}/{pg.slug}: {trans_ex}")
-                        trans_errs += 1
-                        state["error_count"] += 1
-                    _update_redis_state()
+                        session = q.get_session()
+                        proj_item = session.query(BatchItem).filter_by(job_id=batch_job_id, project_id=proj_id).first()
+                        if proj_item:
+                            proj_item.status = "FAILED"
+                            proj_item.completed_at = datetime.utcnow()
+                            session.commit()
+                    except Exception:
+                        pass
 
-                if trans_errs == 0:
-                    proj_state["trans_status"] = "COMPLETED"
-                    proj_state["trans_message"] = f"Completed {len(pages_to_trans)} pages"
-                else:
-                    proj_state["trans_status"] = "COMPLETED_WITH_ERRORS"
-                    proj_state["trans_message"] = f"Completed {len(pages_to_trans) - trans_errs} pages, {trans_errs} failed"
+            # Finalize entire batch job
+            session = q.get_session()
+            batch_job = session.query(BatchJob).get(batch_job_id)
+            has_failed_projects = any(p["status"] == "FAILED" for p in state["projects"])
+            has_error_projects = any(p["status"] == "COMPLETED_WITH_ERRORS" for p in state["projects"])
 
-            # Finalize per-project status
-            if (do_ocr and proj_state["ocr_status"] == "SKIPPED") and (do_translate and proj_state["trans_status"] == "SKIPPED"):
-                proj_state["status"] = "SKIPPED"
-                proj_state["message"] = "Skipped (already OCRed and translated)"
-            elif (not do_ocr or proj_state["ocr_status"] in ("COMPLETED", "SKIPPED")) and (not do_translate or proj_state["trans_status"] in ("COMPLETED", "SKIPPED")):
-                proj_state["status"] = "COMPLETED"
-                proj_state["message"] = "Done"
+            if has_failed_projects and all(p["status"] == "FAILED" for p in state["projects"]):
+                final_status = "FAILED"
+                final_msg = "All batch operations failed."
+            elif has_failed_projects or has_error_projects or state["error_count"] > 0:
+                final_status = "COMPLETED_WITH_ERRORS"
+                final_msg = f"Completed with errors ({state['error_count']} errors recorded)."
             else:
-                proj_state["status"] = "COMPLETED_WITH_ERRORS"
-                proj_state["message"] = "Completed with some page errors"
+                final_status = "COMPLETED"
+                final_msg = "All batch operations completed successfully."
 
-            if proj_item:
-                proj_item.status = proj_state["status"]
-                proj_item.completed_at = datetime.utcnow()
+            state["status"] = final_status
+            state["percent"] = 100
+            state["completed_at"] = datetime.utcnow().isoformat()
+            _update_redis_state(final_msg)
+
+            if batch_job:
+                batch_job.status = final_status
+                batch_job.completed_at = datetime.utcnow()
                 session.commit()
 
-            state["completed_projects"] += 1
-            _update_redis_state(f"Finished processing for '{project.display_title}'")
-
-        # Finalize entire batch job
-        state["status"] = "COMPLETED"
-        state["percent"] = 100
-        state["completed_at"] = datetime.utcnow().isoformat()
-        _update_redis_state("All batch operations completed successfully.")
-
-        batch_job.status = "COMPLETED"
-        batch_job.completed_at = datetime.utcnow()
-        session.commit()
+        except Exception as job_err:
+            LOG.error(f"Multi-batch job {batch_job_id} encountered fatal error: {job_err}", exc_info=True)
+            try:
+                from kalanjiyam.utils.metrics import record_metric
+                record_metric(
+                    category="error",
+                    name="multi_batch.job_failed",
+                    status="FAILED",
+                    error_level="CRITICAL",
+                    error_message=str(job_err),
+                    traceback_str=traceback.format_exc(),
+                    details={"batch_job_id": batch_job_id, "project_ids": project_ids},
+                )
+            except Exception:
+                pass
+            state["status"] = "FAILED"
+            state["completed_at"] = datetime.utcnow().isoformat()
+            _update_redis_state(f"Fatal multi-batch error: {job_err}")
+            try:
+                session = q.get_session()
+                batch_job = session.query(BatchJob).get(batch_job_id)
+                if batch_job:
+                    batch_job.status = "FAILED"
+                    batch_job.completed_at = datetime.utcnow()
+                    session.commit()
+            except Exception:
+                pass
 
