@@ -17,6 +17,9 @@ def test_multi_batch_page_access(rama_client):
     assert "Select Documents" in resp.text
     assert "Batch Functions" in resp.text
     assert "v2 contract only" in resp.text
+    assert "OCR Engine:" in resp.text
+    assert 'value="1"' in resp.text
+    assert "Translation Engine:" in resp.text
 
 
 def test_multi_batch_run_queue_routing(rama_client):

@@ -188,23 +188,38 @@ def index():
 
     # Prepare OCR Engine Choices (Adheres to v2 contract)
     from kalanjiyam.utils.ocr_client import get_available_engines
-    from kalanjiyam.utils.ocr_types import build_engine_choices
+    from kalanjiyam.utils.ocr_types import (
+        build_engine_choices,
+        normalize_engine,
+        REVERSE_ENGINE_MAP,
+        SUPPORTED_ENGINES,
+    )
 
     system_settings = q.get_system_settings()
     default_ocr_engine = getattr(system_settings, "default_ocr_engine", "gemma_ocr") or "gemma_ocr"
-    available_ocr_engines = get_available_engines()
+    recommended_ocr_engine = getattr(system_settings, "recommended_ocr_engine", None) or default_ocr_engine
+    default_engine_value = REVERSE_ENGINE_MAP.get(default_ocr_engine, "1")
+
+    ocr_status = get_available_engines()
+    available_ocr_engines = ocr_status.get("engines", []) if isinstance(ocr_status, dict) else (ocr_status or [])
     if not available_ocr_engines:
-        available_ocr_engines = ["gemma_ocr", "indic_ocr", "chandra", "tesseract_manuscript", "dots_ocr"]
+        available_ocr_engines = list(SUPPORTED_ENGINES)
 
     ocr_engine_choices = build_engine_choices(
         available_ocr_engines,
         is_super_admin=getattr(current_user, "is_super_admin", False),
-        recommended_engine=default_ocr_engine,
+        recommended_engine=recommended_ocr_engine,
     )
 
     # Prepare Translation Choices
+    from kalanjiyam.utils.translation_engine import (
+        build_translation_choices,
+        normalize_translation_engine,
+        REVERSE_TRANSLATION_ENGINE_MAP,
+    )
     default_trans_engine = getattr(system_settings, "default_translation_engine", "indictrans3") or "indictrans3"
     rec_trans_engine = getattr(system_settings, "recommended_translation_engine", None)
+    default_trans_engine_value = REVERSE_TRANSLATION_ENGINE_MAP.get(default_trans_engine, "1")
     trans_engine_choices = build_translation_choices(
         is_super_admin=getattr(current_user, "is_super_admin", False),
         recommended_engine=rec_trans_engine,
@@ -218,8 +233,10 @@ def index():
         bucket_counts=bucket_counts,
         ocr_engines=ocr_engine_choices,
         default_ocr_engine=default_ocr_engine,
+        default_engine_value=default_engine_value,
         trans_engines=trans_engine_choices,
         default_trans_engine=default_trans_engine,
+        default_trans_engine_value=default_trans_engine_value,
         languages=supported_languages,
     )
 
@@ -262,9 +279,12 @@ def run():
     if not do_ocr and not do_translate:
         return jsonify({"success": False, "error": _l("Please select at least one operation (OCR or Translation).")}), 400
 
-    ocr_engine = payload.get("ocr_engine") or "gemma_ocr"
+    from kalanjiyam.utils.ocr_types import normalize_engine
+    from kalanjiyam.utils.translation_engine import normalize_translation_engine
+
+    ocr_engine = normalize_engine(payload.get("ocr_engine") or "gemma_ocr")
     ocr_language = payload.get("ocr_language") or "auto"
-    trans_engine = payload.get("trans_engine") or "indictrans3"
+    trans_engine = normalize_translation_engine(payload.get("trans_engine") or "indictrans3")
     source_lang = payload.get("source_lang") or "sa"
     target_lang = payload.get("target_lang") or "en"
 
