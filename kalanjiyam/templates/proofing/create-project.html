@@ -72,6 +72,11 @@
        docxWorkflow: 'direct',
        sourceLang: 'sa',
        targetLang: 'en',
+       transLanguages: {{ (languages or [])|tojson }},
+       getTransLangLabel(code) {
+         const f = this.transLanguages.find(l => l.code === code);
+         return f ? f.name : code;
+       },
        allGlossaries: [],
        selectedGlossaries: [],
        init() {
@@ -418,21 +423,50 @@
           <!-- Dynamic Translation Settings -->
           <div class="p-3.5 bg-white rounded-xl border border-slate-200 space-y-3" x-show="docxWorkflow === 'direct'" x-transition>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
-              <div>
+              <div class="relative" x-data="{ openSourceLang: false }" @click.outside="openSourceLang = false">
                 <label for="source_lang" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">{{ _('Source Language') }}</label>
-                <select id="source_lang" name="source_lang" x-model="sourceLang" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all">
-                  {% for lang in languages %}
-                    <option value="{{ lang.code }}" {% if lang.code == 'sa' %}selected{% endif %}>{{ lang.name }}</option>
-                  {% endfor %}
-                </select>
+                <input type="hidden" id="source_lang" name="source_lang" :value="sourceLang">
+                <button type="button" @click.stop="openSourceLang = !openSourceLang"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 flex items-center justify-between focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer">
+                  <span class="truncate" x-text="getTransLangLabel(sourceLang)"></span>
+                  <svg class="w-4 h-4 text-slate-400 ml-1.5 shrink-0 transition-transform duration-200" :class="openSourceLang ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
+                </button>
+                <div x-show="openSourceLang" x-cloak x-transition
+                     class="absolute left-0 top-full mt-1.5 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto z-50 p-1 text-left">
+                  <template x-for="lang in transLanguages" :key="lang.code">
+                    <div @click="sourceLang = lang.code; openSourceLang = false"
+                         class="px-3 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+                         :class="sourceLang === lang.code ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+                      <span class="truncate" x-text="lang.name"></span>
+                      <span x-show="sourceLang === lang.code" class="text-royalblue font-bold ml-1">✓</span>
+                    </div>
+                  </template>
+                </div>
               </div>
-              <div>
+
+              <div class="relative" x-data="{ openTargetLang: false }" @click.outside="openTargetLang = false">
                 <label for="target_lang" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">{{ _('Target Language') }}</label>
-                <select id="target_lang" name="target_lang" x-model="targetLang" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 focus:border-royalblue focus:bg-white outline-none transition-all">
-                  {% for lang in languages %}
-                    <option value="{{ lang.code }}" {% if lang.code == 'en' %}selected{% endif %}>{{ lang.name }}</option>
-                  {% endfor %}
-                </select>
+                <input type="hidden" id="target_lang" name="target_lang" :value="targetLang">
+                <button type="button" @click.stop="openTargetLang = !openTargetLang"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 flex items-center justify-between focus:border-royalblue focus:bg-white outline-none transition-all cursor-pointer">
+                  <span class="truncate" x-text="getTransLangLabel(targetLang)"></span>
+                  <svg class="w-4 h-4 text-slate-400 ml-1.5 shrink-0 transition-transform duration-200" :class="openTargetLang ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
+                </button>
+                <div x-show="openTargetLang" x-cloak x-transition
+                     class="absolute left-0 top-full mt-1.5 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto z-50 p-1 text-left">
+                  <template x-for="lang in transLanguages" :key="lang.code">
+                    <div @click="targetLang = lang.code; openTargetLang = false"
+                         class="px-3 py-1.5 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors"
+                         :class="targetLang === lang.code ? 'bg-royalblue/10 text-royalblue font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'">
+                      <span class="truncate" x-text="lang.name"></span>
+                      <span x-show="targetLang === lang.code" class="text-royalblue font-bold ml-1">✓</span>
+                    </div>
+                  </template>
+                </div>
               </div>
             </div>
             <div class="text-left">
