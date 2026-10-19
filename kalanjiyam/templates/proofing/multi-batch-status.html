@@ -1,0 +1,512 @@
+{% extends 'proofing/base.html' %}
+{% import "macros/components.html" as components %}
+{% import "macros/proofing.html" as m %}
+
+{% block extra_css %}
+<style>
+  .google-proofing-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e8eaed;
+  }
+  .doc-card {
+    transition: all 0.15s ease-in-out;
+  }
+  .doc-card:hover {
+    border-color: #93c5fd;
+    background-color: #f8fafc;
+  }
+  .terminal-logs {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+</style>
+{% endblock %}
+
+{% block title %}{{ _('Multi Batch Process Status') }} #{{ job_id }} | Kalanjiyam{% endblock %}
+
+{% block main %}
+<div x-data="multiBatchStatusApp()" class="w-full pb-16">
+  <!-- Top Header -->
+  <header class="google-proofing-header py-3.5 px-4 bg-white border-b border-slate-200 shadow-xs mb-6">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-royalblue/10 text-royalblue flex items-center justify-center shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl font-bold tracking-tight text-slate-900 leading-tight">
+              {{ _('Multi Batch Process Status') }}
+            </h1>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+              {{ _('s3_batch Queue') }}
+            </span>
+          </div>
+          <p class="text-slate-500 text-xs font-medium mt-0.5">
+            {{ _('Live status and telemetry for multi-document background processing.') }}
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 text-xs">
+        <a href="{{ url_for('proofing.multi_batch.index') }}" class="inline-flex items-center px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs">
+          <span>{{ _('Multi Batch Processes') }}</span>
+        </a>
+        <a href="{{ url_for('proofing.index') }}" class="inline-flex items-center px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-royalblue font-semibold transition-all shadow-xs">
+          <span>{{ _('Proofing Workspace') }}</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sub-Nav -->
+  <div class="max-w-7xl mx-auto px-4 mb-6">
+    {{ m.main_nav(active='multi_batch', current_user=current_user) }}
+  </div>
+
+  <!-- Flash Messages -->
+  <div class="max-w-7xl mx-auto px-4 mb-4">
+    {{ components.flash_messages() }}
+  </div>
+
+  <!-- Main Content Container -->
+  <div class="max-w-7xl mx-auto px-4 space-y-6">
+
+    <!-- Top Status Banner Card -->
+    <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-6 space-y-5">
+      <!-- Breadcrumb & Top Bar -->
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+        <div>
+          <nav class="flex items-center gap-1.5 text-xs text-slate-400 font-semibold mb-1">
+            <a href="{{ url_for('proofing.index') }}" class="hover:text-royalblue transition-colors">{{ _('Proofing') }}</a>
+            <span>/</span>
+            <a href="{{ url_for('proofing.multi_batch.index') }}" class="hover:text-royalblue transition-colors">{{ _('Multi Batch') }}</a>
+            <span>/</span>
+            <span class="text-slate-700 font-bold" x-text="`Job #${jobStatus.job_id || {{ job_id }}}`"></span>
+          </nav>
+          <div class="flex items-center gap-3">
+            <h2 class="text-lg font-bold text-slate-900" x-text="`{{ _('Batch Job #') }}${jobStatus.job_id || {{ job_id }}}`"></h2>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-500 font-mono bg-slate-100 px-2.5 py-1 rounded-lg" :title="'Task ID: ' + (jobStatus.task_id || '{{ task_id }}')">
+                <span class="text-slate-400">task:</span> <span x-text="jobStatus.task_id || '{{ task_id }}'"></span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Status Pill & Action Buttons -->
+        <div class="flex items-center gap-2">
+          <!-- Status Pill -->
+          <template x-if="jobStatus.status === 'IN_PROGRESS'">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+              <span class="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+              <span>{{ _('In Progress') }}</span>
+            </span>
+          </template>
+          <template x-if="jobStatus.status === 'COMPLETED'">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span>✓ {{ _('Completed') }}</span>
+            </span>
+          </template>
+          <template x-if="jobStatus.status === 'COMPLETED_WITH_ERRORS'">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+              <span>⚠️ {{ _('Completed with Errors') }}</span>
+            </span>
+          </template>
+          <template x-if="jobStatus.status === 'FAILED'">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+              <span>✕ {{ _('Failed') }}</span>
+            </span>
+          </template>
+          <template x-if="jobStatus.status === 'CANCELLED'">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+              <span>{{ _('Cancelled') }}</span>
+            </span>
+          </template>
+          <template x-if="!['IN_PROGRESS', 'COMPLETED', 'COMPLETED_WITH_ERRORS', 'FAILED', 'CANCELLED'].includes(jobStatus.status)">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+              <span x-text="jobStatus.status || '{{ _('Pending') }}'"></span>
+            </span>
+          </template>
+
+          <!-- Refresh Button -->
+          <button type="button" @click="fetchStatus()" class="inline-flex items-center gap-1 px-3 py-1 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer" title="{{ _('Refresh Status') }}">
+            <svg class="w-3.5 h-3.5" :class="isRefreshing ? 'animate-spin text-royalblue' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>{{ _('Refresh') }}</span>
+          </button>
+
+          <!-- Cancel Button -->
+          <template x-if="jobStatus.status === 'IN_PROGRESS' || jobStatus.status === 'PENDING'">
+            <button type="button" @click="cancelTask()" :disabled="isCancelling" class="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50">
+              <span x-text="isCancelling ? '{{ _('Cancelling...') }}' : '{{ _('Cancel Task') }}'"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      <!-- Overall Progress Bar Section -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between text-xs font-bold">
+          <span class="text-slate-600 flex items-center gap-1.5">
+            <template x-if="jobStatus.status === 'IN_PROGRESS'">
+              <span class="w-2 h-2 rounded-full bg-royalblue animate-pulse"></span>
+            </template>
+            <span x-text="getProgressLabel()"></span>
+          </span>
+          <span class="text-royalblue font-extrabold text-sm" x-text="`${jobStatus.percent || 0}%`"></span>
+        </div>
+
+        <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden shadow-inner">
+          <div class="bg-royalblue h-3 rounded-full transition-all duration-300"
+               :class="jobStatus.status === 'IN_PROGRESS' ? 'animate-pulse' : ''"
+               :style="`width: ${jobStatus.percent || 0}%`"></div>
+        </div>
+      </div>
+
+      <!-- Completion & Failure Alert Banners -->
+      <template x-if="jobStatus.status === 'COMPLETED'">
+        <div class="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-semibold flex items-center justify-between">
+          <span class="flex items-center gap-2">
+            <span class="text-base">✓</span>
+            <span>{{ _('All multi-batch operations completed successfully!') }}</span>
+          </span>
+          <a href="{{ url_for('proofing.index') }}" class="underline text-emerald-900 font-bold hover:text-emerald-700">
+            {{ _('Go to Proofing Workspace') }} →
+          </a>
+        </div>
+      </template>
+      <template x-if="jobStatus.status === 'COMPLETED_WITH_ERRORS'">
+        <div class="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-semibold flex items-center justify-between">
+          <span class="flex items-center gap-2">
+            <span class="text-base">⚠️</span>
+            <span x-text="`{{ _('Batch processing finished with') }} ${jobStatus.error_count || 0} {{ _('errors. Review document breakdown below.') }}`"></span>
+          </span>
+          <a href="{{ url_for('proofing.index') }}" class="underline text-amber-900 font-bold hover:text-amber-700">
+            {{ _('Proofing Workspace') }} →
+          </a>
+        </div>
+      </template>
+      <template x-if="jobStatus.status === 'FAILED'">
+        <div class="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-semibold flex items-center gap-2">
+          <span class="text-base">✕</span>
+          <span>{{ _('Batch processing encountered a fatal error.') }}</span>
+        </div>
+      </template>
+
+      <!-- Metrics Grid (6 Cards) -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <!-- Documents -->
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
+          <div class="text-slate-400 font-bold text-[10px] uppercase tracking-wider">{{ _('Documents') }}</div>
+          <div class="text-base font-extrabold text-slate-900 mt-1" x-text="`${jobStatus.completed_projects || 0} / ${jobStatus.total_projects || 0}`"></div>
+        </div>
+
+        <!-- Pages Processed -->
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
+          <div class="text-slate-400 font-bold text-[10px] uppercase tracking-wider">{{ _('Processed Pages') }}</div>
+          <div class="text-base font-extrabold text-slate-900 mt-1" x-text="`${jobStatus.processed_pages || 0} / ${jobStatus.total_pages || 0}`"></div>
+        </div>
+
+        <!-- Skipped OCR Pages -->
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
+          <div class="text-slate-400 font-bold text-[10px] uppercase tracking-wider">{{ _('Skipped OCR') }}</div>
+          <div class="text-base font-extrabold text-amber-600 mt-1" x-text="`${jobStatus.skipped_ocr_pages || 0} p`" :title="`${jobStatus.skipped_ocr_books || 0} books skipped`"></div>
+        </div>
+
+        <!-- Skipped Translation Pages -->
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
+          <div class="text-slate-400 font-bold text-[10px] uppercase tracking-wider">{{ _('Skipped Trans') }}</div>
+          <div class="text-base font-extrabold text-teal-600 mt-1" x-text="`${jobStatus.skipped_trans_pages || 0} p`" :title="`${jobStatus.skipped_trans_books || 0} books skipped`"></div>
+        </div>
+
+        <!-- Errors Count -->
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
+          <div class="text-slate-400 font-bold text-[10px] uppercase tracking-wider">{{ _('Errors') }}</div>
+          <div class="text-base font-extrabold text-rose-600 mt-1" x-text="jobStatus.error_count || 0"></div>
+        </div>
+
+        <!-- Started At / Time -->
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
+          <div class="text-slate-400 font-bold text-[10px] uppercase tracking-wider">{{ _('Started') }}</div>
+          <div class="text-xs font-bold text-slate-700 mt-1 truncate" x-text="formatTime(jobStatus.started_at)"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2-Column Grid: Document Breakdown & Live Logs -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- ========================================== -->
+      <!-- COLUMN 1: DOCUMENT PROGRESS BREAKDOWN      -->
+      <!-- ========================================== -->
+      <section class="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div>
+            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+              <span>{{ _('Processed Documents') }}</span>
+              <span class="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full" x-text="filteredProjects.length"></span>
+            </h3>
+            <p class="text-xs text-slate-500 mt-0.5">
+              {{ _('Status breakdown of each document included in this batch.') }}
+            </p>
+          </div>
+
+          <!-- Document Search -->
+          <div class="relative w-full sm:w-56">
+            <input type="text" x-model="docSearchQuery" placeholder="{{ _('Filter documents...') }}"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-royalblue focus:outline-none transition-all" />
+            <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Document List -->
+        <div class="space-y-2 max-h-[560px] overflow-y-auto pr-1">
+          <template x-for="p in filteredProjects" :key="p.id || p.slug">
+            <div class="p-3.5 rounded-xl border border-slate-200 bg-white doc-card space-y-2">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-sm text-slate-900 truncate" x-text="p.title"></span>
+                  </div>
+                  <div class="text-[11px] text-slate-400 font-mono truncate" x-text="p.slug"></div>
+                </div>
+
+                <!-- Document Overall Status Badge -->
+                <span class="px-2.5 py-1 rounded-lg text-xs font-bold shrink-0"
+                      :class="{
+                        'bg-emerald-100 text-emerald-800 border border-emerald-200': p.status === 'COMPLETED',
+                        'bg-blue-100 text-blue-800 border border-blue-200 animate-pulse': p.status === 'IN_PROGRESS',
+                        'bg-amber-100 text-amber-800 border border-amber-200': p.status === 'SKIPPED' || p.status === 'COMPLETED_WITH_ERRORS',
+                        'bg-slate-100 text-slate-700 border border-slate-200': p.status === 'PENDING',
+                        'bg-rose-100 text-rose-800 border border-rose-200': p.status === 'FAILED'
+                      }"
+                      x-text="p.status">
+                </span>
+              </div>
+
+              <!-- Badges & Sub-status info -->
+              <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-50">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <!-- Page count -->
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
+                    <span x-text="`${p.total_pages || 0} {{ _('pages') }}`"></span>
+                  </span>
+
+                  <!-- OCR status -->
+                  <template x-if="p.ocr_status && p.ocr_status !== 'NOT_REQUESTED'">
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold"
+                          :class="{
+                            'bg-emerald-100 text-emerald-800': p.ocr_status === 'COMPLETED',
+                            'bg-amber-100 text-amber-800': p.ocr_status === 'SKIPPED',
+                            'bg-blue-100 text-blue-800': p.ocr_status === 'IN_PROGRESS',
+                            'bg-rose-100 text-rose-800': p.ocr_status === 'FAILED',
+                            'bg-slate-100 text-slate-600': p.ocr_status === 'PENDING'
+                          }"
+                          :title="p.ocr_message || p.ocr_status">
+                      <span x-text="`OCR: ${p.ocr_status}`"></span>
+                    </span>
+                  </template>
+
+                  <!-- Translation status -->
+                  <template x-if="p.trans_status && p.trans_status !== 'NOT_REQUESTED'">
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold"
+                          :class="{
+                            'bg-teal-100 text-teal-800': p.trans_status === 'COMPLETED',
+                            'bg-amber-100 text-amber-800': p.trans_status === 'SKIPPED',
+                            'bg-blue-100 text-blue-800': p.trans_status === 'IN_PROGRESS',
+                            'bg-rose-100 text-rose-800': p.trans_status === 'FAILED',
+                            'bg-slate-100 text-slate-600': p.trans_status === 'PENDING'
+                          }"
+                          :title="p.trans_message || p.trans_status">
+                      <span x-text="`Trans: ${p.trans_status}`"></span>
+                    </span>
+                  </template>
+                </div>
+
+                <!-- Link to view project summary if slug exists -->
+                <template x-if="p.slug && p.slug !== 'multi-batch'">
+                  <a :href="'{{ url_for('proofing.project.summary', slug='SLUG_HOLDER') }}'.replace('SLUG_HOLDER', p.slug)"
+                     class="text-royalblue hover:underline text-xs font-bold inline-flex items-center gap-1">
+                    <span>{{ _('View Project') }}</span>
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </a>
+                </template>
+              </div>
+
+              <!-- Error or Detailed message -->
+              <template x-if="p.message && p.message !== p.status && p.message !== 'Queued'">
+                <p class="text-[11px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100" x-text="p.message"></p>
+              </template>
+            </div>
+          </template>
+
+          <div x-show="filteredProjects.length === 0" class="p-8 text-center text-slate-400 text-xs italic">
+            {{ _('No documents match your search query.') }}
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- COLUMN 2: REAL-TIME ACTIVITY LOGS CONSOLE  -->
+      <!-- ========================================== -->
+      <section class="lg:col-span-5 bg-slate-900 rounded-2xl border border-slate-800 shadow-md p-5 text-slate-200 space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400" :class="jobStatus.status === 'IN_PROGRESS' ? 'animate-pulse' : ''"></span>
+            <h3 class="text-sm font-bold text-white tracking-wide uppercase font-mono">
+              {{ _('Live Worker Activity') }}
+            </h3>
+          </div>
+          <span class="text-[11px] font-mono text-slate-400" x-text="`${(jobStatus.logs || []).length} events`"></span>
+        </div>
+
+        <!-- Terminal Logs Stream -->
+        <div id="logs-container" class="terminal-logs text-xs bg-slate-950 p-3.5 rounded-xl border border-slate-800/80 space-y-1.5 max-h-[500px] overflow-y-auto">
+          <template x-for="(log, idx) in (jobStatus.logs || [])" :key="idx">
+            <div class="leading-relaxed font-mono flex items-start gap-1.5">
+              <span class="text-slate-500 select-none">&gt;</span>
+              <span class="text-slate-300 break-all" x-text="log"></span>
+            </div>
+          </template>
+          <div x-show="!jobStatus.logs || jobStatus.logs.length === 0" class="text-slate-500 italic py-4 text-center">
+            {{ _('Awaiting worker log messages...') }}
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 font-mono">
+          <span>{{ _('Queue:') }} s3_batch</span>
+          <span x-text="jobStatus.status === 'IN_PROGRESS' ? '● {{ _('Streaming updates (2.5s)') }}' : '○ {{ _('Polling stopped') }}'"></span>
+        </div>
+      </section>
+
+    </div>
+
+  </div>
+</div>
+
+<script>
+function multiBatchStatusApp() {
+  const initialData = {{ status_data|tojson }};
+  const pollTarget = {{ task_id|tojson }};
+  const statusApiUrl = '{{ url_for("proofing.multi_batch.status", task_id="TASK_HOLDER") }}'.replace('TASK_HOLDER', pollTarget);
+  const cancelApiUrl = '{{ url_for("proofing.cancel_task_api", task_id="TASK_HOLDER") }}'.replace('TASK_HOLDER', pollTarget);
+
+  return {
+    jobStatus: initialData || {},
+    docSearchQuery: '',
+    pollTimer: null,
+    isRefreshing: false,
+    isCancelling: false,
+
+    init() {
+      if (this.jobStatus.status === 'IN_PROGRESS' || this.jobStatus.status === 'PENDING') {
+        this.startPolling();
+      }
+    },
+
+    get filteredProjects() {
+      const projs = this.jobStatus.projects || [];
+      if (!this.docSearchQuery || !this.docSearchQuery.trim()) return projs;
+      const q = this.docSearchQuery.toLowerCase().trim();
+      return projs.filter(p => {
+        const titleMatch = (p.title || '').toLowerCase().includes(q);
+        const slugMatch = (p.slug || '').toLowerCase().includes(q);
+        return titleMatch || slugMatch;
+      });
+    },
+
+    getProgressLabel() {
+      if (this.jobStatus.status === 'COMPLETED') return {{ _('All tasks finished successfully')|tojson }};
+      if (this.jobStatus.status === 'COMPLETED_WITH_ERRORS') return {{ _('Finished with some errors')|tojson }};
+      if (this.jobStatus.status === 'FAILED') return {{ _('Processing stopped due to error')|tojson }};
+      if (this.jobStatus.status === 'CANCELLED') return {{ _('Processing cancelled')|tojson }};
+      return {{ _('Processing documents in background queue...')|tojson }};
+    },
+
+    formatTime(isoStr) {
+      if (!isoStr) return '-';
+      try {
+        const d = new Date(isoStr);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      } catch (e) {
+        return isoStr;
+      }
+    },
+
+    fetchStatus() {
+      this.isRefreshing = true;
+      fetch(statusApiUrl)
+        .then(res => res.json())
+        .then(res => {
+          this.isRefreshing = false;
+          if (res.success && res.data) {
+            this.jobStatus = res.data;
+            this.scrollLogs();
+            if (res.data.status !== 'IN_PROGRESS' && res.data.status !== 'PENDING') {
+              this.stopPolling();
+            }
+          }
+        })
+        .catch(err => {
+          this.isRefreshing = false;
+          console.error('Error fetching batch status:', err);
+        });
+    },
+
+    startPolling() {
+      if (this.pollTimer) clearInterval(this.pollTimer);
+      this.pollTimer = setInterval(() => {
+        this.fetchStatus();
+      }, 2500);
+    },
+
+    stopPolling() {
+      if (this.pollTimer) {
+        clearInterval(this.pollTimer);
+        this.pollTimer = null;
+      }
+    },
+
+    scrollLogs() {
+      this.$nextTick(() => {
+        const el = document.getElementById('logs-container');
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+    },
+
+    cancelTask() {
+      if (!confirm('{{ _("Are you sure you want to cancel this batch task?") }}')) return;
+      this.isCancelling = true;
+      fetch(cancelApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{% if csrf_token is defined %}{% if csrf_token is callable %}{{ csrf_token() }}{% else %}{{ csrf_token }}{% endif %}{% endif %}'
+        }
+      })
+      .then(res => res.json())
+      .then(data => {
+        this.isCancelling = false;
+        if (data.success) {
+          this.jobStatus.status = 'CANCELLED';
+          this.stopPolling();
+        } else {
+          alert(data.error || '{{ _("Could not cancel task.") }}');
+        }
+      })
+      .catch(err => {
+        this.isCancelling = false;
+        console.error('Error cancelling task:', err);
+      });
+    }
+  };
+}
+</script>
+{% endblock %}

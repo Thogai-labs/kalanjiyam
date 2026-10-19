@@ -341,6 +341,14 @@ def run():
         queue="s3_batch",
     )
 
+    # Cache task-to-job mapping in Redis for quick URL and task resolution
+    r_client = _get_redis_client()
+    try:
+        r_client.setex(f"multi_batch_task:{task.id}", 86400 * 7, str(batch_job.id))
+        r_client.setex(f"multi_batch_job_task:{batch_job.id}", 86400 * 7, str(task.id))
+    except Exception as e:
+        LOG.warning(f"Error caching multi_batch task mapping in Redis: {e}")
+
     # Register in user tasks system for navbar badge and active task polling
     user_id = get_user_identifier(current_user, request)
     if user_id:
@@ -368,50 +376,209 @@ def run():
     })
 
 
-@bp.route("/status/<int:job_id>", methods=["GET"])
-@p2_required
-def status(job_id: int):
-    """Query live progress of a multi-batch operation."""
+def _safe_decode(val):
+    if isinstance(val, bytes):
+        return val.decode("utf-8")
+    return val
+
+
+def _resolve_job_id(task_or_job_id: str | int) -> int | None:
+    """Resolve a Celery task ID or BatchJob ID to its integer BatchJob ID."""
+    if not task_or_job_id:
+        return None
+
+    str_id = str(task_or_job_id).strip()
+    r_client = _get_redis_client()
+
+    # 1. Try Redis direct mapping for task_id -> job_id
+    try:
+        mapped_job_id = r_client.get(f"multi_batch_task:{str_id}")
+        if mapped_job_id:
+            val = _safe_decode(mapped_job_id)
+            if val and val.isdigit():
+                return int(val)
+    except Exception as e:
+        LOG.warning(f"Error querying Redis multi_batch_task for {str_id}: {e}")
+
+    # 2. If it's a numeric ID, check if it's a valid BatchJob
+    if str_id.isdigit():
+        jid = int(str_id)
+        session = q.get_session()
+        job = session.query(BatchJob).get(jid)
+        if job and job.job_type == "MULTI_BATCH":
+            return jid
+        try:
+            if r_client.exists(f"multi_batch_job:{jid}"):
+                return jid
+        except Exception:
+            pass
+        if job:
+            return jid
+
+    # 3. Check user tasks in Redis
+    try:
+        user_id = get_user_identifier(current_user, request)
+        if user_id:
+            key = f"user_tasks:{user_id}"
+            task_data = r_client.hget(key, str_id)
+            if task_data:
+                info = json.loads(_safe_decode(task_data))
+                extra = info.get("extra_info") or {}
+                if extra.get("job_id"):
+                    return int(extra["job_id"])
+    except Exception as e:
+        LOG.warning(f"Error checking user tasks for {str_id}: {e}")
+
+    # 4. Search active redis keys multi_batch_job:*
+    try:
+        keys = r_client.keys("multi_batch_job:*")
+        for k in keys:
+            raw = r_client.get(k)
+            if raw:
+                data = json.loads(_safe_decode(raw))
+                if data.get("task_id") == str_id and data.get("job_id"):
+                    return int(data["job_id"])
+    except Exception as e:
+        LOG.warning(f"Error scanning multi_batch_job keys for {str_id}: {e}")
+
+    return None
+
+
+def _get_job_status_data(job_id: int, task_id: str | None = None) -> dict | None:
+    """Retrieve full batch job status data from Redis or database fallback."""
     r_client = _get_redis_client()
     redis_key = f"multi_batch_job:{job_id}"
 
+    state_data = None
     try:
         raw_state = r_client.get(redis_key)
         if raw_state:
-            state_data = json.loads(raw_state)
-            return jsonify({"success": True, "data": state_data})
+            state_data = json.loads(_safe_decode(raw_state))
     except Exception as e:
         LOG.warning(f"Error reading Redis status for multi_batch_job {job_id}: {e}")
 
-    # Fallback to database
     session = q.get_session()
     job = session.query(BatchJob).get(job_id)
-    if not job:
-        return jsonify({"success": False, "error": _l("Batch job not found.")}), 404
 
+    if not state_data and not job:
+        return None
+
+    # Resolve task_id if not present
+    if not task_id:
+        try:
+            mapped_task = r_client.get(f"multi_batch_job_task:{job_id}")
+            if mapped_task:
+                task_id = _safe_decode(mapped_task)
+        except Exception:
+            pass
+
+    if state_data:
+        if task_id and not state_data.get("task_id"):
+            state_data["task_id"] = task_id
+        if not state_data.get("job_id"):
+            state_data["job_id"] = job_id
+        return state_data
+
+    # Fallback to database
     items = session.query(BatchItem).filter_by(job_id=job.id).all()
     completed_items = sum(1 for it in items if it.status in ("COMPLETED", "SKIPPED"))
+    failed_items = sum(1 for it in items if it.status == "FAILED")
     total_pages = sum(it.total_pages or 0 for it in items)
 
-    return jsonify({
-        "success": True,
-        "data": {
-            "job_id": job.id,
-            "status": job.status,
-            "total_projects": len(items),
-            "completed_projects": completed_items,
-            "total_pages": total_pages,
-            "percent": int((completed_items / max(1, len(items))) * 100),
-            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
-            "projects": [
-                {
-                    "id": it.project_id,
-                    "title": it.file_path,
-                    "total_pages": it.total_pages or 0,
-                    "status": it.status,
-                }
-                for it in items
-            ],
-            "logs": [],
-        },
-    })
+    project_ids = [it.project_id for it in items if it.project_id]
+    projects_map = {}
+    if project_ids:
+        projs = session.query(db.Project).filter(db.Project.id.in_(project_ids)).all()
+        projects_map = {p.id: p for p in projs}
+
+    return {
+        "job_id": job.id,
+        "task_id": task_id,
+        "status": job.status,
+        "total_projects": len(items),
+        "completed_projects": completed_items,
+        "total_pages": total_pages,
+        "processed_pages": sum(it.total_pages or 0 for it in items if it.status in ("COMPLETED", "SKIPPED")),
+        "skipped_ocr_pages": 0,
+        "skipped_trans_pages": 0,
+        "skipped_ocr_books": sum(1 for it in items if it.status == "SKIPPED"),
+        "skipped_trans_books": 0,
+        "error_count": failed_items,
+        "percent": int((completed_items / max(1, len(items))) * 100) if items else 0,
+        "started_at": job.created_at.isoformat() if job.created_at else None,
+        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+        "projects": [
+            {
+                "id": it.project_id,
+                "slug": projects_map.get(it.project_id).slug if it.project_id in projects_map else (it.file_path or str(it.project_id)),
+                "title": projects_map.get(it.project_id).display_title if it.project_id in projects_map else it.file_path,
+                "total_pages": it.total_pages or 0,
+                "status": it.status,
+                "ocr_status": "COMPLETED" if it.status == "COMPLETED" else it.status,
+                "ocr_message": it.error_message if it.status == "FAILED" else "",
+                "trans_status": "COMPLETED" if it.status == "COMPLETED" else it.status,
+                "trans_message": it.error_message if it.status == "FAILED" else "",
+                "message": it.error_message or it.status,
+            }
+            for it in items
+        ],
+        "logs": [f"Batch job #{job.id} status is {job.status}."],
+    }
+
+
+@bp.route("/status/<int:job_id>", methods=["GET"])
+@bp.route("/status/<task_id>", methods=["GET"])
+@p2_required
+def status(task_id: str | None = None, job_id: int | None = None):
+    """Query live progress of a multi-batch operation by task ID or job ID."""
+    target_id = task_id or (str(job_id) if job_id is not None else None)
+    if not target_id:
+        return jsonify({"success": False, "error": _l("Batch job not found.")}), 404
+
+    resolved_job_id = _resolve_job_id(target_id)
+    if not resolved_job_id:
+        return jsonify({"success": False, "error": _l("Batch job not found.")}), 404
+
+    data = _get_job_status_data(resolved_job_id, task_id=str(task_id or job_id))
+    if not data:
+        return jsonify({"success": False, "error": _l("Batch job not found.")}), 404
+
+    return jsonify({"success": True, "data": data})
+
+
+@bp.route("/<task_id>", methods=["GET"])
+@p2_required
+def task_status_page(task_id: str):
+    """Dedicated status page for a multi-batch task/process."""
+    if task_id in ("run", "status"):
+        abort(404)
+
+    resolved_job_id = _resolve_job_id(task_id)
+    if not resolved_job_id:
+        abort(404, description=_l("Multi-batch task not found."))
+
+    session = q.get_session()
+    device_fp = request.cookies.get("device_fingerprint")
+
+    # Verify authorization: user must have access to at least one project in the job
+    base_query = q.accessible_proofing_projects_query(
+        current_user, session=session, device_fingerprint=device_fp
+    )
+    items = session.query(BatchItem).filter_by(job_id=resolved_job_id).all()
+    project_ids = [it.project_id for it in items if it.project_id]
+
+    if project_ids:
+        authorized_count = base_query.filter(db.Project.id.in_(project_ids)).count()
+        if authorized_count == 0 and not getattr(current_user, "is_super_admin", False):
+            abort(403, description=_l("You are not authorized to view this batch task."))
+
+    state_data = _get_job_status_data(resolved_job_id, task_id=task_id)
+    if not state_data:
+        abort(404, description=_l("Multi-batch task details not found."))
+
+    return render_template(
+        "proofing/multi-batch-status.html",
+        task_id=task_id,
+        job_id=resolved_job_id,
+        status_data=state_data,
+    )

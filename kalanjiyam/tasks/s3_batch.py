@@ -962,8 +962,17 @@ def run_multi_batch_operation(
                 for p in ordered_projects
             ]
 
+            celery_task_id = getattr(self.request, "id", None)
+            if celery_task_id:
+                try:
+                    r_client.setex(f"multi_batch_task:{celery_task_id}", 86400 * 7, str(batch_job_id))
+                    r_client.setex(f"multi_batch_job_task:{batch_job_id}", 86400 * 7, str(celery_task_id))
+                except Exception:
+                    pass
+
             state = {
                 "job_id": batch_job_id,
+                "task_id": celery_task_id,
                 "status": "IN_PROGRESS",
                 "total_projects": len(project_metas),
                 "completed_projects": 0,

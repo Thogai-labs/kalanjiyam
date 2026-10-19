@@ -438,7 +438,17 @@
             <span class="w-2.5 h-2.5 rounded-full bg-royalblue animate-pulse"></span>
             <h3 class="font-bold text-sm text-slate-900" x-text="`{{ _('Job #') }}${activeJobId} {{ _('Status:') }} ${jobStatus.status || 'IN_PROGRESS'}`"></h3>
           </div>
-          <span class="text-xs font-bold text-royalblue" x-text="`${jobStatus.percent || 0}%`"></span>
+          <div class="flex items-center gap-3">
+            <a :href="'{{ url_for('proofing.multi_batch.task_status_page', task_id='TASK_ID_HOLDER') }}'.replace('TASK_ID_HOLDER', activeTaskId || activeJobId)"
+               class="inline-flex items-center gap-1 text-xs font-bold text-royalblue hover:underline"
+               title="{{ _('Open dedicated status page for this task') }}">
+              <span>{{ _('View Task Page') }}</span>
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+            <span class="text-xs font-bold text-royalblue" x-text="`${jobStatus.percent || 0}%`"></span>
+          </div>
         </div>
 
         <!-- Progress Bar -->
@@ -516,6 +526,7 @@ function multiBatchApp() {
     targetLang: 'en',
     isSubmitting: false,
     activeJobId: null,
+    activeTaskId: null,
     jobStatus: {},
     transLanguages: {{ languages|tojson }},
     ocrLanguageList: [
@@ -617,6 +628,7 @@ function multiBatchApp() {
         this.isSubmitting = false;
         if (data.success && data.job_id) {
           this.activeJobId = data.job_id;
+          this.activeTaskId = data.task_id || data.job_id;
           this.startPolling(data.job_id);
         } else {
           alert(data.error || '{{ _("Failed to start batch processing.") }}');

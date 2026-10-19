@@ -408,12 +408,22 @@
                                       x-cloak>
                                   {{ _('Cancel') }}
                               </button>
-                              <a x-show="task.project_slug" :href="'{{ url_for('proofing.project.summary', slug='SLUG_HOLDER') }}'.replace('SLUG_HOLDER', task.project_slug)" class="text-royalblue hover:underline text-[10px] font-bold ml-auto flex items-center gap-0.5" x-cloak>
-                                  {{ _('View Project') }}
-                                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                  </svg>
+                              <template x-if="task.type === 'multi_batch'">
+                                <a :href="'{{ url_for('proofing.multi_batch.task_status_page', task_id='TASK_ID_HOLDER') }}'.replace('TASK_ID_HOLDER', task.task_id)" class="text-royalblue hover:underline text-[10px] font-bold ml-auto flex items-center gap-0.5" x-cloak>
+                                    {{ _('View Project') }}
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                    </svg>
                                 </a>
+                              </template>
+                              <template x-if="task.type !== 'multi_batch'">
+                                <a x-show="task.project_slug" :href="'{{ url_for('proofing.project.summary', slug='SLUG_HOLDER') }}'.replace('SLUG_HOLDER', task.project_slug)" class="text-royalblue hover:underline text-[10px] font-bold ml-auto flex items-center gap-0.5" x-cloak>
+                                    {{ _('View Project') }}
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                    </svg>
+                                </a>
+                              </template>
                                 <a x-show="task.type === 'docx_translation' && task.status === 'completed' && task.extra_info && task.extra_info.docx_id" :href="'{{ url_for('proofing.docx_translate_download', docx_id='DOCX_ID_HOLDER') }}'.replace('DOCX_ID_HOLDER', task.extra_info.docx_id)" class="text-royalblue hover:underline text-[10px] font-bold ml-auto flex items-center gap-0.5" x-cloak>
                                     {{ _('Download') }}
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -844,11 +854,19 @@
                             class="text-rose-500 font-bold hover:underline">
                       {{ _('Cancel') }}
                     </button>
-                    <a x-show="task.project_slug"
-                       :href="'{{ url_for('proofing.project.summary', slug='SLUG_HOLDER') }}'.replace('SLUG_HOLDER', task.project_slug)"
-                       class="text-royalblue font-bold hover:underline">
-                      {{ _('View') }}
-                    </a>
+                    <template x-if="task.type === 'multi_batch'">
+                      <a :href="'{{ url_for('proofing.multi_batch.task_status_page', task_id='TASK_ID_HOLDER') }}'.replace('TASK_ID_HOLDER', task.task_id)"
+                         class="text-royalblue font-bold hover:underline">
+                        {{ _('View') }}
+                      </a>
+                    </template>
+                    <template x-if="task.type !== 'multi_batch'">
+                      <a x-show="task.project_slug"
+                         :href="'{{ url_for('proofing.project.summary', slug='SLUG_HOLDER') }}'.replace('SLUG_HOLDER', task.project_slug)"
+                         class="text-royalblue font-bold hover:underline">
+                        {{ _('View') }}
+                      </a>
+                    </template>
                   </div>
                 </div>
               </div>

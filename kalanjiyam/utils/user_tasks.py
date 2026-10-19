@@ -209,6 +209,72 @@ def get_user_tasks(user_identifier):
                                         updated_entries[task_id] = json.dumps(info)
                                 except Exception:
                                     pass
+                elif task_type == 'multi_batch':
+                    # Multi-batch progress tracking via Redis and database fallback
+                    job_id = (info.get('extra_info') or {}).get('job_id')
+                    mb_updated = False
+                    if job_id:
+                        try:
+                            raw_state = redis_client.get(f"multi_batch_job:{job_id}")
+                            if raw_state:
+                                state_data = json.loads(safe_decode(raw_state))
+                                mb_status = state_data.get("status")
+                                pct = (state_data.get("percent") or 0) / 100.0
+                                comp_p = state_data.get("completed_projects", 0)
+                                tot_p = state_data.get("total_projects", 0)
+                                if mb_status in ("COMPLETED", "COMPLETED_WITH_ERRORS"):
+                                    info['status'] = 'completed'
+                                    info['progress'] = 1.0
+                                    info['completed_count'] = comp_p or tot_p
+                                    info['total_count'] = tot_p
+                                    updated_entries[task_id] = json.dumps(info)
+                                    mb_updated = True
+                                elif mb_status == "FAILED":
+                                    info['status'] = 'failed'
+                                    info['progress'] = pct
+                                    info['completed_count'] = comp_p
+                                    info['total_count'] = tot_p
+                                    updated_entries[task_id] = json.dumps(info)
+                                    mb_updated = True
+                                elif mb_status == "IN_PROGRESS":
+                                    info['status'] = 'running'
+                                    info['progress'] = pct
+                                    info['completed_count'] = comp_p
+                                    info['total_count'] = tot_p
+                                    updated_entries[task_id] = json.dumps(info)
+                                    mb_updated = True
+                        except Exception as e:
+                            LOG.warning(f"Error checking Redis multi_batch status for task {task_id}: {e}")
+                    if not mb_updated and job_id:
+                        try:
+                            from kalanjiyam import queries as q
+                            from kalanjiyam.models.batch import BatchJob, BatchItem
+                            session = q.get_session()
+                            bjob = session.query(BatchJob).get(job_id)
+                            if bjob:
+                                items = session.query(BatchItem).filter_by(job_id=bjob.id).all()
+                                comp_items = sum(1 for it in items if it.status in ("COMPLETED", "SKIPPED"))
+                                tot_items = len(items)
+                                if bjob.status in ("COMPLETED", "COMPLETED_WITH_ERRORS"):
+                                    info['status'] = 'completed'
+                                    info['progress'] = 1.0
+                                    info['completed_count'] = comp_items or tot_items
+                                    info['total_count'] = tot_items
+                                    updated_entries[task_id] = json.dumps(info)
+                                elif bjob.status == "FAILED":
+                                    info['status'] = 'failed'
+                                    info['progress'] = (comp_items / max(1, tot_items)) if tot_items else 0
+                                    info['completed_count'] = comp_items
+                                    info['total_count'] = tot_items
+                                    updated_entries[task_id] = json.dumps(info)
+                                elif comp_items > 0:
+                                    info['status'] = 'running'
+                                    info['progress'] = (comp_items / max(1, tot_items)) if tot_items else 0
+                                    info['completed_count'] = comp_items
+                                    info['total_count'] = tot_items
+                                    updated_entries[task_id] = json.dumps(info)
+                        except Exception as e:
+                            LOG.warning(f"Error checking DB multi_batch status for task {task_id}: {e}")
                 else:
                     # Single result task checking (like create_project)
                     r = AsyncResult(task_id, app=celery_app)
@@ -298,7 +364,28 @@ def cancel_user_task(user_identifier, task_id):
                     r.revoke(terminate=True)
             except Exception as e:
                 LOG.warning(f"Error revoking Celery task {task_id}: {e}")
-                
+
+            if task_type == 'multi_batch':
+                job_id = (info.get('extra_info') or {}).get('job_id')
+                if job_id:
+                    try:
+                        raw_state = redis_client.get(f"multi_batch_job:{job_id}")
+                        if raw_state:
+                            state_data = json.loads(safe_decode(raw_state))
+                            state_data["status"] = "CANCELLED"
+                            state_data.setdefault("logs", []).append(f"[{datetime.utcnow().strftime('%H:%M:%S')}] Task cancelled by user.")
+                            redis_client.setex(f"multi_batch_job:{job_id}", 86400, json.dumps(state_data))
+                        from kalanjiyam import queries as q
+                        from kalanjiyam.models.batch import BatchJob
+                        session = q.get_session()
+                        bjob = session.query(BatchJob).get(job_id)
+                        if bjob:
+                            bjob.status = "CANCELLED"
+                            bjob.completed_at = datetime.utcnow()
+                            session.commit()
+                    except Exception as e:
+                        LOG.warning(f"Error cancelling BatchJob for task {task_id}: {e}")
+
             # Update status to cancelled
             info['status'] = 'cancelled'
             redis_client.hset(key, task_id, json.dumps(info))
