@@ -57,80 +57,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="w-full mb-16"
-      x-data="{
-        isDragging: false,
-        fileName: '',
-        sourceLang: 'sa',
-        targetLang: 'en',
-        transLanguages: {{ languages|tojson }},
-        getTransLangLabel(code) {
-          const f = this.transLanguages.find(l => l.code === code);
-          return f ? f.name : code;
-        },
-        allGlossaries: [],
-        selectedGlossaries: [],
-        init() {
-          this.$watch('sourceLang', () => this.selectedGlossaries = []);
-          this.$watch('targetLang', () => this.selectedGlossaries = []);
-          
-          const { pathname } = window.location;
-          const prefixMatch = pathname.match(/^(.*)\/proofing\//);
-          const prefix = prefixMatch ? prefixMatch[1] : '';
-          fetch(`${prefix}/api/glossaries`)
-            .then(response => {
-              if (response.ok) return response.json();
-              return [];
-            })
-            .then(data => {
-              this.allGlossaries = data;
-            })
-            .catch(error => {
-              console.error('Error fetching glossaries:', error);
-            });
-        },
-        get filteredGlossaries() {
-          return this.allGlossaries.filter(g => 
-            g.source_language_code === this.sourceLang && 
-            g.target_language_code === this.targetLang
-          );
-        },
-        get showGlossaryWarning() {
-          return this.selectedGlossaries.includes('all') || this.selectedGlossaries.length > 3;
-        },
-        getGlossaryDisplayName(name) {
-          const lookup = {
-            'agri': 'Agriculture',
-            'mech': 'Mechanical',
-            'bio': 'Biology',
-            'chem': 'Chemistry',
-            'comp': 'Computer Science',
-            'phy': 'Physics',
-            'math': 'Mathematics',
-            'it': 'Information Technology'
-          };
-          if (lookup[name]) {
-            return lookup[name];
-          }
-          if (!name) return '';
-          return name.charAt(0).toUpperCase() + name.slice(1);
-        },
-        handleFileSelect(e) {
-          const files = e.target.files;
-          if (files.length > 0) {
-            this.fileName = files[0].name;
-          }
-        },
-        handleDrop(e) {
-          this.isDragging = false;
-          const files = e.dataTransfer.files;
-          if (files.length > 0) {
-            const fileInput = document.getElementById('file');
-            fileInput.files = files;
-            this.fileName = files[0].name;
-          }
-        }
-      }">
+<div class="w-full mb-16" x-data="docxTranslateApp()">
 
   <form action="{{ url_for('proofing.docx_translate') }}" method="POST" enctype="multipart/form-data" @submit.prevent="if (sourceLang === targetLang) { alert('{{ _("Source and Target languages must be different.") }}'); } else { $el.submit(); }">
     {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token }}">{% endif %}
@@ -299,4 +226,82 @@
     </div>
   </form>
 </div>
+
+<script>
+function docxTranslateApp() {
+  return {
+    isDragging: false,
+    fileName: '',
+    sourceLang: 'sa',
+    targetLang: 'en',
+    transLanguages: {{ languages|tojson }},
+    getTransLangLabel(code) {
+      const f = this.transLanguages.find(l => l.code === code);
+      return f ? f.name : code;
+    },
+    allGlossaries: [],
+    selectedGlossaries: [],
+    init() {
+      this.$watch('sourceLang', () => this.selectedGlossaries = []);
+      this.$watch('targetLang', () => this.selectedGlossaries = []);
+
+      const { pathname } = window.location;
+      const prefixMatch = pathname.match(/^(.*)\/proofing\//);
+      const prefix = prefixMatch ? prefixMatch[1] : '';
+      fetch(`${prefix}/api/glossaries`)
+        .then(response => {
+          if (response.ok) return response.json();
+          return [];
+        })
+        .then(data => {
+          this.allGlossaries = data;
+        })
+        .catch(error => {
+          console.error('Error fetching glossaries:', error);
+        });
+    },
+    get filteredGlossaries() {
+      return this.allGlossaries.filter(g =>
+        g.source_language_code === this.sourceLang &&
+        g.target_language_code === this.targetLang
+      );
+    },
+    get showGlossaryWarning() {
+      return this.selectedGlossaries.includes('all') || this.selectedGlossaries.length > 3;
+    },
+    getGlossaryDisplayName(name) {
+      const lookup = {
+        'agri': 'Agriculture',
+        'mech': 'Mechanical',
+        'bio': 'Biology',
+        'chem': 'Chemistry',
+        'comp': 'Computer Science',
+        'phy': 'Physics',
+        'math': 'Mathematics',
+        'it': 'Information Technology'
+      };
+      if (lookup[name]) {
+        return lookup[name];
+      }
+      if (!name) return '';
+      return name.charAt(0).toUpperCase() + name.slice(1);
+    },
+    handleFileSelect(e) {
+      const files = e.target.files;
+      if (files.length > 0) {
+        this.fileName = files[0].name;
+      }
+    },
+    handleDrop(e) {
+      this.isDragging = false;
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        const fileInput = document.getElementById('file');
+        fileInput.files = files;
+        this.fileName = files[0].name;
+      }
+    }
+  };
+}
+</script>
 {% endblock %}

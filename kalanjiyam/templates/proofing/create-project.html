@@ -54,238 +54,7 @@
 
 
 {% block content %}
-<div class="w-full max-w-4xl mx-auto" x-data="{
-       source: '{{ form.pdf_source.data or 'local' }}',
-       license: 'public',
-       uploading: false,
-       progress: 0,
-       status: '',
-       isDocx: false,
-       isImage: false,
-       isPdf: false,
-       fileName: '',
-       fileCount: 0,
-       groupImages: true,
-       imageFileNames: [],
-       pdfFileNames: [],
-       totalFileSizeStr: '',
-       docxWorkflow: 'direct',
-       sourceLang: 'sa',
-       targetLang: 'en',
-       transLanguages: {{ (languages or [])|tojson }},
-       getTransLangLabel(code) {
-         const f = this.transLanguages.find(l => l.code === code);
-         return f ? f.name : code;
-       },
-       allGlossaries: [],
-       selectedGlossaries: [],
-       init() {
-         this.$watch('sourceLang', () => this.selectedGlossaries = []);
-         this.$watch('targetLang', () => this.selectedGlossaries = []);
-
-         const fileInput = document.getElementById('local_file');
-         if (fileInput && fileInput.files && fileInput.files.length > 0) {
-           this.handleFileChange({ target: fileInput });
-         }
-
-         const { pathname } = window.location;
-         const prefixMatch = pathname.match(/^(.*)\/proofing\//);
-         const prefix = prefixMatch ? prefixMatch[1] : '';
-         fetch(`${prefix}/api/glossaries`)
-           .then(response => {
-             if (response.ok) return response.json();
-             return [];
-           })
-           .then(data => {
-             this.allGlossaries = data;
-           })
-           .catch(error => {
-             console.error('Error fetching glossaries:', error);
-           });
-       },
-       get filteredGlossaries() {
-         return this.allGlossaries.filter(g =>
-           g.source_language_code === this.sourceLang &&
-           g.target_language_code === this.targetLang
-         );
-       },
-       get showGlossaryWarning() {
-         return this.selectedGlossaries.includes('all') || this.selectedGlossaries.length > 3;
-       },
-       getProjectTitle(name) {
-         if (!name) return '';
-         const base = name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim();
-         return base ? base.charAt(0).toUpperCase() + base.slice(1) : name;
-       },
-       isDuplicateTitle(list, name, idx) {
-         if (!list || idx === 0) return false;
-         const title = this.getProjectTitle(name).toLowerCase();
-         for (let i = 0; i < idx; i++) {
-           if (this.getProjectTitle(list[i]).toLowerCase() === title) {
-             return true;
-           }
-         }
-         return false;
-       },
-       getGlossaryDisplayName(name) {
-         const lookup = {
-           'agri': 'Agriculture',
-           'mech': 'Mechanical',
-           'bio': 'Biology',
-           'chem': 'Chemistry',
-           'comp': 'Computer Science',
-           'phy': 'Physics',
-           'math': 'Mathematics',
-           'it': 'Information Technology'
-         };
-         if (lookup[name]) {
-           return lookup[name];
-         }
-         if (!name) return '';
-         return name.charAt(0).toUpperCase() + name.slice(1);
-       },
-       handleFileChange(e) {
-         const files = Array.from(e.target.files || []);
-         this.fileCount = files.length;
-         this.imageFileNames = [];
-         this.pdfFileNames = [];
-         if (files.length === 0) {
-           this.isDocx = false;
-           this.isImage = false;
-           this.isPdf = false;
-           this.fileName = '';
-           this.totalFileSizeStr = '';
-           return;
-         }
-
-         let totalBytes = 0;
-         for (const f of files) {
-           totalBytes += f.size;
-         }
-         this.totalFileSizeStr = totalBytes < 1024 * 1024
-           ? (totalBytes / 1024).toFixed(1) + ' KB'
-           : (totalBytes / (1024 * 1024)).toFixed(1) + ' MB';
-
-         if (files.length === 1) {
-           this.groupImages = true;
-           const name = files[0].name;
-           this.fileName = `${name} (${this.totalFileSizeStr})`;
-           const nameLower = name.toLowerCase();
-           this.isDocx = nameLower.endsWith('.docx') || nameLower.endsWith('.doc');
-           this.isImage = /\.(jpe?g|png|webp)$/i.test(nameLower);
-           this.isPdf = nameLower.endsWith('.pdf');
-
-           // Auto-suggest title if empty
-           const titleInput = document.getElementById('local_title');
-           if (titleInput && !titleInput.value.trim()) {
-             const baseTitle = name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim();
-             titleInput.value = baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1);
-           }
-         } else {
-           this.isDocx = false;
-           const allImages = files.every(f => /\.(jpe?g|png|webp)$/i.test(f.name.toLowerCase()));
-           const allPdfs = files.every(f => f.name.toLowerCase().endsWith('.pdf'));
-           if (!allImages && !allPdfs) {
-             alert('{{ _("When uploading multiple files, all files must be either all images (.jpg, .jpeg, .png, .webp) or all PDFs (.pdf).") }}');
-             e.target.value = '';
-             this.fileCount = 0;
-             this.fileName = '';
-             this.isImage = false;
-             this.isPdf = false;
-             return;
-           }
-           if (allImages) {
-             this.isImage = true;
-             this.isPdf = false;
-             this.groupImages = true;
-             this.fileName = `${files.length} {{ _("image scans selected") }} (${this.totalFileSizeStr})`;
-             this.imageFileNames = files.map(f => f.name).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-
-             // Auto-suggest title from common prefix or first filename
-             const titleInput = document.getElementById('local_title');
-             if (titleInput && !titleInput.value.trim() && this.imageFileNames.length > 0) {
-               let baseTitle = this.imageFileNames[0].replace(/\.[^/.]+$/, '').replace(/[_\-\d]+$/, '').replace(/[_-]+/g, ' ').trim();
-               if (baseTitle.length > 2) {
-                 titleInput.value = baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1);
-               }
-             }
-           } else if (allPdfs) {
-             this.isImage = false;
-             this.isPdf = true;
-             this.fileName = `${files.length} {{ _("PDF documents selected") }} (${this.totalFileSizeStr})`;
-             this.pdfFileNames = files.map(f => f.name).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-           }
-         }
-       },
-       submitForm() {
-         if (this.uploading || this.fileCount === 0) {
-           return;
-         }
-
-         const form = this.$refs.projectForm;
-         const isDirect = this.isDocx && this.docxWorkflow === 'direct';
-
-         if (isDirect && this.sourceLang === this.targetLang) {
-           alert('{{ _("Source and Target languages must be different.") }}');
-           return;
-         }
-
-         {% if not current_user.is_authenticated %}
-         const uploadLimitMB = {{ guest_upload_limit | default(10) }};
-         if (this.source === 'local') {
-           const fileInput = document.getElementById('local_file');
-           if (fileInput && fileInput.files && fileInput.files.length > 0) {
-             let totalSize = 0;
-             for (let i = 0; i < fileInput.files.length; i++) {
-               totalSize += fileInput.files[i].size;
-             }
-             if (totalSize > uploadLimitMB * 1024 * 1024) {
-               alert(`Total upload size (${(totalSize / (1024 * 1024)).toFixed(1)}MB) exceeds the allowed limit of ${uploadLimitMB}MB for guest users.`);
-               return;
-             }
-           }
-         }
-         {% endif %}
-
-         const formData = new FormData(form);
-         this.uploading = true;
-         const docLabel = this.isImage
-           ? (this.fileCount > 1 ? (this.groupImages ? `${this.fileCount} images` : `${this.fileCount} projects`) : 'image')
-           : (this.isPdf && this.fileCount > 1 ? `${this.fileCount} PDF projects` : (this.fileName || (isDirect ? '{{ _("document") }}' : '{{ _("PDF") }}')));
-         this.status = `{{ _('Uploading') }} ${docLabel} ...`;
-
-         const xhr = new XMLHttpRequest();
-         xhr.open('POST', form.action, true);
-
-         xhr.upload.onprogress = (e) => {
-           if (e.lengthComputable) {
-             this.progress = Math.round((e.loaded / e.total) * 100);
-             if (this.progress > 0) {
-               this.status = `{{ _('Uploading') }} ${docLabel} (${this.progress}%)...`;
-             }
-           }
-         };
-
-         xhr.onload = () => {
-           if (xhr.status === 200) {
-             document.open();
-             document.write(xhr.responseText);
-             document.close();
-           } else {
-             this.uploading = false;
-             this.status = '{{ _('Upload failed. Please try again.') }}';
-             alert('Upload failed: ' + xhr.statusText);
-           }
-         };
-
-         xhr.onerror = () => {
-           this.uploading = false;
-           this.status = '{{ _('Upload failed. Network error.') }}';
-         };
-
-         xhr.send(formData);
-       }
-     }">
+<div class="w-full max-w-4xl mx-auto" x-data="createProjectApp()">
 
   {% if form.errors %}
   <div class="mb-5 bg-red-50 border border-red-200 rounded-2xl p-4 text-sm text-red-700">
@@ -751,4 +520,241 @@
     </div>
   </form>
 </div>
+
+<script>
+function createProjectApp() {
+  return {
+    source: {{ (form.pdf_source.data or 'local')|tojson }},
+    license: 'public',
+    uploading: false,
+    progress: 0,
+    status: '',
+    isDocx: false,
+    isImage: false,
+    isPdf: false,
+    fileName: '',
+    fileCount: 0,
+    groupImages: true,
+    imageFileNames: [],
+    pdfFileNames: [],
+    totalFileSizeStr: '',
+    docxWorkflow: 'direct',
+    sourceLang: 'sa',
+    targetLang: 'en',
+    transLanguages: {{ (languages or [])|tojson }},
+    getTransLangLabel(code) {
+      const f = this.transLanguages.find(l => l.code === code);
+      return f ? f.name : code;
+    },
+    allGlossaries: [],
+    selectedGlossaries: [],
+    init() {
+      this.$watch('sourceLang', () => this.selectedGlossaries = []);
+      this.$watch('targetLang', () => this.selectedGlossaries = []);
+
+      const fileInput = document.getElementById('local_file');
+      if (fileInput && fileInput.files && fileInput.files.length > 0) {
+        this.handleFileChange({ target: fileInput });
+      }
+
+      const { pathname } = window.location;
+      const prefixMatch = pathname.match(/^(.*)\/proofing\//);
+      const prefix = prefixMatch ? prefixMatch[1] : '';
+      fetch(`${prefix}/api/glossaries`)
+        .then(response => {
+          if (response.ok) return response.json();
+          return [];
+        })
+        .then(data => {
+          this.allGlossaries = data;
+        })
+        .catch(error => {
+          console.error('Error fetching glossaries:', error);
+        });
+    },
+    get filteredGlossaries() {
+      return this.allGlossaries.filter(g =>
+        g.source_language_code === this.sourceLang &&
+        g.target_language_code === this.targetLang
+      );
+    },
+    get showGlossaryWarning() {
+      return this.selectedGlossaries.includes('all') || this.selectedGlossaries.length > 3;
+    },
+    getProjectTitle(name) {
+      if (!name) return '';
+      const base = name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim();
+      return base ? base.charAt(0).toUpperCase() + base.slice(1) : name;
+    },
+    isDuplicateTitle(list, name, idx) {
+      if (!list || idx === 0) return false;
+      const title = this.getProjectTitle(name).toLowerCase();
+      for (let i = 0; i < idx; i++) {
+        if (this.getProjectTitle(list[i]).toLowerCase() === title) {
+          return true;
+        }
+      }
+      return false;
+    },
+    getGlossaryDisplayName(name) {
+      const lookup = {
+        'agri': 'Agriculture',
+        'mech': 'Mechanical',
+        'bio': 'Biology',
+        'chem': 'Chemistry',
+        'comp': 'Computer Science',
+        'phy': 'Physics',
+        'math': 'Mathematics',
+        'it': 'Information Technology'
+      };
+      if (lookup[name]) {
+        return lookup[name];
+      }
+      if (!name) return '';
+      return name.charAt(0).toUpperCase() + name.slice(1);
+    },
+    handleFileChange(e) {
+      const files = Array.from(e.target.files || []);
+      this.fileCount = files.length;
+      this.imageFileNames = [];
+      this.pdfFileNames = [];
+      if (files.length === 0) {
+        this.isDocx = false;
+        this.isImage = false;
+        this.isPdf = false;
+        this.fileName = '';
+        this.totalFileSizeStr = '';
+        return;
+      }
+
+      let totalBytes = 0;
+      for (const f of files) {
+        totalBytes += f.size;
+      }
+      this.totalFileSizeStr = totalBytes < 1024 * 1024
+        ? (totalBytes / 1024).toFixed(1) + ' KB'
+        : (totalBytes / (1024 * 1024)).toFixed(1) + ' MB';
+
+      if (files.length === 1) {
+        this.groupImages = true;
+        const name = files[0].name;
+        this.fileName = `${name} (${this.totalFileSizeStr})`;
+        const nameLower = name.toLowerCase();
+        this.isDocx = nameLower.endsWith('.docx') || nameLower.endsWith('.doc');
+        this.isImage = /\.(jpe?g|png|webp)$/i.test(nameLower);
+        this.isPdf = nameLower.endsWith('.pdf');
+
+        // Auto-suggest title if empty
+        const titleInput = document.getElementById('local_title');
+        if (titleInput && !titleInput.value.trim()) {
+          const baseTitle = name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim();
+          titleInput.value = baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1);
+        }
+      } else {
+        this.isDocx = false;
+        const allImages = files.every(f => /\.(jpe?g|png|webp)$/i.test(f.name.toLowerCase()));
+        const allPdfs = files.every(f => f.name.toLowerCase().endsWith('.pdf'));
+        if (!allImages && !allPdfs) {
+          alert('{{ _("When uploading multiple files, all files must be either all images (.jpg, .jpeg, .png, .webp) or all PDFs (.pdf).") }}');
+          e.target.value = '';
+          this.fileCount = 0;
+          this.fileName = '';
+          this.isImage = false;
+          this.isPdf = false;
+          return;
+        }
+        if (allImages) {
+          this.isImage = true;
+          this.isPdf = false;
+          this.groupImages = true;
+          this.fileName = `${files.length} {{ _("image scans selected") }} (${this.totalFileSizeStr})`;
+          this.imageFileNames = files.map(f => f.name).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+          // Auto-suggest title from common prefix or first filename
+          const titleInput = document.getElementById('local_title');
+          if (titleInput && !titleInput.value.trim() && this.imageFileNames.length > 0) {
+            let baseTitle = this.imageFileNames[0].replace(/\.[^/.]+$/, '').replace(/[_\-\d]+$/, '').replace(/[_-]+/g, ' ').trim();
+            if (baseTitle.length > 2) {
+              titleInput.value = baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1);
+            }
+          }
+        } else if (allPdfs) {
+          this.isImage = false;
+          this.isPdf = true;
+          this.fileName = `${files.length} {{ _("PDF documents selected") }} (${this.totalFileSizeStr})`;
+          this.pdfFileNames = files.map(f => f.name).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+        }
+      }
+    },
+    submitForm() {
+      if (this.uploading || this.fileCount === 0) {
+        return;
+      }
+
+      const form = this.$refs.projectForm;
+      const isDirect = this.isDocx && this.docxWorkflow === 'direct';
+
+      if (isDirect && this.sourceLang === this.targetLang) {
+        alert('{{ _("Source and Target languages must be different.") }}');
+        return;
+      }
+
+      {% if not current_user.is_authenticated %}
+      const uploadLimitMB = {{ guest_upload_limit | default(10) }};
+      if (this.source === 'local') {
+        const fileInput = document.getElementById('local_file');
+        if (fileInput && fileInput.files && fileInput.files.length > 0) {
+          let totalSize = 0;
+          for (let i = 0; i < fileInput.files.length; i++) {
+            totalSize += fileInput.files[i].size;
+          }
+          if (totalSize > uploadLimitMB * 1024 * 1024) {
+            alert(`Total upload size (${(totalSize / (1024 * 1024)).toFixed(1)}MB) exceeds the allowed limit of ${uploadLimitMB}MB for guest users.`);
+            return;
+          }
+        }
+      }
+      {% endif %}
+
+      const formData = new FormData(form);
+      this.uploading = true;
+      const docLabel = this.isImage
+        ? (this.fileCount > 1 ? (this.groupImages ? `${this.fileCount} images` : `${this.fileCount} projects`) : 'image')
+        : (this.isPdf && this.fileCount > 1 ? `${this.fileCount} PDF projects` : (this.fileName || (isDirect ? '{{ _("document") }}' : '{{ _("PDF") }}')));
+      this.status = `{{ _('Uploading') }} ${docLabel} ...`;
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', form.action, true);
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          this.progress = Math.round((e.loaded / e.total) * 100);
+          if (this.progress > 0) {
+            this.status = `{{ _('Uploading') }} ${docLabel} (${this.progress}%)...`;
+          }
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          document.open();
+          document.write(xhr.responseText);
+          document.close();
+        } else {
+          this.uploading = false;
+          this.status = '{{ _('Upload failed. Please try again.') }}';
+          alert('Upload failed: ' + xhr.statusText);
+        }
+      };
+
+      xhr.onerror = () => {
+        this.uploading = false;
+        this.status = '{{ _('Upload failed. Network error.') }}';
+      };
+
+      xhr.send(formData);
+    }
+  };
+}
+</script>
 {% endblock %}
