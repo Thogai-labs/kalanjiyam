@@ -94,6 +94,146 @@ def test_sign_in__unauth_post__ok(client):
         },
     )
     assert r.status_code == 302
+    assert r.headers["Location"].endswith("/proofing/")
+
+
+def test_sign_in__superadmin_redirects_to_platform(client):
+    session = q.get_session()
+    session.query(db.UsageLog).filter_by(action="sign_in").delete()
+    session.commit()
+
+    r = client.post(
+        "/sign-in",
+        data={
+            "username": "u-superadmin",
+            "password": "pass_superadmin",
+        },
+    )
+    assert r.status_code == 302
+    assert r.headers["Location"].endswith("/admin/platform/")
+
+
+def test_sign_in__superadmin_auth_get_redirects_to_platform(superadmin_client):
+    r = superadmin_client.get("/sign-in")
+    assert r.status_code == 302
+    assert r.headers["Location"].endswith("/admin/platform/")
+
+
+def test_sign_in__superadmin_next_url(client):
+    session = q.get_session()
+    session.query(db.UsageLog).filter_by(action="sign_in").delete()
+    session.commit()
+
+    # Safe admin next URL
+    r_safe = client.post(
+        "/sign-in?next=/admin/platform/settings",
+        data={
+            "username": "u-superadmin",
+            "password": "pass_superadmin",
+        },
+    )
+    assert r_safe.status_code == 302
+    assert r_safe.headers["Location"].endswith("/admin/platform/settings")
+
+    # If next is /proofing/, superadmin should still go to platform dashboard
+    r_proofing = client.post(
+        "/sign-in?next=/proofing/",
+        data={
+            "username": "u-superadmin",
+            "password": "pass_superadmin",
+        },
+    )
+    assert r_proofing.status_code == 302
+    assert r_proofing.headers["Location"].endswith("/admin/platform/")
+
+    session.query(db.UsageLog).filter_by(action="sign_in").delete()
+    session.commit()
+
+
+def test_sign_in__org_admin_redirects_to_dashboard(flask_app, client):
+    with flask_app.app_context():
+        session = q.get_session()
+        org = session.query(db.Group).filter_by(slug="test-auth-org").first()
+        if not org:
+            org = db.Group(name="Test Auth Org", slug="test-auth-org")
+            session.add(org)
+            session.flush()
+
+        from kalanjiyam.enums import SiteRole
+        org_role = session.query(db.Role).filter_by(name=SiteRole.ORG_ADMIN.value).first()
+        user = session.query(db.User).filter_by(username="u-orgadmin-authtest").first()
+        if not user:
+            user = db.User(
+                username="u-orgadmin-authtest",
+                email="orgadmin_authtest@test.local",
+                organization_id=org.id,
+            )
+            user.set_password("pass_orgadmin")
+            user.roles.append(org_role)
+            session.add(user)
+            session.flush()
+            session.add(db.UserGroups(user_id=user.id, group_id=org.id))
+            session.commit()
+
+        session.query(db.UsageLog).filter_by(action="sign_in").delete()
+        session.commit()
+
+    r = client.post(
+        "/sign-in",
+        data={
+            "username": "u-orgadmin-authtest",
+            "password": "pass_orgadmin",
+        },
+    )
+    assert r.status_code == 302
+    assert r.headers["Location"].endswith("/admin/org/")
+
+    session = q.get_session()
+    session.query(db.UsageLog).filter_by(action="sign_in").delete()
+    session.commit()
+
+
+def test_sign_in__org_admin_auth_get_redirects_to_dashboard(flask_app):
+    with flask_app.app_context():
+        session = q.get_session()
+        user = session.query(db.User).filter_by(username="u-orgadmin-authtest").first()
+
+    org_client = flask_app.test_client(user=user)
+    r = org_client.get("/sign-in")
+    assert r.status_code == 302
+    assert r.headers["Location"].endswith("/admin/org/")
+
+
+def test_sign_in__org_admin_next_url(flask_app, client):
+    session = q.get_session()
+    session.query(db.UsageLog).filter_by(action="sign_in").delete()
+    session.commit()
+
+    # Safe org admin next URL
+    r_safe = client.post(
+        "/sign-in?next=/admin/org/create-user",
+        data={
+            "username": "u-orgadmin-authtest",
+            "password": "pass_orgadmin",
+        },
+    )
+    assert r_safe.status_code == 302
+    assert r_safe.headers["Location"].endswith("/admin/org/create-user")
+
+    # If next is /proofing/, org admin should still go to org dashboard
+    r_proofing = client.post(
+        "/sign-in?next=/proofing/",
+        data={
+            "username": "u-orgadmin-authtest",
+            "password": "pass_orgadmin",
+        },
+    )
+    assert r_proofing.status_code == 302
+    assert r_proofing.headers["Location"].endswith("/admin/org/")
+
+    session.query(db.UsageLog).filter_by(action="sign_in").delete()
+    session.commit()
+
 
 
 def test_sign_in__unauth_post__bad_username(client):

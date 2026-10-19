@@ -28,6 +28,7 @@ from wtforms import validators as val
 import kalanjiyam.queries as q
 from kalanjiyam import database as db
 from kalanjiyam import mail
+from kalanjiyam.utils.admin_access import is_org_scoped_admin, is_platform_super_admin
 from kalanjiyam.utils.rate_limit import is_rate_limited, log_usage_action
 
 bp = Blueprint("auth", __name__)
@@ -243,7 +244,12 @@ def register():
 def sign_in():
     if current_user.is_authenticated:
         logout_if_not_ok()
-        return redirect(url_for("site.index"))
+        if current_user.is_authenticated:
+            if is_platform_super_admin(current_user):
+                return redirect(url_for("platform_view.index"))
+            if is_org_scoped_admin(current_user):
+                return redirect(url_for("org_admin_view.index"))
+            return redirect(url_for("site.index"))
 
     form = SignInForm()
     if request.method == "POST":
@@ -258,6 +264,31 @@ def sign_in():
         user = q.user(form.username.data.strip())
         if user and user.check_password(form.password.data):
             login_user(user, remember=True)
+            if is_platform_super_admin(user):
+                next_url = request.args.get("next")
+                if (
+                    next_url
+                    and next_url.startswith("/")
+                    and not next_url.startswith("//")
+                    and not next_url.startswith(("/proofing", url_for("proofing.index")))
+                ):
+                    return redirect(next_url)
+                return redirect(url_for("platform_view.index"))
+
+            if is_org_scoped_admin(user):
+                next_url = request.args.get("next")
+                if (
+                    next_url
+                    and next_url.startswith("/")
+                    and not next_url.startswith("//")
+                    and not next_url.startswith(("/proofing", url_for("proofing.index")))
+                ):
+                    return redirect(next_url)
+                return redirect(url_for("org_admin_view.index"))
+
+            next_url = request.args.get("next")
+            if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+                return redirect(next_url)
             return redirect(url_for(POST_AUTH_ROUTE))
         else:
             flash(_l("Invalid username or password."), "error")
