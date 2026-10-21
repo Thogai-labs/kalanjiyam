@@ -144,13 +144,37 @@ def _get_ocr_service_targets() -> list[tuple[str, str]]:
     """Returns list of (base_url, api_key) pairs for primary and fallback OCR services."""
     import os
     targets = []
-    url1 = (current_app.config.get("OCR_SERVICE_URL") or os.environ.get("OCR_SERVICE_URL") or "").rstrip("/")
-    key1 = current_app.config.get("OCR_SERVICE_API_KEY") or os.environ.get("OCR_SERVICE_API_KEY") or ""
+    url1 = (
+        current_app.config.get("OCR_SERVICE_URL")
+        or current_app.config.get("AI_SERVICE_URL")
+        or os.environ.get("OCR_SERVICE_URL")
+        or os.environ.get("AI_SERVICE_URL")
+        or ""
+    ).rstrip("/")
+    key1 = (
+        current_app.config.get("OCR_SERVICE_API_KEY")
+        or current_app.config.get("AI_SERVICE_API_KEY")
+        or os.environ.get("OCR_SERVICE_API_KEY")
+        or os.environ.get("AI_SERVICE_API_KEY")
+        or ""
+    )
     if url1:
         targets.append((url1, key1))
 
-    url2 = (current_app.config.get("OCR_SERVICE_URL_2") or os.environ.get("OCR_SERVICE_URL_2") or "").rstrip("/")
-    key2 = current_app.config.get("OCR_SERVICE_API_KEY_2") or os.environ.get("OCR_SERVICE_API_KEY_2") or key1
+    url2 = (
+        current_app.config.get("OCR_SERVICE_URL_2")
+        or current_app.config.get("AI_SERVICE_URL_2")
+        or os.environ.get("OCR_SERVICE_URL_2")
+        or os.environ.get("AI_SERVICE_URL_2")
+        or ""
+    ).rstrip("/")
+    key2 = (
+        current_app.config.get("OCR_SERVICE_API_KEY_2")
+        or current_app.config.get("AI_SERVICE_API_KEY_2")
+        or os.environ.get("OCR_SERVICE_API_KEY_2")
+        or os.environ.get("AI_SERVICE_API_KEY_2")
+        or key1
+    )
     if url2 and url2 != url1:
         targets.append((url2, key2))
 

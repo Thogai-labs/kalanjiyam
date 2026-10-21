@@ -270,82 +270,66 @@ class BaseConfig:
     #: OCR backend: ``local`` (in-process) or ``remote`` (OCR service API).
     OCR_BACKEND = _env("OCR_BACKEND", "remote")
 
-    #: Base URL of the standalone OCR service.
-    OCR_SERVICE_URL = _env("OCR_SERVICE_URL", "http://10.195.100.51:4000/v1")
+    #: Primary Unified AI Service (used across OCR, Translation, ASR, LLM)
+    AI_SERVICE_URL = _env("AI_SERVICE_URL", "http://10.195.100.51:4000/v1")
+    AI_SERVICE_API_KEY = _env("AI_SERVICE_API_KEY", "")
 
-    #: Fallback URL of the standalone OCR service if OCR_SERVICE_URL is unreachable.
-    OCR_SERVICE_URL_2 = _env("OCR_SERVICE_URL_2", "")
+    #: Fallback AI Service
+    AI_SERVICE_URL_2 = _env("AI_SERVICE_URL_2", "")
+    AI_SERVICE_API_KEY_2 = _env("AI_SERVICE_API_KEY_2", "")
+    AI_SERVICE_TIMEOUT = int(_env("AI_SERVICE_TIMEOUT", "300") or "300")
 
-    #: API key for service-to-service OCR requests.
-    OCR_SERVICE_API_KEY = _env("OCR_SERVICE_API_KEY", "")
+    #: All individual service URLs and API keys take directly from AI_SERVICE_*
+    OCR_SERVICE_URL = AI_SERVICE_URL
+    OCR_SERVICE_URL_2 = AI_SERVICE_URL_2
+    OCR_SERVICE_API_KEY = AI_SERVICE_API_KEY
+    OCR_SERVICE_API_KEY_2 = AI_SERVICE_API_KEY_2
+    OCR_SERVICE_TIMEOUT = AI_SERVICE_TIMEOUT
 
-    #: API key for fallback OCR service requests.
-    OCR_SERVICE_API_KEY_2 = _env("OCR_SERVICE_API_KEY_2", "")
+    TRANSLATION_SERVICE_URL = AI_SERVICE_URL
+    TRANSLATION_SERVICE_URL_2 = AI_SERVICE_URL_2
+    TRANSLATION_SERVICE_API_KEY = AI_SERVICE_API_KEY
+    TRANSLATION_SERVICE_API_KEY_2 = AI_SERVICE_API_KEY_2
+    TRANSLATION_SERVICE_TIMEOUT = AI_SERVICE_TIMEOUT
 
-    #: Timeout in seconds for OCR service HTTP requests.
-    OCR_SERVICE_TIMEOUT = int(_env("OCR_SERVICE_TIMEOUT", "300") or "300")
+    BHARATGEN_TRANSLATION_API_URL = f"{AI_SERVICE_URL.rstrip('/')}/chat/completions"
+    BHARATGEN_TRANSLATION_API_KEY = AI_SERVICE_API_KEY
+    BHARATGEN_TRANSLATION_TIMEOUT = AI_SERVICE_TIMEOUT
 
-    #: Base URL of the standalone translation service.
-    TRANSLATION_SERVICE_URL = _env(
-        "TRANSLATION_SERVICE_URL", "http://10.195.100.51:4000/v1"
-    )
+    LLM_GEMMA_TRANSLATION_API_URL = f"{AI_SERVICE_URL.rstrip('/')}/chat/completions"
+    LLM_GEMMA_TRANSLATION_API_KEY = AI_SERVICE_API_KEY
+    LLM_GEMMA_TRANSLATION_TIMEOUT = AI_SERVICE_TIMEOUT
 
-    #: API key for service-to-service translation requests.
-    TRANSLATION_SERVICE_API_KEY = _env("TRANSLATION_SERVICE_API_KEY", "")
-
-    #: Timeout in seconds for translation service HTTP requests.
-    TRANSLATION_SERVICE_TIMEOUT = int(
-        _env("TRANSLATION_SERVICE_TIMEOUT", "300") or "300"
-    )
-
-    #: Base URL for BharatGen translation chat completions API.
-    BHARATGEN_TRANSLATION_API_URL = _env(
-        "BHARATGEN_TRANSLATION_API_URL", "https://api.bharatgen.dev/v1/chat/completions"
-    )
-
-    #: API key / Bearer token for BharatGen translation requests.
-    BHARATGEN_TRANSLATION_API_KEY = _env(
-        "BHARATGEN_TRANSLATION_API_KEY",
-        _env("BHARATGEN_API_KEY", ""),
-    )
-
-    #: Timeout in seconds for BharatGen translation HTTP requests.
-    BHARATGEN_TRANSLATION_TIMEOUT = int(
-        _env("BHARATGEN_TRANSLATION_TIMEOUT", "300") or "300"
-    )
-
-    #: Optional URL override for llm-gemma translation API (defaults to {OCR_SERVICE_URL}/v1/chat/completions with automatic fallback if /v1/ocr is given).
-    LLM_GEMMA_TRANSLATION_API_URL = _env(
-        "LLM_GEMMA_TRANSLATION_API_URL", "http://10.195.100.51:4000/v1/chat/completions"
-    )
-
-    #: Optional API key override for llm-gemma translation (defaults to OCR_SERVICE_API_KEY).
-    LLM_GEMMA_TRANSLATION_API_KEY = _env("LLM_GEMMA_TRANSLATION_API_KEY", "")
-
-    #: Timeout in seconds for llm-gemma translation HTTP requests.
-    LLM_GEMMA_TRANSLATION_TIMEOUT = int(
-        _env("LLM_GEMMA_TRANSLATION_TIMEOUT", "300") or "300"
-    )
-
-    #: Master switch for handsfree voice editing on the proofing page. Off by
-    #: default: the feature needs the ``/v1/voice-edit`` agents deployed on the
-    #: OCR service host, so it ships dark and is enabled per environment.
     VOICE_EDIT_ENABLED = _env("VOICE_EDIT_ENABLED", "False").lower() in (
         "true",
         "1",
         "yes",
     )
-
-    #: Timeout in seconds for voice-edit HTTP requests. Much shorter than the
-    #: OCR/translation timeouts on purpose -- a user is speaking and waiting, so
-    #: a late answer applies to an utterance they have already moved past.
     VOICE_SERVICE_TIMEOUT = int(_env("VOICE_SERVICE_TIMEOUT", "30") or "30")
 
-    #: Base URL for ASR (speech recognition) service (e.g. http://10.195.100.51:4000/v1).
-    ASR_SERVICE_URL = _env("ASR_SERVICE_URL", "http://10.195.100.51:4000/v1")
+    ASR_SERVICE_URL = AI_SERVICE_URL
+    ASR_SERVICE_URL_2 = AI_SERVICE_URL_2
+    ASR_SERVICE_API_KEY = AI_SERVICE_API_KEY
+    ASR_SERVICE_API_KEY_2 = AI_SERVICE_API_KEY_2
+    ASR_SERVICE_TIMEOUT = int(_env("ASR_SERVICE_TIMEOUT", "30") or "30")
 
-    #: API key for ASR service. Defaults to OCR_SERVICE_API_KEY when empty.
-    ASR_SERVICE_API_KEY = _env("ASR_SERVICE_API_KEY", "")
+    #: Base URL for ASR (speech recognition) service (defaults to AI_SERVICE_URL).
+    ASR_SERVICE_URL = _env("ASR_SERVICE_URL", AI_SERVICE_URL)
+
+    #: Fallback URL for ASR service (defaults to AI_SERVICE_URL_2).
+    ASR_SERVICE_URL_2 = _env("ASR_SERVICE_URL_2", AI_SERVICE_URL_2)
+
+    #: API key for ASR service (defaults to AI_SERVICE_API_KEY or OCR_SERVICE_API_KEY).
+    ASR_SERVICE_API_KEY = _env(
+        "ASR_SERVICE_API_KEY",
+        AI_SERVICE_API_KEY or OCR_SERVICE_API_KEY,
+    )
+
+    #: Fallback API key for ASR service (defaults to AI_SERVICE_API_KEY_2).
+    ASR_SERVICE_API_KEY_2 = _env(
+        "ASR_SERVICE_API_KEY_2",
+        AI_SERVICE_API_KEY_2 or OCR_SERVICE_API_KEY_2,
+    )
 
     #: Default ASR model (e.g. asr-large, asr-sanskrit).
     DEFAULT_ASR_MODEL = _env("DEFAULT_ASR_MODEL", "asr-large")

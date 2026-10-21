@@ -14,10 +14,10 @@ services:
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
-      - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
-      - TRANSLATION_SERVICE_API_KEY=${TRANSLATION_SERVICE_API_KEY}
-      - BHARATGEN_TRANSLATION_API_URL=${BHARATGEN_TRANSLATION_API_URL}
-      - BHARATGEN_TRANSLATION_API_KEY=${BHARATGEN_TRANSLATION_API_KEY}
+      - AI_SERVICE_URL=${AI_SERVICE_URL:-}
+      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:-}
+      - AI_SERVICE_URL_2=${AI_SERVICE_URL_2:-}
+      - AI_SERVICE_API_KEY_2=${AI_SERVICE_API_KEY_2:-}
       - GUNICORN_TIMEOUT=300
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-4}
       - GUNICORN_THREADS=${GUNICORN_THREADS:-8}
@@ -72,11 +72,10 @@ services:
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
-      - OCR_SERVICE_URL=${OCR_SERVICE_URL}
-      - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
-      - TRANSLATION_SERVICE_API_KEY=${TRANSLATION_SERVICE_API_KEY}
-      - BHARATGEN_TRANSLATION_API_URL=${BHARATGEN_TRANSLATION_API_URL}
-      - BHARATGEN_TRANSLATION_API_KEY=${BHARATGEN_TRANSLATION_API_KEY}
+      - AI_SERVICE_URL=${AI_SERVICE_URL:-}
+      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:-}
+      - AI_SERVICE_URL_2=${AI_SERVICE_URL_2:-}
+      - AI_SERVICE_API_KEY_2=${AI_SERVICE_API_KEY_2:-}
       - FLASK_UPLOAD_FOLDER=/data/uploads
       - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
       - S3_ENDPOINT_URL=http://kalanjiyam-versitygw:7070
@@ -147,7 +146,10 @@ services:
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
-      - OCR_SERVICE_URL=${OCR_SERVICE_URL}
+      - AI_SERVICE_URL=${AI_SERVICE_URL:-}
+      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:-}
+      - AI_SERVICE_URL_2=${AI_SERVICE_URL_2:-}
+      - AI_SERVICE_API_KEY_2=${AI_SERVICE_API_KEY_2:-}
       - FLASK_UPLOAD_FOLDER=/data/uploads
       - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
       - S3_ENDPOINT_URL=http://kalanjiyam-versitygw:7070
@@ -170,7 +172,7 @@ services:
     restart: unless-stopped
     command: >
       celery -A kalanjiyam.tasks worker
-      -Q translation
+      -Q translation,low_priority
       --loglevel=INFO
       --autoscale=8,2
       --prefetch-multiplier=1
@@ -180,10 +182,10 @@ services:
       - FLASK_ENV=production
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam
-      - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
-      - TRANSLATION_SERVICE_API_KEY=${TRANSLATION_SERVICE_API_KEY}
-      - BHARATGEN_TRANSLATION_API_URL=${BHARATGEN_TRANSLATION_API_URL}
-      - BHARATGEN_TRANSLATION_API_KEY=${BHARATGEN_TRANSLATION_API_KEY}
+      - AI_SERVICE_URL=${AI_SERVICE_URL:-}
+      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:-}
+      - AI_SERVICE_URL_2=${AI_SERVICE_URL_2:-}
+      - AI_SERVICE_API_KEY_2=${AI_SERVICE_API_KEY_2:-}
       - FLASK_UPLOAD_FOLDER=/data/uploads
       - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
       - S3_ENDPOINT_URL=http://kalanjiyam-versitygw:7070
@@ -216,11 +218,10 @@ services:
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
-      - OCR_SERVICE_URL=${OCR_SERVICE_URL}
-      - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
-      - TRANSLATION_SERVICE_API_KEY=${TRANSLATION_SERVICE_API_KEY}
-      - BHARATGEN_TRANSLATION_API_URL=${BHARATGEN_TRANSLATION_API_URL}
-      - BHARATGEN_TRANSLATION_API_KEY=${BHARATGEN_TRANSLATION_API_KEY}
+      - AI_SERVICE_URL=${AI_SERVICE_URL:-}
+      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:-}
+      - AI_SERVICE_URL_2=${AI_SERVICE_URL_2:-}
+      - AI_SERVICE_API_KEY_2=${AI_SERVICE_API_KEY_2:-}
       - FLASK_UPLOAD_FOLDER=/data/uploads
       - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
       - S3_ENDPOINT_URL=http://kalanjiyam-versitygw:7070
@@ -258,11 +259,10 @@ services:
       - REDIS_URL=redis://kalanjiyam-redis:6379/0
       - SQLALCHEMY_DATABASE_URI=postgresql://kalanjiyam:${POSTGRES_PASSWORD:-kalanjiyam}@kalanjiyam-db/kalanjiyam
       - OCR_BACKEND=remote
-      - OCR_SERVICE_URL=${OCR_SERVICE_URL}
-      - TRANSLATION_SERVICE_URL=${TRANSLATION_SERVICE_URL}
-      - TRANSLATION_SERVICE_API_KEY=${TRANSLATION_SERVICE_API_KEY}
-      - BHARATGEN_TRANSLATION_API_URL=${BHARATGEN_TRANSLATION_API_URL}
-      - BHARATGEN_TRANSLATION_API_KEY=${BHARATGEN_TRANSLATION_API_KEY}
+      - AI_SERVICE_URL=${AI_SERVICE_URL:-}
+      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:-}
+      - AI_SERVICE_URL_2=${AI_SERVICE_URL_2:-}
+      - AI_SERVICE_API_KEY_2=${AI_SERVICE_API_KEY_2:-}
       - FLASK_UPLOAD_FOLDER=/data/uploads
       - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
       - S3_ENDPOINT_URL=http://kalanjiyam-versitygw:7070

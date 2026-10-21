@@ -5,7 +5,7 @@ import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from pathlib import Path
 
 # Translation response data structure
@@ -202,6 +202,78 @@ class OpenAITranslateEngine(TranslationEngine):
         return ['en', 'hi', 'sa', 'te', 'mr', 'fr', 'de', 'es', 'ja', 'ko', 'zh']
 
 
+def _get_translation_service_targets() -> List[Tuple[str, str]]:
+    """Returns list of (base_url, api_key) pairs for primary and fallback translation services."""
+    import os
+    from flask import current_app, has_app_context
+    targets = []
+    url1 = ""
+    key1 = ""
+    url2 = ""
+    key2 = ""
+
+    if has_app_context():
+        url1 = (
+            current_app.config.get("AI_SERVICE_URL")
+            or current_app.config.get("TRANSLATION_SERVICE_URL")
+            or current_app.config.get("OCR_SERVICE_URL")
+            or ""
+        ).rstrip("/")
+        key1 = (
+            current_app.config.get("AI_SERVICE_API_KEY")
+            or current_app.config.get("TRANSLATION_SERVICE_API_KEY")
+            or current_app.config.get("OCR_SERVICE_API_KEY")
+            or ""
+        )
+        url2 = (
+            current_app.config.get("AI_SERVICE_URL_2")
+            or current_app.config.get("TRANSLATION_SERVICE_URL_2")
+            or current_app.config.get("OCR_SERVICE_URL_2")
+            or ""
+        ).rstrip("/")
+        key2 = (
+            current_app.config.get("AI_SERVICE_API_KEY_2")
+            or current_app.config.get("TRANSLATION_SERVICE_API_KEY_2")
+            or current_app.config.get("OCR_SERVICE_API_KEY_2")
+            or key1
+        )
+
+    if not url1:
+        url1 = (
+            os.environ.get("AI_SERVICE_URL")
+            or os.environ.get("TRANSLATION_SERVICE_URL")
+            or os.environ.get("OCR_SERVICE_URL")
+            or "http://10.195.100.51:4000/v1"
+        ).rstrip("/")
+        key1 = (
+            os.environ.get("AI_SERVICE_API_KEY")
+            or os.environ.get("TRANSLATION_SERVICE_API_KEY")
+            or os.environ.get("OCR_SERVICE_API_KEY")
+            or key1
+        )
+
+    if not url2:
+        url2 = (
+            os.environ.get("AI_SERVICE_URL_2")
+            or os.environ.get("TRANSLATION_SERVICE_URL_2")
+            or os.environ.get("OCR_SERVICE_URL_2")
+            or ""
+        ).rstrip("/")
+        key2 = (
+            os.environ.get("AI_SERVICE_API_KEY_2")
+            or os.environ.get("TRANSLATION_SERVICE_API_KEY_2")
+            or os.environ.get("OCR_SERVICE_API_KEY_2")
+            or key1
+        )
+
+    if url1:
+        targets.append((url1, key1))
+    if url2 and url2 != url1:
+        targets.append((url2, key2))
+
+    return targets
+
+
 class GenericTranslationEngine(TranslationEngine):
     """Generic translation engine client that forwards translation requests to the backend service."""
 
@@ -214,25 +286,31 @@ class GenericTranslationEngine(TranslationEngine):
         from flask import current_app, has_app_context
         import os
 
-        base_url = ""
-        api_key = ""
-        timeout = 300.0
-
-        if has_app_context():
-            base_url = current_app.config.get("TRANSLATION_SERVICE_URL", "").rstrip("/")
-            api_key = current_app.config.get("TRANSLATION_SERVICE_API_KEY", "")
-            timeout = float(current_app.config.get("TRANSLATION_SERVICE_TIMEOUT", 300))
-
-        if not base_url:
-            base_url = (os.environ.get("TRANSLATION_SERVICE_URL") or "").rstrip("/")
-            api_key = os.environ.get("TRANSLATION_SERVICE_API_KEY") or api_key
-            timeout = float(os.environ.get("TRANSLATION_SERVICE_TIMEOUT", 300))
-
-        if not base_url:
+        targets = _get_translation_service_targets()
+        if not targets:
             raise RuntimeError("TRANSLATION_SERVICE_URL is not configured")
 
+        timeout = 300.0
+        if has_app_context():
+            timeout = float(
+                current_app.config.get("TRANSLATION_SERVICE_TIMEOUT")
+                or current_app.config.get("AI_SERVICE_TIMEOUT")
+                or 300
+            )
+        else:
+            timeout = float(
+                os.environ.get("TRANSLATION_SERVICE_TIMEOUT")
+                or os.environ.get("AI_SERVICE_TIMEOUT")
+                or 300
+            )
+
+        base_url, api_key = targets[0]
         url = f"{base_url}/translate/text"
-        headers = {"X-API-Key": api_key} if api_key else {}
+        headers = {}
+        if api_key:
+            clean_key = str(api_key).strip().strip("'").strip('"')
+            headers["X-API-Key"] = clean_key
+            headers["Authorization"] = f"Bearer {clean_key}"
 
         # Map language codes to English names if available
         language_map = {
@@ -437,13 +515,23 @@ class BharatGenTranslateEngine(TranslationEngine):
             except Exception:
                 pass
 
+        if not api_key:
+            targets = _get_translation_service_targets()
+            if targets:
+                api_key = targets[0][1]
+
+        if not api_url:
+            targets = _get_translation_service_targets()
+            if targets:
+                base = targets[0][0].rstrip('/')
+                api_url = f"{base}/chat/completions"
+
         if not api_key and os.environ.get("PYTEST_CURRENT_TEST"):
             api_key = "test-bharatgen-key"
 
         if not api_key or not str(api_key).strip():
             raise RuntimeError(
-                "BHARATGEN_TRANSLATION_API_KEY is not configured on the server. "
-                "Please add BHARATGEN_TRANSLATION_API_KEY to your .env file or server environment variables."
+                "AI_SERVICE_API_KEY or BHARATGEN_TRANSLATION_API_KEY is not configured on the server."
             )
 
         api_key = str(api_key).strip().strip("'").strip('"')
@@ -490,14 +578,13 @@ class BharatGenTranslateEngine(TranslationEngine):
         if kwargs.get("glossary"):
             user_content = f"Translate the following text from {source_name} to {target_name} using domain terms ({kwargs['glossary']}):\n\n{text}"
 
+        target_model = self.model_name
+        if target_model in ("param_lc_translate_ep4", "param", "param_lc"):
+            target_model = "bharatgen-param"
+
         payload = {
-            "model": self.model_name,
+            "model": target_model,
             "temperature": kwargs.get("temperature", 0.1),
-            "repetition_penalty": kwargs.get("repetition_penalty", 1.02),
-            "max_length": kwargs.get("max_length", 2048),
-            "chat_template_kwargs": {
-                "enable_thinking": kwargs.get("enable_thinking", True)
-            },
             "messages": [
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": user_content},
@@ -632,24 +719,31 @@ class LlmGemmaTranslateEngine(TranslationEngine):
                 api_key = (
                     current_app.config.get("LLM_GEMMA_TRANSLATION_API_KEY")
                     or current_app.config.get("TRANSLATION_SERVICE_API_KEY")
+                    or current_app.config.get("AI_SERVICE_API_KEY")
                     or current_app.config.get("OCR_SERVICE_API_KEY")
                     or ""
                 )
             timeout = float(
                 current_app.config.get(
                     "LLM_GEMMA_TRANSLATION_TIMEOUT",
-                    current_app.config.get("TRANSLATION_SERVICE_TIMEOUT", current_app.config.get("OCR_SERVICE_TIMEOUT", 300)),
+                    current_app.config.get(
+                        "TRANSLATION_SERVICE_TIMEOUT",
+                        current_app.config.get(
+                            "AI_SERVICE_TIMEOUT",
+                            current_app.config.get("OCR_SERVICE_TIMEOUT", 300),
+                        ),
+                    ),
                 )
             )
 
         if not api_url:
             api_url = os.environ.get("LLM_GEMMA_TRANSLATION_API_URL")
             if not api_url:
-                trans_base = (
-                    os.environ.get("TRANSLATION_SERVICE_URL")
-                    or os.environ.get("OCR_SERVICE_URL")
-                    or "http://10.195.100.51:4000/v1"
-                ).rstrip("/")
+                targets = _get_translation_service_targets()
+                if targets:
+                    trans_base = targets[0][0].rstrip("/")
+                else:
+                    trans_base = "http://10.195.100.51:4000/v1"
                 if trans_base.endswith("/v1/ocr"):
                     api_url = trans_base[:-7] + "/v1/chat/completions"
                 elif trans_base.endswith("/v1"):
@@ -658,12 +752,17 @@ class LlmGemmaTranslateEngine(TranslationEngine):
                     api_url = trans_base + "/v1/chat/completions"
 
         if not api_key:
-            api_key = (
-                os.environ.get("LLM_GEMMA_TRANSLATION_API_KEY")
-                or os.environ.get("TRANSLATION_SERVICE_API_KEY")
-                or os.environ.get("OCR_SERVICE_API_KEY")
-                or ""
-            )
+            targets = _get_translation_service_targets()
+            if targets:
+                api_key = targets[0][1]
+            else:
+                api_key = (
+                    os.environ.get("LLM_GEMMA_TRANSLATION_API_KEY")
+                    or os.environ.get("TRANSLATION_SERVICE_API_KEY")
+                    or os.environ.get("AI_SERVICE_API_KEY")
+                    or os.environ.get("OCR_SERVICE_API_KEY")
+                    or ""
+                )
 
         if api_url:
             api_url = api_url.rstrip("/")
@@ -1309,85 +1408,96 @@ def get_available_translation_engines() -> List[Dict[str, str]]:
     from flask import current_app, has_app_context
 
     seen_engines = {}
+    targets = _get_translation_service_targets()
 
-    if has_app_context():
-        base_url = current_app.config.get("TRANSLATION_SERVICE_URL", "").rstrip("/")
-        if base_url:
-            url = f"{base_url}/models"
-            api_key = current_app.config.get("TRANSLATION_SERVICE_API_KEY", "")
-            headers = {"X-API-Key": api_key} if api_key else {}
-            try:
-                # Use a short timeout (5s) for fetching available models to avoid blocking the app
-                timeout = 5.0
-                with httpx.Client(timeout=timeout) as client:
-                    response = client.get(url, headers=headers)
-                if response.status_code == 200:
-                    resp_json = response.json()
-                    models = resp_json.get("data", []) if isinstance(resp_json, dict) else resp_json
-                    for m in models:
-                        # Use backend provided engine/label or derive intelligently
-                        engine_val = m.get("engine")
-                        if not engine_val:
-                            name = m.get("model_name", "") or m.get("id", "")
-                            parts = name.split('/')
-                            if len(parts) > 1:
-                                family_part = parts[1]
-                                if family_part.startswith("indictrans"):
-                                    engine_val = family_part.split('-')[0]
-                                elif "gemma" in family_part.lower():
-                                    if "llm" in family_part.lower():
-                                        engine_val = "llm_gemma"
-                                    elif "31b" in family_part.lower():
-                                        engine_val = "gemma_4_31b"
-                                    else:
-                                        engine_val = "gemma"
-                                elif "indic" in family_part.lower() and "translate" in family_part.lower():
-                                    engine_val = "indic_translate"
-                                else:
-                                    engine_val = family_part.split('-')[0]
-                            else:
-                                if "llm" in name.lower() and "gemma" in name.lower():
+    for base_url, api_key in targets:
+        if not base_url:
+            continue
+        url = f"{base_url.rstrip('/')}/models"
+        headers = {}
+        if api_key:
+            clean_key = str(api_key).strip().strip("'").strip('"')
+            headers["Authorization"] = f"Bearer {clean_key}"
+            headers["X-API-Key"] = clean_key
+        try:
+            timeout = 5.0
+            with httpx.Client(timeout=timeout, trust_env=False) as client:
+                response = client.get(url, headers=headers)
+            if response.status_code == 200:
+                resp_json = response.json()
+                models = resp_json.get("data", []) if isinstance(resp_json, dict) else resp_json
+                for m in models:
+                    # Use backend provided engine/label or derive intelligently
+                    engine_val = m.get("engine")
+                    if not engine_val:
+                        name = m.get("model_name", "") or m.get("id", "")
+                        parts = name.split('/')
+                        if len(parts) > 1:
+                            family_part = parts[1]
+                            if family_part.startswith("indictrans"):
+                                engine_val = family_part.split('-')[0]
+                            elif "gemma" in family_part.lower():
+                                if "llm" in family_part.lower():
                                     engine_val = "llm_gemma"
-                                elif "31b" in name.lower() and "gemma" in name.lower():
+                                elif "31b" in family_part.lower():
                                     engine_val = "gemma_4_31b"
-                                elif "indic" in name.lower() and "translate" in name.lower():
-                                    engine_val = "indic_translate"
                                 else:
-                                    engine_val = "gemma" if "gemma" in name.lower() else name
+                                    engine_val = "gemma"
+                            elif "indic" in family_part.lower() and "translate" in family_part.lower():
+                                engine_val = "indic_translate"
+                            elif "param" in family_part.lower() or "bharatgen" in family_part.lower():
+                                engine_val = "param_lc_translate_ep4"
+                            else:
+                                engine_val = family_part.split('-')[0]
                         else:
-                            engine_val = normalize_translation_service_engine(engine_val)
-                        
-                        label_val = m.get("label")
-                        if not label_val:
-                            label_map = {
-                                'indictrans2': 'IndicTrans v2',
-                                'indictrans3': 'IndicTrans v3',
-                                'gemma': 'Gemma 4 12B',
-                                'gemma4': 'Gemma 4 12B',
-                                'gemma_4_31b': 'Gemma 4 31B',
-                                'gemma-4-31b': 'Gemma 4 31B',
-                                'gemma_31b': 'Gemma 4 31B',
-                                'gemma-31b': 'Gemma 4 31B',
-                                'indic_translate': 'Indic-Translate',
-                                'indic-translate': 'Indic-Translate',
-                                'llm_gemma': 'LLM Gemma',
-                                'llm-gemma': 'LLM Gemma',
-                                'param_lc_translate_ep4': 'Param LC Translate EP4',
-                                'translation_1b_exp_40': 'Translation 1B Exp 40',
-                            }
-                            label_val = label_map.get(engine_val, engine_val.replace('_', ' ').replace('-', ' ').title())
+                            if "llm" in name.lower() and "gemma" in name.lower():
+                                engine_val = "llm_gemma"
+                            elif "31b" in name.lower() and "gemma" in name.lower():
+                                engine_val = "gemma_4_31b"
+                            elif "indic" in name.lower() and "translate" in name.lower():
+                                engine_val = "indic_translate"
+                            elif "param" in name.lower() or "bharatgen" in name.lower():
+                                engine_val = "param_lc_translate_ep4"
+                            else:
+                                engine_val = "gemma" if "gemma" in name.lower() else name
+                    else:
+                        engine_val = normalize_translation_service_engine(engine_val)
 
-                        if (
-                            engine_val in SUPPORTED_TRANSLATION_ENGINES
-                            and engine_val not in seen_engines
-                        ):
-                            seen_engines[engine_val] = {
-                                'value': engine_val,
-                                'label': label_val,
-                                'model_name': m.get("model_name", "") or m.get("id", ""),
-                            }
-            except Exception as e:
-                logging.error(f"Failed to fetch translation models: {e}")
+                    label_val = m.get("label")
+                    if not label_val:
+                        label_map = {
+                            'indictrans2': 'IndicTrans v2',
+                            'indictrans3': 'IndicTrans v3',
+                            'gemma': 'Gemma 4 12B',
+                            'gemma4': 'Gemma 4 12B',
+                            'gemma_4_31b': 'Gemma 4 31B',
+                            'gemma-4-31b': 'Gemma 4 31B',
+                            'gemma_31b': 'Gemma 4 31B',
+                            'gemma-31b': 'Gemma 4 31B',
+                            'indic_translate': 'Indic-Translate',
+                            'indic-translate': 'Indic-Translate',
+                            'llm_gemma': 'LLM Gemma',
+                            'llm-gemma': 'LLM Gemma',
+                            'param_lc_translate_ep4': 'Param LC Translate EP4',
+                            'bharatgen_param': 'Param LC Translate EP4',
+                            'bharatgen-param': 'Param LC Translate EP4',
+                            'translation_1b_exp_40': 'Translation 1B Exp 40',
+                        }
+                        label_val = label_map.get(engine_val, engine_val.replace('_', ' ').replace('-', ' ').title())
+
+                    if (
+                        engine_val in SUPPORTED_TRANSLATION_ENGINES
+                        and engine_val not in seen_engines
+                    ):
+                        seen_engines[engine_val] = {
+                            'value': engine_val,
+                            'label': label_val,
+                            'model_name': m.get("model_name", "") or m.get("id", ""),
+                        }
+                if seen_engines:
+                    break
+        except Exception as e:
+            logging.warning(f"Failed to fetch translation models from {base_url}: {e}")
 
     # Fallback to default remote engines if none discovered
     if not seen_engines:

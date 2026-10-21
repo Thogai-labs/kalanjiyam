@@ -137,19 +137,26 @@ def transcribe_audio(
         if not raw_url:
             raw_url = (
                 current_app.config.get("ASR_SERVICE_URL")
+                or current_app.config.get("AI_SERVICE_URL")
                 or current_app.config.get("OCR_SERVICE_URL")
+                or os.environ.get("ASR_SERVICE_URL")
+                or os.environ.get("AI_SERVICE_URL")
                 or ""
             )
         if not raw_key:
             raw_key = (
                 current_app.config.get("ASR_SERVICE_API_KEY")
+                or current_app.config.get("AI_SERVICE_API_KEY")
                 or current_app.config.get("OCR_SERVICE_API_KEY")
+                or os.environ.get("ASR_SERVICE_API_KEY")
+                or os.environ.get("AI_SERVICE_API_KEY")
                 or ""
             )
         if timeout is None:
             default_timeout = float(
                 current_app.config.get("ASR_SERVICE_TIMEOUT")
                 or current_app.config.get("VOICE_SERVICE_TIMEOUT")
+                or current_app.config.get("AI_SERVICE_TIMEOUT")
                 or REQUEST_TIMEOUT
             )
     except RuntimeError:

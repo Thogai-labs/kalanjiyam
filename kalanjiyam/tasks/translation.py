@@ -432,10 +432,9 @@ def run_translation_for_project(
             ).set(priority=priority)
             for p in pages_with_revisions
         )
-        if queue:
-            ret = tasks.apply_async(queue=queue, priority=priority)
-        else:
-            ret = tasks.apply_async(priority=priority)
+        # Ensure translation tasks route to translation workers, using priority for QoS
+        target_queue = queue if queue and queue != "low_priority" else "translation"
+        ret = tasks.apply_async(queue=target_queue, priority=priority)
         # Save the result so that we can poll for it later
         ret.save()
         return ret
