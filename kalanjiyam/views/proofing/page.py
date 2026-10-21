@@ -50,6 +50,8 @@ from kalanjiyam.views.api import bp as api
 from kalanjiyam.views.proofing.decorators import p2_required
 
 bp = Blueprint("page", __name__)
+logger = logging.getLogger(__name__)
+
 
 
 SENTENCE_SPLIT_REGEX = re.compile(
@@ -223,7 +225,9 @@ def resolve_version_keys(user, page) -> tuple:
             return 4
         elif v.version_key.startswith("ocr:"):
             return 5
-        return 6
+        elif v.version_key.startswith("chat-structure:"):
+            return 6
+        return 7
 
     # Sort tracks by updated_at descending, then by tier rank ascending (tie-breaker)
     sorted_tracks = sorted(
@@ -364,6 +368,8 @@ def get_version_display_name(version_key: str) -> str:
             engine=real_label,
             languages=lang_display,
         )
+    elif version_key.startswith("chat-structure:"):
+        return _l("Structure Extraction")
     return version_key
 
 
@@ -3201,3 +3207,190 @@ def asr_transcribe(project_slug, page_slug):
         }
     )
 
+
+# ---------------------------------------------------------------------------
+# Structure extraction (chat panel → editable table → versioned save)
+# ---------------------------------------------------------------------------
+
+# Maximum OCR text size accepted (to prevent runaway inference calls)
+_EXTRACT_MAX_BYTES = 256 * 1024  # 256 KB
+
+
+@api.route("/chat-extract/<project_slug>/<page_slug>/", methods=["POST"])
+@p2_required
+def chat_extract(project_slug, page_slug):
+    """Run structure extraction on page OCR text via Gemma 4 26B IT.
+
+    Accepts an optional JSON body with ``{"ocr_text": "..."}`` to let the
+    client supply a custom prompt override; otherwise reads the page's
+    latest main-branch revision text automatically.
+
+    Returns ``{"entries": [...], "model": "..."}`` on success, or
+    ``{"error": "..."}`` with a 4xx/5xx status on failure.
+    """
+    from kalanjiyam.utils import structure_extract as se
+    from kalanjiyam.utils.proofing_utils import get_main_revision, revision_plain_content
+
+    if current_user.is_authenticated and current_user.is_super_admin:
+        abort(403, description=_l("Superadmins are not allowed to access project data."))
+
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+    if not q.user_can_view_proofing_project(current_user, project_):
+        abort(403)
+    page_ = q.page(project_.id, page_slug)
+    if not page_:
+        abort(404)
+
+    # Determine OCR text: prefer client-supplied, fall back to latest revision
+    body = {}
+    try:
+        body = request.get_json(silent=True) or {}
+    except Exception:
+        pass
+
+    ocr_text = (body.get("ocr_text") or "").strip()
+    if not ocr_text:
+        revision = get_main_revision(page_)
+        ocr_text = revision_plain_content(revision) if revision else ""
+
+    if not ocr_text:
+        return jsonify({"error": "No OCR text available for this page."}), 400
+
+    if len(ocr_text.encode("utf-8")) > _EXTRACT_MAX_BYTES:
+        return jsonify({"error": "OCR text is too large. Please extract one section at a time."}), 413
+
+    api_url = (
+        current_app.config.get("LLM_GEMMA_TRANSLATION_API_URL")
+        or current_app.config.get("AI_SERVICE_URL")
+        or ""
+    )
+    api_key = (
+        current_app.config.get("LLM_GEMMA_TRANSLATION_API_KEY")
+        or current_app.config.get("AI_SERVICE_API_KEY")
+        or ""
+    )
+    model = (
+        current_app.config.get("STRUCTURE_EXTRACT_MODEL")
+        or current_app.config.get("DEFAULT_TRANSLATION_ENGINE")
+        or "gemma-4"
+    )
+    timeout = float(current_app.config.get("AI_SERVICE_TIMEOUT", 300))
+
+    try:
+        entries = se.extract(
+            ocr_text,
+            api_url=api_url,
+            api_key=api_key,
+            model=model,
+            timeout=timeout,
+        )
+    except se.ExtractionError as exc:
+        current_app.logger.warning("Structure extraction failed for %s/%s: %s", project_slug, page_slug, exc)
+        return jsonify({"error": str(exc)}), 502
+
+    return jsonify({"entries": entries, "model": model})
+
+
+@api.route("/chat-structure-save/<project_slug>/<page_slug>/", methods=["POST"])
+@p2_required
+def chat_structure_save(project_slug, page_slug):
+    """Save a user-reviewed extraction table as a versioned revision.
+
+    Expects a JSON body::
+
+        {
+            "entries": [...],   // validated entry dicts (edited by user)
+            "summary": "..."    // optional commit message
+        }
+
+    Creates (or updates) a PageVersion with key ``"chat-structure:user:<id>"``
+    so the extraction is isolated from the main proofing track.
+
+    Returns ``{"version_key": ..., "available_versions": [...]}`` on success.
+    """
+    from kalanjiyam.utils import structure_extract as se
+    from kalanjiyam.utils.revisions import EditError, add_revision
+
+    if current_user.is_authenticated and current_user.is_super_admin:
+        abort(403, description=_l("Superadmins are not allowed to access project data."))
+
+    if not current_user.is_authenticated:
+        abort(401)
+
+    project_ = q.project(project_slug)
+    if project_ is None:
+        abort(404)
+    if not q.user_can_view_proofing_project(current_user, project_):
+        abort(403)
+    page_ = q.page(project_.id, page_slug)
+    if not page_:
+        abort(404)
+
+    body = request.get_json(silent=True) or {}
+    entries = body.get("entries")
+    if not isinstance(entries, list):
+        return jsonify({"error": "entries must be a list."}), 400
+
+    try:
+        validated = [se._normalise_entry(e, i) for i, e in enumerate(entries)]
+        validated = se.assign_stable_ids(validated)
+    except Exception as exc:
+        return jsonify({"error": f"Invalid entry data: {exc}"}), 400
+
+    summary = str(body.get("summary") or "Structure extraction (chat)")[:500]
+
+    lines = []
+    for e in validated:
+        heading = e.get("heading") or ""
+        page_label = e.get("page_label_raw") or ""
+        lines.append(f"{heading}  {page_label}".strip())
+    plain_content = "\n".join(lines)
+
+    document_payload = {
+        "type": "chat-structure",
+        "format": "structure-entries-v1",
+        "entries": validated,
+    }
+
+    if current_user.is_authenticated:
+        version_key = f"chat-structure:user:{current_user.id}"
+        author_id = current_user.id
+    else:
+        fp = request.cookies.get("device_fingerprint") or "guest"
+        version_key = f"chat-structure:guest:{fp}"
+        author_id = None
+
+    session = q.get_session()
+    pv = (
+        session.query(db.PageVersion)
+        .filter_by(page_id=page_.id, version_key=version_key)
+        .first()
+    )
+    current_version = pv.version if pv else 0
+
+    status_val = page_.status.name if (page_.status and hasattr(page_.status, "name")) else SitePageStatus.R0.value
+
+    try:
+        new_version = add_revision(
+            page_,
+            summary=summary,
+            content=plain_content,
+            status=status_val,
+            version=current_version,
+            author_id=author_id,
+            document=document_payload,
+            content_format="plain",
+            version_key=version_key,
+        )
+    except EditError as exc:
+        return jsonify({"error": f"Save conflict: {exc}"}), 409
+
+    available_versions = get_available_versions_for_page(page_.id)
+
+    return jsonify({
+        "version_key": version_key,
+        "version": new_version,
+        "available_versions": available_versions,
+    })

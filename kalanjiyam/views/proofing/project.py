@@ -77,6 +77,7 @@ def _enforce_project_access():
             "proofing.project.download_as_xml",
             "proofing.project.download_as_json",
             "proofing.project.download_as_html",
+            "proofing.project.download_as_csv",
             "proofing.project.search",
             "proofing.project.replace",
             "proofing.project.submit_changes",
@@ -1235,6 +1236,7 @@ def download_as_docx(slug):
     return response
 
 
+
 @bp.route("/<slug>/download/pdf")
 def download_as_pdf(slug):
     """Download project pages compiled into a single PDF document in replica layout."""
@@ -1249,6 +1251,76 @@ def download_as_pdf(slug):
         f'attachment; filename="{slug}-replica.pdf"'
     )
     return response
+
+
+@bp.route("/<slug>/download/csv")
+def download_as_csv(slug):
+    """Download the latest chat-structure extraction for this project as CSV.
+
+    Scans every page for a ``chat-structure:user:*`` version track and
+    collects all entries across pages into a single UTF-8 CSV file.
+
+    If no extraction has been saved yet, returns a 404 with an informative
+    message so the frontend can show an actionable error rather than an
+    empty download.
+    """
+    from kalanjiyam.utils import structure_extract as se
+
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+
+    session = q.get_session()
+    all_entries: list[dict] = []
+
+    for page_ in project_.pages:
+        # Find the most recently updated chat-structure version track for any user
+        pv = (
+            session.query(db.PageVersion)
+            .filter(
+                db.PageVersion.page_id == page_.id,
+                db.PageVersion.version_key.like("chat-structure:user:%"),
+            )
+            .order_by(db.PageVersion.updated_at.desc())
+            .first()
+        )
+        if pv is None or not pv.revisions:
+            continue
+
+        latest_rev = pv.revisions[-1]
+
+        # Load document from object storage or inline JSON column
+        from kalanjiyam.utils.document_storage import load_revision_document
+
+        doc = load_revision_document(latest_rev)
+        if doc is None and latest_rev.document:
+            doc = latest_rev.document if isinstance(latest_rev.document, dict) else None
+
+        if not doc or doc.get("type") != "chat-structure":
+            continue
+
+        entries = doc.get("entries") or []
+        all_entries.extend(entries)
+
+    if not all_entries:
+        abort(
+            404,
+            description=(
+                "No structure extraction found for this project. "
+                "Open the editor, run the Structure Chat on at least one page, "
+                "and save before downloading."
+            ),
+        )
+
+    csv_bytes = se.to_csv_bytes(all_entries, document_id=str(project_.id))
+    safe_slug = re.sub(r"[^a-z0-9_-]", "-", slug.lower())
+    filename = f"{safe_slug}-structure.csv"
+
+    response = make_response(csv_bytes, 200)
+    response.mimetype = "text/csv; charset=utf-8"
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
 
 
 @bp.route("/<slug>/stats")

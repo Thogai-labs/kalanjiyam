@@ -259,6 +259,35 @@
       </a>
     </div>
 
+    {# 7. Structure CSV (from chat extraction) #}
+    <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs hover:border-teal-500/50 hover:shadow-sm transition-all flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 border border-teal-100 flex flex-col items-center justify-center shrink-0">
+          <span class="text-[10px] font-extrabold uppercase tracking-tight">CSV</span>
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <h3 class="text-xs sm:text-sm font-bold text-slate-900 truncate">{{ _('Structure Export') }}</h3>
+            <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-teal-50 text-teal-700 border border-teal-100">.csv</span>
+            <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-violet-50 text-violet-700 border border-violet-100">{{ _('AI') }}</span>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-0.5">
+            {{ _('Table of contents, chapters, and index entries extracted by Structure Chat.') }}
+          </p>
+          <p class="text-[10px] text-slate-400 mt-0.5">
+            {{ _('Open the editor → Structure Chat → save an extraction first.') }}
+          </p>
+        </div>
+      </div>
+      <a href="{{ url_for('proofing.project.download_as_csv', slug=project.slug) }}"
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+        </svg>
+        <span>{{ _('Download') }}</span>
+      </a>
+    </div>
+
   </div>
 </div>
 {% endblock %}

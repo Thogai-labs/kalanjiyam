@@ -47,6 +47,10 @@ def p2_required(func: Callable):
                     if device_fp and project.fingerprint_id == device_fp:
                         return current_app.ensure_sync(func)(*args, **kwargs)
 
+        if request.blueprint == "api" or request.is_json or (request.path and "/api/" in request.path):
+            from flask import jsonify
+            return jsonify({"error": str(_l("Sorry, you aren't authorized to use this feature."))}), 403
+
         flash(_l("Sorry, you aren't authorized to use this feature."), "error")
         return redirect(url_for("proofing.index"))
 
@@ -56,7 +60,11 @@ def p2_required(func: Callable):
 def moderator_required(func: Callable):
     @wraps(func)
     def decorated_view(*args, **kwargs):
+        from flask import request
         if not (current_user.is_moderator or current_user.is_org_admin or current_user.is_super_admin):
+            if request.blueprint == "api" or request.is_json or (request.path and "/api/" in request.path):
+                from flask import jsonify
+                return jsonify({"error": str(_l("Sorry, you aren't authorized to use this feature."))}), 403
             flash(_l("Sorry, you aren't authorized to use this feature."), "error")
             return redirect(url_for("proofing.index"))
         return current_app.ensure_sync(func)(*args, **kwargs)

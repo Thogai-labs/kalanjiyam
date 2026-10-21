@@ -1,6 +1,5 @@
 """Views for basic site pages."""
-from flask import request
-from flask import Blueprint, abort, redirect, render_template, session, url_for
+from flask import Blueprint, abort, jsonify, redirect, render_template, request, session, url_for
 
 from kalanjiyam import queries as q
 from kalanjiyam.consts import LOCALES
@@ -101,23 +100,44 @@ def editor_image(project_slug, filename):
     return storage.serve(key)
 
 
+def _is_api_request():
+    return bool(
+        getattr(request, "blueprint", "") == "api"
+        or request.is_json
+        or (request.path and "/api/" in request.path)
+        or (getattr(request, "accept_mimetypes", None) and request.accept_mimetypes.best == "application/json" and not request.accept_mimetypes.accept_html)
+    )
+
+
 @bp.app_errorhandler(403)
 def forbidden(e):
+    if _is_api_request():
+        desc = getattr(e, "description", None) or "Forbidden"
+        return jsonify({"error": str(desc)}), 403
     return render_template("403.html"), 403
 
 
 @bp.app_errorhandler(404)
 def page_not_found(e):
+    if _is_api_request():
+        desc = getattr(e, "description", None) or "Not Found"
+        return jsonify({"error": str(desc)}), 404
     return render_template("404.html"), 404
 
 
 @bp.app_errorhandler(413)
 def request_too_large(e):
+    if _is_api_request():
+        desc = getattr(e, "description", None) or "Request Entity Too Large"
+        return jsonify({"error": str(desc)}), 413
     return render_template("413.html"), 413
 
 
 @bp.app_errorhandler(500)
 def internal_server_error(e):
+    if _is_api_request():
+        desc = getattr(e, "description", None) or "Internal Server Error"
+        return jsonify({"error": str(desc)}), 500
     return render_template("500.html"), 500
 
 

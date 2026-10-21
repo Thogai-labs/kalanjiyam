@@ -199,6 +199,18 @@ export default () => ({
   _voiceUndo: null,
   _voiceBusy: false,
 
+  // ── Structure-extraction chat ─────────────────────────────────────────
+  // Deliberately separate from voice to allow independent testing.
+  chatPanelOpen: false,
+  chatBusy: false,
+  chatSaving: false,
+  chatInput: '',
+  chatModel: '',
+  // Chronological log: [{role: 'user'|'assistant'|'error', content, entries?}]
+  chatLog: [],
+  // Live editable table (bound to the last assistant extraction result)
+  chatTable: [],
+
   // Internal-only
   layoutClasses: CLASSES_SIDE_BY_SIDE,
   isRunningOCR: false,
@@ -2963,6 +2975,190 @@ export default () => ({
       form.submit();
     }
   },
+
+  // ── Structure-extraction chat methods ──────────────────────────────────
+
+  /** Scroll the chat log to the latest message. */
+  _chatScrollToEnd() {
+    this.$nextTick(() => {
+      const el = document.getElementById('chat-log');
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+  },
+
+  /** Append a message to the chat log and scroll to it. */
+  _chatLog(role, content, entries) {
+    const entry = { role, content };
+    if (entries !== undefined) entry.entries = entries;
+    this.chatLog.push(entry);
+    if (this.chatLog.length > 200) this.chatLog = this.chatLog.slice(-200);
+    this._chatScrollToEnd();
+  },
+
+  /** Load the current page's OCR plain text into the chat input. */
+  chatLoadOcr() {
+    let text = '';
+    if (this.pageDocument) {
+      text = typeof documentToPlainText === 'function'
+        ? documentToPlainText(this.pageDocument)
+        : '';
+    }
+    if (!text && this.content) text = this.content;
+    if (!text) {
+      this._chatLog('error', 'No OCR text available on this page yet. Run OCR first.');
+      return;
+    }
+    this.chatInput = text;
+    this.chatPanelOpen = true;
+    this._chatScrollToEnd();
+  },
+
+  /** Clear the conversation log and reset the table. */
+  chatClear() {
+    this.chatLog = [];
+    this.chatTable = [];
+    this.chatInput = '';
+    this.chatModel = '';
+  },
+
+  /** Add a blank row to the editable table. */
+  chatAddRow() {
+    const nextNum = this.chatTable.length + 1;
+    this.chatTable.push({
+      entry_id: `new-${nextNum}`,
+      parent_entry_id: null,
+      level: 1,
+      entry_type: 'heading',
+      heading: '',
+      description: null,
+      author: null,
+      page_start: null,
+      page_end: null,
+      page_label_raw: '',
+      source_pdf_page: null,
+      raw_ocr_text: null,
+      needs_review: false,
+    });
+    this._chatScrollToEnd();
+  },
+
+  /** Send the current chatInput to the backend extraction endpoint. */
+  async chatSend() {
+    const text = this.chatInput.trim();
+    if (!text || this.chatBusy) return;
+
+    this._chatLog('user', text);
+    this.chatInput = '';
+    this.chatBusy = true;
+
+    const { pathname } = window.location;
+    // Derive /api/chat-extract/<project>/<page>/ from the current proofing URL
+    // e.g. /proofing/my-project/page-1/ → /api/chat-extract/my-project/page-1/
+    const apiUrl = pathname.replace(/\/proofing\//, '/api/chat-extract/');
+
+    const headers = { 'Content-Type': 'application/json' };
+    const csrfInput = document.querySelector('input[name="csrf_token"]');
+    if (csrfInput) headers['X-CSRFToken'] = csrfInput.value;
+
+    // If the message looks like raw OCR text (long, no question mark),
+    // send it as ocr_text so the backend skips the DB read.
+    const isOcrDump = text.length > 200 && !text.endsWith('?');
+    const body = isOcrDump ? { ocr_text: text } : {};
+
+    try {
+      const resp = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      let data = {};
+      const contentType = resp.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        try {
+          data = await resp.json();
+        } catch (_) {}
+      } else {
+        const text = await resp.text();
+        if (!resp.ok) {
+          this._chatLog('error', `Server error (${resp.status}): ${text.slice(0, 200)}`);
+          return;
+        }
+      }
+
+      if (!resp.ok) {
+        this._chatLog('error', data.error || `Server error ${resp.status}`);
+        return;
+      }
+
+      this.chatModel = data.model || '';
+      const entries = Array.isArray(data.entries) ? data.entries : [];
+      this._chatLog('assistant', `Extracted ${entries.length} entries.`, entries);
+
+      // Sync the editable table to the latest extraction
+      if (entries.length > 0) this.chatTable = JSON.parse(JSON.stringify(entries));
+    } catch (err) {
+      this._chatLog('error', `Request error: ${err.message}`);
+    } finally {
+      this.chatBusy = false;
+    }
+  },
+
+  /** Save the current chatTable as a versioned revision. */
+  async chatSave() {
+    if (this.chatTable.length === 0 || this.chatBusy || this.chatSaving) return;
+    this.chatSaving = true;
+
+    const { pathname } = window.location;
+    const saveUrl = pathname.replace(/\/proofing\//, '/api/chat-structure-save/');
+
+    const headers = { 'Content-Type': 'application/json' };
+    const csrfInput = document.querySelector('input[name="csrf_token"]');
+    if (csrfInput) headers['X-CSRFToken'] = csrfInput.value;
+
+    try {
+      const resp = await fetch(saveUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          entries: this.chatTable,
+          summary: 'Structure extraction (chat)',
+        }),
+      });
+
+      let data = {};
+      const contentType = resp.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        try {
+          data = await resp.json();
+        } catch (_) {}
+      } else {
+        const text = await resp.text();
+        if (!resp.ok) {
+          this._chatLog('error', `Save failed (${resp.status}): ${text.slice(0, 200)}`);
+          return;
+        }
+      }
+
+      if (!resp.ok) {
+        this._chatLog('error', data.error || `Save failed (${resp.status})`);
+        return;
+      }
+
+      // Update version panel so the new track appears immediately
+      if (data.available_versions) this.availableVersions = data.available_versions;
+
+      this._chatLog('assistant',
+        `✓ Saved as version "${data.version_key}". ` +
+        `You can now download it as CSV from the Download page.`
+      );
+    } catch (err) {
+      this._chatLog('error', `Save failed: ${err.message}`);
+    } finally {
+      this.chatSaving = false;
+    }
+  },
+
 });
 
 function computeSimpleDiff(oldText, newText) {

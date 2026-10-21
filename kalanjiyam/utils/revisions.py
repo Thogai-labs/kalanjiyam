@@ -21,6 +21,8 @@ def _resolve_content_and_document(
     content_format: str,
 ) -> tuple[str, dict | None, str]:
     if document:
+        if document.get("type") == "chat-structure" or "entries" in document:
+            return content or "", document, content_format
         doc = PageDocument.from_dict(document)
         plain = doc.to_plain_text()
         return plain or (content or ""), doc.to_dict(), doc.content_format
@@ -88,10 +90,14 @@ def add_revision(
             )
 
     # 2. Update the page's overall status
+    status_str = getattr(status, "value", str(status)) if status is not None else None
+    status_id = status_ids.get(status_str) if status_str else None
+    if status_id is None:
+        status_id = page.status_id or status_ids.get("reviewed-0") or 1
     session.execute(
         update(db.Page)
         .where(db.Page.id == page.id)
-        .values(status_id=status_ids[status])
+        .values(status_id=status_id)
     )
     session.commit()
 
@@ -103,7 +109,7 @@ def add_revision(
         summary=summary,
         content=resolved_content or "",
         author_id=author_id,
-        status_id=status_ids[status],
+        status_id=status_id,
         document=None,
         content_format=resolved_format,
     )
