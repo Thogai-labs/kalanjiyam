@@ -42,6 +42,7 @@ app = Celery(
         "kalanjiyam.tasks.search_index",
         "kalanjiyam.tasks.metadata",
         "kalanjiyam.tasks.archival_extract",
+        "kalanjiyam.tasks.structure",
     ],
 )
 # Task Priority Levels (0..9) for fair scheduling and starvation prevention

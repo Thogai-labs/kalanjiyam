@@ -1322,6 +1322,66 @@ def download_as_csv(slug):
     return response
 
 
+@bp.route("/<slug>/extract-structure", methods=["POST"])
+@login_required
+def extract_structure_start(slug):
+    """Start a background Celery task that extracts document structure for all
+    pages in *slug* and saves the results as versioned revisions.
+
+    Returns JSON ``{"task_id": "<id>"}`` on success so the client can poll
+    the status endpoint.
+    """
+    from kalanjiyam.tasks.structure import extract_project_structure
+
+    project_ = q.project(slug)
+    if project_ is None:
+        abort(404)
+    if not q.user_can_view_proofing_project(current_user, project_):
+        abort(403)
+
+    task = extract_project_structure.apply_async(
+        kwargs={
+            "app_env": current_app.config["KALANJIYAM_ENVIRONMENT"],
+            "project_slug": slug,
+            "user_id": current_user.id,
+        }
+    )
+    return jsonify({"task_id": task.id})
+
+
+@bp.route("/<slug>/extract-structure-status/<task_id>")
+@login_required
+def extract_structure_status(slug, task_id):
+    """Poll the status of a structure extraction background job.
+
+    Returns JSON with a ``state`` key: ``PENDING``, ``PROGRESS``,
+    ``SUCCESS``, or ``FAILURE``.  Progress payloads include ``current``,
+    ``total``, ``page``, and ``entries_total``.
+    """
+    from celery.result import AsyncResult
+
+    from kalanjiyam.tasks import app as celery_app
+
+    result = AsyncResult(task_id, app=celery_app)
+    info = result.info or {}
+
+    if result.state == "PROGRESS":
+        return jsonify(
+            {
+                "state": "PROGRESS",
+                "current": info.get("current", 0),
+                "total": info.get("total", 1),
+                "page": info.get("page", ""),
+                "entries_total": info.get("entries_total", 0),
+            }
+        )
+    elif result.state == "SUCCESS":
+        return jsonify({"state": "SUCCESS", **(result.result or {})})
+    elif result.state == "FAILURE":
+        return jsonify({"state": "FAILURE", "error": str(info)})
+
+    return jsonify({"state": result.state})
+
 
 @bp.route("/<slug>/stats")
 def stats(slug):
