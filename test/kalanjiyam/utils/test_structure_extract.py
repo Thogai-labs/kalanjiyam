@@ -327,3 +327,49 @@ def test_to_csv_bytes_needs_review_field():
     data = to_csv_bytes([entry], document_id="d")
     rows = _parse_csv(data)
     assert rows[1][CSV_COLUMNS.index("needs_review")] == "True"
+
+
+# ────────────────────────────────────────────────────────────────
+# Truncation & Chunking tests
+# ────────────────────────────────────────────────────────────────
+
+def test_validate_entries_repairs_truncated_json_array():
+    """Simulate exact error when model generation is cut off mid-string/object."""
+    truncated_raw = (
+        '[\n'
+        '  {"entry_id": "e1", "parent_entry_id": null, "level": 1, "entry_type": "heading", "heading": "CONTENTS"},\n'
+        '  {"entry_id": "e2", "parent_entry_id": "e1", "level": 2, "entry_type": "chapter", "heading": "XXI. EDUCATION IN THE FIFTH CENTURY A.D.",\n'
+    )
+    entries = validate_entries(truncated_raw)
+    assert len(entries) == 1
+    assert entries[0]["entry_id"] == "e1"
+    assert entries[0]["heading"] == "CONTENTS"
+    assert entries[0]["needs_review"] is True  # flagged because truncation occurred
+
+
+def test_validate_entries_repairs_multi_entry_truncation():
+    truncated_raw = (
+        '[\n'
+        '  {"entry_id": "e1", "level": 1, "heading": "Part I", "entry_type": "part"},\n'
+        '  {"entry_id": "e2", "level": 2, "heading": "Chapter 1", "entry_type": "chapter"},\n'
+        '  {"entry_id": "e3", "level": 2, "heading": "Chapter 2", "raw_ocr_text": "Chap'
+    )
+    entries = validate_entries(truncated_raw)
+    assert len(entries) == 2
+    assert entries[0]["heading"] == "Part I"
+    assert entries[1]["heading"] == "Chapter 1"
+
+
+def test_split_into_chunks():
+    from kalanjiyam.utils.structure_extract import _split_into_chunks
+
+    # Short text remains a single chunk
+    short = "Line 1\nLine 2\nLine 3"
+    assert len(_split_into_chunks(short, max_lines=10)) == 1
+
+    # Text exceeding line limit splits cleanly
+    lines = [f"Entry line {i}" for i in range(1, 150)]
+    long_text = "\n".join(lines)
+    chunks = _split_into_chunks(long_text, max_lines=50)
+    assert len(chunks) == 3
+    assert "".join(chunks) == long_text

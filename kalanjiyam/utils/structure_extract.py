@@ -104,6 +104,8 @@ Each element must be an object with these fields:
 8. Do NOT re-OCR; use only the text provided.
 9. Return a flat array — hierarchy is expressed via parent_entry_id, not nesting.
 10. If the input contains no recognisable structure, return an empty array [].
+11. Output compact JSON without excess whitespace or indentation to maximize capacity.
+12. Keep raw_ocr_text concise (only the primary source line).
 """
 
 # ---------------------------------------------------------------------------
@@ -126,6 +128,130 @@ def _find_array(text: str) -> str:
     return text[start : end + 1]
 
 
+def _repair_truncated_json_array(text: str) -> list | None:
+    """Attempt to recover a valid JSON array from a generation truncated by max_tokens.
+
+    Finds the last complete '}' object boundary, closes the array with ']',
+    and attempts to parse. Iterates backwards up to 30 times if needed.
+    """
+    start = text.find("[")
+    if start == -1:
+        return None
+
+    idx = len(text)
+    attempts = 0
+    while attempts < 30:
+        idx = text.rfind("}", 0, idx)
+        if idx == -1 or idx <= start:
+            break
+        attempts += 1
+        candidate = text[start : idx + 1].strip()
+        if candidate.endswith(","):
+            candidate = candidate[:-1].strip()
+        test_json = candidate + "\n]"
+        try:
+            data = json.loads(test_json)
+            if isinstance(data, list) and len(data) > 0:
+                return data
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
+def _split_into_chunks(text: str, max_lines: int = 100, max_chars: int = 5000) -> list[str]:
+    """Split oversized OCR text into manageable chunks at natural line boundaries."""
+    lines = text.splitlines(keepends=True)
+    if len(lines) <= max_lines and len(text) <= max_chars:
+        return [text]
+
+    chunks: list[str] = []
+    current_chunk: list[str] = []
+    current_chars = 0
+
+    for line in lines:
+        line_len = len(line)
+        if (len(current_chunk) >= max_lines or (current_chars + line_len > max_chars)) and current_chunk:
+            chunks.append("".join(current_chunk))
+            current_chunk = [line]
+            current_chars = line_len
+        else:
+            current_chunk.append(line)
+            current_chars += line_len
+
+    if current_chunk:
+        chunks.append("".join(current_chunk))
+
+    return chunks
+
+
+def _call_model_for_chunk(
+    chunk_text: str,
+    *,
+    url: str,
+    headers: dict[str, str],
+    model: str,
+    timeout: float,
+    context_prefix: str = "",
+) -> list[dict]:
+    prompt = (
+        f"{context_prefix}\n\n"
+        f"Extract the document structure from the following OCR text:\n\n{chunk_text}"
+        if context_prefix
+        else f"Extract the document structure from the following OCR text:\n\n{chunk_text}"
+    )
+
+    approx_prompt_tokens = len(prompt) // 3 + 1200
+    max_tokens = max(4096, min(16384, 32000 - approx_prompt_tokens))
+
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.1,
+        "max_tokens": max_tokens,
+    }
+
+    last_err: Exception | None = None
+    for attempt in range(1, 4):
+        try:
+            with httpx.Client(timeout=timeout, trust_env=False) as client:
+                resp = client.post(url, json=payload, headers=headers)
+            if resp.status_code == 200:
+                raw = _parse_response(resp)
+                return validate_entries(raw)
+            if resp.status_code in (502, 503):
+                last_err = ExtractionError(f"Service returned {resp.status_code}")
+                time.sleep(2 * attempt)
+                continue
+            detail = resp.text
+            try:
+                body = resp.json()
+                detail = (
+                    body.get("detail")
+                    or (body.get("error") or {}).get("message")
+                    or detail
+                )
+            except Exception:
+                pass
+            raise ExtractionError(
+                f"AI service error ({resp.status_code}): {detail}"
+            )
+        except httpx.TimeoutException as exc:
+            last_err = exc
+            logger.warning("structure_extract attempt %d timed out", attempt)
+            time.sleep(2 * attempt)
+        except httpx.TransportError as exc:
+            last_err = exc
+            logger.warning("structure_extract attempt %d transport error: %s", attempt, exc)
+            time.sleep(2 * attempt)
+
+    raise ExtractionError(
+        f"AI service unreachable after 3 attempts: {last_err}"
+    )
+
+
 def extract(
     ocr_text: str,
     *,
@@ -136,6 +262,8 @@ def extract(
 ) -> list[dict]:
     """Call the AI service and return a validated list of entry dicts.
 
+    Handles oversized documents automatically by chunking across section
+    boundaries and preserving parent-child context across chunks.
     Raises ``ExtractionError`` if the service is unreachable or returns
     unparseable output.
     """
@@ -164,54 +292,70 @@ def extract(
         headers["Authorization"] = f"Bearer {key}"
         headers["X-API-Key"] = key
 
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Extract the document structure from the following OCR text:\n\n{ocr_text}"},
-        ],
-        "temperature": 0.1,
-        "max_tokens": 8192,
-    }
+    chunks = _split_into_chunks(ocr_text)
+    if len(chunks) == 1:
+        return _call_model_for_chunk(
+            chunks[0],
+            url=url,
+            headers=headers,
+            model=model,
+            timeout=timeout,
+        )
 
-    last_err: Exception | None = None
-    for attempt in range(1, 4):
-        try:
-            with httpx.Client(timeout=timeout, trust_env=False) as client:
-                resp = client.post(url, json=payload, headers=headers)
-            if resp.status_code == 200:
-                raw = _parse_response(resp)
-                return validate_entries(raw)
-            if resp.status_code in (502, 503):
-                last_err = ExtractionError(f"Service returned {resp.status_code}")
-                time.sleep(2 * attempt)
-                continue
-            # 4xx – don't retry
-            detail = resp.text
-            try:
-                body = resp.json()
-                detail = (
-                    body.get("detail")
-                    or (body.get("error") or {}).get("message")
-                    or detail
-                )
-            except Exception:
-                pass
-            raise ExtractionError(
-                f"AI service error ({resp.status_code}): {detail}"
+    all_entries: list[dict] = []
+    active_parents_by_level: dict[int, dict] = {}
+    id_map: dict[str, str] = {}
+    entry_counter = 1
+
+    for chunk_idx, chunk in enumerate(chunks, start=1):
+        context_lines = []
+        if active_parents_by_level:
+            context_lines.append(
+                f"Context from preceding document section (chunk {chunk_idx - 1} of {len(chunks)}):"
             )
-        except httpx.TimeoutException as exc:
-            last_err = exc
-            logger.warning("structure_extract attempt %d timed out", attempt)
-            time.sleep(2 * attempt)
-        except httpx.TransportError as exc:
-            last_err = exc
-            logger.warning("structure_extract attempt %d transport error: %s", attempt, exc)
-            time.sleep(2 * attempt)
+            for lvl in sorted(active_parents_by_level.keys()):
+                p = active_parents_by_level[lvl]
+                context_lines.append(
+                    f"- Level {lvl} active parent: {p.get('heading')!r} (entry_id: {p.get('entry_id')!r})"
+                )
+            context_lines.append(
+                "Assign parent_entry_id to these if the new entries belong under them, "
+                "or create new parent sections if new headings appear."
+            )
 
-    raise ExtractionError(
-        f"AI service unreachable after 3 attempts: {last_err}"
-    )
+        context_prefix = "\n".join(context_lines)
+        chunk_entries = _call_model_for_chunk(
+            chunk,
+            url=url,
+            headers=headers,
+            model=model,
+            timeout=timeout,
+            context_prefix=context_prefix,
+        )
+
+        for e in chunk_entries:
+            old_id = e.get("entry_id")
+            new_id = f"e{entry_counter}"
+            entry_counter += 1
+            if old_id:
+                id_map[str(old_id)] = new_id
+            e["entry_id"] = new_id
+
+            lvl = e.get("level", 1)
+            active_parents_by_level[lvl] = e
+            to_remove = [l for l in active_parents_by_level if l > lvl]
+            for l in to_remove:
+                del active_parents_by_level[l]
+
+            all_entries.append(e)
+
+    # Remap parent_entry_id references across all chunks
+    for e in all_entries:
+        pid = e.get("parent_entry_id")
+        if pid is not None and str(pid) in id_map:
+            e["parent_entry_id"] = id_map[str(pid)]
+
+    return all_entries
 
 
 def _parse_response(resp: httpx.Response) -> str:
@@ -263,12 +407,28 @@ def validate_entries(raw: str) -> list[dict]:
         candidate = _find_array(cleaned)
         try:
             data = json.loads(candidate)
-        except json.JSONDecodeError:
-            # Re-raise original error for a more useful message
-            raise ExtractionError(
-                f"The model did not return valid JSON. Parse error: {parse_error}. "
-                f"Raw output (first 500 chars): {raw[:500]!r}"
-            ) from parse_error
+        except json.JSONDecodeError as exc:
+            parse_error = exc
+
+    if data is None:
+        # The output may have been truncated mid-generation by token limits.
+        # Attempt to recover all completed array elements.
+        recovered = _repair_truncated_json_array(cleaned)
+        if recovered is not None:
+            logger.warning(
+                "Model output was truncated by token limit. Repaired %d entries from partial JSON.",
+                len(recovered),
+            )
+            data = recovered
+            if data and isinstance(data[-1], dict):
+                data[-1]["needs_review"] = True
+
+    if data is None:
+        # Re-raise original error for a more useful message
+        raise ExtractionError(
+            f"The model did not return valid JSON. Parse error: {parse_error}. "
+            f"Raw output (first 500 chars): {raw[:500]!r}"
+        ) from parse_error
 
     if not isinstance(data, list):
         raise ExtractionError(
