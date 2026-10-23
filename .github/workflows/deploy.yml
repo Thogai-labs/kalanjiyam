@@ -1,0 +1,49 @@
+name: Deploy Kalanjiyam Production
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kalanjiyam-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, production-deploy]
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Build production image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IMAGE="kalanjiyam:v0.1-main-${GITHUB_SHA::7}"
+          echo "KALANJIYAM_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+          docker build \
+            -t "$IMAGE" \
+            -f build/containers/Dockerfile.final \
+            .
+
+      - name: Prepare production environment reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /home/pranav/kalanjiyam/.env
+          rm -f .env
+          ln -s /home/pranav/kalanjiyam/.env .env
+
+      - name: Deploy application
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash deploy/prod/deploy-ci.sh
