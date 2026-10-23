@@ -7,6 +7,7 @@ ENV_FILE="/home/pranav/kalanjiyam/.env"
 PROJECT="kalanjiyam-prod"
 
 : "${KALANJIYAM_IMAGE:?Missing KALANJIYAM_IMAGE}"
+export KALANJIYAM_IMAGE
 
 if [[ ! -f "$ENV_FILE" ]]; then
     echo "Production environment file not found"
@@ -36,7 +37,32 @@ done
     exit 1
 }
 
-# Require the existing production network; do not start/recreate dependencies.
+# Ensure base infrastructure services are running before migrations
+echo "Ensuring infrastructure services are running..."
+docker compose --env-file "$ENV_FILE" \
+    -p "$PROJECT" \
+    -f "$COMPOSE_FILE" \
+    up -d \
+    kalanjiyam-db \
+    kalanjiyam-redis \
+    kalanjiyam-versitygw \
+    kalanjiyam-search
+
+# Wait for postgres to be ready
+echo "Waiting for postgres to be ready..."
+for i in {1..30}; do
+    if docker compose --env-file "$ENV_FILE" -p "$PROJECT" -f "$COMPOSE_FILE" \
+        exec -T kalanjiyam-db pg_isready -U "${POSTGRES_USER:-kalanjiyam}" >/dev/null 2>&1; then
+        echo "Postgres is ready."
+        break
+    fi
+    if [[ $i -eq 30 ]]; then
+        echo "Postgres timed out waiting to become ready"
+        exit 1
+    fi
+    sleep 1
+done
+
 NETWORK="${PROJECT}_default"
 docker network inspect "$NETWORK" >/dev/null
 
@@ -48,13 +74,11 @@ docker run --rm \
     alembic upgrade head
 
 echo "Updating application services"
-KALANJIYAM_IMAGE="$KALANJIYAM_IMAGE" \
 docker compose --env-file "$ENV_FILE" \
     -p "$PROJECT" \
     -f "$COMPOSE_FILE" \
     up -d --no-deps \
     kalanjiyam-web \
-    kalanjiyam-search \
     kalanjiyam-celery \
     kalanjiyam-celery-translation \
     kalanjiyam-celery-metadata \
